@@ -1,0 +1,13 @@
+[package]
+name = "adi"
+version = "0.1.0"
+authors = ["Jarrett Billingsley <jarrett.billingsley@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+err-derive = "0.2.4"
+derive-new = "0.5.8"
+colored = "1.9.3"
+parse-display = "0.1.2"
