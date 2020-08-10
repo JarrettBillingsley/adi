@@ -1,12 +1,23 @@
 use parse_display::*;
 use derive_new::*;
-use std::collections::{ BTreeMap, HashMap };
+use std::collections::{
+	BTreeMap,
+	HashMap,
+	hash_map::Iter as HashIter,
+	btree_map::Iter as BTreeIter,
+	btree_map::Range as BTreeRange,
+};
+use std::fmt::{ Debug, Display };
 use std::iter::IntoIterator;
 use std::iter::FromIterator;
 
 /// newtype for virtual addresses.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct VAddr(pub usize);
+
+/// newtype for offsets into segments.
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct SegOffset(pub usize);
 
 // ------------------------------------------------------------------------------------------------
 // Memory map regions
@@ -169,10 +180,14 @@ impl<'a> MemoryMap<'a> {
 /// For example:
 ///
 /// ```
+/// use adi::memory::MemoryConfig;
+/// use std::iter::FromIterator;
 /// let config = MemoryConfig::from_iter(&[
 ///     ("a", "b"),
 ///     ("c", "d"),
 /// ]);
+/// assert_eq!(config.get_segment("a"), Some("b"));
+/// assert_eq!(config.get_segment("x"), None);
 /// ```
 #[derive(Debug, PartialEq, Eq)]
 pub struct MemoryConfig<'a> {
@@ -201,7 +216,7 @@ impl<'a> MemoryConfig<'a> {
 	}
 
 	/// Iterates over the mappings.
-	pub fn iter(&self) -> std::collections::hash_map::Iter<'a, &str, &str> {
+	pub fn iter(&self) -> HashIter<'a, &str, &str> {
 		self.assignments.iter()
 	}
 
@@ -211,5 +226,144 @@ impl<'a> MemoryConfig<'a> {
 		let mut ret = Self::new(self.assignments.clone());
 		ret.assignments.extend(iter.into_iter().copied());
 		ret
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Span
+// ------------------------------------------------------------------------------------------------
+
+/// TODO: what IS this?
+pub trait SpanOwner: Debug + Display {}
+
+/// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
+/// segment, to avoid confusion when dealing with virtual and physical addresses.
+///
+/// Its "owner" is some kind of object which "manages" this span. For example, code spans can be
+/// managed by BasicBlock objects.
+#[derive(Debug, Display)]
+#[derive(new)]
+#[display("{kind} [0x{start.0:08X} .. 0x{end.0:08X})")]
+pub struct Span<'a> {
+	/// address of first byte.
+	start: SegOffset,
+	/// address of first byte after span.
+	end: SegOffset,
+	/// the owner, if any.
+	owner: Option<&'a dyn SpanOwner>,
+	/// what kind of span it is.
+	kind: SpanKind,
+}
+
+/// What kind of thing the span covers.
+#[derive(Debug, Display, PartialEq, Eq, Clone, Copy)]
+pub enum SpanKind {
+	/// Unknown (not yet analyzed)
+	Unk,
+	/// Code (that is, a basic block of a function)
+	Code,
+	/// Data (anything that isn't code)
+	Data,
+}
+
+// ------------------------------------------------------------------------------------------------
+// SpanMap
+// ------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Display, Clone, Copy)]
+#[derive(new)]
+#[display("{kind} @ 0x{start.0:08X}")]
+struct Split<'a> {
+	start: SegOffset,
+	kind:  SpanKind,
+	owner: Option<&'a dyn SpanOwner>,
+}
+
+/// Representation of the "map" of a segment's spans. Has a fixed size (which matches the segment's
+/// size) and the entire size is covered by spans (no "empty" spots).
+///
+/// Looking up spans by address is efficient (logarithmic time). Looking up spans in other ways
+/// requires the use of an index.
+
+pub struct SpanMap<'a> {
+	// There's some duplication between the index into the map and Split::start.
+	// But I don't think it's possible to use BTreeSet::range using a SegOffset as
+	// the range bounds when the value is a Split. So, map it is.
+	splits: BTreeMap<SegOffset, Split<'a>>,
+	size: usize,
+
+	// TODO:
+	// self.functionsByLoc = {}
+	// self.functionsByName = {}
+}
+
+type SplitPair<'a> = (&'a Split<'a>, Option<&'a Split<'a>>);
+
+impl<'a> SpanMap<'a> {
+	pub fn new(size: usize) -> Self {
+		let mut splits = BTreeMap::new();
+		splits.insert(SegOffset(0), Split::new(SegOffset(0), SpanKind::Unk, None));
+		Self {
+			splits,
+			size,
+		}
+	}
+
+	fn offs_to_range(&self, offs: SegOffset) -> SplitPair {
+		use std::ops::Bound::{Excluded, Unbounded};
+
+		assert!((0 .. self.size).contains(&offs.0));
+
+		// TODO: this does two lookups, which sucks, but idk how else to do it.
+		// BTreeMap::split_off() basically does what I want but I don't want two mapssssss
+		// aaAAAAAAA
+		let (_, fst) = self.splits.range(..= offs).next_back().expect("how even");
+		let snd = self.splits.range((Excluded(fst.start), Unbounded)).next();
+		let snd = snd.map(|(_, snd)| snd);
+
+		(fst, snd)
+	}
+
+	// fn range_to_span(self, splits: SplitPair) -> Span {
+	// 	let first = splits.next().expect("oh no");
+	// 	let next = splits.next();
+
+
+	// }
+
+	// fn span_end(self, splits: SplitPair) -> SegOffset {
+
+	// }
+
+	// fn indexToSpan(self, idx):
+	// 	split = self.splits[idx]
+	// 	return Span(split[0], self.spanEnd(idx), split[1], split[2])
+
+	// fn spanEnd(self, idx):
+	// 	return self.splits[idx + 1][0] if idx < len(self.splits) - 1 else self.size
+
+	// fn dumpSpans(self):
+	// 	print("----------------------------")
+	// 	for s in self:
+	// 		print(s)
+
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn span_map() {
+		let mut m = SpanMap::new(2usize.pow(16));
+		m.splits.insert(SegOffset(0x1000), Split::new(SegOffset(0x1000), SpanKind::Code, None));
+		m.splits.insert(SegOffset(0x2000), Split::new(SegOffset(0x2000), SpanKind::Data, None));
+
+		println!("{:?}", m.offs_to_range(SegOffset(0)));
+		println!("{:?}", m.offs_to_range(SegOffset(0xFFF)));
+		println!("{:?}", m.offs_to_range(SegOffset(0x1000)));
+		println!("{:?}", m.offs_to_range(SegOffset(0x1FFF)));
+		println!("{:?}", m.offs_to_range(SegOffset(0x2000)));
+		println!("{:?}", m.offs_to_range(SegOffset(0xFFFF)));
 	}
 }

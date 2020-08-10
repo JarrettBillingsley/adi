@@ -27,5 +27,7 @@ fn main() {
 
 	println!("{:#?}", config);
 	println!("{:#?}", config2);
+
+	println!("{:?}", Span::new(SegOffset(10), SegOffset(20), None, SpanKind::Unk));
 }
 
