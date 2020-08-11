@@ -6,7 +6,7 @@ use std::collections::{
 	hash_map::Iter as HashIter,
 	btree_map::Values as BTreeValues,
 };
-use std::fmt::{ Debug, Display };
+use std::fmt::{ Debug, Display, Formatter, Result as FmtResult };
 use std::iter::IntoIterator;
 use std::iter::FromIterator;
 
@@ -470,12 +470,10 @@ fn generate_name(name: &str, va: VAddr, base_name: Option<&str>) -> String {
 	}
 }
 
-pub struct SegmentImage {
+#[derive(Debug, Clone, Copy)]
+pub struct ImageRange {
 	pbase: PAddr,
 	pend:  PAddr,
-}
-
-impl SegmentImage {
 }
 
 pub struct Segment<'a> {
@@ -486,13 +484,13 @@ pub struct Segment<'a> {
 	spans:  SpanMap<'a>,
 	labels: LabelMap<'a>,
 	// TODO: refs: ReferenceMap<'a>,
-	image:  Option<SegmentImage>,
+	image:  Option<ImageRange>,
 }
 
 impl<'a> Segment<'a> {
 	pub fn new(name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
 		let size = vend.0 - vbase.0;
-		let image = pbase.map(|pbase| SegmentImage { pbase, pend: PAddr(pbase.0 + size) });
+		let image = pbase.map(|pbase| ImageRange { pbase, pend: PAddr(pbase.0 + size) });
 
 		Self {
 			name,
@@ -516,6 +514,10 @@ impl<'a> Segment<'a> {
 		self.image.is_none()
 	}
 
+	pub fn get_image_range(&self) -> ImageRange {
+		self.image.unwrap()
+	}
+
 	pub fn contains_offset(&self, offs: SegOffset) -> bool {
 		(0 .. self.size).contains(&offs.0)
 	}
@@ -529,18 +531,18 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn contains_pa(&self, addr: PAddr) -> bool {
-		let i = self.image.as_ref().unwrap();
+		let i = self.get_image_range();
 		(i.pbase .. i.pend).contains(&addr)
 	}
 
 	pub fn overlaps_pa(&self, other: &Segment) -> bool {
-		let i = self.image.as_ref().unwrap();
-		let o = other.image.as_ref().unwrap();
+		let i = self.get_image_range();
+		let o = other.get_image_range();
 		!(i.pend <= o.pbase || o.pend <= i.pbase)
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Conversions
+	// Conversions between segment offsets, virtual addresses, physical addresses, and names
 	// (there are so many for "convenience" I guess)
 	// (remains to be seen how many of these are actually used in practice)
 
@@ -553,12 +555,22 @@ impl<'a> Segment<'a> {
 		SegOffset(va.0 - self.vbase.0)
 	}
 
+	pub fn offset_from_pa(&self, pa: PAddr) -> SegOffset {
+		assert!(self.contains_pa(pa));
+		let pbase = self.get_image_range().pbase;
+		SegOffset(pa.0 - pbase.0)
+	}
+
 	pub fn name_from_offset(&self, offs: SegOffset) -> &str {
 		self.labels.name_from_offset(offs).unwrap()
 	}
 
 	pub fn name_from_va(&self, va: VAddr) -> &str {
 		self.labels.name_from_offset(self.offset_from_va(va)).unwrap()
+	}
+
+	pub fn name_from_pa(&self, pa: PAddr) -> &str {
+		self.name_from_offset(self.offset_from_pa(pa))
 	}
 
 	pub fn va_from_name(&self, name: &str) -> VAddr {
@@ -570,16 +582,26 @@ impl<'a> Segment<'a> {
 		VAddr(self.vbase.0 + offs.0)
 	}
 
-	pub fn span_from_name(&self, name: &str) -> &Span {
-		self.spans.span_at(self.offset_from_name(name))
+	pub fn va_from_pa(&self, pa: PAddr) -> VAddr {
+		assert!(self.contains_pa(pa));
+		let pbase = self.get_image_range().pbase;
+		VAddr((pa.0 - pbase.0) + self.vbase.0)
 	}
 
-	pub fn span_from_offset(&self, offs: SegOffset) -> &Span {
-		self.spans.span_at(offs)
+	pub fn pa_from_offset(&self, offs: SegOffset) -> PAddr {
+		assert!(self.contains_offset(offs));
+		let pbase = self.get_image_range().pbase;
+		PAddr(pbase.0 + offs.0)
 	}
 
-	pub fn span_from_va(&self, va: VAddr) -> &Span {
-		self.spans.span_at(self.offset_from_va(va))
+	pub fn pa_from_va(&self, va: VAddr) -> PAddr {
+		assert!(self.contains_va(va));
+		let pbase = self.get_image_range().pbase;
+		PAddr((va.0 - self.vbase.0) + pbase.0)
+	}
+
+	pub fn pa_from_name(&self, name: &str) -> PAddr {
+		self.pa_from_offset(self.labels.offset_from_name(name).unwrap())
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -639,6 +661,85 @@ impl<'a> Segment<'a> {
 
 	// def makeNewSpan(self, loc, endOffs, type, owner):
 	// 	self.spans.redefine(loc.offs, endOffs, type, owner)
+
+	pub fn span_from_name(&self, name: &str) -> &Span {
+		self.spans.span_at(self.offset_from_name(name))
+	}
+
+	pub fn span_from_offset(&self, offs: SegOffset) -> &Span {
+		self.spans.span_at(offs)
+	}
+
+	pub fn span_from_va(&self, va: VAddr) -> &Span {
+		self.spans.span_at(self.offset_from_va(va))
+	}
+
+	pub fn span_from_pa(&self, pa: PAddr) -> &Span {
+		self.spans.span_at(self.offset_from_pa(pa))
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Locations and References
+// ------------------------------------------------------------------------------------------------
+
+pub struct Location<'a> {
+	pub seg: &'a Segment<'a>,
+	pub offs: SegOffset,
+}
+
+impl<'a> Display for Location<'a> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{}:{}", self.seg.name, self.get_name())
+	}
+}
+
+impl<'a> Location<'a> {
+	pub fn new(seg: &'a Segment, offs: SegOffset) -> Self {
+		assert!(seg.contains_offset(offs));
+		Self { seg, offs }
+	}
+
+	pub fn get_name(&self) -> String {
+		self.seg.name_for_offset(self.offs)
+	}
+
+	pub fn get_full_name(&self) -> String {
+		self.to_string()
+	}
+
+	pub fn get_span(&self) -> &Span {
+		self.seg.span_from_offset(self.offs)
+	}
+
+	// pub fn __hash__(&self) -> {
+	// 	hash((self.seg, self.offs))
+	// }
+	// pub fn __eq__(&self, other) -> {
+	// 	self.seg is other.seg and self.offs == other.offs
+	// }
+}
+
+pub struct Reference<'a> {
+	pub src: Location<'a>,
+	pub dst: Location<'a>,
+}
+
+impl<'a> Reference<'a> {
+	pub fn new(src: Location<'a>, dst: Location<'a>) -> Self {
+		Self { src, dst }
+	}
+
+	pub fn get_name(&self) -> String {
+		self.dst.get_name()
+	}
+
+	pub fn get_full_name(&self) -> String {
+		self.dst.get_full_name()
+	}
+
+	// def __hash__(self):      return hash(self.src) ^ hash(self.dst)
+	// def __eq__(self, other): return self.src == other.src and self.dst == other.dst
 }
 
 // ------------------------------------------------------------------------------------------------
