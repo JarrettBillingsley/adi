@@ -3,31 +3,46 @@ use std::iter::FromIterator;
 use adi::memory::*;
 
 fn main() {
+	test_nes();
+}
+
+fn test_nes() {
 	let regions = &[
-		MemoryRegion::new("DICKS", 50, 1000, true, MemoryRegionKind::Ram),
-		MemoryRegion::new("BUTTS", 1000, 2000, true, MemoryRegionKind::Ram),
+		//default
+		MemoryRegion::new("RAM",      0x0000,  0x0800, true, MemoryRegionKind::Ram   ),
+		MemoryRegion::new("RAMECHO",  0x0800,  0x2000, true, MemoryRegionKind::Mirror),
+		MemoryRegion::new("PPU",      0x2000,  0x2008, true, MemoryRegionKind::Mmio  ),
+		MemoryRegion::new("PPUECHO",  0x2008,  0x4000, true, MemoryRegionKind::Mirror),
+		MemoryRegion::new("IOREG",    0x4000,  0x4020, true, MemoryRegionKind::Mmio  ),
+
+		// ROM-specific
+		MemoryRegion::new("PRGROM",   0x8000, 0x10000, false, MemoryRegionKind::Rom),
 	];
 
 	let mmap = MemoryMap::new(16, regions);
-	println!("{:#?}", mmap);
 
-	println!("{:?}", mmap.get(VAddr(0)));
-	println!("{:?}", mmap.get(VAddr(50)));
-	println!("{:?}", mmap.get(VAddr(1500)));
-	println!("{:?}", mmap.get(VAddr(2000)));
-
+	// Region: Segment
 	let config = MemoryConfig::from_iter(&[
-		("a", "b"),
+		// default
+		("RAM",    "RAM"),
+		("PPU",    "PPU"),
+		("IOREG",  "IOREG"),
+
+		// ROM-specific
+		("PRGROM", "PRG0"),
 	]);
 
-	let config2 = config.derive(&[
-		("a", "c"),
-		("x", "y"),
-	]);
+	println!("{:?}", mmap);
+	println!("{:?}", config);
 
-	println!("{:#?}", config);
-	println!("{:#?}", config2);
+	/*	let segments = &[
+			// default
+			FakeSegment ("RAM",   vbase = 0x0000, vend =  0x0800, type = SegType.DATA),
+			FakeSegment ("PPU",   vbase = 0x2000, vend =  0x2008, type = SegType.DATA),
+			FakeSegment ("IOREG", vbase = 0x4000, vend =  0x4020, type = SegType.DATA),
 
-	println!("{:?}", Span::new(SegOffset(10), SegOffset(20), None, SpanKind::Unk));
+			// ROM-specific
+			ImageSegment("PRG0",  vbase = 0x8000, vend = 0x10000, pbase = 0, type = SegType.CODE|SegType.DATA),
+		];
+	*/
 }
-
