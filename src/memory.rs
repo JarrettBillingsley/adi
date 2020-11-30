@@ -4,6 +4,7 @@ use std::collections::{
 	BTreeMap,
 	HashMap,
 	hash_map::Iter as HashIter,
+	// btree_map::Iter as BTreeIter,
 	btree_map::Values as BTreeValues,
 };
 use std::fmt::{ Debug, Display, Formatter, Result as FmtResult };
@@ -154,7 +155,7 @@ impl<'a> MemoryMap<'a> {
 	pub fn len(&self) -> usize { self.end }
 
 	/// Given a virtual address, get the memory region which contains it, if any.
-	pub fn get(&self, va: VAddr) -> Option<&MemoryRegion> {
+	pub fn region_for_va(&self, va: VAddr) -> Option<&MemoryRegion> {
 		assert!(va.0 < self.end);
 
 		// find the last entry whose start <= va
@@ -168,8 +169,23 @@ impl<'a> MemoryMap<'a> {
 		}
 	}
 
-	// TODO: bankable_regions iter?
-	// TODO: all_regions iter?
+	/// A shorter name for `region_for_va`.
+	pub fn get(&self, va: VAddr) -> Option<&MemoryRegion> {
+		self.region_for_va(va)
+	}
+
+	/// Given a name, gets the memory region with that name, if any.
+	pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion> {
+		self.name_map.get(&name).map(|&idx| &self.regions[idx])
+	}
+
+	/// Iterator over all memory regions.
+	pub fn all_regions(&'a self) -> impl Iterator<Item = &'a MemoryRegion<'a>> {
+		let func = move |&idx| &self.regions[idx];
+		self.addr_map.values().map(func)
+	}
+
+	// TODO: iterators for bankable regions, ROM regions, etc?
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -190,8 +206,8 @@ impl<'a> MemoryMap<'a> {
 ///     ("a", "b"),
 ///     ("c", "d"),
 /// ]);
-/// assert_eq!(config.get_segment("a"), Some("b"));
-/// assert_eq!(config.get_segment("x"), None);
+/// assert_eq!(config.segment_for_region("a"), Some("b"));
+/// assert_eq!(config.segment_for_region("x"), None);
 /// ```
 #[derive(Debug, PartialEq, Eq)]
 pub struct MemoryConfig<'a> {
@@ -215,11 +231,11 @@ impl<'a> MemoryConfig<'a> {
 	}
 
 	/// Gets the segment mapped to the given region (if any).
-	pub fn get_segment(&self, region_name: &str) -> Option<&str> {
+	pub fn segment_for_region(&self, region_name: &str) -> Option<&str> {
 		self.assignments.get(region_name).copied()
 	}
 
-	/// Iterates over the mappings.
+	/// Iterates over the mappings (region name, segment name).
 	pub fn iter(&self) -> HashIter<'a, &str, &str> {
 		self.assignments.iter()
 	}
@@ -237,14 +253,14 @@ impl<'a> MemoryConfig<'a> {
 // Span
 // ------------------------------------------------------------------------------------------------
 
-/// TODO: what IS this?
+// TODO: what IS this?
 pub trait SpanOwner: Debug + Display {}
 
 /// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
 ///
 /// Its "owner" is some kind of object which "manages" this span. For example, code spans can be
-/// managed by BasicBlock objects.
+/// managed by BasicBlock objects. (data spans might have some kind of Array or Variable object?)
 #[derive(Debug, Display)]
 #[derive(new)]
 #[display("{kind} [0x{start.0:08X} .. 0x{end.0:08X})")]
@@ -292,6 +308,7 @@ pub struct SpanMap<'a> {
 }
 
 impl<'a> SpanMap<'a> {
+	/// Creates a new `SpanMap` with a single unknown span that covers the entire segment.
 	pub fn new(size: usize) -> Self {
 		let mut spans = BTreeMap::new();
 		spans.insert(SegOffset(0), Span::new(SegOffset(0), SegOffset(size), SpanKind::Unk, None));
@@ -301,11 +318,14 @@ impl<'a> SpanMap<'a> {
 		}
 	}
 
+	/// Given an offset into the segment, gets the Span which contains it.
 	pub fn span_at(&self, offs: SegOffset) -> &Span {
 		assert!(offs.0 <= self.size); // TODO: should this be inclusive or exclusive...?
 		self.spans.range(..= offs).next_back().expect("how even").1
 	}
 
+	/// Given an offset into the segment, gets the Span which comes after the containing Span,
+	/// or None if the containing Span is the last one in the segment.
 	pub fn span_after(&self, offs: SegOffset) -> Option<&Span> {
 		assert!(offs.0 <= self.size); // TODO: should this be inclusive or exclusive...?
 
@@ -316,6 +336,7 @@ impl<'a> SpanMap<'a> {
 		}.next().map(|(_, a)| a)
 	}
 
+	/// Iterator over all spans (SegOffset, Span).
 	pub fn iter(&self) -> BTreeValues<'a, SegOffset, Span> {
 		self.spans.values()
 	}
@@ -411,12 +432,14 @@ impl<'a> SpanMap<'a> {
 // LabelMap
 // ------------------------------------------------------------------------------------------------
 
+/// A bidirectional mapping between labels (names) and segment offsets.
 pub struct LabelMap<'a> {
 	names_to_offsets: HashMap<&'a str, SegOffset>,
 	offsets_to_names: BTreeMap<SegOffset, &'a str>,
 }
 
 impl<'a> LabelMap<'a> {
+	/// Makes a new empty map.
 	pub fn new() -> Self {
 		Self {
 			names_to_offsets: HashMap::new(),
@@ -424,36 +447,43 @@ impl<'a> LabelMap<'a> {
 		}
 	}
 
+	/// Assigns a name to a given offset. The offset must not already have a name.
 	pub fn add(&mut self, name: &'a str, offset: SegOffset) {
 		assert!(!self.names_to_offsets.contains_key(&name));
 		self.names_to_offsets.insert(name, offset);
 		self.offsets_to_names.insert(offset, name);
 	}
 
+	/// Removes a mapping by name.
 	pub fn remove_name(&mut self, name: &'a str) {
 		let offs = *self.names_to_offsets.get(&name).unwrap();
 		self.names_to_offsets.remove(name);
 		self.offsets_to_names.remove(&offs);
 	}
 
+	/// Removes a mapping by offset.
 	pub fn remove_offset(&mut self, offs: SegOffset) {
 		let name = *self.offsets_to_names.get(&offs).unwrap();
 		self.names_to_offsets.remove(name);
 		self.offsets_to_names.remove(&offs);
 	}
 
-	pub fn offset_from_name(&self, name: &'a str) -> Option<SegOffset> {
+	/// Gets the offset for a label name, if one of that name exists.
+	pub fn offset_for_name(&self, name: &'a str) -> Option<SegOffset> {
 		self.names_to_offsets.get(name).copied()
 	}
 
-	pub fn name_from_offset(&self, offs: SegOffset) -> Option<&'a str> {
+	/// Gets the label name for an offset, if there is one.
+	pub fn name_for_offset(&self, offs: SegOffset) -> Option<&'a str> {
 		self.offsets_to_names.get(&offs).copied()
 	}
 
+	/// Whether or not the given label name exists.
 	pub fn has_name(&self, name: &'a str) -> bool {
 		self.names_to_offsets.contains_key(name)
 	}
 
+	/// Whether or not there is a label name for the given offset.
 	pub fn has_offset(&self, offs: SegOffset) -> bool {
 		self.offsets_to_names.contains_key(&offs)
 	}
@@ -463,6 +493,8 @@ impl<'a> LabelMap<'a> {
 // Segment
 // ------------------------------------------------------------------------------------------------
 
+/// Generates a string of the form `{name}_{va}` if `base_name` is `None`, or
+/// `{name}_{base_name}_{va}` if `base_name` is `Some`.
 fn generate_name(name: &str, va: VAddr, base_name: Option<&str>) -> String {
 	match base_name {
 		None            => format!("{}_{:04X}", name, va.0),
@@ -470,12 +502,15 @@ fn generate_name(name: &str, va: VAddr, base_name: Option<&str>) -> String {
 	}
 }
 
+/// A range of physical addresses within an image.
 #[derive(Debug, Clone, Copy)]
 pub struct ImageRange {
 	pbase: PAddr,
 	pend:  PAddr,
 }
 
+/// A single segment. Can be an image segment (data comes from a ROM image) or a fake
+/// segment (there is no data, e.g. RAM, but it's useful to put names and spans there).
 pub struct Segment<'a> {
 	name:   &'a str,
 	vbase:  VAddr,
@@ -483,11 +518,24 @@ pub struct Segment<'a> {
 	size:   usize,
 	spans:  SpanMap<'a>,
 	labels: LabelMap<'a>,
-	// TODO: refs: ReferenceMap<'a>,
 	image:  Option<ImageRange>,
 }
 
+impl<'a> Display for Segment<'a> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		match self.image {
+			Some(image) =>
+				write!(f, "{} (image) VA [{:08X}..{:08X}) PA: [{:08X}..{:08X})",
+					self.name, self.vbase.0, self.vend.0, image.pbase.0, image.pend.0),
+			None =>
+				write!(f, "{} (fake) VA [{:08X}..{:08X})", self.name, self.vbase.0, self.vend.0),
+		}
+	}
+}
+
 impl<'a> Segment<'a> {
+	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
+	/// part of a ROM image.
 	pub fn new(name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
 		let size = vend.0 - vbase.0;
 		let image = pbase.map(|pbase| ImageRange { pbase, pend: PAddr(pbase.0 + size) });
@@ -547,7 +595,7 @@ impl<'a> Segment<'a> {
 	// (remains to be seen how many of these are actually used in practice)
 
 	pub fn offset_from_name(&self, name: &str) -> SegOffset {
-		self.labels.offset_from_name(name).unwrap()
+		self.labels.offset_for_name(name).unwrap()
 	}
 
 	pub fn offset_from_va(&self, va: VAddr) -> SegOffset {
@@ -562,11 +610,11 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn name_from_offset(&self, offs: SegOffset) -> &str {
-		self.labels.name_from_offset(offs).unwrap()
+		self.labels.name_for_offset(offs).unwrap()
 	}
 
 	pub fn name_from_va(&self, va: VAddr) -> &str {
-		self.labels.name_from_offset(self.offset_from_va(va)).unwrap()
+		self.labels.name_for_offset(self.offset_from_va(va)).unwrap()
 	}
 
 	pub fn name_from_pa(&self, pa: PAddr) -> &str {
@@ -574,7 +622,7 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn va_from_name(&self, name: &str) -> VAddr {
-		self.va_from_offset(self.labels.offset_from_name(name).unwrap())
+		self.va_from_offset(self.labels.offset_for_name(name).unwrap())
 	}
 
 	pub fn va_from_offset(&self, offs: SegOffset) -> VAddr {
@@ -601,7 +649,7 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn pa_from_name(&self, name: &str) -> PAddr {
-		self.pa_from_offset(self.labels.offset_from_name(name).unwrap())
+		self.pa_from_offset(self.labels.offset_for_name(name).unwrap())
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -640,18 +688,18 @@ impl<'a> Segment<'a> {
 		self.labels.has_offset(self.offset_from_va(va))
 	}
 
-	pub fn name_for_va(&self, va: VAddr) -> String {
-		self.name_for_offset(self.offset_from_va(va))
+	pub fn name_of_va(&self, va: VAddr) -> String {
+		self.name_of_offset(self.offset_from_va(va))
 	}
 
-	pub fn name_for_offset(&self, offs: SegOffset) -> String {
+	pub fn name_of_offset(&self, offs: SegOffset) -> String {
 		assert!(self.contains_offset(offs));
 
-		if let Some(name) = self.labels.name_from_offset(offs) {
+		if let Some(name) = self.labels.name_for_offset(offs) {
 			name.into()
 		} else {
 			let span_start = self.spans.span_at(offs).start;
-			let base_name = self.labels.name_from_offset(span_start);
+			let base_name = self.labels.name_for_offset(span_start);
 			generate_name(self.name, self.va_from_offset(offs), base_name)
 		}
 	}
@@ -701,7 +749,7 @@ impl<'a> Location<'a> {
 	}
 
 	pub fn get_name(&self) -> String {
-		self.seg.name_for_offset(self.offs)
+		self.seg.name_of_offset(self.offs)
 	}
 
 	pub fn get_full_name(&self) -> String {
@@ -743,6 +791,153 @@ impl<'a> Reference<'a> {
 }
 
 // ------------------------------------------------------------------------------------------------
+// Memory
+// ------------------------------------------------------------------------------------------------
+
+#[derive(new)]
+pub struct RomImage<'a> {
+	name: &'a str,
+	data: &'a [u8],
+}
+
+pub type SegmentMap<'a> = HashMap<&'a str, usize>;
+
+pub struct Memory<'a> {
+	image:        RomImage<'a>,
+	mem_map:      MemoryMap<'a>,
+	segs:         &'a mut [Segment<'a>],
+	seg_name_map: SegmentMap<'a>,
+	config:       MemoryConfig<'a>,
+}
+
+impl<'a> Memory<'a> {
+	pub fn new(
+		image: RomImage<'a>,
+		segs: &'a mut [Segment<'a>],
+		mem_map: MemoryMap<'a>,
+		config: MemoryConfig<'a>
+	) -> Self {
+		let mut seg_name_map = HashMap::new();
+
+		for (i, s) in segs.iter().enumerate() {
+			assert!(seg_name_map.insert(s.name, i).is_none());
+		}
+
+		// check the config.
+		// it's OK for memory regions to be unmapped (e.g. for mirror areas, optional areas)
+		for (region_name, seg_name) in config.iter() {
+			let region = mem_map.region_for_name(&region_name).unwrap();
+			let seg = &segs[*seg_name_map.get(seg_name).unwrap()];
+			// if it's bankable, it must be real.
+			assert!(!(region.is_bankable() && seg.is_fake()));
+		}
+
+		Self { image, mem_map, segs, seg_name_map, config }
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Queries
+
+	pub fn len(&self) -> usize {
+		self.mem_map.len()
+	}
+
+	pub fn range_crosses_regions(&self, start: VAddr, end: VAddr) -> bool {
+		assert!(end.0 > start.0);
+
+		match (self.mem_map.get(start), self.mem_map.get(end)) {
+			(Some(s), Some(e)) => !std::ptr::eq(s, e),
+			(None, None)       => false,
+			_                  => true,
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Segments
+
+	pub fn segment_for_va(&self, va: VAddr) -> Option<&Segment> {
+		self.mem_map.get(va)
+		.and_then(|region| self.config.segment_for_region(region.name))
+		.and_then(|name|   self.segment_for_name(name))
+	}
+
+	pub fn segment_for_va_mut(&'a mut self, va: VAddr) -> Option<&mut Segment> {
+		let name = match self.mem_map.get(va) {
+			Some(region) => self.config.segment_for_region(region.name),
+			None => None,
+		};
+
+		match name {
+			Some(name) => match self.seg_name_map.get(&name) {
+				Some(&idx) => Some(&mut self.segs[idx]),
+				None       => None,
+			},
+			None => None,
+		}
+	}
+
+	pub fn segment_for_name(&self, name: &str) -> Option<&Segment> {
+		self.seg_name_map.get(&name).map(|&idx| &self.segs[idx])
+	}
+
+	pub fn segment_for_name_mut(&'a mut self, name: &str) -> Option<&mut Segment> {
+		// Rust refuses to let me do a similar thing to above and I can't figure out why.
+		match self.seg_name_map.get(&name) {
+			Some(&idx) => Some(&mut self.segs[idx]),
+			None       => None,
+		}
+	}
+
+	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
+		self.config.segment_for_region(region_name)
+		.and_then(|seg_name| self.segment_for_name(seg_name))
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Names
+
+	pub fn name_of_va(&self, va: VAddr) -> String {
+		match self.segment_for_va(va) {
+			Some(seg) => seg.name_of_va(va),
+			None      => generate_name("UNK", va, None),
+		}
+	}
+
+	pub fn name_of_loc(&'a self, loc: Location<'a>) -> String {
+		// doing it this way ensures that we really do have this segment.
+		self.segment_for_name(loc.seg.name)
+			.expect("segment not in segment map")
+			.name_of_offset(loc.offs)
+	}
+
+	pub fn add_label(&'a mut self, name: &'a str, loc: Location<'a>) {
+		self.segment_for_name_mut(loc.seg.name)
+			.expect("segment not in segment map")
+			.add_label_offset(name, loc.offs);
+	}
+}
+
+impl<'a> Display for Memory<'a> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		writeln!(f, "Image: {} (0x{:X} bytes)", self.image.name, self.image.data.len())?;
+		writeln!(f, "Segments:")?;
+
+		writeln!(f, "Memory map:")?;
+
+		for region in self.mem_map.all_regions() {
+			write!(f, "{:>40}", region.to_string())?;
+
+			match self.segment_for_region(region.name) {
+				Some(seg) => writeln!(f, " mapped to segment {}", seg)?,
+				None      => writeln!(f, " (unmapped)")?,
+			}
+		}
+
+		Ok(())
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------------------------------
 
@@ -761,12 +956,12 @@ mod tests {
 		m.redefine(SegOffset(0), SegOffset(0x800), SpanKind::Code, None);
 		m.dump_spans();
 
+		println!("span map iter:");
 		for s in m.iter() {
 			println!("{}", s.start);
 		}
 
 		m.redefine(SegOffset(0), SegOffset(0x10000), SpanKind::Unk, None);
 		m.dump_spans();
-
 	}
 }
