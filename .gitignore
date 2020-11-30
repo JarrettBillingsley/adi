@@ -1,1 +1,6 @@
 /target
+.DS_Store
+*.prg
+*.chr
+*.gb
+tests/data/smb*
