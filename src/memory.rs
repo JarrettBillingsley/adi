@@ -429,16 +429,16 @@ impl<'a> SpanMap<'a> {
 }
 
 // ------------------------------------------------------------------------------------------------
-// LabelMap
+// NameMap
 // ------------------------------------------------------------------------------------------------
 
-/// A bidirectional mapping between labels (names) and segment offsets.
-pub struct LabelMap<'a> {
+/// A bidirectional mapping between names and segment offsets.
+pub struct NameMap<'a> {
 	names_to_offsets: HashMap<&'a str, SegOffset>,
 	offsets_to_names: BTreeMap<SegOffset, &'a str>,
 }
 
-impl<'a> LabelMap<'a> {
+impl<'a> NameMap<'a> {
 	/// Makes a new empty map.
 	pub fn new() -> Self {
 		Self {
@@ -468,22 +468,22 @@ impl<'a> LabelMap<'a> {
 		self.offsets_to_names.remove(&offs);
 	}
 
-	/// Gets the offset for a label name, if one of that name exists.
+	/// Gets the offset for a name, if one of that name exists.
 	pub fn offset_for_name(&self, name: &'a str) -> Option<SegOffset> {
 		self.names_to_offsets.get(name).copied()
 	}
 
-	/// Gets the label name for an offset, if there is one.
+	/// Gets the name for an offset, if there is one.
 	pub fn name_for_offset(&self, offs: SegOffset) -> Option<&'a str> {
 		self.offsets_to_names.get(&offs).copied()
 	}
 
-	/// Whether or not the given label name exists.
+	/// Whether or not the given name exists.
 	pub fn has_name(&self, name: &'a str) -> bool {
 		self.names_to_offsets.contains_key(name)
 	}
 
-	/// Whether or not there is a label name for the given offset.
+	/// Whether or not there is a name for the given offset.
 	pub fn has_offset(&self, offs: SegOffset) -> bool {
 		self.offsets_to_names.contains_key(&offs)
 	}
@@ -512,13 +512,13 @@ pub struct ImageRange {
 /// A single segment. Can be an image segment (data comes from a ROM image) or a fake
 /// segment (there is no data, e.g. RAM, but it's useful to put names and spans there).
 pub struct Segment<'a> {
-	name:   &'a str,
-	vbase:  VAddr,
-	vend:   VAddr,
-	size:   usize,
-	spans:  SpanMap<'a>,
-	labels: LabelMap<'a>,
-	image:  Option<ImageRange>,
+	name:  &'a str,
+	vbase: VAddr,
+	vend:  VAddr,
+	size:  usize,
+	spans: SpanMap<'a>,
+	names: NameMap<'a>,
+	image: Option<ImageRange>,
 }
 
 impl<'a> Display for Segment<'a> {
@@ -546,7 +546,7 @@ impl<'a> Segment<'a> {
 			vend,
 			size,
 			spans: SpanMap::new(size),
-			labels: LabelMap::new(),
+			names: NameMap::new(),
 			image,
 		}
 	}
@@ -595,7 +595,7 @@ impl<'a> Segment<'a> {
 	// (remains to be seen how many of these are actually used in practice)
 
 	pub fn offset_from_name(&self, name: &str) -> SegOffset {
-		self.labels.offset_for_name(name).unwrap()
+		self.names.offset_for_name(name).unwrap()
 	}
 
 	pub fn offset_from_va(&self, va: VAddr) -> SegOffset {
@@ -610,11 +610,11 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn name_from_offset(&self, offs: SegOffset) -> &str {
-		self.labels.name_for_offset(offs).unwrap()
+		self.names.name_for_offset(offs).unwrap()
 	}
 
 	pub fn name_from_va(&self, va: VAddr) -> &str {
-		self.labels.name_for_offset(self.offset_from_va(va)).unwrap()
+		self.names.name_for_offset(self.offset_from_va(va)).unwrap()
 	}
 
 	pub fn name_from_pa(&self, pa: PAddr) -> &str {
@@ -622,7 +622,7 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn va_from_name(&self, name: &str) -> VAddr {
-		self.va_from_offset(self.labels.offset_for_name(name).unwrap())
+		self.va_from_offset(self.names.offset_for_name(name).unwrap())
 	}
 
 	pub fn va_from_offset(&self, offs: SegOffset) -> VAddr {
@@ -649,43 +649,43 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn pa_from_name(&self, name: &str) -> PAddr {
-		self.pa_from_offset(self.labels.offset_for_name(name).unwrap())
+		self.pa_from_offset(self.names.offset_for_name(name).unwrap())
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Label management
+	// Name management
 
-	pub fn add_label_offset(&mut self, name: &'a str, offs: SegOffset) {
+	pub fn add_name_offset(&mut self, name: &'a str, offs: SegOffset) {
 		assert!(self.contains_offset(offs));
-		self.labels.add(name, offs);
+		self.names.add(name, offs);
 	}
 
-	pub fn add_label_va(&mut self, name: &'a str, va: VAddr) {
-		self.add_label_offset(name, self.offset_from_va(va));
+	pub fn add_name_va(&mut self, name: &'a str, va: VAddr) {
+		self.add_name_offset(name, self.offset_from_va(va));
 	}
 
-	pub fn remove_label_name(&mut self, name: &'a str) {
-		self.labels.remove_name(name)
+	pub fn remove_name_name(&mut self, name: &'a str) {
+		self.names.remove_name(name)
 	}
 
-	pub fn remove_label_offset(&mut self, offs: SegOffset) {
-		self.labels.remove_offset(offs);
+	pub fn remove_name_offset(&mut self, offs: SegOffset) {
+		self.names.remove_offset(offs);
 	}
 
-	pub fn remove_label_va(&mut self, va: VAddr) {
-		self.labels.remove_offset(self.offset_from_va(va));
+	pub fn remove_name_va(&mut self, va: VAddr) {
+		self.names.remove_offset(self.offset_from_va(va));
 	}
 
-	pub fn has_label_name(&self, name: &str) -> bool {
-		self.labels.has_name(name)
+	pub fn has_name_name(&self, name: &str) -> bool {
+		self.names.has_name(name)
 	}
 
-	pub fn has_label_offset(&self, offs: SegOffset) -> bool {
-		self.labels.has_offset(offs)
+	pub fn has_name_offset(&self, offs: SegOffset) -> bool {
+		self.names.has_offset(offs)
 	}
 
-	pub fn has_label_va(&self, va: VAddr) -> bool {
-		self.labels.has_offset(self.offset_from_va(va))
+	pub fn has_name_va(&self, va: VAddr) -> bool {
+		self.names.has_offset(self.offset_from_va(va))
 	}
 
 	pub fn name_of_va(&self, va: VAddr) -> String {
@@ -695,11 +695,11 @@ impl<'a> Segment<'a> {
 	pub fn name_of_offset(&self, offs: SegOffset) -> String {
 		assert!(self.contains_offset(offs));
 
-		if let Some(name) = self.labels.name_for_offset(offs) {
+		if let Some(name) = self.names.name_for_offset(offs) {
 			name.into()
 		} else {
 			let span_start = self.spans.span_at(offs).start;
-			let base_name = self.labels.name_for_offset(span_start);
+			let base_name = self.names.name_for_offset(span_start);
 			generate_name(self.name, self.va_from_offset(offs), base_name)
 		}
 	}
@@ -910,10 +910,10 @@ impl<'a> Memory<'a> {
 			.name_of_offset(loc.offs)
 	}
 
-	pub fn add_label(&'a mut self, name: &'a str, loc: Location<'a>) {
+	pub fn add_name(&'a mut self, name: &'a str, loc: Location<'a>) {
 		self.segment_for_name_mut(loc.seg.name)
 			.expect("segment not in segment map")
-			.add_label_offset(name, loc.offs);
+			.add_name_offset(name, loc.offs);
 	}
 }
 
