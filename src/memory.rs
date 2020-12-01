@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::collections::{
 	btree_map::Iter as BTreeIter,
@@ -8,7 +9,6 @@ use std::collections::{
 use std::ops::RangeBounds;
 
 mod config;
-mod locref;
 mod map;
 mod names;
 mod newtypes;
@@ -20,13 +20,67 @@ mod spans;
 mod tests;
 
 pub use config::*;
-pub use locref::*;
 pub use map::*;
 pub use names::*;
 pub use newtypes::*;
 pub use region::*;
 pub use segment::*;
 pub use spans::*;
+
+// ------------------------------------------------------------------------------------------------
+// MemoryBuilder
+// ------------------------------------------------------------------------------------------------
+
+/// Builder for the Memory object.
+pub struct MemoryBuilder<'a> {
+	image:   RomImage<'a>,
+	segs:    Vec<Segment<'a>>,
+	mem_map: MemoryMap<'a>,
+	config:  MemoryConfig<'a>,
+	seg_name_map: HashMap<&'a str, usize>,
+}
+
+impl<'a> MemoryBuilder<'a> {
+	pub fn new(image: RomImage<'a>, mem_map: MemoryMap<'a>, config: MemoryConfig<'a>) -> Self {
+		Self {
+			image,
+			segs: vec![],
+			mem_map,
+			config,
+			seg_name_map: HashMap::new(),
+		}
+	}
+
+	/// Add a segment. Cannot be a duplicate of an existing one.
+	pub fn segment(&mut self, name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) ->
+		&mut Self {
+		let id = self.segs.len();
+		assert!(self.seg_name_map.insert(name, id).is_none(), "duplicate segment name {}", name);
+		self.segs.push(Segment::new(SegId(id.try_into().unwrap()), name, vbase, vend, pbase));
+		self
+	}
+
+	/// Construct the Memory object.
+	pub fn build(self) -> Memory<'a> {
+		// check the config.
+		// it's OK for memory regions to be unmapped (e.g. for mirror areas, optional areas)
+		for (region_name, seg_name) in self.config.iter() {
+			let region = self.mem_map.region_for_name(&region_name).unwrap();
+			let seg = &self.segs[*self.seg_name_map.get(seg_name).unwrap()];
+			// if it's bankable, it must be real.
+			assert!(!(region.is_bankable() && seg.is_fake()));
+		}
+
+		Memory {
+			image:        self.image,
+			segs:         self.segs,
+			mem_map:      self.mem_map,
+			config:       self.config,
+			seg_name_map: self.seg_name_map,
+			names:        NameMap::new(),
+		}
+	}
+}
 
 // ------------------------------------------------------------------------------------------------
 // Memory
@@ -36,39 +90,16 @@ pub use spans::*;
 /// Ties together an image, memory map, memory config, segments, and names.
 pub struct Memory<'a> {
 	image:        RomImage<'a>,
+	segs:         Vec<Segment<'a>>,
 	mem_map:      MemoryMap<'a>,
-	segs:         &'a mut [Segment<'a>],
-	seg_name_map: HashMap<&'a str, usize>,
 	config:       MemoryConfig<'a>,
+
+	seg_name_map: HashMap<&'a str, usize>,
 	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 	names:        NameMap<'a>,
 }
 
 impl<'a> Memory<'a> {
-	pub fn new(
-		image: RomImage<'a>,
-		segs: &'a mut [Segment<'a>],
-		mem_map: MemoryMap<'a>,
-		config: MemoryConfig<'a>
-	) -> Self {
-		let mut seg_name_map = HashMap::new();
-
-		for (i, s) in segs.iter().enumerate() {
-			assert!(seg_name_map.insert(s.name, i).is_none());
-		}
-
-		// check the config.
-		// it's OK for memory regions to be unmapped (e.g. for mirror areas, optional areas)
-		for (region_name, seg_name) in config.iter() {
-			let region = mem_map.region_for_name(&region_name).unwrap();
-			let seg = &segs[*seg_name_map.get(seg_name).unwrap()];
-			// if it's bankable, it must be real.
-			assert!(!(region.is_bankable() && seg.is_fake()));
-		}
-
-		Self { image, mem_map, segs, seg_name_map, config, names: NameMap::new() }
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// Memory map and Segments
 
@@ -128,6 +159,28 @@ impl<'a> Memory<'a> {
 			Some(&idx) => Some(&mut self.segs[idx]),
 			None       => None,
 		}
+	}
+
+	// TODO: adding/removing/redefining segments
+
+	// ---------------------------------------------------------------------------------------------
+	// Address translation
+
+	/// Tries to find a unique location for the given VA.
+	/// If there is no mapping, or if the region is bankable, returns None.
+	pub fn va_to_loc(&self, va: VAddr) -> Option<Location> {
+		self.mem_map.region_for_va(va)
+		.and_then(|region| {
+			if region.is_bankable() {
+				None
+			} else {
+				self.segment_for_region(region.name)
+				.and_then(|seg| {
+					let offs = seg.offset_from_va(va);
+					Some(Location::new(seg.id, offs))
+				})
+			}
+		})
 	}
 
 	// ---------------------------------------------------------------------------------------------

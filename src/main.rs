@@ -19,16 +19,6 @@ fn test_nes() -> std::io::Result<()> {
 		MemoryRegion::new("PRGROM",  VAddr(0x8000), VAddr(0x10000), false, MemoryRegionKind::Rom),
 	];
 
-	let segments = &mut [
-		// default
-		Segment::new("RAM",   VAddr(0x0000), VAddr(0x0800), None),
-		Segment::new("PPU",   VAddr(0x2000), VAddr(0x2008), None),
-		Segment::new("IOREG", VAddr(0x4000), VAddr(0x4020), None),
-
-		// ROM-specific
-		Segment::new("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0))),
-	];
-
 	// default
 	let nes_config = MemoryConfig::from_iter(&[
 		// Region, Segment
@@ -46,7 +36,15 @@ fn test_nes() -> std::io::Result<()> {
 	let img_data = std::fs::read("tests/data/smb.prg")?;
 	let img = RomImage::new("smb.prg", &img_data);
 	let map = MemoryMap::new(16, regions);
-	let mut mem = Memory::new(img, segments, map, config);
+	let mut mem = MemoryBuilder::new(img, map, config);
+		// default segments
+		mem.segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
+		mem.segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
+		mem.segment("IOREG", VAddr(0x4000), VAddr(0x4020), None);
+
+		// ROM-specific segments
+		mem.segment("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0)));
+	let mut mem = mem.build();
 
 	for StdName { name, addr } in NES_STD_NAMES {
 		mem.add_name(name, VAddr(*addr));
@@ -66,6 +64,16 @@ fn test_nes() -> std::io::Result<()> {
 	// for (va, name) in mem.all_names_by_va() { println!("0x{:04x}: {}", va, name); }
 	// println!();
 	// for (va, name) in mem.names_in_range(..VAddr(0x2004)) { println!("0x{:04x}: {}", va, name); }
+
+	println!();
+
+	println!("location for 0x0000: {:?}", mem.va_to_loc(VAddr(0x0000)));
+	println!("location for 0x2000: {:?}", mem.va_to_loc(VAddr(0x2000)));
+	println!("location for 0x2001: {:?}", mem.va_to_loc(VAddr(0x2001)));
+	println!("location for 0x2008: {:?}", mem.va_to_loc(VAddr(0x2008)));
+	println!("location for 0x0400: {:?}", mem.va_to_loc(VAddr(0x0400)));
+	println!("location for 0x5000: {:?}", mem.va_to_loc(VAddr(0x5000)));
+	println!("location for 0x8000: {:?}", mem.va_to_loc(VAddr(0x8000)));
 
 	Ok(())
 }

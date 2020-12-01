@@ -104,6 +104,38 @@ impl Sub for SegOffset {
 }
 
 // ------------------------------------------------------------------------------------------------
+// SegId
+// ------------------------------------------------------------------------------------------------
+
+/// newtype for segment IDs. each segment gets a unique ID (index into an array).
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct SegId(pub u16);
+
+// ------------------------------------------------------------------------------------------------
+// Location
+// ------------------------------------------------------------------------------------------------
+
+/// A unique location consisting of Segment ID and an offset within that Segment.
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(new)]
+#[display("{seg.0:04X}:{offs:08X}")]
+pub struct Location {
+	pub seg:  SegId,
+	pub offs: SegOffset,
+}
+
+// ------------------------------------------------------------------------------------------------
+// Reference
+// ------------------------------------------------------------------------------------------------
+
+/// A directed edge from one location to another.
+#[derive(new)]
+pub struct Reference {
+	pub src: Location,
+	pub dst: Location,
+}
+
+// ------------------------------------------------------------------------------------------------
 // ImageRange
 // ------------------------------------------------------------------------------------------------
 

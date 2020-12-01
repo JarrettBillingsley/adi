@@ -13,6 +13,7 @@ use super::spans::*;
 /// A single segment. Can be an image segment (data comes from a ROM image) or a fake
 /// segment (there is no data, e.g. RAM, but it's useful to put spans there).
 pub struct Segment<'a> {
+	pub id:    SegId,
 	pub name:  &'a str,
 	pub vbase: VAddr,
 	pub vend:  VAddr,
@@ -36,11 +37,12 @@ impl<'a> Display for Segment<'a> {
 impl<'a> Segment<'a> {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
-	pub fn new(name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
+	pub fn new(id: SegId, name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
 		let size = vend - vbase;
 		let image = pbase.map(|pbase| ImageRange { pbase, pend: pbase + size });
 
 		Self {
+			id,
 			name,
 			vbase,
 			vend,
