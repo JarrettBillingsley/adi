@@ -1,4 +1,7 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::collections::{
+	btree_map::Values as BTreeValues,
+};
 
 use super::newtypes::*;
 use super::spans::*;
@@ -50,30 +53,37 @@ impl<'a> Segment<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Queries
 
+	/// Length in bytes.
 	pub fn len(&self) -> usize {
 		self.size
 	}
 
+	/// True if this is a "fake" segment (has no physical image mapping).
 	pub fn is_fake(&self) -> bool {
 		self.image.is_none()
 	}
 
+	/// Gets the range of physical addresses this segment is mapped to.
 	pub fn get_image_range(&self) -> ImageRange {
 		self.image.unwrap()
 	}
 
+	/// Whether the given offset is valid for this segment.
 	pub fn contains_offset(&self, offs: SegOffset) -> bool {
 		(.. SegOffset(self.size)).contains(&offs)
 	}
 
+	/// Whether this segment contains a given VA.
 	pub fn contains_va(&self, addr: VAddr) -> bool {
 		(self.vbase .. self.vend).contains(&addr)
 	}
 
+	/// Whether this segment and another segment overlap in the virtual address space.
 	pub fn overlaps_va(&self, other: &Segment) -> bool {
 		!(self.vend <= other.vbase || other.vend <= self.vbase)
 	}
 
+	/// Whether this segment contains a given PA.
 	pub fn contains_pa(&self, addr: PAddr) -> bool {
 		match self.image {
 			Some(i) => (i.pbase .. i.pend).contains(&addr),
@@ -81,6 +91,8 @@ impl<'a> Segment<'a> {
 		}
 	}
 
+	/// Whether this segment and another segment overlap in the physical address space.
+	/// (That really should never happen, I don't think...)
 	pub fn overlaps_pa(&self, other: &Segment) -> bool {
 		let i = self.get_image_range();
 		let o = other.get_image_range();
@@ -92,34 +104,40 @@ impl<'a> Segment<'a> {
 	// (there are so many for "convenience" I guess)
 	// (remains to be seen how many of these are actually used in practice)
 
+	/// Given a VA, convert it to an offset into this segment.
 	pub fn offset_from_va(&self, va: VAddr) -> SegOffset {
 		assert!(self.contains_va(va));
 		SegOffset(va - self.vbase)
 	}
 
+	/// Given a PA, convert it to an offset into this segment.
 	pub fn offset_from_pa(&self, pa: PAddr) -> SegOffset {
 		assert!(self.contains_pa(pa));
 		let pbase = self.get_image_range().pbase;
 		SegOffset(pa - pbase)
 	}
 
+	/// Given an offset into this segment, get the VA.
 	pub fn va_from_offset(&self, offs: SegOffset) -> VAddr {
 		assert!(self.contains_offset(offs));
 		self.vbase + offs
 	}
 
+	/// Given a PA in this segment, get the VA.
 	pub fn va_from_pa(&self, pa: PAddr) -> VAddr {
 		assert!(self.contains_pa(pa));
 		let pbase = self.get_image_range().pbase;
 		self.vbase + (pa - pbase)
 	}
 
+	/// Given an offset into this segment, get the PA.
 	pub fn pa_from_offset(&self, offs: SegOffset) -> PAddr {
 		assert!(self.contains_offset(offs));
 		let pbase = self.get_image_range().pbase;
 		pbase + offs
 	}
 
+	/// Given a VA in this segment, get the PA.
 	pub fn pa_from_va(&self, va: VAddr) -> PAddr {
 		assert!(self.contains_va(va));
 		let pbase = self.get_image_range().pbase;
@@ -133,15 +151,23 @@ impl<'a> Segment<'a> {
 	// def makeNewSpan(self, loc, endOffs, type, owner):
 	// 	self.spans.redefine(loc.offs, endOffs, type, owner)
 
+	/// Get the span which contains the given offset.
 	pub fn span_from_offset(&self, offs: SegOffset) -> &Span {
 		self.spans.span_at(offs)
 	}
 
+	/// Get the span which contains the given VA.
 	pub fn span_from_va(&self, va: VAddr) -> &Span {
 		self.spans.span_at(self.offset_from_va(va))
 	}
 
+	/// Get the span which contains the given PA.
 	pub fn span_from_pa(&self, pa: PAddr) -> &Span {
 		self.spans.span_at(self.offset_from_pa(pa))
+	}
+
+	/// Iterator over all spans in this segment, in order.
+	pub fn all_spans(&self) -> BTreeValues<'a, SegOffset, Span> {
+		self.spans.iter()
 	}
 }
