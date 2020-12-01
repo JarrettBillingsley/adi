@@ -161,6 +161,16 @@ impl<'a> Memory<'a> {
 		}
 	}
 
+	/// Given a location, get the Segment which contains it.
+	pub fn segment_from_loc(&self, loc: Location) -> &Segment {
+		&self.segs[loc.seg.0 as usize]
+	}
+
+	/// Same as above but mutable.
+	pub fn segment_from_loc_mut(&'a mut self, loc: Location) -> &mut Segment {
+		&mut self.segs[loc.seg.0 as usize]
+	}
+
 	// TODO: adding/removing/redefining segments
 
 	// ---------------------------------------------------------------------------------------------
