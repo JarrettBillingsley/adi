@@ -1,6 +1,10 @@
 use std::collections::{
 	BTreeMap,
 	HashMap,
+
+	btree_map::Iter as BTreeIter,
+	btree_map::Range as BTreeRange,
+	hash_map::Iter as HashIter,
 };
 
 use super::newtypes::*;
@@ -65,5 +69,21 @@ impl<'a> NameMap<'a> {
 		self.vas_to_names.contains_key(&va)
 	}
 
-	// TODO: iterators
+	/// All (name, VA) pairs in arbitrary order.
+	pub fn names(&self) -> HashIter<'a, &str, VAddr> {
+		self.names_to_vas.iter()
+	}
+
+	/// All (VA, name) pairs in VA order.
+	pub fn vas(&self) -> BTreeIter<'a, VAddr, &str> {
+		self.vas_to_names.iter()
+	}
+
+	/// All (VA, name) pairs in a given range of VAs, in VA order.
+	pub fn names_in_range<R>(&self, range: R) -> BTreeRange<'a, VAddr, &str>
+	where
+		R: std::ops::RangeBounds<VAddr>
+	{
+		self.vas_to_names.range(range)
+	}
 }

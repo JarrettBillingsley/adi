@@ -1,5 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::collections::{
+	btree_map::Iter as BTreeIter,
+	btree_map::Range as BTreeRange,
+	hash_map::Iter as HashIter,
+};
 
 mod config;
 mod locref;
@@ -26,12 +31,15 @@ pub use spans::*;
 // Memory
 // ------------------------------------------------------------------------------------------------
 
+/// This is the data structure on which everything else is built.
+/// Ties together an image, memory map, memory config, segments, and names.
 pub struct Memory<'a> {
 	image:        RomImage<'a>,
 	mem_map:      MemoryMap<'a>,
 	segs:         &'a mut [Segment<'a>],
 	seg_name_map: HashMap<&'a str, usize>,
 	config:       MemoryConfig<'a>,
+	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 	names:        NameMap<'a>,
 }
 
@@ -61,12 +69,14 @@ impl<'a> Memory<'a> {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Queries
+	// Memory map and Segments
 
+	/// How many bytes are in the memory map (virtual address map).
 	pub fn len(&self) -> usize {
 		self.mem_map.len()
 	}
 
+	/// Given a range of two VAs, do they cross over the boundary between two regions?
 	pub fn range_crosses_regions(&self, start: VAddr, end: VAddr) -> bool {
 		assert!(end.0 > start.0);
 
@@ -77,15 +87,20 @@ impl<'a> Memory<'a> {
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------------
-	// Segments
+	/// Given a region name, get the Segment mapped to it (if any).
+	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
+		self.config.segment_for_region(region_name)
+		.and_then(|seg_name| self.segment_for_name(seg_name))
+	}
 
+	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VAddr) -> Option<&Segment> {
 		self.mem_map.region_for_va(va)
 		.and_then(|region| self.config.segment_for_region(region.name))
 		.and_then(|name|   self.segment_for_name(name))
 	}
 
+	/// Same as above but mutable.
 	pub fn segment_for_va_mut(&'a mut self, va: VAddr) -> Option<&mut Segment> {
 		let name = self.mem_map.region_for_va(va)
 			.and_then(|region| self.config.segment_for_region(region.name));
@@ -100,10 +115,12 @@ impl<'a> Memory<'a> {
 		}
 	}
 
+	/// Given a segment name, get the Segment named that (if any).
 	pub fn segment_for_name(&self, name: &str) -> Option<&Segment> {
 		self.seg_name_map.get(&name).map(|&idx| &self.segs[idx])
 	}
 
+	/// Same as above but mutable.
 	pub fn segment_for_name_mut(&'a mut self, name: &str) -> Option<&mut Segment> {
 		// Rust refuses to let me do a similar thing to above and I can't figure out why.
 		match self.seg_name_map.get(&name) {
@@ -112,31 +129,26 @@ impl<'a> Memory<'a> {
 		}
 	}
 
-	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
-		self.config.segment_for_region(region_name)
-		.and_then(|seg_name| self.segment_for_name(seg_name))
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// Names
 
-	pub fn add_name_va(&mut self, name: &'a str, va: VAddr) {
+	pub fn add_name(&mut self, name: &'a str, va: VAddr) {
 		self.names.add(name, va);
 	}
 
-	pub fn remove_name_name(&mut self, name: &'a str) {
+	pub fn remove_name(&mut self, name: &'a str) {
 		self.names.remove_name(name)
 	}
 
-	pub fn remove_name_va(&mut self, va: VAddr) {
+	pub fn remove_name_from_va(&mut self, va: VAddr) {
 		self.names.remove_va(va);
 	}
 
-	pub fn has_name_name(&self, name: &str) -> bool {
+	pub fn has_name(&self, name: &str) -> bool {
 		self.names.has_name(name)
 	}
 
-	pub fn has_name_va(&self, va: VAddr) -> bool {
+	pub fn has_name_for_va(&self, va: VAddr) -> bool {
 		self.names.has_va(va)
 	}
 
@@ -154,31 +166,58 @@ impl<'a> Memory<'a> {
 		} else {
 			let base_name = self.names.name_for_va(va);
 
-			let name = match self.segment_for_va(va) {
+			let seg_name = match self.segment_for_va(va) {
 				Some(seg) => seg.name,
 				None      => "UNK",
 			};
 
 			match base_name {
-				None            => format!("{}_{:04X}", name, va.0),
-				Some(base_name) => format!("{}_{}_{:04X}", name, base_name, va.0),
+				None            => format!("{}_{:04X}", seg_name, va.0),
+				Some(base_name) => format!("{}_{}_{:04X}", seg_name, base_name, va.0),
 			}
 		}
 	}
+
+	/// All (name, VA) pairs in arbitrary order.
+	pub fn all_names(&self) -> HashIter<'a, &str, VAddr> {
+		self.names.names()
+	}
+
+	/// All (VA, name) pairs in VA order.
+	pub fn all_names_by_va(&self) -> BTreeIter<'a, VAddr, &str> {
+		self.names.vas()
+	}
+
+	/// All (VA, name) pairs in a given range of VAs, in VA order.
+	pub fn names_in_range<R>(&self, range: R) -> BTreeRange<'a, VAddr, &str>
+	where
+		R: std::ops::RangeBounds<VAddr>
+	{
+		self.names.names_in_range(range)
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Image
+
+	// TODO: get slices of image, read bytes etc. ENDIANNESS??
 }
 
 impl<'a> Display for Memory<'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Image: {} (0x{:X} bytes)", self.image.name, self.image.data.len())?;
-		writeln!(f, "Segments:")?;
+		writeln!(f, "\nSegments:")?;
 
-		writeln!(f, "Memory map:")?;
+		for seg in self.segs.iter() {
+			writeln!(f, "    {}", seg)?;
+		}
+
+		writeln!(f, "\nMemory map:")?;
 
 		for region in self.mem_map.all_regions() {
 			write!(f, "{:>40}", region.to_string())?;
 
 			match self.segment_for_region(region.name) {
-				Some(seg) => writeln!(f, " mapped to segment {}", seg)?,
+				Some(seg) => writeln!(f, " => {}", seg)?,
 				None      => writeln!(f, " (unmapped)")?,
 			}
 		}
