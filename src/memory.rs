@@ -87,11 +87,10 @@ impl<'a> Memory<'a> {
 	}
 
 	pub fn segment_for_va_mut(&'a mut self, va: VAddr) -> Option<&mut Segment> {
-		let name = match self.mem_map.region_for_va(va) {
-			Some(region) => self.config.segment_for_region(region.name),
-			None => None,
-		};
+		let name = self.mem_map.region_for_va(va)
+			.and_then(|region| self.config.segment_for_region(region.name));
 
+		// Rust refuses to let me do a similar thing to above and I can't figure out why.
 		match name {
 			Some(name) => match self.seg_name_map.get(&name) {
 				Some(&idx) => Some(&mut self.segs[idx]),
