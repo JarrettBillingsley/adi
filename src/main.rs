@@ -1,8 +1,15 @@
 
+use better_panic::{ Settings, Verbosity };
 use std::iter::FromIterator;
 use adi::memory::*;
 
 fn main() -> std::io::Result<()> {
+	Settings::new()
+		.lineno_suffix(true)
+		// .most_recent_first(false)
+		.verbosity(Verbosity::Full)
+		.install();
+
 	test_nes()
 }
 
@@ -75,6 +82,10 @@ fn test_nes() -> std::io::Result<()> {
 	println!("location for 0x0400: {:?}", mem.va_to_loc(VAddr(0x0400)));
 	println!("location for 0x5000: {:?}", mem.va_to_loc(VAddr(0x5000)));
 	println!("location for 0x8000: {:?}", mem.va_to_loc(VAddr(0x8000)));
+
+	println!();
+
+	println!("{}", mem.image_slice_for_segment_name("PRG0").len());
 
 	Ok(())
 }

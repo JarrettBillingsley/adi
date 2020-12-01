@@ -70,6 +70,15 @@ impl<'a> Segment<'a> {
 		self.image.unwrap()
 	}
 
+	/// Given a ROM image, get the slice of that image that this segment covers,
+	/// or None if this is a fake segment.
+	pub fn get_image_slice(&self, image: &'a RomImage) -> Option<&'a [u8]> {
+		match self.image {
+			Some(range) => Some(&image.data[range.pbase.0 .. range.pend.0]),
+			None => None,
+		}
+	}
+
 	/// Whether the given offset is valid for this segment.
 	pub fn contains_offset(&self, offs: SegOffset) -> bool {
 		(.. SegOffset(self.size)).contains(&offs)
