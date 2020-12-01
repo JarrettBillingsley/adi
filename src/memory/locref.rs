@@ -29,7 +29,7 @@ impl<'a> Location<'a> {
 	}
 
 	pub fn to_va(&self) -> VAddr {
-		VAddr(self.seg.vbase.0 + self.offs.0)
+		self.seg.vbase + self.offs
 	}
 
 	pub fn get_span(&self) -> &Span {

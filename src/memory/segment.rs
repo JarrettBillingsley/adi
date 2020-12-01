@@ -34,8 +34,8 @@ impl<'a> Segment<'a> {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
 	pub fn new(name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
-		let size = vend.0 - vbase.0;
-		let image = pbase.map(|pbase| ImageRange { pbase, pend: PAddr(pbase.0 + size) });
+		let size = vend - vbase;
+		let image = pbase.map(|pbase| ImageRange { pbase, pend: pbase + size });
 
 		Self {
 			name,
@@ -94,36 +94,36 @@ impl<'a> Segment<'a> {
 
 	pub fn offset_from_va(&self, va: VAddr) -> SegOffset {
 		assert!(self.contains_va(va));
-		SegOffset(va.0 - self.vbase.0)
+		SegOffset(va - self.vbase)
 	}
 
 	pub fn offset_from_pa(&self, pa: PAddr) -> SegOffset {
 		assert!(self.contains_pa(pa));
 		let pbase = self.get_image_range().pbase;
-		SegOffset(pa.0 - pbase.0)
+		SegOffset(pa - pbase)
 	}
 
 	pub fn va_from_offset(&self, offs: SegOffset) -> VAddr {
 		assert!(self.contains_offset(offs));
-		VAddr(self.vbase.0 + offs.0)
+		self.vbase + offs
 	}
 
 	pub fn va_from_pa(&self, pa: PAddr) -> VAddr {
 		assert!(self.contains_pa(pa));
 		let pbase = self.get_image_range().pbase;
-		VAddr((pa.0 - pbase.0) + self.vbase.0)
+		self.vbase + (pa - pbase)
 	}
 
 	pub fn pa_from_offset(&self, offs: SegOffset) -> PAddr {
 		assert!(self.contains_offset(offs));
 		let pbase = self.get_image_range().pbase;
-		PAddr(pbase.0 + offs.0)
+		pbase + offs
 	}
 
 	pub fn pa_from_va(&self, va: VAddr) -> PAddr {
 		assert!(self.contains_va(va));
 		let pbase = self.get_image_range().pbase;
-		PAddr((va.0 - self.vbase.0) + pbase.0)
+		pbase + (va - self.vbase)
 	}
 
 	// ---------------------------------------------------------------------------------------------

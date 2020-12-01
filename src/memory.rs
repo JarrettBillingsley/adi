@@ -79,7 +79,7 @@ impl<'a> Memory<'a> {
 
 	/// Given a range of two VAs, do they cross over the boundary between two regions?
 	pub fn range_crosses_regions(&self, start: VAddr, end: VAddr) -> bool {
-		assert!(end.0 > start.0);
+		assert!(end > start);
 
 		match (self.mem_map.region_for_va(start), self.mem_map.region_for_va(end)) {
 			(Some(s), Some(e)) => !std::ptr::eq(s, e),

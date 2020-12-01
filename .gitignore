@@ -4,3 +4,5 @@
 *.chr
 *.gb
 tests/data/smb*
+*.sublime-project
+*.sublime-workspace
