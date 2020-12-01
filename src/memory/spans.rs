@@ -6,7 +6,7 @@ use std::collections::{
 };
 use std::fmt::{ Debug, Display };
 
-use super::newtypes::*;
+use super::types::*;
 
 // ------------------------------------------------------------------------------------------------
 // Span

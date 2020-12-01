@@ -8,7 +8,7 @@ use std::collections::{
 };
 use std::ops::RangeBounds;
 
-use super::newtypes::*;
+use super::types::*;
 
 // TODO: make this parameterizable
 pub const AUTOGEN_NAME_PREFIX: &str = "loc";

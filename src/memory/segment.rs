@@ -3,7 +3,7 @@ use std::collections::{
 	btree_map::Values as BTreeValues,
 };
 
-use super::newtypes::*;
+use super::types::*;
 use super::spans::*;
 
 // ------------------------------------------------------------------------------------------------
