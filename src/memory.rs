@@ -161,20 +161,34 @@ impl<'a> Memory<'a> {
 	}
 
 	pub fn name_of_va(&self, va: VAddr) -> String {
+		// see if there's already a name here.
 		if let Some(name) = self.names.name_for_va(va) {
-			name.into()
-		} else {
-			let base_name = self.names.name_for_va(va);
+			return name.into();
+		}
 
-			let seg_name = match self.segment_for_va(va) {
-				Some(seg) => seg.name,
-				None      => "UNK",
-			};
+		// nope. have to make our own.
+		// if there's a mapped segment, see what span is there.
+		if let Some(seg) = self.segment_for_va(va) {
+			// since there's a segment, let's see if the span has a name.
+			let start = seg.va_from_offset(seg.span_from_va(va).start);
 
-			match base_name {
-				None            => format!("{}_{:04X}", seg_name, va.0),
-				Some(base_name) => format!("{}_{}_{:04X}", seg_name, base_name, va.0),
+			match self.names.name_for_va(start) {
+				Some(name) =>
+					// there's already a name, so name it like "main_loc_0C30"
+					return format!("{}_loc_{:04X}", name, va.0),
+				None =>
+					// no name, so name it "SEGNAME_loc_0C30"
+					return format!("{}_loc_{:04X}", seg.name, va.0),
 			}
+		}
+
+		// no mapped segment?? uhhhh....... try region name?
+		if let Some(region) = self.mem_map.region_for_va(va) {
+			// name it "REGIONNAME_loc_0C30"
+			return format!("{}_loc_{:04X}", region.name, va.0);
+		} else {
+			// how in the hell
+			return format!("UNK_loc_{:04X}", va.0);
 		}
 	}
 

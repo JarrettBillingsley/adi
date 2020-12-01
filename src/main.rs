@@ -55,6 +55,9 @@ fn test_nes() -> std::io::Result<()> {
 	println!("0x2000: {}", mem.name_of_va(VAddr(0x2000)));
 	println!("0x2001: {}", mem.name_of_va(VAddr(0x2001)));
 	println!("0x2008: {}", mem.name_of_va(VAddr(0x2008)));
+	println!("0x0400: {}", mem.name_of_va(VAddr(0x0400)));
+	println!("0x5000: {}", mem.name_of_va(VAddr(0x5000)));
+	println!("0x8000: {}", mem.name_of_va(VAddr(0x8000)));
 
 	// for (name, va) in mem.all_names() { println!("{}: 0x{:04x}", name, va.0); }
 	// println!();
