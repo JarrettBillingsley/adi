@@ -33,6 +33,7 @@ pub use spans::*;
 
 /// Builder for the Memory object.
 pub struct MemoryBuilder<'a> {
+	endian:  Endian,
 	image:   RomImage<'a>,
 	segs:    Vec<Segment<'a>>,
 	mem_map: MemoryMap<'a>,
@@ -41,8 +42,14 @@ pub struct MemoryBuilder<'a> {
 }
 
 impl<'a> MemoryBuilder<'a> {
-	pub fn new(image: RomImage<'a>, mem_map: MemoryMap<'a>, config: MemoryConfig<'a>) -> Self {
+	pub fn new(
+		endian: Endian,
+		image: RomImage<'a>,
+		mem_map: MemoryMap<'a>,
+		config: MemoryConfig<'a>
+	) -> Self {
 		Self {
+			endian,
 			image,
 			segs: vec![],
 			mem_map,
@@ -51,7 +58,7 @@ impl<'a> MemoryBuilder<'a> {
 		}
 	}
 
-	/// Add a segment. Cannot be a duplicate of an existing one.
+	/// Add a segment. Name cannot be a duplicate of an existing one.
 	pub fn segment(&mut self, name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) ->
 		&mut Self {
 		let id = self.segs.len();
@@ -72,6 +79,7 @@ impl<'a> MemoryBuilder<'a> {
 		}
 
 		Memory {
+			endian:       self.endian,
 			image:        self.image,
 			segs:         self.segs,
 			mem_map:      self.mem_map,
@@ -89,6 +97,7 @@ impl<'a> MemoryBuilder<'a> {
 /// This is the data structure on which everything else is built.
 /// Ties together an image, memory map, memory config, segments, and names.
 pub struct Memory<'a> {
+	endian:       Endian,
 	image:        RomImage<'a>,
 	segs:         Vec<Segment<'a>>,
 	mem_map:      MemoryMap<'a>,
@@ -296,13 +305,14 @@ impl<'a> Memory<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Image
 
-	// TODO: get slices of image, read bytes etc. ENDIANNESS??
+	// TODO: get slices of image, read bytes etc.
 	// TODO: spanagement? or just leave that to the segment (segment_for_name_mut)
 }
 
 impl<'a> Display for Memory<'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Image: {} (0x{:X} bytes)", self.image.name, self.image.data.len())?;
+		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.mem_map.len(), self.endian)?;
 		writeln!(f, "\nSegments:")?;
 
 		for seg in self.segs.iter() {

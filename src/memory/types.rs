@@ -156,3 +156,15 @@ pub struct RomImage<'a> {
 	pub name: &'a str,
 	pub data: &'a [u8],
 }
+
+// ------------------------------------------------------------------------------------------------
+// Endian
+// ------------------------------------------------------------------------------------------------
+
+/// Byte order.
+#[derive(Debug, Display, PartialEq, Eq, Clone, Copy)]
+pub enum Endian {
+	#[display("little")] Little,
+	#[display("big")]    Big,
+	#[display("n/a")]    NA,
+}

@@ -37,7 +37,7 @@ fn test_nes() -> std::io::Result<()> {
 	let img_data = std::fs::read("tests/data/smb.prg")?;
 	let img = RomImage::new("smb.prg", &img_data);
 	let map = MemoryMap::new(16, regions);
-	let mut mem = MemoryBuilder::new(img, map, config);
+	let mut mem = MemoryBuilder::new(Endian::Big, img, map, config);
 		// default segments
 		mem.segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
 		mem.segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
