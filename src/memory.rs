@@ -133,6 +133,7 @@ impl<'a> Memory<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Names
 
+	/// Assigns a name to a given VA.
 	pub fn add_name(&mut self, name: &'a str, va: VAddr) {
 		self.names.add(name, va);
 	}

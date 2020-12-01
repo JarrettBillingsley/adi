@@ -29,9 +29,8 @@ impl<'a> NameMap<'a> {
 		}
 	}
 
-	/// Assigns a name to a given VA. The VA must not already have a name.
+	/// Assigns a name to a given VA.
 	pub fn add(&mut self, name: &'a str, va: VAddr) {
-		assert!(!self.names_to_vas.contains_key(&name));
 		self.names_to_vas.insert(name, va);
 		self.vas_to_names.insert(va, name);
 	}

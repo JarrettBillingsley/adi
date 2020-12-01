@@ -147,9 +147,17 @@ impl<'a> Segment<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Span management (spanagement?)
 
-	// TODO:
-	// def makeNewSpan(self, loc, endOffs, type, owner):
-	// 	self.spans.redefine(loc.offs, endOffs, type, owner)
+	/// Redefines a range of addresses (by segment offsets) to be a new span.
+	pub fn redefine_span_offsets(&mut self,
+		start: SegOffset, end: SegOffset, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
+		self.spans.redefine(start, end, kind, owner)
+	}
+
+	/// Redefines a range of addresses (by VAs) to be a new span.
+	pub fn redefine_span_vas(&mut self,
+		start: VAddr, end: VAddr, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
+		self.spans.redefine(self.offset_from_va(start), self.offset_from_va(end), kind, owner)
+	}
 
 	/// Get the span which contains the given offset.
 	pub fn span_from_offset(&self, offs: SegOffset) -> &Span {
