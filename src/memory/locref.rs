@@ -18,7 +18,7 @@ pub struct Location<'a> {
 impl<'a> Debug for Location<'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		// TODO: is it possible to get the name for this with only the segment reference?
-		write!(f, "{}:{:04X}", self.seg.name, self.offs.0)
+		write!(f, "{}:{:04X}", self.seg.name, self.offs)
 	}
 }
 

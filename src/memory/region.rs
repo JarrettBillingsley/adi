@@ -1,6 +1,8 @@
 use parse_display::*;
 use derive_new::*;
 
+use super::newtypes::*;
+
 // ------------------------------------------------------------------------------------------------
 // Memory map regions
 // ------------------------------------------------------------------------------------------------
@@ -13,9 +15,9 @@ pub struct MemoryRegion<'a> {
 	/// Human-readable name.
 	pub name: &'a str,
 	/// Address of first byte.
-	pub base: usize,
+	pub base: VAddr,
 	/// Address of first byte *after* this region.
-	pub end:  usize,
+	pub end:  VAddr,
 	/// Whether this is provided by the hardware or by a cartridge etc.
 	pub hw:   bool,
 	/// What kind of thing is at these addresses.

@@ -22,7 +22,7 @@ pub trait SpanOwner: Debug + Display {}
 /// managed by BasicBlock objects. (data spans might have some kind of Array or Variable object?)
 #[derive(Debug, Display)]
 #[derive(new)]
-#[display("{kind} [0x{start.0:08X} .. 0x{end.0:08X})")]
+#[display("{kind} [0x{start:08X} .. 0x{end:08X})")]
 pub struct Span<'a> {
 	/// address of first byte.
 	pub start: SegOffset,
@@ -59,33 +59,31 @@ pub struct SpanMap<'a> {
 	// But I don't think it's possible to use BTreeSet::range using a SegOffset as
 	// the range bounds when the value is a Span. So, map it is.
 	spans: BTreeMap<SegOffset, Span<'a>>,
-	size:  usize,
+	end:   SegOffset,
 }
 
 impl<'a> SpanMap<'a> {
 	/// Creates a new `SpanMap` with a single unknown span that covers the entire segment.
 	pub fn new(size: usize) -> Self {
+		let end = SegOffset(size);
 		let mut spans = BTreeMap::new();
-		spans.insert(SegOffset(0), Span::new(SegOffset(0), SegOffset(size), SpanKind::Unk, None));
-		Self {
-			spans,
-			size,
-		}
+		spans.insert(SegOffset(0), Span::new(SegOffset(0), end, SpanKind::Unk, None));
+		Self { spans, end }
 	}
 
 	/// Given an offset into the segment, gets the Span which contains it.
 	pub fn span_at(&self, offs: SegOffset) -> &Span {
-		assert!(offs.0 <= self.size); // TODO: should this be inclusive or exclusive...?
+		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
 		self.spans.range(..= offs).next_back().expect("how even").1
 	}
 
 	/// Given an offset into the segment, gets the Span which comes after the containing Span,
 	/// or None if the containing Span is the last one in the segment.
 	pub fn span_after(&self, offs: SegOffset) -> Option<&Span> {
-		assert!(offs.0 <= self.size); // TODO: should this be inclusive or exclusive...?
+		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
 
 		if self.spans.contains_key(&offs) {
-			self.spans.range(SegOffset(offs.0 + 1) ..)
+			self.spans.range(offs + 1 ..)
 		} else {
 			self.spans.range(offs ..)
 		}.next().map(|(_, a)| a)
@@ -101,8 +99,8 @@ impl<'a> SpanMap<'a> {
 		// TODO: SegRange for a pair of offsets (more Rustic)
 		start: SegOffset, end: SegOffset, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
 
-		assert!(start.0 < end.0);
-		assert!(end.0 <= self.size);
+		assert!(start < end);
+		assert!(end <= self.end);
 
 		// get the span inside which start falls
 		let (first_start, first_end) = self.range_from_offset(start);
@@ -148,7 +146,7 @@ impl<'a> SpanMap<'a> {
 	}
 
 	fn rewrite(&mut self, start: SegOffset, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
-		println!("rewriting 0x{:08X}!", start.0);
+		println!("rewriting 0x{:08X}!", start);
 		let span = self.spans.get_mut(&start).unwrap();
 		span.kind = kind;
 		span.owner = owner;
@@ -169,8 +167,8 @@ impl<'a> SpanMap<'a> {
 			assert_eq!(spans[i].end, spans[i + 1].start);
 		}
 
-		// INVARIANT: span[n - 1].end == self.size
-		assert_eq!(spans[spans.len() - 1].end.0, self.size);
+		// INVARIANT: span[n - 1].end == self.end
+		assert_eq!(spans[spans.len() - 1].end, self.end);
 	}
 
 	#[cfg(any(test, debug_assertions))]

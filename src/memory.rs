@@ -176,20 +176,20 @@ impl<'a> Memory<'a> {
 			match self.names.name_for_va(start) {
 				Some(name) =>
 					// there's already a name, so name it like "main_loc_0C30"
-					return format!("{}_loc_{:04X}", name, va.0),
+					return format!("{}_loc_{:04X}", name, va),
 				None =>
 					// no name, so name it "SEGNAME_loc_0C30"
-					return format!("{}_loc_{:04X}", seg.name, va.0),
+					return format!("{}_loc_{:04X}", seg.name, va),
 			}
 		}
 
 		// no mapped segment?? uhhhh....... try region name?
 		if let Some(region) = self.mem_map.region_for_va(va) {
 			// name it "REGIONNAME_loc_0C30"
-			return format!("{}_loc_{:04X}", region.name, va.0);
+			return format!("{}_loc_{:04X}", region.name, va);
 		} else {
 			// how in the hell
-			return format!("UNK_loc_{:04X}", va.0);
+			return format!("UNK_loc_{:04X}", va);
 		}
 	}
 

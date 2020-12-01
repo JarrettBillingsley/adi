@@ -2,25 +2,22 @@ use derive_new::*;
 use parse_display::*;
 
 use std::ops::{ Add, Sub };
+use std::fmt::{ UpperHex, Formatter, Result as FmtResult };
 
 // ------------------------------------------------------------------------------------------------
-// Addresses and Offsets
+// VAddr
 // ------------------------------------------------------------------------------------------------
 
 /// newtype for virtual addresses.
 #[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct VAddr(pub usize);
 
-/// newtype for physical addresses (i.e. offsets into an image).
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct PAddr(pub usize);
+impl UpperHex for VAddr {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		UpperHex::fmt(&self.0, f)
+	}
+}
 
-/// newtype for offsets into segments.
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-#[display("0x{0:08X}")]
-pub struct SegOffset(pub usize);
-
-// vaddr + usize = vaddr
 impl Add<usize> for VAddr {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
@@ -28,7 +25,6 @@ impl Add<usize> for VAddr {
 	}
 }
 
-// vaddr + segoffset = vaddr
 impl Add<SegOffset> for VAddr {
 	type Output = Self;
 	fn add(self, other: SegOffset) -> Self {
@@ -36,7 +32,6 @@ impl Add<SegOffset> for VAddr {
 	}
 }
 
-// vaddr - vaddr = usize
 impl Sub for VAddr {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
@@ -44,7 +39,21 @@ impl Sub for VAddr {
 	}
 }
 
-// paddr + usize = paddr
+// ------------------------------------------------------------------------------------------------
+// PAddr
+// ------------------------------------------------------------------------------------------------
+
+/// newtype for physical addresses (i.e. offsets into an image).
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct PAddr(pub usize);
+
+impl UpperHex for PAddr {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		UpperHex::fmt(&self.0, f)
+	}
+}
+
+
 impl Add<usize> for PAddr {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
@@ -52,7 +61,6 @@ impl Add<usize> for PAddr {
 	}
 }
 
-// paddr + segoffset = paddr
 impl Add<SegOffset> for PAddr {
 	type Output = Self;
 	fn add(self, other: SegOffset) -> Self {
@@ -60,8 +68,35 @@ impl Add<SegOffset> for PAddr {
 	}
 }
 
-// paddr - paddr = usize
 impl Sub for PAddr {
+	type Output = usize;
+	fn sub(self, other: Self) -> usize {
+		self.0 - other.0
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// SegOffset
+// ------------------------------------------------------------------------------------------------
+
+/// newtype for offsets into segments.
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct SegOffset(pub usize);
+
+impl UpperHex for SegOffset {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		UpperHex::fmt(&self.0, f)
+	}
+}
+
+impl Add<usize> for SegOffset {
+	type Output = Self;
+	fn add(self, other: usize) -> Self {
+		SegOffset(self.0 + other)
+	}
+}
+
+impl Sub for SegOffset {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
 		self.0 - other.0

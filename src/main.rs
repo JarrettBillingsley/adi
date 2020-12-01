@@ -9,14 +9,14 @@ fn main() -> std::io::Result<()> {
 fn test_nes() -> std::io::Result<()> {
 	let regions = &[
 		// default
-		MemoryRegion::new("RAM",      0x0000,  0x0800, true, MemoryRegionKind::Ram   ),
-		MemoryRegion::new("RAMECHO",  0x0800,  0x2000, true, MemoryRegionKind::Mirror),
-		MemoryRegion::new("PPU",      0x2000,  0x2008, true, MemoryRegionKind::Mmio  ),
-		MemoryRegion::new("PPUECHO",  0x2008,  0x4000, true, MemoryRegionKind::Mirror),
-		MemoryRegion::new("IOREG",    0x4000,  0x4020, true, MemoryRegionKind::Mmio  ),
+		MemoryRegion::new("RAM",     VAddr(0x0000), VAddr(0x0800),  true,  MemoryRegionKind::Ram   ),
+		MemoryRegion::new("RAMECHO", VAddr(0x0800), VAddr(0x2000),  true,  MemoryRegionKind::Mirror),
+		MemoryRegion::new("PPU",     VAddr(0x2000), VAddr(0x2008),  true,  MemoryRegionKind::Mmio  ),
+		MemoryRegion::new("PPUECHO", VAddr(0x2008), VAddr(0x4000),  true,  MemoryRegionKind::Mirror),
+		MemoryRegion::new("IOREG",   VAddr(0x4000), VAddr(0x4020),  true,  MemoryRegionKind::Mmio  ),
 
 		// ROM-specific
-		MemoryRegion::new("PRGROM",   0x8000, 0x10000, false, MemoryRegionKind::Rom),
+		MemoryRegion::new("PRGROM",  VAddr(0x8000), VAddr(0x10000), false, MemoryRegionKind::Rom),
 	];
 
 	let segments = &mut [
@@ -59,11 +59,11 @@ fn test_nes() -> std::io::Result<()> {
 	println!("0x5000: {}", mem.name_of_va(VAddr(0x5000)));
 	println!("0x8000: {}", mem.name_of_va(VAddr(0x8000)));
 
-	// for (name, va) in mem.all_names() { println!("{}: 0x{:04x}", name, va.0); }
+	// for (name, va) in mem.all_names() { println!("{}: 0x{:04x}", name, va); }
 	// println!();
-	// for (va, name) in mem.all_names_by_va() { println!("0x{:04x}: {}", va.0, name); }
+	// for (va, name) in mem.all_names_by_va() { println!("0x{:04x}: {}", va, name); }
 	// println!();
-	// for (va, name) in mem.names_in_range(.. VAddr(0x2004)) { println!("0x{:04x}: {}", va.0, name); }
+	// for (va, name) in mem.names_in_range(.. VAddr(0x2004)) { println!("0x{:04x}: {}", va, name); }
 
 	Ok(())
 }

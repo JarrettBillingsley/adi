@@ -52,7 +52,7 @@ impl<'a> MemoryMap<'a> {
 
 		// fill in the maps.
 		for (i, r) in regions.iter().enumerate() {
-			addr_map.insert(VAddr(r.base), i);
+			addr_map.insert(r.base, i);
 			name_map.insert(r.name, i);
 		}
 
@@ -76,7 +76,7 @@ impl<'a> MemoryMap<'a> {
 		// find the last entry whose start <= va
 		match self.addr_map.range(..= va).next_back() {
 			// if va < the region's end, we found it
-			Some((_, &idx)) if va.0 < self.regions[idx].end => {
+			Some((_, &idx)) if va < self.regions[idx].end => {
 				Some(&self.regions[idx])
 			}
 

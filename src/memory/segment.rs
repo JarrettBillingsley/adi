@@ -23,9 +23,9 @@ impl<'a> Display for Segment<'a> {
 		match self.image {
 			Some(image) =>
 				write!(f, "{} (image) VA [{:08X}..{:08X}) PA: [{:08X}..{:08X})",
-					self.name, self.vbase.0, self.vend.0, image.pbase.0, image.pend.0),
+					self.name, self.vbase, self.vend, image.pbase, image.pend),
 			None =>
-				write!(f, "{} (fake) VA [{:08X}..{:08X})", self.name, self.vbase.0, self.vend.0),
+				write!(f, "{} (fake) VA [{:08X}..{:08X})", self.name, self.vbase, self.vend),
 		}
 	}
 }
@@ -63,7 +63,7 @@ impl<'a> Segment<'a> {
 	}
 
 	pub fn contains_offset(&self, offs: SegOffset) -> bool {
-		(0 .. self.size).contains(&offs.0)
+		(.. SegOffset(self.size)).contains(&offs)
 	}
 
 	pub fn contains_va(&self, addr: VAddr) -> bool {
