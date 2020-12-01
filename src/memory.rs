@@ -5,6 +5,7 @@ use std::collections::{
 	btree_map::Range as BTreeRange,
 	hash_map::Iter as HashIter,
 };
+use std::ops::RangeBounds;
 
 mod config;
 mod locref;
@@ -203,10 +204,7 @@ impl<'a> Memory<'a> {
 	}
 
 	/// All (VA, name) pairs in a given range of VAs, in VA order.
-	pub fn names_in_range<R>(&self, range: R) -> BTreeRange<'a, VAddr, &str>
-	where
-		R: std::ops::RangeBounds<VAddr>
-	{
+	pub fn names_in_range(&self, range: impl RangeBounds<VAddr>) -> BTreeRange<'a, VAddr, &str> {
 		self.names.names_in_range(range)
 	}
 
