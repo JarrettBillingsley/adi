@@ -56,8 +56,9 @@ pub enum SpanKind {
 /// requires the use of an index.
 pub struct SpanMap<'a> {
 	// There's some duplication between the index into the map and Span::start.
+	// Ideally we'd use BTreeSet using Span::start as the sorting key.
 	// But I don't think it's possible to use BTreeSet::range using a SegOffset as
-	// the range bounds when the value is a Span. So, map it is.
+	// the range bounds when the value is a Span. So, a map (and duplication) it is.
 	spans: BTreeMap<SegOffset, Span<'a>>,
 	end:   SegOffset,
 }

@@ -42,15 +42,17 @@ fn test_nes() -> std::io::Result<()> {
 		("PRGROM", "PRG0"),
 	]);
 
+	// let's set it up
 	let img_data = std::fs::read("tests/data/smb.prg")?;
 	let img = RomImage::new("smb.prg", &img_data);
 	let map = MemoryMap::new(16, regions);
 	let mut mem = Memory::new(img, segments, map, config);
-	println!("{}", mem);
 
 	for StdName { name, addr } in NES_STD_NAMES {
 		mem.add_name(name, VAddr(*addr));
 	}
+
+	println!("{}", mem);
 
 	println!("0x2000: {}", mem.name_of_va(VAddr(0x2000)));
 	println!("0x2001: {}", mem.name_of_va(VAddr(0x2001)));
@@ -63,7 +65,7 @@ fn test_nes() -> std::io::Result<()> {
 	// println!();
 	// for (va, name) in mem.all_names_by_va() { println!("0x{:04x}: {}", va, name); }
 	// println!();
-	// for (va, name) in mem.names_in_range(.. VAddr(0x2004)) { println!("0x{:04x}: {}", va, name); }
+	// for (va, name) in mem.names_in_range(..VAddr(0x2004)) { println!("0x{:04x}: {}", va, name); }
 
 	Ok(())
 }
