@@ -14,6 +14,7 @@ fn test_nes() -> std::io::Result<()> {
 		MemoryRegion::new("PPU",     VAddr(0x2000), VAddr(0x2008),  true,  MemoryRegionKind::Mmio  ),
 		MemoryRegion::new("PPUECHO", VAddr(0x2008), VAddr(0x4000),  true,  MemoryRegionKind::Mirror),
 		MemoryRegion::new("IOREG",   VAddr(0x4000), VAddr(0x4020),  true,  MemoryRegionKind::Mmio  ),
+		MemoryRegion::new("WEIRD",   VAddr(0x5000), VAddr(0x6000), true, MemoryRegionKind::RamBank),
 
 		// ROM-specific
 		MemoryRegion::new("PRGROM",  VAddr(0x8000), VAddr(0x10000), false, MemoryRegionKind::Rom),
@@ -47,7 +48,7 @@ fn test_nes() -> std::io::Result<()> {
 	let mut mem = mem.build();
 
 	for StdName { name, addr } in NES_STD_NAMES {
-		mem.add_name(name, VAddr(*addr));
+		mem.add_name_va(name, VAddr(*addr));
 	}
 
 	println!("{}", mem);

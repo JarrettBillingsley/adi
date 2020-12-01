@@ -186,86 +186,108 @@ impl<'a> Memory<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Names
 
-	/// Assigns a name to a given VA.
-	pub fn add_name(&mut self, name: &'a str, va: VAddr) {
-		self.names.add(name, va);
+	/// Assigns a name to a given Location. Renames it if it already has one.
+	pub fn add_name(&mut self, name: &'a str, loc: Location) {
+		self.names.add(name, loc);
 	}
 
+	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique Location.
+	pub fn add_name_va(&mut self, name: &'a str, va: VAddr) {
+		let loc = self.va_to_loc(va).unwrap();
+		self.add_name(name, loc);
+	}
+
+	/// Removes a name. Panics if the name doesn't exist.
 	pub fn remove_name(&mut self, name: &'a str) {
 		self.names.remove_name(name)
 	}
 
-	pub fn remove_name_from_va(&mut self, va: VAddr) {
-		self.names.remove_va(va);
+	/// Removes the name from a location. Panics if there is no name.
+	pub fn remove_name_from_loc(&mut self, loc: Location) {
+		self.names.remove_loc(loc);
 	}
 
+	/// Whether this name exists.
 	pub fn has_name(&self, name: &str) -> bool {
 		self.names.has_name(name)
 	}
 
-	pub fn has_name_for_va(&self, va: VAddr) -> bool {
-		self.names.has_va(va)
+	/// Whether this location has a name.
+	pub fn has_name_for_loc(&self, loc: Location) -> bool {
+		self.names.has_loc(loc)
 	}
 
-	pub fn name_from_va(&self, va: VAddr) -> &str {
-		self.names.name_for_va(va).unwrap()
+	/// Gets the name for a location. Panics if it has none.
+	pub fn name_from_loc(&self, loc: Location) -> &str {
+		self.names.name_for_loc(loc).unwrap()
 	}
 
-	pub fn va_from_name(&self, name: &'a str) -> VAddr {
-		self.names.va_for_name(name).unwrap()
+	/// Gets the location for a name. Panics if the name doesn't exist.
+	pub fn loc_from_name(&self, name: &'a str) -> Location {
+		self.names.loc_for_name(name).unwrap()
 	}
 
-	pub fn name_of_va(&self, va: VAddr) -> String {
-		// see if there's already a name here.
-		if let Some(name) = self.names.name_for_va(va) {
-			return name.into();
-		}
-
-		// nope. have to make our own.
-		// if there's a mapped segment, see what span is there.
-		if let Some(seg) = self.segment_for_va(va) {
-			// since there's a segment, let's see if the span has a name.
-			let start = seg.va_from_offset(seg.span_from_va(va).start);
-
-			match self.names.name_for_va(start) {
-				Some(name) =>
-					// there's already a name, so name it like "main_loc_0C30"
-					return format!("{}_loc_{:04X}", name, va),
-				None =>
-					// no name, so name it "SEGNAME_loc_0C30"
-					return format!("{}_loc_{:04X}", seg.name, va),
-			}
-		}
-
-		// no mapped segment?? uhhhh....... try region name?
-		if let Some(region) = self.mem_map.region_for_va(va) {
-			// name it "REGIONNAME_loc_0C30"
-			return format!("{}_loc_{:04X}", region.name, va);
-		} else {
-			// how in the hell
-			return format!("UNK_loc_{:04X}", va);
-		}
-	}
-
-	/// All (name, VA) pairs in arbitrary order.
-	pub fn all_names(&self) -> HashIter<'a, &str, VAddr> {
+	/// All (name, Location) pairs in arbitrary order.
+	pub fn all_names(&self) -> HashIter<'a, &str, Location> {
 		self.names.names()
 	}
 
-	/// All (VA, name) pairs in VA order.
-	pub fn all_names_by_va(&self) -> BTreeIter<'a, VAddr, &str> {
-		self.names.vas()
+	/// All (Location, name) pairs in Location order.
+	pub fn all_names_by_loc(&self) -> BTreeIter<'a, Location, &str> {
+		self.names.locations()
 	}
 
-	/// All (VA, name) pairs in a given range of VAs, in VA order.
-	pub fn names_in_range(&self, range: impl RangeBounds<VAddr>) -> BTreeRange<'a, VAddr, &str> {
+	/// All (Location, name) pairs in a given range of Locations, in Location order.
+	pub fn names_in_range(&self, range: impl RangeBounds<Location>)
+	-> BTreeRange<'a, Location, &str> {
 		self.names.names_in_range(range)
+	}
+
+	/// Gets the name of a given VA if one exists, or generates one if not.
+	pub fn name_of_va(&self, va: VAddr) -> String {
+		if let Some(loc) = self.va_to_loc(va) {
+			self.name_of_loc(loc)
+		// no mapped segment?? uhhhh....... try region name?
+		} else if let Some(region) = self.mem_map.region_for_va(va) {
+			// name it "REGIONNAME_loc_0C30"
+			self.generate_name(region.name, va)
+		} else {
+			// DUNNO!
+			self.generate_name("UNK", va)
+		}
+	}
+
+	/// Gets the name of a given Location if one exists, or generates one if not.
+	pub fn name_of_loc(&self, loc: Location) -> String {
+		// see if there's already a name here.
+		if let Some(name) = self.names.name_for_loc(loc) {
+			name.into()
+		} else {
+			// what span is here?
+			let seg = &self.segs[loc.seg.0 as usize];
+			let va = seg.va_from_offset(loc.offs);
+			let start = seg.span_from_offset(loc.offs).start;
+
+			match self.names.name_for_loc(Location::new(loc.seg, start)) {
+				Some(name) =>
+					// there's already a name, so name it like "main_loc_0C30"
+					self.generate_name(name, va),
+				None =>
+					// no name, so name it "SEGNAME_loc_0C30"
+					self.generate_name(seg.name, va),
+			}
+		}
+	}
+
+	fn generate_name(&self, base: &str, va: VAddr) -> String {
+		format!("{}_{}_{}", base, AUTOGEN_NAME_PREFIX, self.mem_map.fmt_addr(va.0))
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Image
 
 	// TODO: get slices of image, read bytes etc. ENDIANNESS??
+	// TODO: spanagement? or just leave that to the segment (segment_for_name_mut)
 }
 
 impl<'a> Display for Memory<'a> {
