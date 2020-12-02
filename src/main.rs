@@ -44,7 +44,7 @@ fn test_nes() -> std::io::Result<()> {
 	let img_data = std::fs::read("tests/data/smb.prg")?;
 	let img = RomImage::new("smb.prg", &img_data);
 	let map = MemoryMap::new(16, regions);
-	let mut mem = MemoryBuilder::new(Endian::Big, map, config);
+	let mut mem = MemoryBuilder::new(Endian::Little, map, config);
 		// default segments
 		mem.segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
 		mem.segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
@@ -59,7 +59,7 @@ fn test_nes() -> std::io::Result<()> {
 		prog.add_name_va(name, VAddr(*addr));
 	}
 
-	println!("{}", prog.get_mem());
+	println!("{}", prog.mem());
 
 	for (loc, name) in prog.all_names_by_loc() {
 		println!("{}: {}", loc, name);
@@ -82,13 +82,13 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("location for 0x0000: {:?}", prog.get_mem().va_to_loc(VAddr(0x0000)));
-	println!("location for 0x2000: {:?}", prog.get_mem().va_to_loc(VAddr(0x2000)));
-	println!("location for 0x2001: {:?}", prog.get_mem().va_to_loc(VAddr(0x2001)));
-	println!("location for 0x2008: {:?}", prog.get_mem().va_to_loc(VAddr(0x2008)));
-	println!("location for 0x0400: {:?}", prog.get_mem().va_to_loc(VAddr(0x0400)));
-	println!("location for 0x5000: {:?}", prog.get_mem().va_to_loc(VAddr(0x5000)));
-	println!("location for 0x8000: {:?}", prog.get_mem().va_to_loc(VAddr(0x8000)));
+	println!("location for 0x0000: {:?}", prog.mem().va_to_loc(VAddr(0x0000)));
+	println!("location for 0x2000: {:?}", prog.mem().va_to_loc(VAddr(0x2000)));
+	println!("location for 0x2001: {:?}", prog.mem().va_to_loc(VAddr(0x2001)));
+	println!("location for 0x2008: {:?}", prog.mem().va_to_loc(VAddr(0x2008)));
+	println!("location for 0x0400: {:?}", prog.mem().va_to_loc(VAddr(0x0400)));
+	println!("location for 0x5000: {:?}", prog.mem().va_to_loc(VAddr(0x5000)));
+	println!("location for 0x8000: {:?}", prog.mem().va_to_loc(VAddr(0x8000)));
 
 	println!();
 

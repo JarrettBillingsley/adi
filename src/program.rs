@@ -22,12 +22,12 @@ impl<'a> Program<'a> {
 	}
 
 	/// Gets the RomImage object associated with this Program.
-	pub fn get_image(&self) -> &RomImage<'a> {
+	pub fn image(&self) -> &RomImage<'a> {
 		&self.image
 	}
 
 	/// Gets the Memory object associated with this Program.
-	pub fn get_mem(&self) -> &Memory<'a> {
+	pub fn mem(&self) -> &Memory<'a> {
 		&self.mem
 	}
 
@@ -123,7 +123,7 @@ impl<'a> Program<'a> {
 		if let Some(loc) = self.mem.va_to_loc(va) {
 			self.name_of_loc(loc)
 		// no mapped segment?? uhhhh....... try region name?
-		} else if let Some(region) = self.mem.get_map().region_for_va(va) {
+		} else if let Some(region) = self.mem.map().region_for_va(va) {
 			// name it "REGIONNAME_loc_0C30"
 			self.generate_name(region.name, va)
 		} else {

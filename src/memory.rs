@@ -103,17 +103,17 @@ impl<'a> Memory<'a> {
 	// Memory map and Segments
 
 	/// Get the memory address space map.
-	pub fn get_map(&'a self) -> &'a MemoryMap<'a> {
+	pub fn map(&'a self) -> &'a MemoryMap<'a> {
 		&self.mem_map
 	}
 
 	/// Get the memory configuration.
-	pub fn get_config(&'a self) -> &'a MemoryConfig<'a> {
+	pub fn config(&'a self) -> &'a MemoryConfig<'a> {
 		&self.config
 	}
 
 	/// Gets endianness.
-	pub fn get_endianness(&self) -> Endian {
+	pub fn endianness(&self) -> Endian {
 		self.endianness
 	}
 
