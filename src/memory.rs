@@ -100,7 +100,7 @@ pub struct Memory<'a> {
 
 impl<'a> Memory<'a> {
 	// ---------------------------------------------------------------------------------------------
-	// Memory map and Segments
+	// Getters
 
 	/// Get the memory address space map.
 	pub fn map(&'a self) -> &'a MemoryMap<'a> {
@@ -117,10 +117,8 @@ impl<'a> Memory<'a> {
 		self.endianness
 	}
 
-	/// How many bytes are in the memory map (virtual address map).
-	pub fn len(&self) -> usize {
-		self.mem_map.len()
-	}
+	// ---------------------------------------------------------------------------------------------
+	// Regions
 
 	/// Given a range of two VAs, do they cross over the boundary between two regions?
 	pub fn range_crosses_regions(&self, start: VAddr, end: VAddr) -> bool {
@@ -142,6 +140,9 @@ impl<'a> Memory<'a> {
 	pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion> {
 		self.mem_map.region_for_name(name)
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Segments
 
 	/// Given a region name, get the Segment mapped to it (if any).
 	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
