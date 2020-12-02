@@ -9,16 +9,23 @@ use std::ops::{ Bound, RangeBounds };
 
 use super::memory::*;
 
-/// A Program contains an image, a Memory object, and a collection of names.
+pub mod namemap;
+pub mod refmap;
+
+pub use namemap::*;
+pub use refmap::*;
+
+/// A Program contains an image, a Memory object, and collections of names and references.
 pub struct Program<'a> {
 	image: RomImage<'a>,
 	mem:   Memory<'a>,
 	names: NameMap<'a>,
+	refs:  RefMap,
 }
 
 impl<'a> Program<'a> {
 	pub fn new(image: RomImage<'a>, mem: Memory<'a>) -> Self {
-		Self { image, mem, names: NameMap::new() }
+		Self { image, mem, names: NameMap::new(), refs: RefMap::new() }
 	}
 
 	/// Gets the RomImage object associated with this Program.
@@ -36,20 +43,13 @@ impl<'a> Program<'a> {
 
 	/// Given a reference to a segment, gets a slice of the ROM image that it covers.
 	/// Panics if the segment has no physical mapping.
-	pub fn image_slice_for_segment(&'a self, seg: &'a Segment) -> &'a [u8] {
+	pub fn image_slice_from_segment(&'a self, seg: &'a Segment) -> &'a [u8] {
 		assert!(!seg.is_fake(), "segment {} has no physical mapping", seg.name);
 		seg.get_image_slice(&self.image).unwrap()
 	}
 
-	/// Given the name of a segment, gets a slice of the ROM image that it covers.
-	/// Panics if there's no segment with that name, or if the segment has no physical mapping.
-	pub fn image_slice_for_segment_name(&'a self, name: &str) -> &'a [u8] {
-		let seg = self.mem.segment_for_name(name);
-		assert!(seg.is_some(), "no segment named '{}'", name);
-		self.image_slice_for_segment(seg.unwrap())
-	}
-
 	// TODO: spanagement? or just leave that to the segment (segment_for_name_mut)
+	// TODO: refs
 
 	// ---------------------------------------------------------------------------------------------
 	// Names

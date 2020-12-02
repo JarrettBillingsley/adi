@@ -2,23 +2,19 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
-mod config;
-mod map;
-mod names;
-mod types;
-mod refmap;
-mod region;
-mod segment;
-mod spans;
+pub mod config;
+pub mod map;
+pub mod types;
+pub mod region;
+pub mod segment;
+pub mod spans;
 
 #[cfg(test)]
 mod tests;
 
 pub use config::*;
 pub use map::*;
-pub use names::*;
 pub use types::*;
-pub use refmap::*;
 pub use region::*;
 pub use segment::*;
 pub use spans::*;
