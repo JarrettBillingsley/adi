@@ -55,9 +55,7 @@ fn test_nes() -> std::io::Result<()> {
 	let mem = mem.build();
 	let mut prog = Program::new(img, mem);
 
-	for StdName { name, addr } in NES_STD_NAMES {
-		prog.add_name_va(name, VAddr(*addr));
-	}
+	setup_nes_labels(&mut prog);
 
 	println!("{}", prog.mem());
 
@@ -98,52 +96,55 @@ fn test_nes() -> std::io::Result<()> {
 	Ok(())
 }
 
-struct StdName {
-	name: &'static str,
-	addr: usize,
+fn setup_nes_labels(prog: &mut Program) {
+	for StdName(name, addr) in NES_STD_NAMES {
+		prog.add_name_va(name, VAddr(*addr));
+	}
 }
 
+struct StdName(&'static str, usize);
+
 const NES_STD_NAMES: &[StdName] = &[
-	StdName { name: "PPU_CTRL_REG1",         addr: 0x2000 },
-	StdName { name: "PPU_CTRL_REG2",         addr: 0x2001 },
-	StdName { name: "PPU_STATUS",            addr: 0x2002 },
-	StdName { name: "PPU_SPR_ADDR",          addr: 0x2003 },
-	StdName { name: "PPU_SPR_DATA",          addr: 0x2004 },
-	StdName { name: "PPU_SCROLL_REG",        addr: 0x2005 },
-	StdName { name: "PPU_ADDRESS",           addr: 0x2006 },
-	StdName { name: "PPU_DATA",              addr: 0x2007 },
+	StdName("PPU_CTRL_REG1",         0x2000),
+	StdName("PPU_CTRL_REG2",         0x2001),
+	StdName("PPU_STATUS",            0x2002),
+	StdName("PPU_SPR_ADDR",          0x2003),
+	StdName("PPU_SPR_DATA",          0x2004),
+	StdName("PPU_SCROLL_REG",        0x2005),
+	StdName("PPU_ADDRESS",           0x2006),
+	StdName("PPU_DATA",              0x2007),
 
-	StdName { name: "SND_PULSE1_CTRL1",      addr: 0x4000 },
-	StdName { name: "SND_PULSE1_CTRL2",      addr: 0x4001 },
-	StdName { name: "SND_PULSE1_TIMER",      addr: 0x4002 },
-	StdName { name: "SND_PULSE1_LENGTH",     addr: 0x4003 },
-	StdName { name: "SND_PULSE2_CTRL1",      addr: 0x4004 },
-	StdName { name: "SND_PULSE2_CTRL2",      addr: 0x4005 },
-	StdName { name: "SND_PULSE2_TIMER",      addr: 0x4006 },
-	StdName { name: "SND_PULSE2_LENGTH",     addr: 0x4007 },
-	StdName { name: "SND_TRI_CTRL",          addr: 0x4008 },
-	StdName { name: "SND_TRI_TIMER",         addr: 0x400A },
-	StdName { name: "SND_TRI_LENGTH",        addr: 0x400B },
-	StdName { name: "SND_NOISE_CTRL",        addr: 0x400c },
-	StdName { name: "SND_NOISE_PERIOD",      addr: 0x400e },
-	StdName { name: "SND_NOISE_LENGTH",      addr: 0x400f },
-	StdName { name: "SND_DMC_CTRL",          addr: 0x4010 },
-	StdName { name: "SND_DMC_COUNTER",       addr: 0x4011 },
-	StdName { name: "SND_DMC_ADDR",          addr: 0x4012 },
-	StdName { name: "SND_DMC_LEN",           addr: 0x4013 },
-	StdName { name: "SPR_DMA",               addr: 0x4014 },
-	StdName { name: "SND_MASTER_CTRL",       addr: 0x4015 },
-	StdName { name: "JOYPAD_PORT1",          addr: 0x4016 },
-	StdName { name: "JOYPAD_PORT2",          addr: 0x4017 },
-	StdName { name: "TESTMODE_PULSE_DAC",    addr: 0x4018 },
-	StdName { name: "TESTMODE_TRINOISE_DAC", addr: 0x4019 },
-	StdName { name: "TESTMODE_DPCM_DAC",     addr: 0x401A },
-	StdName { name: "UNUSED_TIMER_LO",       addr: 0x401C },
-	StdName { name: "UNUSED_TIMER_MID",      addr: 0x401D },
-	StdName { name: "UNUSED_TIMER_HI",       addr: 0x401E },
-	StdName { name: "UNUSED_TIMER_CTRL",     addr: 0x401F },
+	StdName("SND_PULSE1_CTRL1",      0x4000),
+	StdName("SND_PULSE1_CTRL2",      0x4001),
+	StdName("SND_PULSE1_TIMER",      0x4002),
+	StdName("SND_PULSE1_LENGTH",     0x4003),
+	StdName("SND_PULSE2_CTRL1",      0x4004),
+	StdName("SND_PULSE2_CTRL2",      0x4005),
+	StdName("SND_PULSE2_TIMER",      0x4006),
+	StdName("SND_PULSE2_LENGTH",     0x4007),
+	StdName("SND_TRI_CTRL",          0x4008),
+	StdName("SND_TRI_TIMER",         0x400A),
+	StdName("SND_TRI_LENGTH",        0x400B),
+	StdName("SND_NOISE_CTRL",        0x400c),
+	StdName("SND_NOISE_PERIOD",      0x400e),
+	StdName("SND_NOISE_LENGTH",      0x400f),
+	StdName("SND_DMC_CTRL",          0x4010),
+	StdName("SND_DMC_COUNTER",       0x4011),
+	StdName("SND_DMC_ADDR",          0x4012),
+	StdName("SND_DMC_LEN",           0x4013),
+	StdName("SPR_DMA",               0x4014),
+	StdName("SND_MASTER_CTRL",       0x4015),
+	StdName("JOYPAD_PORT1",          0x4016),
+	StdName("JOYPAD_PORT2",          0x4017),
+	StdName("TESTMODE_PULSE_DAC",    0x4018),
+	StdName("TESTMODE_TRINOISE_DAC", 0x4019),
+	StdName("TESTMODE_DPCM_DAC",     0x401A),
+	StdName("UNUSED_TIMER_LO",       0x401C),
+	StdName("UNUSED_TIMER_MID",      0x401D),
+	StdName("UNUSED_TIMER_HI",       0x401E),
+	StdName("UNUSED_TIMER_CTRL",     0x401F),
 
-	StdName { name: "VEC_NMI",               addr: 0xFFFA },
-	StdName { name: "VEC_RESET",             addr: 0xFFFC },
-	StdName { name: "VEC_IRQ",               addr: 0xFFFE },
+	StdName("VEC_NMI",               0xFFFA),
+	StdName("VEC_RESET",             0xFFFC),
+	StdName("VEC_IRQ",               0xFFFE),
 ];

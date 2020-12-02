@@ -49,7 +49,7 @@ impl<'a> Program<'a> {
 	}
 
 	// TODO: spanagement? or just leave that to the segment (segment_for_name_mut)
-	// TODO: refs
+	// TODO: refs... explicitly managed? or created/destroyed through other means?
 
 	// ---------------------------------------------------------------------------------------------
 	// Names
