@@ -16,13 +16,13 @@ use super::region::*;
 #[derive(Debug)]
 pub struct MemoryMap<'a> {
 	/// how many bits an address is.
-	bits:     usize,
+	pub bits:     usize,
 	/// how many digits in a formatted address.
-	digits:   usize,
+	pub digits:   usize,
 	/// all the memory regions in the memory map.
 	regions:  &'a [MemoryRegion<'a>],
 	/// the first invalid address, and the size of the virtual address space.
-	end:      VAddr,
+	pub end:      VAddr,
 	/// maps from virtual addresses to an index into `regions`.
 	addr_map: BTreeMap<VAddr, usize>,  // from VAs to `regions` index
 	/// maps from names into `regions`.
@@ -96,12 +96,6 @@ impl<'a> MemoryMap<'a> {
 	pub fn all_regions(&'a self) -> impl Iterator<Item = &'a MemoryRegion<'a>> {
 		let func = move |&idx| &self.regions[idx];
 		self.addr_map.values().map(func)
-	}
-
-	/// Formats a number as a hexadecimal number with the appropriate number of digits
-	/// for the size of the address space.
-	pub fn fmt_addr(&self, addr: usize) -> String {
-		format!("{:0width$X}", addr, width = self.digits)
 	}
 
 	// TODO: iterators for bankable regions, ROM regions, etc?

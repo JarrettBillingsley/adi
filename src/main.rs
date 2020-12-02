@@ -1,7 +1,7 @@
 
 use better_panic::{ Settings, Verbosity };
 use std::iter::FromIterator;
-use adi::memory::*;
+use adi::*;
 
 fn main() -> std::io::Result<()> {
 	Settings::new()
@@ -44,7 +44,7 @@ fn test_nes() -> std::io::Result<()> {
 	let img_data = std::fs::read("tests/data/smb.prg")?;
 	let img = RomImage::new("smb.prg", &img_data);
 	let map = MemoryMap::new(16, regions);
-	let mut mem = MemoryBuilder::new(Endian::Big, img, map, config);
+	let mut mem = MemoryBuilder::new(Endian::Big, map, config);
 		// default segments
 		mem.segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
 		mem.segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
@@ -52,40 +52,47 @@ fn test_nes() -> std::io::Result<()> {
 
 		// ROM-specific segments
 		mem.segment("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0)));
-	let mut mem = mem.build();
+	let mem = mem.build();
+	let mut prog = Program::new(img, mem);
 
 	for StdName { name, addr } in NES_STD_NAMES {
-		mem.add_name_va(name, VAddr(*addr));
+		prog.add_name_va(name, VAddr(*addr));
 	}
 
-	println!("{}", mem);
+	println!("{}", prog.get_mem());
 
-	println!("0x2000: {}", mem.name_of_va(VAddr(0x2000)));
-	println!("0x2001: {}", mem.name_of_va(VAddr(0x2001)));
-	println!("0x2008: {}", mem.name_of_va(VAddr(0x2008)));
-	println!("0x0400: {}", mem.name_of_va(VAddr(0x0400)));
-	println!("0x5000: {}", mem.name_of_va(VAddr(0x5000)));
-	println!("0x8000: {}", mem.name_of_va(VAddr(0x8000)));
-
-	// for (name, va) in mem.all_names() { println!("{}: 0x{:04x}", name, va); }
-	// println!();
-	// for (va, name) in mem.all_names_by_va() { println!("0x{:04x}: {}", va, name); }
-	// println!();
-	// for (va, name) in mem.names_in_range(..VAddr(0x2004)) { println!("0x{:04x}: {}", va, name); }
+	for (loc, name) in prog.all_names_by_loc() {
+		println!("{}: {}", loc, name);
+	}
 
 	println!();
 
-	println!("location for 0x0000: {:?}", mem.va_to_loc(VAddr(0x0000)));
-	println!("location for 0x2000: {:?}", mem.va_to_loc(VAddr(0x2000)));
-	println!("location for 0x2001: {:?}", mem.va_to_loc(VAddr(0x2001)));
-	println!("location for 0x2008: {:?}", mem.va_to_loc(VAddr(0x2008)));
-	println!("location for 0x0400: {:?}", mem.va_to_loc(VAddr(0x0400)));
-	println!("location for 0x5000: {:?}", mem.va_to_loc(VAddr(0x5000)));
-	println!("location for 0x8000: {:?}", mem.va_to_loc(VAddr(0x8000)));
+	for (loc, name) in prog.names_in_va_range(..VAddr(0x2004)) {
+		println!("{}: {}", loc, name);
+	}
 
 	println!();
 
-	println!("PRG0 length: {}", mem.image_slice_for_segment_name("PRG0").len());
+	println!("name for 0x2000: {}", prog.name_of_va(VAddr(0x2000)));
+	println!("name for 0x2001: {}", prog.name_of_va(VAddr(0x2001)));
+	println!("name for 0x2008: {}", prog.name_of_va(VAddr(0x2008)));
+	println!("name for 0x0400: {}", prog.name_of_va(VAddr(0x0400)));
+	println!("name for 0x5000: {}", prog.name_of_va(VAddr(0x5000)));
+	println!("name for 0x8000: {}", prog.name_of_va(VAddr(0x8000)));
+
+	println!();
+
+	println!("location for 0x0000: {:?}", prog.get_mem().va_to_loc(VAddr(0x0000)));
+	println!("location for 0x2000: {:?}", prog.get_mem().va_to_loc(VAddr(0x2000)));
+	println!("location for 0x2001: {:?}", prog.get_mem().va_to_loc(VAddr(0x2001)));
+	println!("location for 0x2008: {:?}", prog.get_mem().va_to_loc(VAddr(0x2008)));
+	println!("location for 0x0400: {:?}", prog.get_mem().va_to_loc(VAddr(0x0400)));
+	println!("location for 0x5000: {:?}", prog.get_mem().va_to_loc(VAddr(0x5000)));
+	println!("location for 0x8000: {:?}", prog.get_mem().va_to_loc(VAddr(0x8000)));
+
+	println!();
+
+	println!("PRG0 length: {}", prog.image_slice_for_segment_name("PRG0").len());
 
 	Ok(())
 }
