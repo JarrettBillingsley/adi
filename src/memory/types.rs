@@ -2,7 +2,7 @@ use derive_new::*;
 use parse_display::*;
 
 use std::ops::{ Add, Sub };
-use std::fmt::{ UpperHex, Formatter, Result as FmtResult };
+use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };
 
 // ------------------------------------------------------------------------------------------------
 // VAddr
@@ -116,7 +116,7 @@ pub struct SegId(pub u16);
 // ------------------------------------------------------------------------------------------------
 
 /// A unique location consisting of Segment ID and an offset within that Segment.
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 #[derive(new)]
 #[display("{seg.0:04X}:{offs:08X}")]
 pub struct Location {
@@ -124,15 +124,10 @@ pub struct Location {
 	pub offs: SegOffset,
 }
 
-// ------------------------------------------------------------------------------------------------
-// Reference
-// ------------------------------------------------------------------------------------------------
-
-/// A directed edge from one location to another.
-#[derive(new)]
-pub struct Reference {
-	pub src: Location,
-	pub dst: Location,
+impl Debug for Location {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{}", self)
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

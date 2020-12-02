@@ -85,7 +85,7 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("{}", mem.image_slice_for_segment_name("PRG0").len());
+	println!("PRG0 length: {}", mem.image_slice_for_segment_name("PRG0").len());
 
 	Ok(())
 }
