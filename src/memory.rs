@@ -106,13 +106,29 @@ pub struct Memory<'a> {
 	config:       MemoryConfig<'a>,
 
 	seg_name_map: HashMap<&'a str, usize>,
-	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 	names:        NameMap<'a>,
+
+	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 }
 
 impl<'a> Memory<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Memory map and Segments
+
+	/// Get the memory address space map.
+	pub fn get_map(&'a self) -> &'a MemoryMap<'a> {
+		&self.mem_map
+	}
+
+	/// Get the memory configuration.
+	pub fn get_config(&'a self) -> &'a MemoryConfig<'a> {
+		&self.config
+	}
+
+	/// Gets endianness.
+	pub fn get_endianness(&self) -> Endian {
+		self.endian
+	}
 
 	/// How many bytes are in the memory map (virtual address map).
 	pub fn len(&self) -> usize {
@@ -182,7 +198,7 @@ impl<'a> Memory<'a> {
 		&mut self.segs[loc.seg.0 as usize]
 	}
 
-	// TODO: adding/removing/redefining segments
+	// TODO: adding/removing/redefining/iterating segments
 
 	// ---------------------------------------------------------------------------------------------
 	// Address translation
