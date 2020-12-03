@@ -9,7 +9,7 @@ use crate::memory::*;
 // ------------------------------------------------------------------------------------------------
 
 /// The kinds of disassembly errors.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum DisasErrorKind {
 	/// Unknown instruction - undefined opcode.
 	UnknownInstruction,
@@ -37,7 +37,7 @@ impl Display for DisasErrorKind {
 // ------------------------------------------------------------------------------------------------
 
 /// The disassembly error type.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct DisasError {
 	/// VA passed to `disas_instr`.
 	pub va:   VAddr,

@@ -1,5 +1,5 @@
 
-// use std::iter::Iterator;
+use std::marker::PhantomData;
 
 use crate::memory::*;
 use super::error::*;
@@ -111,8 +111,79 @@ pub trait DisassemblerTrait {
 	/// Disassemble a single instruction from `img[offs..]` with the given VA.
 	fn disas_instr(&self, img: &[u8], va: VAddr) -> DisasResult<Self::TInstruction>;
 
-	// TODO: this
-	// fn disas_range(&self, start: VAddr, end: Option<VAddr>) -> dyn Iterator<Item = TInstruction>;
+	/// Iterator over all instructions in a slice, where the first one has the given VA.
+	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VAddr)
+		-> DisasAll<'dis, 'img, Self>
+	where Self: Sized {
+		DisasAll::new(self, img, va)
+	}
+}
+
+/// Iterator type. Also lets you find out *why* iteration stopped, like:
+///
+/// ```ignore
+/// let mut iter = dis.disas_all(image, va);
+/// for inst in &mut iter {
+///     // blah blah
+/// }
+///
+/// if let Some(err) = iter.err() {
+///     // do stuff with err and iter.err_offs()
+/// }
+/// ```
+pub struct DisasAll<'dis, 'img, D: DisassemblerTrait> {
+	disas: &'dis D,
+	img:   &'img [u8],
+	va:    VAddr,
+	offs:  usize,
+	err:   Option<DisasError>,
+	_inst: PhantomData<<D as DisassemblerTrait>::TInstruction>,
+}
+
+impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
+	fn new(disas: &'dis D, img: &'img [u8], va: VAddr) -> Self {
+		Self { disas, img, va, offs: 0, err: None, _inst: PhantomData }
+	}
+
+	/// If iteration stopped because of an error, returns that error.
+	pub fn err(&self) -> Option<DisasError> {
+		self.err
+	}
+
+	/// Whether or not iteration stopped because of an error.
+	pub fn has_err(&self) -> bool {
+		self.err().is_some()
+	}
+
+	/// The offset into the slice where an error occurred, if any.
+	pub fn err_offset(&self) -> usize {
+		self.offs
+	}
+}
+
+impl<'dis, 'img, D: DisassemblerTrait> Iterator for DisasAll<'dis, 'img, D> {
+	type Item = <D as DisassemblerTrait>::TInstruction;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.offs == self.img.len() {
+			// don't want to produce an error when successfully disassembling all instructions
+			None
+		} else {
+			match self.disas.disas_instr(&self.img[self.offs ..], self.va) {
+				Ok(inst) => {
+					let size = inst.size();
+					self.va += size;
+					self.offs += size;
+					Some(inst)
+				}
+
+				Err(e) => {
+					self.err = Some(e);
+					None
+				}
+			}
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

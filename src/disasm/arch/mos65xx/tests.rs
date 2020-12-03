@@ -88,21 +88,71 @@ fn disasm_success() {
 }
 
 #[test]
+fn disasm_range() {
+	use Opcode::*;
+
+	let code = &[
+		BRK_IMP as u8,
+		LDA_IMM as u8, 0xEF,
+		ADC_ABS as u8, 0x56, 0x34,
+		STY_ZPG as u8, 0x33,
+		ASL_ZPG as u8, 0x99,
+		ROL_ABS as u8, 0xEF, 0xBE,
+		JMP_LAB as u8, 0xFE, 0xFF,
+		JMP_IND as u8, 0xFC, 0xFF,
+		BCC_REL as u8, 10,
+		BCC_REL as u8, 0xF2,
+		ORA_ZPX as u8, 0x30,
+		LDX_ZPY as u8, 0x40,
+		LDY_ABX as u8, 0x50, 0x60,
+		CMP_ABY as u8, 0x30, 0x00,
+		SBC_IZX as u8, 0x10,
+		EOR_IZY as u8, 0x90,
+	];
+
+	let expected = &[
+		"brk ",
+		"lda #$EF",
+		"adc $3456",
+		"sty $33",
+		"asl $99",
+		"rol beefmaster",
+		"jmp $FFFE",
+		"jmp (VEC_RESET)",
+		"bcc $001F",
+		"bcc $0009",
+		"ora v_ztable,x",
+		"ldx $40,y",
+		"ldy $6050,x",
+		"cmp v_ztable,y",
+		"sbc ($10,x)",
+		"eor ($90),y",
+	];
+
+	let p = Printer::new(SyntaxFlavor::Old);
+	let mut iter = Disassembler.disas_all(code, VAddr(0));
+	let mut output = Vec::new();
+
+	for inst in &mut iter {
+		output.push(p.fmt_instr(&inst, &DummyLookup));
+	}
+
+	assert!(!iter.has_err());
+
+	for (exp, out) in expected.iter().zip(output.iter()) {
+		assert_eq!(exp, out);
+	}
+}
+
+#[test]
 fn disasm_failure() {
 	use Opcode::*;
 
-	// offset == end of image
-	check_fail(0, &[], DisasError::out_of_bytes(VAddr(0), 1, 0));
-
-	// bad opcode
-	check_fail(0, &[0xCB], DisasError::unknown_instruction(VAddr(0)));
-	check_fail(0, &[0xFF], DisasError::unknown_instruction(VAddr(0)));
-
-	// 1 operand byte
-	check_fail(0, &[LDA_IMM as u8], DisasError::out_of_bytes(VAddr(0), 2, 1));
-
-	// 2 operand bytes
-	check_fail(0, &[JMP_LAB as u8], DisasError::out_of_bytes(VAddr(0), 3, 1));
+	check_fail(0, &[],                    DisasError::out_of_bytes(VAddr(0), 1, 0));
+	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VAddr(0)));
+	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VAddr(0)));
+	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VAddr(0), 2, 1));
+	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VAddr(0), 3, 1));
 	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VAddr(0), 3, 2));
 }
 
