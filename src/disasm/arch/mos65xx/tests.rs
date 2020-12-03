@@ -95,18 +95,18 @@ fn disasm_failure() {
 	use Opcode::*;
 
 	// offset == end of image
-	check_fail(0, &[], out_of_bytes(0, VAddr(0), 1, 0));
+	check_fail(0, &[], DisasError::out_of_bytes(0, VAddr(0), 1, 0));
 
 	// bad opcode
-	check_fail(0, &[0xCB], unknown_instruction(0, VAddr(0)));
-	check_fail(0, &[0xFF], unknown_instruction(0, VAddr(0)));
+	check_fail(0, &[0xCB], DisasError::unknown_instruction(0, VAddr(0)));
+	check_fail(0, &[0xFF], DisasError::unknown_instruction(0, VAddr(0)));
 
 	// 1 operand byte
-	check_fail(0, &[LDA_IMM as u8], out_of_bytes(0, VAddr(0), 2, 1));
+	check_fail(0, &[LDA_IMM as u8], DisasError::out_of_bytes(0, VAddr(0), 2, 1));
 
 	// 2 operand bytes
-	check_fail(0, &[JMP_LAB as u8], out_of_bytes(0, VAddr(0), 3, 1));
-	check_fail(0, &[JMP_LAB as u8, 0x00], out_of_bytes(0, VAddr(0), 3, 2));
+	check_fail(0, &[JMP_LAB as u8], DisasError::out_of_bytes(0, VAddr(0), 3, 1));
+	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(0, VAddr(0), 3, 2));
 }
 
 struct DummyLookup;

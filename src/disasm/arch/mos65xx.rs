@@ -174,14 +174,6 @@ impl InstructionTrait for Instruction {
 // Disassembler
 // ------------------------------------------------------------------------------------------------
 
-fn out_of_bytes(offs: usize, va: VAddr, expected: usize, got: usize) -> DisasError {
-	DisasError { offs, va, kind: DisasErrorKind::OutOfBytes { expected, got } }
-}
-
-fn unknown_instruction(offs: usize, va: VAddr) -> DisasError {
-	DisasError { offs, va, kind: DisasErrorKind::UnknownInstruction }
-}
-
 /// The 65xx disassembler.
 pub struct Disassembler;
 
@@ -191,14 +183,14 @@ impl DisassemblerTrait for Disassembler {
 	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if offs == img.len() {
-			return Err(out_of_bytes(offs, va, 1, 0));
+			return Err(DisasError::out_of_bytes(offs, va, 1, 0));
 		}
 
 		// is the opcode OK?
 		let desc = lookup_desc(img[offs]);
 
 		if desc.meta_op == MetaOp::UNK {
-			return Err(unknown_instruction(offs, va));
+			return Err(DisasError::unknown_instruction(offs, va));
 		}
 
 		// do we have enough bytes for the operands?
@@ -207,7 +199,7 @@ impl DisassemblerTrait for Disassembler {
 		let inst_size = op_size + 1;
 
 		if (op_offs + op_size) > img.len() {
-			return Err(out_of_bytes(offs, va, inst_size, img.len() - offs));
+			return Err(DisasError::out_of_bytes(offs, va, inst_size, img.len() - offs));
 		}
 
 		// okay cool, let's decode

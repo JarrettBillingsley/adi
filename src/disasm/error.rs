@@ -4,6 +4,10 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use crate::memory::*;
 
+// ------------------------------------------------------------------------------------------------
+// DisasErrorKind
+// ------------------------------------------------------------------------------------------------
+
 /// The kinds of disassembly errors.
 #[derive(Debug, PartialEq, Eq)]
 pub enum DisasErrorKind {
@@ -28,6 +32,10 @@ impl Display for DisasErrorKind {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+// DisasError
+// ------------------------------------------------------------------------------------------------
+
 /// The disassembly error type.
 #[derive(Debug, PartialEq, Eq)]
 pub struct DisasError {
@@ -46,6 +54,22 @@ impl Display for DisasError {
 }
 
 impl Error for DisasError {}
+
+impl DisasError {
+	/// Shorthand constructors.
+	pub fn out_of_bytes(offs: usize, va: VAddr, expected: usize, got: usize) -> DisasError {
+		DisasError { offs, va, kind: DisasErrorKind::OutOfBytes { expected, got } }
+	}
+
+	/// Ditto.
+	pub fn unknown_instruction(offs: usize, va: VAddr) -> DisasError {
+		DisasError { offs, va, kind: DisasErrorKind::UnknownInstruction }
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// DisasResult
+// ------------------------------------------------------------------------------------------------
 
 /// Alias for a `Result` with a `DisasError` as its error type.
 pub type DisasResult<T> = Result<T, DisasError>;
