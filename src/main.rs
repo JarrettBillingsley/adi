@@ -91,7 +91,31 @@ fn test_nes() -> std::io::Result<()> {
 	println!();
 
 	let prg0 = prog.mem().segment_for_name("PRG0").unwrap();
-	println!("PRG0 length: {}", prog.image_slice_from_segment(prg0).len());
+	let prg0 = prog.image_slice_from_segment(prg0);
+
+	// Disassembly/printing!
+	let disas = mos65xx::Disassembler;
+	let print = mos65xx::Printer::new(mos65xx::SyntaxFlavor::New);
+
+	let mut iter = disas.disas_all(&prg0[..0x100], VAddr(0x8000));
+
+	for inst in &mut iter {
+		print!("0x{:4X}  ", inst.va());
+		let b = inst.bytes();
+
+		match b.len() {
+			1 => print!("{:02X}      ",         b[0]),
+			2 => print!("{:02X} {:02X}   ",     b[0], b[1]),
+			3 => print!("{:02X} {:02X} {:02X}", b[0], b[1], b[2]),
+			_ => unreachable!()
+		}
+
+		println!("  {}", print.fmt_instr(&inst, &prog));
+	}
+
+	if let Some(err) = iter.err() {
+		println!("{}", err);
+	}
 
 	Ok(())
 }

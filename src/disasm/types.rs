@@ -94,7 +94,7 @@ pub trait InstructionTrait {
 	fn get_op(&self, i: usize) -> Self::TOperand;
 
 	/// Accessor for original bytes.
-	fn get_bytes(&self) -> &[u8];
+	fn bytes(&self) -> &[u8];
 
 	// TODO: implied ops as a separate thing?
 }

@@ -14,13 +14,13 @@ use crate::memory::types::*;
 
 mod descs;
 mod opcodes;
-mod types;
+pub mod types;
 #[cfg(test)]
 mod tests;
 
 use descs::*;
 use opcodes::*;
-use types::*;
+pub use types::*;
 
 // ------------------------------------------------------------------------------------------------
 // InstDesc
@@ -172,7 +172,7 @@ impl InstructionTrait for Instruction {
 		assert!(i == 0);
 		self.op.unwrap()
 	}
-	fn get_bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
+	fn bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
 }
 
 // ------------------------------------------------------------------------------------------------

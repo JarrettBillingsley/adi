@@ -8,6 +8,7 @@ use std::collections::{
 use std::ops::{ Bound, RangeBounds };
 
 use super::memory::*;
+use super::disasm::types::NameLookupTrait;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -173,6 +174,12 @@ impl<'a> Display for Program<'a> {
 		writeln!(f, "Image: {} (0x{:X} bytes)", self.image.name, self.image.data.len())?;
 
 		Ok(())
+	}
+}
+
+impl<'a> NameLookupTrait for Program<'a> {
+	fn lookup(&self, addr: VAddr) -> Option<String> {
+		Some(self.name_of_va(addr))
 	}
 }
 
