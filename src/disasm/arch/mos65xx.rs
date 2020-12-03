@@ -7,6 +7,7 @@ use parse_display::*;
 use derive_new::*;
 
 use crate::disasm::types::*;
+use crate::disasm::error::*;
 use crate::memory::types::*;
 
 // ------------------------------------------------------------------------------------------------
