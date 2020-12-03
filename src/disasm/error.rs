@@ -39,8 +39,6 @@ impl Display for DisasErrorKind {
 /// The disassembly error type.
 #[derive(Debug, PartialEq, Eq)]
 pub struct DisasError {
-	/// offset passed to `disas_instr`.
-	pub offs: usize,
 	/// VA passed to `disas_instr`.
 	pub va:   VAddr,
 	/// kind of error.
@@ -49,7 +47,7 @@ pub struct DisasError {
 
 impl Display for DisasError {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "disassembly error at VA 0x{:08X} (offs = {}): {}", self.va, self.offs, self.kind)
+		write!(f, "disassembly error at VA 0x{:08X}: {}", self.va, self.kind)
 	}
 }
 
@@ -57,13 +55,13 @@ impl Error for DisasError {}
 
 impl DisasError {
 	/// Shorthand constructors.
-	pub fn out_of_bytes(offs: usize, va: VAddr, expected: usize, got: usize) -> DisasError {
-		DisasError { offs, va, kind: DisasErrorKind::OutOfBytes { expected, got } }
+	pub fn out_of_bytes(va: VAddr, expected: usize, got: usize) -> DisasError {
+		DisasError { va, kind: DisasErrorKind::OutOfBytes { expected, got } }
 	}
 
 	/// Ditto.
-	pub fn unknown_instruction(offs: usize, va: VAddr) -> DisasError {
-		DisasError { offs, va, kind: DisasErrorKind::UnknownInstruction }
+	pub fn unknown_instruction(va: VAddr) -> DisasError {
+		DisasError { va, kind: DisasErrorKind::UnknownInstruction }
 	}
 }
 

@@ -185,31 +185,29 @@ pub struct Disassembler;
 impl DisassemblerTrait for Disassembler {
 	type TInstruction = Instruction;
 
-	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> DisasResult<Instruction> {
+	fn disas_instr(&self, img: &[u8], va: VAddr) -> DisasResult<Instruction> {
 		// do we have enough bytes?
-		if offs == img.len() {
-			return Err(DisasError::out_of_bytes(offs, va, 1, 0));
+		if img.len() == 0 {
+			return Err(DisasError::out_of_bytes(va, 1, 0));
 		}
 
 		// is the opcode OK?
-		let desc = lookup_desc(img[offs]);
+		let desc = lookup_desc(img[0]);
 
 		if desc.meta_op == MetaOp::UNK {
-			return Err(DisasError::unknown_instruction(offs, va));
+			return Err(DisasError::unknown_instruction(va));
 		}
 
 		// do we have enough bytes for the operand?
-		let op_offs = offs + 1;
-		let op_size = desc.addr_mode.op_bytes();
-		let inst_size = op_size + 1;
+		let inst_size = desc.addr_mode.op_bytes() + 1;
 
-		if (op_offs + op_size) > img.len() {
-			return Err(DisasError::out_of_bytes(offs, va, inst_size, img.len() - offs));
+		if inst_size > img.len() {
+			return Err(DisasError::out_of_bytes(va, inst_size, img.len()));
 		}
 
 		// okay cool, let's decode
-		let bytes = &img[offs .. offs + inst_size];
-		let op = decode_operand(desc, va, &img[op_offs .. op_offs + op_size]);
+		let bytes = &img[0 .. inst_size];
+		let op = decode_operand(desc, va, &img[1 .. inst_size]);
 		Ok(Instruction::new(va, desc, inst_size, op, bytes))
 	}
 }

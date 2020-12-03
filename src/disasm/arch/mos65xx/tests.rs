@@ -34,7 +34,7 @@ fn mnemonics() {
 
 fn disas(va: usize, img: &[u8]) -> Instruction {
 	let va = VAddr(va);
-	match Disassembler.disas_instr(img, 0, va) {
+	match Disassembler.disas_instr(img, va) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
 	}
@@ -42,7 +42,7 @@ fn disas(va: usize, img: &[u8]) -> Instruction {
 
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 	let va = VAddr(va);
-	match Disassembler.disas_instr(img, 0, va) {
+	match Disassembler.disas_instr(img, va) {
 		Ok(inst) => {
 			assert_eq!(inst.va, va);
 			assert_eq!(inst.desc.meta_op, meta_op);
@@ -57,7 +57,7 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 	let va = VAddr(va);
-	match Disassembler.disas_instr(img, 0, va) {
+	match Disassembler.disas_instr(img, va) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
 		}
@@ -92,18 +92,18 @@ fn disasm_failure() {
 	use Opcode::*;
 
 	// offset == end of image
-	check_fail(0, &[], DisasError::out_of_bytes(0, VAddr(0), 1, 0));
+	check_fail(0, &[], DisasError::out_of_bytes(VAddr(0), 1, 0));
 
 	// bad opcode
-	check_fail(0, &[0xCB], DisasError::unknown_instruction(0, VAddr(0)));
-	check_fail(0, &[0xFF], DisasError::unknown_instruction(0, VAddr(0)));
+	check_fail(0, &[0xCB], DisasError::unknown_instruction(VAddr(0)));
+	check_fail(0, &[0xFF], DisasError::unknown_instruction(VAddr(0)));
 
 	// 1 operand byte
-	check_fail(0, &[LDA_IMM as u8], DisasError::out_of_bytes(0, VAddr(0), 2, 1));
+	check_fail(0, &[LDA_IMM as u8], DisasError::out_of_bytes(VAddr(0), 2, 1));
 
 	// 2 operand bytes
-	check_fail(0, &[JMP_LAB as u8], DisasError::out_of_bytes(0, VAddr(0), 3, 1));
-	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(0, VAddr(0), 3, 2));
+	check_fail(0, &[JMP_LAB as u8], DisasError::out_of_bytes(VAddr(0), 3, 1));
+	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VAddr(0), 3, 2));
 }
 
 struct DummyLookup;
