@@ -147,7 +147,7 @@ impl<'a> SpanMap<'a> {
 	}
 
 	fn rewrite(&mut self, start: SegOffset, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
-		println!("rewriting 0x{:08X}!", start);
+		// println!("rewriting 0x{:08X}!", start);
 		let span = self.spans.get_mut(&start).unwrap();
 		span.kind = kind;
 		span.owner = owner;
