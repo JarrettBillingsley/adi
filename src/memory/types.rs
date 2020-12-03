@@ -1,7 +1,7 @@
 use derive_new::*;
 use parse_display::*;
 
-use std::ops::{ Add, Sub };
+use std::ops::{ Add, AddAssign, Sub, SubAssign };
 use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };
 
 // ------------------------------------------------------------------------------------------------
@@ -25,6 +25,12 @@ impl Add<usize> for VAddr {
 	}
 }
 
+impl AddAssign<usize> for VAddr {
+	fn add_assign(&mut self, other: usize) {
+		self.0 += other;
+	}
+}
+
 impl Add<SegOffset> for VAddr {
 	type Output = Self;
 	fn add(self, other: SegOffset) -> Self {
@@ -36,6 +42,12 @@ impl Sub for VAddr {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
 		self.0 - other.0
+	}
+}
+
+impl SubAssign<usize> for VAddr {
+	fn sub_assign(&mut self, other: usize) {
+		self.0 -= other;
 	}
 }
 
@@ -52,7 +64,6 @@ impl UpperHex for PAddr {
 		UpperHex::fmt(&self.0, f)
 	}
 }
-
 
 impl Add<usize> for PAddr {
 	type Output = Self;
