@@ -190,11 +190,6 @@ impl<'dis, 'img, D: DisassemblerTrait> Iterator for DisasAll<'dis, 'img, D> {
 // PrinterTrait
 // ------------------------------------------------------------------------------------------------
 
-/// Trait to abstract the process of looking up names of addresses.
-pub trait NameLookupTrait {
-	fn lookup(&self, addr: VAddr) -> Option<String>;
-}
-
 /// Trait for instruction printers.
 pub trait PrinterTrait {
 	/// Associated type of instructions that this printer prints.
@@ -209,5 +204,19 @@ pub trait PrinterTrait {
 	/// Give a string representation of an instruction.
 	fn fmt_instr(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String {
 		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, l))
+	}
+}
+
+/// Trait to abstract the process of looking up names of addresses.
+pub trait NameLookupTrait {
+	fn lookup(&self, addr: VAddr) -> Option<String>;
+}
+
+/// A dummy struct that implements `NameLookupTrait` whose `lookup` method always returns `None`.
+pub struct NullLookup;
+
+impl NameLookupTrait for NullLookup {
+	fn lookup(&self, _addr: VAddr) -> Option<String> {
+		None
 	}
 }
