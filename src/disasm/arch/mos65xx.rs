@@ -150,14 +150,11 @@ pub struct Instruction {
 	bytes: [u8; MAX_BYTES],
 }
 
-// can't use #[derive(new)] cause that always makes a `pub` function...
 impl Instruction {
-	fn new(va: VAddr, desc: &'static InstDesc, size: usize, ops: Operands, bytes: &[u8]) -> Self {
-		// TODO: this feels really overwritten
-		assert!(bytes.len() <= MAX_BYTES);
-		let mut b = [0u8; MAX_BYTES];
-		for (i, x) in bytes.iter().enumerate() { b[i] = *x; }
-		Self { va, desc, size, ops, bytes: b }
+	fn new(va: VAddr, desc: &'static InstDesc, size: usize, ops: Operands, orig: &[u8]) -> Self {
+		let mut bytes = [0u8; MAX_BYTES];
+		bytes[..orig.len()].copy_from_slice(orig);
+		Self { va, desc, size, ops, bytes }
 	}
 }
 
