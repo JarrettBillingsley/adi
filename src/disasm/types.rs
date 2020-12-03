@@ -2,7 +2,6 @@
 // use std::iter::Iterator;
 
 use crate::memory::*;
-use crate::program::*;
 use super::error::*;
 
 // ------------------------------------------------------------------------------------------------
@@ -118,26 +117,24 @@ pub trait DisassemblerTrait {
 // PrinterTrait
 // ------------------------------------------------------------------------------------------------
 
+/// Trait to abstract the process of looking up names of addresses.
+pub trait NameLookupTrait {
+	fn lookup(&self, addr: VAddr) -> Option<String>;
+}
+
 /// Trait for instruction printers.
 pub trait PrinterTrait {
 	/// Associated type of instructions that this printer prints.
 	type TInstruction: InstructionTrait;
 
-	/// Construct a new printer using the given Program for looking up names.
-	fn new(prog: &Program) -> Self;
-
-	/// Get the Program this was constructed with.
-	fn prog(&self) -> &Program;
-
 	/// Give a string representation of an instruction's mnemonic.
 	fn fmt_mnemonic(&self, i: &Self::TInstruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &Self::TInstruction) -> String;
+	fn fmt_operands(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String;
 
-	/// Give a string representation of an instruction. Default implementation
-	/// pads mnemonic out to 8 spaces.
-	fn fmt_instr(&self, i: &Self::TInstruction) -> String {
-		format!("{:8} {}", self.fmt_mnemonic(i), self.fmt_operands(i))
+	/// Give a string representation of an instruction.
+	fn fmt_instr(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String {
+		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, l))
 	}
 }

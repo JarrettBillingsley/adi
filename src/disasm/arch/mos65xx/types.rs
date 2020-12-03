@@ -1,5 +1,19 @@
 
 // ------------------------------------------------------------------------------------------------
+// SyntaxFlavor
+// ------------------------------------------------------------------------------------------------
+
+/// Which flavor of 65xx syntax the printer will use.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum SyntaxFlavor {
+	/// The traditional syntax everyone uses.
+	Old,
+
+	/// A new less-confusing one I made.
+	New,
+}
+
+// ------------------------------------------------------------------------------------------------
 // AddrMode
 // ------------------------------------------------------------------------------------------------
 
@@ -51,6 +65,41 @@ impl AddrMode {
 			ABS | ABX | ABY | IND | LAB => 2,
 		}
 	}
+
+	/// Is this a zero-page addressing mode?
+	pub fn is_zero_page(&self) -> bool {
+		use AddrMode::*;
+		matches!(self, ZPG | ZPX | ZPY | IZX | IZY)
+	}
+
+	/// Operand printing template
+	pub fn operand_template(&self, flavor: SyntaxFlavor) -> &'static str {
+		use AddrMode::*;
+
+		match flavor {
+			SyntaxFlavor::Old =>
+				match self {
+					ABS | ZPG | REL | LAB | IMM => "{}",
+					ABX | ZPX                   => "{},x",
+					ABY | ZPY                   => "{},y",
+					IND                         => "({})",
+					IZX                         => "({},x)",
+					IZY                         => "({}),y",
+					IMP                         => unreachable!(),
+				},
+
+			SyntaxFlavor::New =>
+				match self {
+					REL | LAB | IMM => "{}",
+					ZPG | ABS | IND => "[{}]",
+					ZPX | ABX       => "[{} + x]",
+					ZPY | ABY       => "[{} + y]",
+					IZX             => "[[{} + x]]",
+					IZY             => "[[{}] + y]",
+					IMP             => unreachable!(),
+				},
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -73,52 +122,51 @@ pub enum MetaOp {
 }
 
 impl MetaOp {
-	/// The traditional mnemonics, but not so screamy.
-	pub fn mnemonic_old(&self) -> &'static str {
+	/// Instruction mnemonics
+	pub fn mnemonic(&self, flavor: SyntaxFlavor) -> &'static str {
 		use MetaOp::*;
-		match self {
-			UNK  => "???",
-			ADC  => "adc", AND  => "and", ASLA => "asl", ASL  => "asl",
-			BCC  => "bcc", BCS  => "bcs", BEQ  => "beq", BIT  => "bit",
-			BMI  => "bmi", BNE  => "bne", BPL  => "bpl", BRK  => "brk",
-			BVC  => "bvc", BVS  => "bvs", CLC  => "clc", CLD  => "cld",
-			CLI  => "cli", CLV  => "clv", CMP  => "cmp", CPX  => "cpx",
-			CPY  => "cpy", DEC  => "dec", DEX  => "dex", DEY  => "dey",
-			EOR  => "eor", INC  => "inc", INX  => "inx", INY  => "iny",
-			JMP  => "jmp", JSR  => "jsr", LDA  => "lda", LDAI => "lda",
-			LDX  => "ldx", LDXI => "ldx", LDY  => "ldy", LDYI => "ldy",
-			LSRA => "lsr", LSR  => "lsr", NOP  => "nop", ORA  => "ora",
-			PHA  => "pha", PHP  => "php", PLA  => "pla", PLP  => "plp",
-			ROLA => "rol", ROL  => "rol", RORA => "ror", ROR  => "ror",
-			RTI  => "rti", RTS  => "rts", SBC  => "sbc", SEC  => "sec",
-			SED  => "sed", SEI  => "sei", STA  => "sta", STX  => "stx",
-			STY  => "sty", TAX  => "tax", TAY  => "tay", TSX  => "tsx",
-			TXA  => "txa", TXS  => "txs", TYA  => "tya",
-		}
-	}
+		match flavor {
+			SyntaxFlavor::Old =>
+				match self {
+					UNK  => "???",
+					ADC  => "adc", AND  => "and", ASLA => "asl", ASL  => "asl",
+					BCC  => "bcc", BCS  => "bcs", BEQ  => "beq", BIT  => "bit",
+					BMI  => "bmi", BNE  => "bne", BPL  => "bpl", BRK  => "brk",
+					BVC  => "bvc", BVS  => "bvs", CLC  => "clc", CLD  => "cld",
+					CLI  => "cli", CLV  => "clv", CMP  => "cmp", CPX  => "cpx",
+					CPY  => "cpy", DEC  => "dec", DEX  => "dex", DEY  => "dey",
+					EOR  => "eor", INC  => "inc", INX  => "inx", INY  => "iny",
+					JMP  => "jmp", JSR  => "jsr", LDA  => "lda", LDAI => "lda",
+					LDX  => "ldx", LDXI => "ldx", LDY  => "ldy", LDYI => "ldy",
+					LSRA => "lsr", LSR  => "lsr", NOP  => "nop", ORA  => "ora",
+					PHA  => "pha", PHP  => "php", PLA  => "pla", PLP  => "plp",
+					ROLA => "rol", ROL  => "rol", RORA => "ror", ROR  => "ror",
+					RTI  => "rti", RTS  => "rts", SBC  => "sbc", SEC  => "sec",
+					SED  => "sed", SEI  => "sei", STA  => "sta", STX  => "stx",
+					STY  => "sty", TAX  => "tax", TAY  => "tay", TSX  => "tsx",
+					TXA  => "txa", TXS  => "txs", TYA  => "tya",
+				},
 
-	/// My more "modern" mnemonics. Get those damn registers out of the mnemonics!
-	/// Destination on the left!!
-	pub fn mnemonic_new(&self) -> &'static str {
-		use MetaOp::*;
-		match self {
-			UNK  => "???",
-			ADC  => "adc a,",   AND  => "and a,",   ASLA => "shl a",    ASL  => "shl",
-			BCC  => "bcc",      BCS  => "bcs",      BEQ  => "beq",      BIT  => "bit",
-			BMI  => "bmi",      BNE  => "bne",      BPL  => "bpl",      BRK  => "brk",
-			BVC  => "bvc",      BVS  => "bvs",      CLC  => "clr c",    CLD  => "clr d",
-			CLI  => "clr i",    CLV  => "clr v",    CMP  => "cmp a,",   CPX  => "cmp x,",
-			CPY  => "cmp y,",   DEC  => "dec",      DEX  => "dec x",    DEY  => "dec y",
-			EOR  => "xor a,",   INC  => "inc",      INX  => "inc x",    INY  => "inc y",
-			JMP  => "jmp",      JSR  => "jsr",      LDA  => "ld  a,",   LDAI => "li  a,",
-			LDX  => "ld  x,",   LDXI => "li  x,",   LDY  => "ld  y,",   LDYI => "li  y,",
-			LSRA => "shr a",    LSR  => "shr",      NOP  => "nop",      ORA  => "or  a,",
-			PHA  => "psh a",    PHP  => "psh p",    PLA  => "pul a",    PLP  => "pul p",
-			ROLA => "rol a",    ROL  => "rol",      RORA => "ror a",    ROR  => "ror",
-			RTI  => "rti",      RTS  => "rts",      SBC  => "sbc a,",   SEC  => "set c",
-			SED  => "set d",    SEI  => "set i",    STA  => "st  a,",   STX  => "st  x,",
-			STY  => "st  y,",   TAX  => "mov x, a", TAY  => "mov y, a", TSX  => "mov x, s",
-			TXA  => "mov a, x", TXS  => "mov s, x", TYA  => "mov a, y",
+			SyntaxFlavor::New =>
+				match self {
+					UNK  => "???",
+					ADC  => "adc a,",   AND  => "and a,",   ASLA => "shl a",    ASL  => "shl",
+					BCC  => "bcc",      BCS  => "bcs",      BEQ  => "beq",      BIT  => "bit",
+					BMI  => "bmi",      BNE  => "bne",      BPL  => "bpl",      BRK  => "brk",
+					BVC  => "bvc",      BVS  => "bvs",      CLC  => "clr c",    CLD  => "clr d",
+					CLI  => "clr i",    CLV  => "clr v",    CMP  => "cmp a,",   CPX  => "cmp x,",
+					CPY  => "cmp y,",   DEC  => "dec",      DEX  => "dec x",    DEY  => "dec y",
+					EOR  => "xor a,",   INC  => "inc",      INX  => "inc x",    INY  => "inc y",
+					JMP  => "jmp",      JSR  => "jsr",      LDA  => "ld  a,",   LDAI => "li  a,",
+					LDX  => "ld  x,",   LDXI => "li  x,",   LDY  => "ld  y,",   LDYI => "li  y,",
+					LSRA => "shr a",    LSR  => "shr",      NOP  => "nop",      ORA  => "or  a,",
+					PHA  => "psh a",    PHP  => "psh p",    PLA  => "pul a",    PLP  => "pul p",
+					ROLA => "rol a",    ROL  => "rol",      RORA => "ror a",    ROR  => "ror",
+					RTI  => "rti",      RTS  => "rts",      SBC  => "sbc a,",   SEC  => "set c",
+					SED  => "set d",    SEI  => "set i",    STA  => "st  a,",   STX  => "st  x,",
+					STY  => "st  y,",   TAX  => "mov x, a", TAY  => "mov y, a", TSX  => "mov x, s",
+					TXA  => "mov a, x", TXS  => "mov s, x", TYA  => "mov a, y",
+				}
 		}
 	}
 }

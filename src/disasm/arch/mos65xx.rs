@@ -249,3 +249,65 @@ fn decode_operands(opcode: &'static Opcode, va: VAddr, img: &[u8]) -> Operands {
 
 	ops
 }
+
+// ------------------------------------------------------------------------------------------------
+// Printer
+// ------------------------------------------------------------------------------------------------
+
+/// The 65xx instruction printer.
+#[derive(Debug, Copy, Clone)]
+pub struct Printer {
+	flavor: SyntaxFlavor,
+}
+
+impl Printer {
+	pub fn new(flavor: SyntaxFlavor) -> Self {
+		Self { flavor }
+	}
+
+	fn fmt_imm(&self, imm: u8) -> String {
+		match self.flavor {
+			SyntaxFlavor::Old =>
+				if imm < 0x10 { format!("#{}", imm) } else { format!("#${:X}", imm) },
+			SyntaxFlavor::New =>
+				if imm < 0x10 { format!("{}",  imm) } else { format!("0x{:X}", imm) },
+		}
+	}
+
+	fn fmt_addr(&self, addr: u16, zpg: bool) -> String {
+		match self.flavor {
+			SyntaxFlavor::Old =>
+				if zpg { format!("${:02X}", addr) } else { format!("${:04X}", addr) },
+			SyntaxFlavor::New =>
+				if zpg { format!("0x{:02X}", addr)} else { format!("0x{:04X}", addr) },
+		}
+	}
+}
+
+impl PrinterTrait for Printer {
+	type TInstruction = Instruction;
+
+	fn fmt_mnemonic(&self, i: &Instruction) -> String {
+		i.opcode.meta_op.mnemonic(self.flavor).into()
+	}
+
+	fn fmt_operands(&self, i: &Instruction, l: &dyn NameLookupTrait) -> String {
+		if i.num_ops() == 0 {
+			"".into()
+		} else {
+			let operand = match i.get_op(0) {
+				Operand::Reg(..)       => unreachable!(),
+				Operand::Imm(imm)      => self.fmt_imm(imm),
+				Operand::Mem(addr, ..) => {
+					match l.lookup(VAddr(addr as usize)) {
+						Some(name) => name,
+						None       => self.fmt_addr(addr, i.opcode.addr_mode.is_zero_page()),
+					}
+				}
+			};
+
+			let template = i.opcode.addr_mode.operand_template(self.flavor);
+			template.replace("{}", &operand)
+		}
+	}
+}
