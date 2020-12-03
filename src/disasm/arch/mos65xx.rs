@@ -248,20 +248,42 @@ impl InstructionTrait for Instruction {
 
 pub struct Disassembler;
 
+fn out_of_bytes(offs: usize, va: VAddr, expected: usize, got: usize) -> DisasError {
+	DisasError { offs, va, kind: DisasErrorKind::OutOfBytes { expected, got } }
+}
+
+fn unknown_instruction(offs: usize, va: VAddr) -> DisasError {
+	DisasError { offs, va, kind: DisasErrorKind::UnknownInstruction }
+}
+
 impl DisassemblerTrait for Disassembler {
 	type TInstruction = Instruction;
 
-	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> Instruction {
+	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> DisasResult<Instruction> {
+		// do we have enough bytes?
+		if offs == img.len() {
+			return Err(out_of_bytes(offs, va, 1, 0));
+		}
+
+		// is the opcode OK?
 		let opcode = lookup_opcode(img[offs]);
+
+		if opcode.meta_op == MetaOp::UNK {
+			return Err(unknown_instruction(offs, va));
+		}
+
+		// do we have enough bytes for the operands?
 		let op_offs = offs + 1;
 		let op_size = opcode.addr_mode.op_bytes();
 		let inst_size = op_size + 1;
 
-		// TODO: an assert is def not the right thing here
-		assert!((op_offs + op_size) <= img.len());
+		if (op_offs + op_size) > img.len() {
+			return Err(out_of_bytes(offs, va, inst_size, img.len() - offs));
+		}
 
+		// okay cool, let's decode
 		let ops = decode_operands(opcode, va, &img[op_offs .. op_offs + op_size]);
-		Instruction::new(va, opcode, inst_size, ops)
+		Ok(Instruction::new(va, opcode, inst_size, ops))
 	}
 }
 
@@ -491,18 +513,37 @@ mod tests {
 
 	fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
 		let va = VAddr(va);
-		let inst = Disassembler.disas_instr(img, 0, va);
+		match Disassembler.disas_instr(img, 0, va) {
+			Ok(inst) => {
+				let mut operands = Operands::new();
+				for op in ops { operands.push(*op); }
 
-		let mut operands = Operands::new();
-		for op in ops { operands.push(*op); }
+				assert_eq!(inst.va, va);
+				assert_eq!(inst.opcode.meta_op, meta_op);
+				assert_eq!(inst.ops, operands);
+			}
 
-		assert_eq!(inst.va, va);
-		assert_eq!(inst.opcode.meta_op, meta_op);
-		assert_eq!(inst.ops, operands);
+			Err(e) => {
+				panic!("failed to disassemble: {}", e);
+			}
+		}
+	}
+
+	fn check_fail(va: usize, img: &[u8], expected: DisasError) {
+		let va = VAddr(va);
+		match Disassembler.disas_instr(img, 0, va) {
+			Ok(inst) => {
+				panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
+			}
+
+			Err(e) => {
+				assert_eq!(e, expected);
+			}
+		}
 	}
 
 	#[test]
-	fn disasm() {
+	fn disasm_success() {
 		use MetaOp::*;
 		use Operand::*;
 		use MemAccess::*;
@@ -517,5 +558,22 @@ mod tests {
 		check_disas(0, &[0x6C, 0xFE, 0xFF],   JMP,  &[Mem(0xFFFE, Read)]);
 		check_disas(3, &[0x90, 10],           BCC,  &[Mem(3 + 10 + 2, Target)]);
 		check_disas(8, &[0x90, (-5i8) as u8], BCC,  &[Mem(8 - 5 + 2,  Target)]);
+	}
+
+	#[test]
+	fn disasm_failure() {
+		// offset == end of image
+		check_fail(0, &[], out_of_bytes(0, VAddr(0), 1, 0));
+
+		// bad opcode
+		check_fail(0, &[0xCB], unknown_instruction(0, VAddr(0)));
+		check_fail(0, &[0xFF], unknown_instruction(0, VAddr(0)));
+
+		// 1 operand byte
+		check_fail(0, &[0xA9], out_of_bytes(0, VAddr(0), 2, 1));
+
+		// 2 operand bytes
+		check_fail(0, &[0x4C], out_of_bytes(0, VAddr(0), 3, 1));
+		check_fail(0, &[0x4C, 0x00], out_of_bytes(0, VAddr(0), 3, 2));
 	}
 }

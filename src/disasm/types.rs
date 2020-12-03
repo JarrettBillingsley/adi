@@ -1,5 +1,6 @@
 
 // use std::iter::Iterator;
+use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use crate::memory::*;
 use crate::program::*;
@@ -22,6 +23,43 @@ pub enum MemAccess {
 	/// Used as the target of a jump or branch.
 	Target,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DisasErrorKind {
+	UnknownInstruction,
+	OutOfBytes { expected: usize, got: usize },
+}
+
+impl Display for DisasErrorKind {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use DisasErrorKind::*;
+
+		match self {
+			UnknownInstruction =>
+				write!(f, "unknown instruction"),
+
+			OutOfBytes { expected, got } =>
+				write!(f, "out of bytes (expected {}, got {})", expected, got),
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct DisasError {
+	pub offs: usize,
+	pub va:   VAddr,
+	pub kind: DisasErrorKind,
+}
+
+impl Display for DisasError {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "disassembly error at VA 0x{:08X} (offs = {}): {}", self.va, self.offs, self.kind)
+	}
+}
+
+impl std::error::Error for DisasError {}
+
+pub type DisasResult<T> = Result<T, DisasError>;
 
 // hmmmmmmm
 pub trait InstructionTrait {
@@ -57,8 +95,7 @@ pub trait OperandTrait {
 
 pub trait DisassemblerTrait {
 	type TInstruction: InstructionTrait;
-	// TODO: this should return a Result type
-	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> Self::TInstruction;
+	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> DisasResult<Self::TInstruction>;
 	// fn disas_range(&self, start: VAddr, end: Option<VAddr>) -> dyn Iterator<Item = TInstruction>;
 }
 
