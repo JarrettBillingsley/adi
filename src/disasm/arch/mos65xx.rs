@@ -14,11 +14,13 @@ use crate::memory::types::*;
 // ------------------------------------------------------------------------------------------------
 
 mod descs;
+mod opcodes;
 mod types;
 #[cfg(test)]
 mod tests;
 
 use descs::*;
+use opcodes::*;
 use types::*;
 
 // ------------------------------------------------------------------------------------------------
@@ -29,7 +31,7 @@ use types::*;
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct InstDesc {
 	/// The actual opcode byte.
-	opcode:      u8,
+	opcode:      Opcode,
 	/// Which meta-op this is.
 	meta_op:     MetaOp,
 	/// What addressing mode is used.
@@ -42,7 +44,7 @@ pub struct InstDesc {
 
 impl InstDesc {
 	const fn new(
-		opcode:      u8,
+		opcode:      Opcode,
 		meta_op:     MetaOp,
 		addr_mode:   AddrMode,
 		ctrl:        bool,
@@ -55,27 +57,13 @@ impl InstDesc {
 impl InstDescTrait for &InstDesc {
 	fn is_control    (&self) -> bool { self.ctrl }
 
-	/// True for conditional branches.
 	fn is_conditional(&self) -> bool { self.addr_mode == AddrMode::REL }
-
-	/// True for opcode `0x4C` (absolute `jmp`).
-	fn is_jump       (&self) -> bool { self.opcode == 0x4C }                // jmp absolute
-
-	/// True for opcode `0x6C` (indirect `jmp`).
-	fn is_indir_jump (&self) -> bool { self.opcode == 0x6C }                // jmp indirect
-
-	/// True for opcode `0x20` (`jsr`).
-	fn is_call       (&self) -> bool { self.opcode == 0x20 }                // jsr
-
-	/// True for opcodes `0x40` and `0x60` (`rts` and `rti`).
-	fn is_return     (&self) -> bool { matches!(self.opcode, 0x40 | 0x60) } // rts/rti
-
-	/// True for invalid opcodes.
-	fn is_invalid    (&self) -> bool { self.opcode == INVALID_OPCODE }
+	fn is_jump       (&self) -> bool { matches!(self.opcode, Opcode::JMP_LAB) }
+	fn is_indir_jump (&self) -> bool { matches!(self.opcode, Opcode::JMP_IND) }
+	fn is_call       (&self) -> bool { matches!(self.opcode, Opcode::JSR_LAB) }
+	fn is_return     (&self) -> bool { matches!(self.opcode, Opcode::RTS_IMP | Opcode::RTI_IMP) }
+	fn is_invalid    (&self) -> bool { matches!(self.opcode, Opcode::INVALID) }
 }
-
-/// Sentinel value used for invalid opcodes.
-pub const INVALID_OPCODE: u8 = 0xFF;
 
 // ------------------------------------------------------------------------------------------------
 // Operand
