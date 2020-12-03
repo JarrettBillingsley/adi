@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::default::Default;
-use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use lazy_static::*;
 use parse_display::*;
@@ -98,6 +97,8 @@ impl OperandTrait for Operand {
 // Operands
 // ------------------------------------------------------------------------------------------------
 
+/*
+// Keeping this around if we need it for implicit operands.
 const MAX_OPS: usize = 2; // ? we'll see
 
 /// Tiny container for instruction operands.
@@ -132,7 +133,7 @@ impl Operands {
 		assert!(i < self.len);
 		self.ops[i]
 	}
-}
+}*/
 
 // ------------------------------------------------------------------------------------------------
 // Instruction
@@ -146,15 +147,16 @@ pub struct Instruction {
 	va:    VAddr,
 	desc:  &'static InstDesc,
 	size:  usize,
-	ops:   Operands,
+	op:    Option<Operand>,
 	bytes: [u8; MAX_BYTES],
 }
 
 impl Instruction {
-	fn new(va: VAddr, desc: &'static InstDesc, size: usize, ops: Operands, orig: &[u8]) -> Self {
+	fn new(va: VAddr, desc: &'static InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
+	-> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
-		Self { va, desc, size, ops, bytes }
+		Self { va, desc, size, op, bytes }
 	}
 }
 
@@ -165,8 +167,11 @@ impl InstructionTrait for Instruction {
 	fn va(&self) -> VAddr                 { self.va }
 	fn desc(&self) -> &'static InstDesc   { self.desc }
 	fn size(&self) -> usize               { self.size }
-	fn num_ops(&self) -> usize            { self.ops.len() }
-	fn get_op(&self, i: usize) -> Operand { self.ops.get(i) }
+	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
+	fn get_op(&self, i: usize) -> Operand {
+		assert!(i == 0);
+		self.op.unwrap()
+	}
 	fn get_bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
 }
 
@@ -193,7 +198,7 @@ impl DisassemblerTrait for Disassembler {
 			return Err(DisasError::unknown_instruction(offs, va));
 		}
 
-		// do we have enough bytes for the operands?
+		// do we have enough bytes for the operand?
 		let op_offs = offs + 1;
 		let op_size = desc.addr_mode.op_bytes();
 		let inst_size = op_size + 1;
@@ -204,14 +209,12 @@ impl DisassemblerTrait for Disassembler {
 
 		// okay cool, let's decode
 		let bytes = &img[offs .. offs + inst_size];
-		let ops = decode_operands(desc, va, &img[op_offs .. op_offs + op_size]);
-		Ok(Instruction::new(va, desc, inst_size, ops, bytes))
+		let op = decode_operand(desc, va, &img[op_offs .. op_offs + op_size]);
+		Ok(Instruction::new(va, desc, inst_size, op, bytes))
 	}
 }
 
-fn decode_operands(desc: &'static InstDesc, va: VAddr, img: &[u8]) -> Operands {
-	let mut ops = Operands::new();
-
+fn decode_operand(desc: &'static InstDesc, va: VAddr, img: &[u8]) -> Option<Operand> {
 	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
 		if let Some(access) = desc.access {
@@ -226,14 +229,14 @@ fn decode_operands(desc: &'static InstDesc, va: VAddr, img: &[u8]) -> Operands {
 				_ => unreachable!()
 			};
 
-			ops.push(Operand::Mem(addr, access));
+			Some(Operand::Mem(addr, access))
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
-			ops.push(Operand::Imm(img[0]));
+			Some(Operand::Imm(img[0]))
 		}
+	} else {
+		None
 	}
-
-	ops
 }
 
 // ------------------------------------------------------------------------------------------------
