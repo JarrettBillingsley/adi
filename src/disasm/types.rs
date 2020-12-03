@@ -94,6 +94,7 @@ pub trait InstructionTrait {
 	/// Accessor for operands.
 	fn get_op(&self, i: usize) -> Self::TOperand;
 
+	// TODO: original bytes
 	// TODO: implied ops as a separate thing?
 }
 
@@ -108,6 +109,8 @@ pub trait DisassemblerTrait {
 
 	/// Disassemble a single instruction from `img[offs..]` with the given VA.
 	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> DisasResult<Self::TInstruction>;
+
+	// TODO: this
 	// fn disas_range(&self, start: VAddr, end: Option<VAddr>) -> dyn Iterator<Item = TInstruction>;
 }
 
