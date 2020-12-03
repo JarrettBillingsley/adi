@@ -2,6 +2,10 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
+// ------------------------------------------------------------------------------------------------
+// Sub-modules
+// ------------------------------------------------------------------------------------------------
+
 pub mod config;
 pub mod map;
 pub mod types;
