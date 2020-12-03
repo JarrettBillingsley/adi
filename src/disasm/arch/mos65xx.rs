@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use lazy_static::*;
 use parse_display::*;
@@ -7,7 +8,6 @@ use derive_new::*;
 
 use crate::disasm::types::*;
 use crate::memory::types::*;
-use crate::program::*;
 
 // ------------------------------------------------------------------------------------------------
 // AddrMode
@@ -55,10 +55,69 @@ impl AddrMode {
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum MetaOp {
+	UNK,
+	ADC, AND,  ASLA, ASL,  BCC,  BCS,  BEQ,  BIT, BMI, BNE,
+	BPL, BRK,  BVC,  BVS,  CLC,  CLD,  CLI,  CLV, CMP, CPX,
+	CPY, DEC,  DEX,  DEY,  EOR,  INC,  INX,  INY, JMP, JSR,
+	LDA, LDAI, LDX,  LDXI, LDY,  LDYI, LSRA, LSR, NOP, ORA,
+	PHA, PHP,  PLA,  PLP,  ROLA, ROL,  RORA, ROR, RTI, RTS,
+	SBC, SEC,  SED,  SEI,  STA,  STX,  STY,  TAX, TAY, TSX,
+	TXA, TXS,  TYA,
+}
+
+impl MetaOp {
+	pub fn mnemonic_old(&self) -> &'static str {
+		use MetaOp::*;
+		match self {
+			UNK  => "???",
+			ADC  => "adc", AND  => "and", ASLA => "asl", ASL  => "asl",
+			BCC  => "bcc", BCS  => "bcs", BEQ  => "beq", BIT  => "bit",
+			BMI  => "bmi", BNE  => "bne", BPL  => "bpl", BRK  => "brk",
+			BVC  => "bvc", BVS  => "bvs", CLC  => "clc", CLD  => "cld",
+			CLI  => "cli", CLV  => "clv", CMP  => "cmp", CPX  => "cpx",
+			CPY  => "cpy", DEC  => "dec", DEX  => "dex", DEY  => "dey",
+			EOR  => "eor", INC  => "inc", INX  => "inx", INY  => "iny",
+			JMP  => "jmp", JSR  => "jsr", LDA  => "lda", LDAI => "lda",
+			LDX  => "ldx", LDXI => "ldx", LDY  => "ldy", LDYI => "ldy",
+			LSRA => "lsr", LSR  => "lsr", NOP  => "nop", ORA  => "ora",
+			PHA  => "pha", PHP  => "php", PLA  => "pla", PLP  => "plp",
+			ROLA => "rol", ROL  => "rol", RORA => "ror", ROR  => "ror",
+			RTI  => "rti", RTS  => "rts", SBC  => "sbc", SEC  => "sec",
+			SED  => "sed", SEI  => "sei", STA  => "sta", STX  => "stx",
+			STY  => "sty", TAX  => "tax", TAY  => "tay", TSX  => "tsx",
+			TXA  => "txa", TXS  => "txs", TYA  => "tya",
+		}
+	}
+
+	pub fn mnemonic_new(&self) -> &'static str {
+		use MetaOp::*;
+		match self {
+			UNK  => "???",
+			ADC  => "adc a,",   AND  => "and a,",   ASLA => "shl a",    ASL  => "shl",
+			BCC  => "bcc",      BCS  => "bcs",      BEQ  => "beq",      BIT  => "bit",
+			BMI  => "bmi",      BNE  => "bne",      BPL  => "bpl",      BRK  => "brk",
+			BVC  => "bvc",      BVS  => "bvs",      CLC  => "clr c",    CLD  => "clr d",
+			CLI  => "clr i",    CLV  => "clr v",    CMP  => "cmp a,",   CPX  => "cmp x,",
+			CPY  => "cmp y,",   DEC  => "dec",      DEX  => "dec x",    DEY  => "dec y",
+			EOR  => "xor a,",   INC  => "inc",      INX  => "inc x",    INY  => "inc y",
+			JMP  => "jmp",      JSR  => "jsr",      LDA  => "ld  a,",   LDAI => "li  a,",
+			LDX  => "ld  x,",   LDXI => "li  x,",   LDY  => "ld  y,",   LDYI => "li  y,",
+			LSRA => "shr a",    LSR  => "shr",      NOP  => "nop",      ORA  => "or  a,",
+			PHA  => "psh a",    PHP  => "psh p",    PLA  => "pul a",    PLP  => "pul p",
+			ROLA => "rol a",    ROL  => "rol",      RORA => "ror a",    ROR  => "ror",
+			RTI  => "rti",      RTS  => "rts",      SBC  => "sbc a,",   SEC  => "set c",
+			SED  => "set d",    SEI  => "set i",    STA  => "st  a,",   STX  => "st  x,",
+			STY  => "st  y,",   TAX  => "mov x, a", TAY  => "mov y, a", TSX  => "mov x, s",
+			TXA  => "mov a, x", TXS  => "mov s, x", TYA  => "mov a, y",
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Opcode {
 	pub opcode:      u8,
-	pub my_mnemonic: &'static str,
-	pub mnemonic:    &'static str,
+	pub meta_op:     MetaOp,
 	pub addr_mode:   AddrMode,
 	pub ctrl:        bool,
 	pub access:      Option<MemAccess>,
@@ -67,17 +126,16 @@ pub struct Opcode {
 impl Opcode {
 	const fn new(
 		opcode:      u8,
-		my_mnemonic: &'static str,
-		mnemonic:    &'static str,
+		meta_op:     MetaOp,
 		addr_mode:   AddrMode,
 		ctrl:        bool,
 		access:      Option<MemAccess>,
 	) -> Opcode {
-		Self { opcode, my_mnemonic, mnemonic, addr_mode, ctrl, access, }
+		Self { opcode, meta_op, addr_mode, ctrl, access, }
 	}
 }
 
-impl OpcodeTrait for Opcode {
+impl OpcodeTrait for &Opcode {
 	fn is_control    (&self) -> bool { self.ctrl }
 	fn is_conditional(&self) -> bool { self.addr_mode == AddrMode::REL }
 	fn is_jump       (&self) -> bool { self.opcode == 0x4C }                // jmp absolute
@@ -116,12 +174,11 @@ impl Default for Operand {
 
 impl OperandTrait for Operand {
 	fn is_reg(&self) -> bool { matches!(self, Operand::Reg(..)) }
-	fn is_mem(&self) -> bool { matches!(self, Operand::Mem(..)) }
 	fn is_imm(&self) -> bool { matches!(self, Operand::Imm(..)) }
-	fn access(&self) -> MemAccess {
+	fn access(&self) -> Option<MemAccess> {
 		match self {
-			Operand::Mem(_, a) => *a,
-			_ => panic!("access called on a non-memory operand {}", self),
+			Operand::Mem(_, a) => Some(*a),
+			_ => None,
 		}
 	}
 }
@@ -132,10 +189,16 @@ impl OperandTrait for Operand {
 
 const MAX_OPS: usize = 2; // ? we'll see
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Operands {
 	len: usize,
 	ops: [Operand; MAX_OPS],
+}
+
+impl Debug for Operands {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "Operands{:?}", &self.ops[..self.len])
+	}
 }
 
 impl Operands {
@@ -180,19 +243,9 @@ impl InstructionTrait<&'static Opcode, Operand> for Instruction {
 // Disassembler
 // ------------------------------------------------------------------------------------------------
 
-pub struct Disassembler<'a> {
-	prog: &'a Program<'a>,
-}
+pub struct Disassembler;
 
-impl<'a> DisassemblerTrait<'a, Instruction> for Disassembler<'a> {
-	fn new(prog: &'a Program<'a>) -> Disassembler<'a> {
-		Self { prog }
-	}
-
-	fn prog(&self) -> &'a Program<'a> {
-		self.prog
-	}
-
+impl DisassemblerTrait<&'static Opcode, Operand, Instruction> for Disassembler {
 	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> Instruction {
 		let opcode = lookup_opcode(img[offs]);
 		let op_offs = offs + 1;
@@ -220,7 +273,7 @@ fn decode_operands(opcode: &'static Opcode, va: VAddr, img: &[u8]) -> Operands {
 				ABS | ABX | ABY | IND | LAB => img[0] as u16 | ((img[1] as u16) << 8),
 
 				// +2 to include size of the branch instruction itself
-				REL => ((va.0 as i32) + (img[0] as i32) + 2) as u16,
+				REL => ((va.0 as i32) + (img[0] as i8 as i32) + 2) as u16,
 				_ => unreachable!()
 			};
 
@@ -250,158 +303,214 @@ lazy_static! {
 	};
 }
 
-const OP_INVALID: Opcode = Opcode::new(0xFF, "???", "???", AddrMode::IMP, false, None);
+const OP_INVALID: Opcode = Opcode::new(0xFF, MetaOp::UNK, AddrMode::IMP, false, None);
 
 const OPCODES: &[Opcode] = &[
-	Opcode::new(0x00, "brk",      "brk", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x01, "or  a,",   "ora", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x05, "or  a,",   "ora", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x06, "shl",      "asl", AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
-	Opcode::new(0x08, "psh p",    "php", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x09, "or  a,",   "ora", AddrMode::IMM, false, None                   ),
-	Opcode::new(0x0A, "shl a",    "asl", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x0D, "or  a,",   "ora", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x0E, "shl",      "asl", AddrMode::ABS, false, Some(MemAccess::Offset)),
-	Opcode::new(0x10, "bpl",      "bpl", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0x11, "or  a,",   "ora", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x15, "or  a,",   "ora", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x16, "shl",      "asl", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x18, "clr c",    "clc", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x19, "or  a,",   "ora", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0x1D, "or  a,",   "ora", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x1E, "shl",      "asl", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x20, "jsr",      "jsr", AddrMode::LAB, true,  Some(MemAccess::Target)),
-	Opcode::new(0x21, "and a,",   "and", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x24, "bit",      "bit", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x25, "and a,",   "and", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x26, "rol",      "rol", AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
-	Opcode::new(0x28, "pul p",    "plp", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x29, "and a,",   "and", AddrMode::IMM, false, None                   ),
-	Opcode::new(0x2A, "rol a",    "rol", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x2C, "bit",      "bit", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x2D, "and a,",   "and", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x2E, "rol",      "rol", AddrMode::ABS, false, Some(MemAccess::Offset)),
-	Opcode::new(0x30, "bmi",      "bmi", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0x31, "and a,",   "and", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x35, "and a,",   "and", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x36, "rol",      "rol", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x38, "set c",    "sec", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x39, "and a,",   "and", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0x3D, "and a,",   "and", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x3E, "rol",      "rol", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x40, "rti",      "rti", AddrMode::IMP, true , None                   ),
-	Opcode::new(0x41, "xor a,",   "eor", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x45, "xor a,",   "eor", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x46, "shr",      "lsr", AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
-	Opcode::new(0x48, "psh a",    "pha", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x49, "xor a,",   "eor", AddrMode::IMM, false, None                   ),
-	Opcode::new(0x4A, "shr a",    "lsr", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x4C, "jmp",      "jmp", AddrMode::LAB, true,  Some(MemAccess::Target)),
-	Opcode::new(0x4D, "xor a,",   "eor", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x4E, "shr",      "lsr", AddrMode::ABS, false, Some(MemAccess::Offset)),
-	Opcode::new(0x50, "bvc",      "bvc", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0x51, "xor a,",   "eor", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x55, "xor a,",   "eor", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x56, "shr",      "lsr", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x58, "clr i",    "cli", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x59, "xor a,",   "eor", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0x5D, "xor a,",   "eor", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x5E, "shr",      "lsr", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x60, "rts",      "rts", AddrMode::IMP, true , None                   ),
-	Opcode::new(0x61, "adc a,",   "adc", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x65, "adc a,",   "adc", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x66, "ror",      "ror", AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
-	Opcode::new(0x68, "pul a",    "pla", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x69, "adc a,",   "adc", AddrMode::IMM, false, None                   ),
-	Opcode::new(0x6A, "ror a",    "ror", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x6C, "jmp",      "jmp", AddrMode::IND, true,  Some(MemAccess::Read)  ),
-	Opcode::new(0x6D, "adc a,",   "adc", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x6E, "ror",      "ror", AddrMode::ABS, false, Some(MemAccess::Offset)),
-	Opcode::new(0x70, "bvs",      "bvs", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0x71, "adc a,",   "adc", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x75, "adc a,",   "adc", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x76, "ror",      "ror", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x78, "set i",    "sei", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x79, "adc a,",   "adc", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0x7D, "adc a,",   "adc", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x7E, "ror",      "ror", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x81, "st  a,",   "sta", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x84, "st  y,",   "sty", AddrMode::ZPG, false, Some(MemAccess::Write) ),
-	Opcode::new(0x85, "st  a,",   "sta", AddrMode::ZPG, false, Some(MemAccess::Write) ),
-	Opcode::new(0x86, "st  x,",   "stx", AddrMode::ZPG, false, Some(MemAccess::Write) ),
-	Opcode::new(0x88, "dec y",    "dey", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x8A, "mov a, x", "txa", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x8C, "st  y,",   "sty", AddrMode::ABS, false, Some(MemAccess::Write) ),
-	Opcode::new(0x8D, "st  a,",   "sta", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x8E, "st  x,",   "stx", AddrMode::ABS, false, Some(MemAccess::Write) ),
-	Opcode::new(0x90, "bcc",      "bcc", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0x91, "st  a,",   "sta", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0x94, "st  y,",   "sty", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x95, "st  a,",   "sta", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0x96, "st  x,",   "stx", AddrMode::ZPY, false, Some(MemAccess::Offset)),
-	Opcode::new(0x98, "mov a, y", "tya", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x99, "st  a,",   "sta", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0x9A, "mov s, x", "txs", AddrMode::IMP, false, None                   ),
-	Opcode::new(0x9D, "st  a,",   "sta", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xA0, "li  y,",   "ldy", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xA1, "ld  a,",   "lda", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xA2, "li  x,",   "ldx", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xA4, "ld  y,",   "ldy", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xA5, "ld  a,",   "lda", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xA6, "ld  x,",   "ldx", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xA8, "mov y, a", "tay", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xA9, "li  a,",   "lda", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xAA, "mov x, a", "tax", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xAC, "ld  y,",   "ldy", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xAD, "ld  a,",   "lda", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xAE, "ld  x,",   "ldx", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xB0, "bcs",      "bcs", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0xB1, "ld  a,",   "lda", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xB4, "ld  y,",   "ldy", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xB5, "ld  a,",   "lda", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xB6, "ld  x,",   "ldx", AddrMode::ZPY, false, Some(MemAccess::Offset)),
-	Opcode::new(0xB8, "clr v",    "clv", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xB9, "ld  a,",   "lda", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0xBA, "mov x, s", "tsx", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xBC, "ld  y,",   "ldy", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xBD, "ld  a,",   "lda", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xBE, "ld  x,",   "ldx", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0xC0, "cmp y,",   "cpy", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xC1, "cmp a,",   "cmp", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xC4, "cmp y,",   "cpy", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xC5, "cmp a,",   "cmp", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xC6, "dec",      "dec", AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
-	Opcode::new(0xC8, "inc y",    "iny", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xC9, "cmp a,",   "cmp", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xCA, "dec x",    "dex", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xCC, "cmp y,",   "cpy", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xCD, "cmp a,",   "cmp", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xCE, "dec",      "dec", AddrMode::ABS, false, Some(MemAccess::Offset)),
-	Opcode::new(0xD0, "bne",      "bne", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0xD1, "cmp a,",   "cmp", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xD5, "cmp a,",   "cmp", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xD6, "dec",      "dec", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xD8, "clr d",    "cld", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xD9, "cmp a,",   "cmp", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0xDD, "cmp a,",   "cmp", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xDE, "dec",      "dec", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xE0, "cmp x,",   "cpx", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xE1, "sbc a,",   "sbc", AddrMode::IZX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xE4, "cmp x,",   "cpx", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xE5, "sbc a,",   "sbc", AddrMode::ZPG, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xE6, "inc",      "inc", AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
-	Opcode::new(0xE8, "inc x",    "inx", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xE9, "sbc a,",   "sbc", AddrMode::IMM, false, None                   ),
-	Opcode::new(0xEA, "nop",      "nop", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xEC, "cmp x,",   "cpx", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xED, "sbc a,",   "sbc", AddrMode::ABS, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xEE, "inc",      "inc", AddrMode::ABS, false, Some(MemAccess::Offset)),
-	Opcode::new(0xF0, "beq",      "beq", AddrMode::REL, true,  Some(MemAccess::Target)),
-	Opcode::new(0xF1, "sbc a,",   "sbc", AddrMode::IZY, false, Some(MemAccess::Read)  ),
-	Opcode::new(0xF5, "sbc a,",   "sbc", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xF6, "inc",      "inc", AddrMode::ZPX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xF8, "set d",    "sed", AddrMode::IMP, false, None                   ),
-	Opcode::new(0xF9, "sbc a,",   "sbc", AddrMode::ABY, false, Some(MemAccess::Offset)),
-	Opcode::new(0xFD, "sbc a,",   "sbc", AddrMode::ABX, false, Some(MemAccess::Offset)),
-	Opcode::new(0xFE, "inc",      "inc", AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x00, MetaOp::BRK,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x01, MetaOp::ORA,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x05, MetaOp::ORA,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x06, MetaOp::ASL,  AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
+	Opcode::new(0x08, MetaOp::PHP,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x09, MetaOp::ORA,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0x0A, MetaOp::ASLA, AddrMode::IMP, false, None                   ),
+	Opcode::new(0x0D, MetaOp::ORA,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x0E, MetaOp::ASL,  AddrMode::ABS, false, Some(MemAccess::Offset)),
+	Opcode::new(0x10, MetaOp::BPL,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0x11, MetaOp::ORA,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x15, MetaOp::ORA,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x16, MetaOp::ASL,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x18, MetaOp::CLC,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x19, MetaOp::ORA,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0x1D, MetaOp::ORA,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x1E, MetaOp::ASL,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x20, MetaOp::JSR,  AddrMode::LAB, true,  Some(MemAccess::Target)),
+	Opcode::new(0x21, MetaOp::AND,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x24, MetaOp::BIT,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x25, MetaOp::AND,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x26, MetaOp::ROL,  AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
+	Opcode::new(0x28, MetaOp::PLP,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x29, MetaOp::AND,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0x2A, MetaOp::ROLA, AddrMode::IMP, false, None                   ),
+	Opcode::new(0x2C, MetaOp::BIT,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x2D, MetaOp::AND,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x2E, MetaOp::ROL,  AddrMode::ABS, false, Some(MemAccess::Offset)),
+	Opcode::new(0x30, MetaOp::BMI,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0x31, MetaOp::AND,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x35, MetaOp::AND,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x36, MetaOp::ROL,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x38, MetaOp::SEC,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x39, MetaOp::AND,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0x3D, MetaOp::AND,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x3E, MetaOp::ROL,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x40, MetaOp::RTI,  AddrMode::IMP, true , None                   ),
+	Opcode::new(0x41, MetaOp::EOR,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x45, MetaOp::EOR,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x46, MetaOp::LSR,  AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
+	Opcode::new(0x48, MetaOp::PHA,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x49, MetaOp::EOR,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0x4A, MetaOp::LSRA, AddrMode::IMP, false, None                   ),
+	Opcode::new(0x4C, MetaOp::JMP,  AddrMode::LAB, true,  Some(MemAccess::Target)),
+	Opcode::new(0x4D, MetaOp::EOR,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x4E, MetaOp::LSR,  AddrMode::ABS, false, Some(MemAccess::Offset)),
+	Opcode::new(0x50, MetaOp::BVC,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0x51, MetaOp::EOR,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x55, MetaOp::EOR,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x56, MetaOp::LSR,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x58, MetaOp::CLI,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x59, MetaOp::EOR,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0x5D, MetaOp::EOR,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x5E, MetaOp::LSR,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x60, MetaOp::RTS,  AddrMode::IMP, true , None                   ),
+	Opcode::new(0x61, MetaOp::ADC,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x65, MetaOp::ADC,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x66, MetaOp::ROR,  AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
+	Opcode::new(0x68, MetaOp::PLA,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x69, MetaOp::ADC,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0x6A, MetaOp::RORA, AddrMode::IMP, false, None                   ),
+	Opcode::new(0x6C, MetaOp::JMP,  AddrMode::IND, true,  Some(MemAccess::Read)  ),
+	Opcode::new(0x6D, MetaOp::ADC,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x6E, MetaOp::ROR,  AddrMode::ABS, false, Some(MemAccess::Offset)),
+	Opcode::new(0x70, MetaOp::BVS,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0x71, MetaOp::ADC,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x75, MetaOp::ADC,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x76, MetaOp::ROR,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x78, MetaOp::SEI,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x79, MetaOp::ADC,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0x7D, MetaOp::ADC,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x7E, MetaOp::ROR,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x81, MetaOp::STA,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x84, MetaOp::STY,  AddrMode::ZPG, false, Some(MemAccess::Write) ),
+	Opcode::new(0x85, MetaOp::STA,  AddrMode::ZPG, false, Some(MemAccess::Write) ),
+	Opcode::new(0x86, MetaOp::STX,  AddrMode::ZPG, false, Some(MemAccess::Write) ),
+	Opcode::new(0x88, MetaOp::DEY,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x8A, MetaOp::TXA,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x8C, MetaOp::STY,  AddrMode::ABS, false, Some(MemAccess::Write) ),
+	Opcode::new(0x8D, MetaOp::STA,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x8E, MetaOp::STX,  AddrMode::ABS, false, Some(MemAccess::Write) ),
+	Opcode::new(0x90, MetaOp::BCC,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0x91, MetaOp::STA,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0x94, MetaOp::STY,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x95, MetaOp::STA,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0x96, MetaOp::STX,  AddrMode::ZPY, false, Some(MemAccess::Offset)),
+	Opcode::new(0x98, MetaOp::TYA,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x99, MetaOp::STA,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0x9A, MetaOp::TXS,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0x9D, MetaOp::STA,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xA0, MetaOp::LDYI, AddrMode::IMM, false, None                   ),
+	Opcode::new(0xA1, MetaOp::LDA,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xA2, MetaOp::LDXI, AddrMode::IMM, false, None                   ),
+	Opcode::new(0xA4, MetaOp::LDY,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xA5, MetaOp::LDA,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xA6, MetaOp::LDX,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xA8, MetaOp::TAY,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xA9, MetaOp::LDAI, AddrMode::IMM, false, None                   ),
+	Opcode::new(0xAA, MetaOp::TAX,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xAC, MetaOp::LDY,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xAD, MetaOp::LDA,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xAE, MetaOp::LDX,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xB0, MetaOp::BCS,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0xB1, MetaOp::LDA,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xB4, MetaOp::LDY,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xB5, MetaOp::LDA,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xB6, MetaOp::LDX,  AddrMode::ZPY, false, Some(MemAccess::Offset)),
+	Opcode::new(0xB8, MetaOp::CLV,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xB9, MetaOp::LDA,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0xBA, MetaOp::TSX,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xBC, MetaOp::LDY,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xBD, MetaOp::LDA,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xBE, MetaOp::LDX,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0xC0, MetaOp::CPY,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0xC1, MetaOp::CMP,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xC4, MetaOp::CPY,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xC5, MetaOp::CMP,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xC6, MetaOp::DEC,  AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
+	Opcode::new(0xC8, MetaOp::INY,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xC9, MetaOp::CMP,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0xCA, MetaOp::DEX,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xCC, MetaOp::CPY,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xCD, MetaOp::CMP,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xCE, MetaOp::DEC,  AddrMode::ABS, false, Some(MemAccess::Offset)),
+	Opcode::new(0xD0, MetaOp::BNE,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0xD1, MetaOp::CMP,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xD5, MetaOp::CMP,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xD6, MetaOp::DEC,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xD8, MetaOp::CLD,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xD9, MetaOp::CMP,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0xDD, MetaOp::CMP,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xDE, MetaOp::DEC,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xE0, MetaOp::CPX,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0xE1, MetaOp::SBC,  AddrMode::IZX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xE4, MetaOp::CPX,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xE5, MetaOp::SBC,  AddrMode::ZPG, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xE6, MetaOp::INC,  AddrMode::ZPG, false, Some(MemAccess::Rmw)   ),
+	Opcode::new(0xE8, MetaOp::INX,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xE9, MetaOp::SBC,  AddrMode::IMM, false, None                   ),
+	Opcode::new(0xEA, MetaOp::NOP,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xEC, MetaOp::CPX,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xED, MetaOp::SBC,  AddrMode::ABS, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xEE, MetaOp::INC,  AddrMode::ABS, false, Some(MemAccess::Offset)),
+	Opcode::new(0xF0, MetaOp::BEQ,  AddrMode::REL, true,  Some(MemAccess::Target)),
+	Opcode::new(0xF1, MetaOp::SBC,  AddrMode::IZY, false, Some(MemAccess::Read)  ),
+	Opcode::new(0xF5, MetaOp::SBC,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xF6, MetaOp::INC,  AddrMode::ZPX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xF8, MetaOp::SED,  AddrMode::IMP, false, None                   ),
+	Opcode::new(0xF9, MetaOp::SBC,  AddrMode::ABY, false, Some(MemAccess::Offset)),
+	Opcode::new(0xFD, MetaOp::SBC,  AddrMode::ABX, false, Some(MemAccess::Offset)),
+	Opcode::new(0xFE, MetaOp::INC,  AddrMode::ABX, false, Some(MemAccess::Offset)),
 ];
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn opcode_lookup() {
+		assert_eq!(lookup_opcode(0x00).meta_op, MetaOp::BRK);
+		assert_eq!(lookup_opcode(0x01).meta_op, MetaOp::ORA);
+		assert_eq!(lookup_opcode(0xFE).meta_op, MetaOp::INC);
+		assert_eq!(lookup_opcode(0x72).meta_op, MetaOp::UNK);
+		assert_eq!(lookup_opcode(0xFF).meta_op, MetaOp::UNK);
+	}
+
+	#[test]
+	fn mnemonics() {
+		assert_eq!(MetaOp::BRK.mnemonic_old(),  "brk");
+		assert_eq!(MetaOp::BRK.mnemonic_new(),  "brk");
+		assert_eq!(MetaOp::LDA.mnemonic_old(),  "lda");
+		assert_eq!(MetaOp::LDA.mnemonic_new(),  "ld  a,");
+		assert_eq!(MetaOp::LDAI.mnemonic_old(), "lda");
+		assert_eq!(MetaOp::LDAI.mnemonic_new(), "li  a,");
+		assert_eq!(MetaOp::UNK.mnemonic_old(),  "???");
+		assert_eq!(MetaOp::UNK.mnemonic_new(),  "???");
+	}
+
+	fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
+		let va = VAddr(va);
+		let inst = Disassembler.disas_instr(img, 0, va);
+
+		let mut operands = Operands::new();
+		for op in ops { operands.push(*op); }
+
+		assert_eq!(inst.va, va);
+		assert_eq!(inst.opcode.meta_op, meta_op);
+		assert_eq!(inst.ops, operands);
+	}
+
+	#[test]
+	fn disasm() {
+		use MetaOp::*;
+		use Operand::*;
+		use MemAccess::*;
+
+		check_disas(0, &[0x00],               BRK,  &[]);
+		check_disas(0, &[0xA9, 0xEF],         LDAI, &[Imm(0xEF)]);
+		check_disas(0, &[0x6D, 0x56, 0x34],   ADC,  &[Mem(0x3456, Read)]);
+		check_disas(0, &[0x84, 0x33],         STY,  &[Mem(0x0033, Write)]);
+		check_disas(0, &[0x06, 0x99],         ASL,  &[Mem(0x0099, Rmw)]);
+		check_disas(0, &[0x2E, 0xAA, 0x99],   ROL,  &[Mem(0x99AA, Offset)]);
+		check_disas(0, &[0x4C, 0xFE, 0xFF],   JMP,  &[Mem(0xFFFE, Target)]);
+		check_disas(0, &[0x6C, 0xFE, 0xFF],   JMP,  &[Mem(0xFFFE, Read)]);
+		check_disas(3, &[0x90, 10],           BCC,  &[Mem(3 + 10 + 2, Target)]);
+		check_disas(8, &[0x90, (-5i8) as u8], BCC,  &[Mem(8 - 5 + 2,  Target)]);
+	}
+}

@@ -20,6 +20,7 @@ pub struct Program<'a> {
 	image: RomImage<'a>,
 	mem:   Memory<'a>,
 	names: NameMap<'a>,
+	#[allow(dead_code)]
 	refs:  RefMap,
 }
 
