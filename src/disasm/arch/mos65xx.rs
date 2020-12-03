@@ -138,19 +138,26 @@ impl Operands {
 // Instruction
 // ------------------------------------------------------------------------------------------------
 
+const MAX_BYTES: usize = 3;
+
 /// A 65xx instruction.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Instruction {
-	va:   VAddr,
-	desc: &'static InstDesc,
-	size: usize,
-	ops:  Operands,
+	va:    VAddr,
+	desc:  &'static InstDesc,
+	size:  usize,
+	ops:   Operands,
+	bytes: [u8; MAX_BYTES],
 }
 
 // can't use #[derive(new)] cause that always makes a `pub` function...
 impl Instruction {
-	fn new(va: VAddr, desc: &'static InstDesc, size: usize, ops: Operands) -> Self {
-		Self { va, desc, size, ops }
+	fn new(va: VAddr, desc: &'static InstDesc, size: usize, ops: Operands, bytes: &[u8]) -> Self {
+		// TODO: this feels really overwritten
+		assert!(bytes.len() <= MAX_BYTES);
+		let mut b = [0u8; MAX_BYTES];
+		for (i, x) in bytes.iter().enumerate() { b[i] = *x; }
+		Self { va, desc, size, ops, bytes: b }
 	}
 }
 
@@ -163,6 +170,7 @@ impl InstructionTrait for Instruction {
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { self.ops.len() }
 	fn get_op(&self, i: usize) -> Operand { self.ops.get(i) }
+	fn get_bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -206,8 +214,9 @@ impl DisassemblerTrait for Disassembler {
 		}
 
 		// okay cool, let's decode
+		let bytes = &img[offs .. offs + inst_size];
 		let ops = decode_operands(desc, va, &img[op_offs .. op_offs + op_size]);
-		Ok(Instruction::new(va, desc, inst_size, ops))
+		Ok(Instruction::new(va, desc, inst_size, ops, bytes))
 	}
 }
 
