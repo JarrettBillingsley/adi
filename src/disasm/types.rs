@@ -5,11 +5,11 @@ use crate::memory::*;
 use super::error::*;
 
 // ------------------------------------------------------------------------------------------------
-// OpcodeTrait
+// InstDescTrait
 // ------------------------------------------------------------------------------------------------
 
-/// Trait for opcodes. Methods are used by analysis to determine control flow.
-pub trait OpcodeTrait {
+/// Trait for instruction descriptors. Methods are used by analysis to determine control flow.
+pub trait InstDescTrait {
 	/// Is this a control flow instruction?
 	fn is_control    (&self) -> bool;
 	/// Is this conditional or unconditional?
@@ -22,7 +22,7 @@ pub trait OpcodeTrait {
 	fn is_call       (&self) -> bool;
 	/// Is this a function return?
 	fn is_return     (&self) -> bool;
-	/// Is this an invalid opcode?
+	/// Is this an invalid instruction?
 	fn is_invalid    (&self) -> bool;
 }
 
@@ -72,8 +72,8 @@ pub trait OperandTrait {
 
 /// Trait for instructions. Used by analysis and such.
 pub trait InstructionTrait {
-	/// Associated type of opcodes returned by `opcode`.
-	type TOpcode: OpcodeTrait;
+	/// Associated type of instruction descs returned by `desc`.
+	type TDesc: InstDescTrait;
 
 	/// Associated type of operands returned by `get_op`.
 	type TOperand: OperandTrait;
@@ -81,8 +81,8 @@ pub trait InstructionTrait {
 	/// Get virtual address.
 	fn va(&self) -> VAddr;
 
-	/// Get opcode.
-	fn opcode(&self) -> Self::TOpcode;
+	/// Get desc.
+	fn desc(&self) -> Self::TDesc;
 
 	/// Get size, in bytes.
 	fn size(&self) -> usize;

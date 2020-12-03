@@ -13,21 +13,21 @@ use crate::memory::types::*;
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-mod opcode_table;
+mod descs;
 mod types;
 #[cfg(test)]
 mod tests;
 
-use opcode_table::*;
+use descs::*;
 use types::*;
 
 // ------------------------------------------------------------------------------------------------
-// Opcode
+// InstDesc
 // ------------------------------------------------------------------------------------------------
 
-/// A 65xx opcode.
+/// A 65xx instruction desc.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct Opcode {
+pub struct InstDesc {
 	/// The actual opcode byte.
 	opcode:      u8,
 	/// Which meta-op this is.
@@ -40,19 +40,19 @@ pub struct Opcode {
 	access:      Option<MemAccess>,
 }
 
-impl Opcode {
+impl InstDesc {
 	const fn new(
 		opcode:      u8,
 		meta_op:     MetaOp,
 		addr_mode:   AddrMode,
 		ctrl:        bool,
 		access:      Option<MemAccess>,
-	) -> Opcode {
+	) -> Self {
 		Self { opcode, meta_op, addr_mode, ctrl, access, }
 	}
 }
 
-impl OpcodeTrait for &Opcode {
+impl InstDescTrait for &InstDesc {
 	fn is_control    (&self) -> bool { self.ctrl }
 
 	/// True for conditional branches.
@@ -153,25 +153,25 @@ impl Operands {
 /// A 65xx instruction.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Instruction {
-	va:       VAddr,
-	opcode:   &'static Opcode,
-	size:     usize,
-	ops:      Operands,
+	va:   VAddr,
+	desc: &'static InstDesc,
+	size: usize,
+	ops:  Operands,
 }
 
 // can't use #[derive(new)] cause that always makes a `pub` function...
 impl Instruction {
-	fn new(va: VAddr, opcode: &'static Opcode, size: usize, ops: Operands) -> Self {
-		Self { va, opcode, size, ops }
+	fn new(va: VAddr, desc: &'static InstDesc, size: usize, ops: Operands) -> Self {
+		Self { va, desc, size, ops }
 	}
 }
 
 impl InstructionTrait for Instruction {
-	type TOpcode = &'static Opcode;
+	type TDesc = &'static InstDesc;
 	type TOperand = Operand;
 
 	fn va(&self) -> VAddr                 { self.va }
-	fn opcode(&self) -> &'static Opcode   { self.opcode }
+	fn desc(&self) -> &'static InstDesc   { self.desc }
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { self.ops.len() }
 	fn get_op(&self, i: usize) -> Operand { self.ops.get(i) }
@@ -202,15 +202,15 @@ impl DisassemblerTrait for Disassembler {
 		}
 
 		// is the opcode OK?
-		let opcode = lookup_opcode(img[offs]);
+		let desc = lookup_desc(img[offs]);
 
-		if opcode.meta_op == MetaOp::UNK {
+		if desc.meta_op == MetaOp::UNK {
 			return Err(unknown_instruction(offs, va));
 		}
 
 		// do we have enough bytes for the operands?
 		let op_offs = offs + 1;
-		let op_size = opcode.addr_mode.op_bytes();
+		let op_size = desc.addr_mode.op_bytes();
 		let inst_size = op_size + 1;
 
 		if (op_offs + op_size) > img.len() {
@@ -218,18 +218,18 @@ impl DisassemblerTrait for Disassembler {
 		}
 
 		// okay cool, let's decode
-		let ops = decode_operands(opcode, va, &img[op_offs .. op_offs + op_size]);
-		Ok(Instruction::new(va, opcode, inst_size, ops))
+		let ops = decode_operands(desc, va, &img[op_offs .. op_offs + op_size]);
+		Ok(Instruction::new(va, desc, inst_size, ops))
 	}
 }
 
-fn decode_operands(opcode: &'static Opcode, va: VAddr, img: &[u8]) -> Operands {
+fn decode_operands(desc: &'static InstDesc, va: VAddr, img: &[u8]) -> Operands {
 	let mut ops = Operands::new();
 
-	if opcode.addr_mode.op_bytes() > 0 {
+	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
-		if let Some(access) = opcode.access {
-			let addr = match opcode.addr_mode {
+		if let Some(access) = desc.access {
+			let addr = match desc.addr_mode {
 				ZPG | ZPX | ZPY | IZX | IZY => img[0] as u16,
 
 				// TODO: should really use u16::from_le_bytes but it's awkward with slices
@@ -242,7 +242,7 @@ fn decode_operands(opcode: &'static Opcode, va: VAddr, img: &[u8]) -> Operands {
 
 			ops.push(Operand::Mem(addr, access));
 		} else {
-			assert!(matches!(opcode.addr_mode, IMM));
+			assert!(matches!(desc.addr_mode, IMM));
 			ops.push(Operand::Imm(img[0]));
 		}
 	}
@@ -288,7 +288,7 @@ impl PrinterTrait for Printer {
 	type TInstruction = Instruction;
 
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
-		i.opcode.meta_op.mnemonic(self.flavor).into()
+		i.desc.meta_op.mnemonic(self.flavor).into()
 	}
 
 	fn fmt_operands(&self, i: &Instruction, l: &dyn NameLookupTrait) -> String {
@@ -301,12 +301,12 @@ impl PrinterTrait for Printer {
 				Operand::Mem(addr, ..) => {
 					match l.lookup(VAddr(addr as usize)) {
 						Some(name) => name,
-						None       => self.fmt_addr(addr, i.opcode.addr_mode.is_zero_page()),
+						None       => self.fmt_addr(addr, i.desc.addr_mode.is_zero_page()),
 					}
 				}
 			};
 
-			let template = i.opcode.addr_mode.operand_template(self.flavor);
+			let template = i.desc.addr_mode.operand_template(self.flavor);
 			template.replace("{}", &operand)
 		}
 	}

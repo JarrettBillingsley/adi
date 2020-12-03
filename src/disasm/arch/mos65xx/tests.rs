@@ -1,14 +1,14 @@
 use super::*;
-use super::opcode_table::*;
+use super::descs::*;
 use super::types::*;
 
 #[test]
 fn opcode_lookup() {
-	assert_eq!(lookup_opcode(0x00).meta_op, MetaOp::BRK);
-	assert_eq!(lookup_opcode(0x01).meta_op, MetaOp::ORA);
-	assert_eq!(lookup_opcode(0xFE).meta_op, MetaOp::INC);
-	assert_eq!(lookup_opcode(0x72).meta_op, MetaOp::UNK);
-	assert_eq!(lookup_opcode(0xFF).meta_op, MetaOp::UNK);
+	assert_eq!(lookup_desc(0x00).meta_op, MetaOp::BRK);
+	assert_eq!(lookup_desc(0x01).meta_op, MetaOp::ORA);
+	assert_eq!(lookup_desc(0xFE).meta_op, MetaOp::INC);
+	assert_eq!(lookup_desc(0x72).meta_op, MetaOp::UNK);
+	assert_eq!(lookup_desc(0xFF).meta_op, MetaOp::UNK);
 }
 
 #[test]
@@ -24,11 +24,11 @@ fn mnemonics() {
 }
 
 /*fn make_instr(va: usize, opcode: u8, ops: &[Operand]) -> Instruction {
-	let opcode = lookup_opcode(opcode);
-	let size = opcode.addr_mode.op_bytes() + 1;
+	let desc = lookup_desc(opcode);
+	let size = desc.addr_mode.op_bytes() + 1;
 	let mut operands = Operands::new();
 	for op in ops { operands.push(*op); }
-	Instruction::new(VAddr(va), opcode, size, operands)
+	Instruction::new(VAddr(va), desc, size, operands)
 } */
 
 fn disas(va: usize, img: &[u8]) -> Instruction {
@@ -47,7 +47,7 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
 			for op in ops { operands.push(*op); }
 
 			assert_eq!(inst.va, va);
-			assert_eq!(inst.opcode.meta_op, meta_op);
+			assert_eq!(inst.desc.meta_op, meta_op);
 			assert_eq!(inst.ops, operands);
 		}
 
