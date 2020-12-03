@@ -4,7 +4,6 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use lazy_static::*;
 use parse_display::*;
-use derive_new::*;
 
 use crate::disasm::types::*;
 use crate::disasm::error::*;
@@ -14,34 +13,47 @@ use crate::memory::types::*;
 // AddrMode
 // ------------------------------------------------------------------------------------------------
 
+/// All 65xx addressing modes.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum AddrMode {
-	IMP, // (no operand bytes)
-	IMM, // #$11
+enum AddrMode {
+	/// Implied (no operand bytes), e.g. `rol`.
+	IMP,
+	/// Immediate (1 byte), e.g. `lda #$30`.
+	IMM,
 
-	ZPG, // $11
-	ZPX, // $11,X where $11 is ZPGaddr
-	ZPY, // $11,Y where $11 is ZPGaddr
+	/// Zero-page absolute (1 byte), e.g. `lda $10`.
+	ZPG,
+	/// Zero-page, X-indexed (1 byte), e.g. `lda $80,X`.
+	ZPX,
+	/// Zero-page, Y-indexed (1 byte), e.g. `lda $80,Y`.
+	ZPY,
 
-	ABS, // $2211
-	ABX, // $2211,X
-	ABY, // $2211,Y
+	/// Absolute (2 bytes), e.g. `lda $8040`.
+	ABS,
+	/// Absolute, X-indexed (2 bytes), e.g. `lda $8040,X`
+	ABX,
+	/// Absolute, Y-indexed (2 bytes), e.g. `lda $8040,Y`
+	ABY,
 
-	IND, // ($2211) (only used for JMP indirect)
+	/// Indirect (2 bytes); used only for indirect jump i.e. `jmp ($2000)`.
+	IND,
+	/// "Indexed Indirect" - double-indirect zero-page X-indexed (1 byte), e.g. `lda ($10,X)`.
+	/// Loads a 2-byte address from `X + offset`, then accesses the byte at that address.
 	IZX, // ($11,X) where $11 is ZPGaddr
+	/// "Indirect Indexed" - double-indirect zero-page Y-indexed (1 byte), e.g. `lda ($10),Y`.
+	/// Loads a 2-byte address from `offset`, then accesses the byte at `Y + address`.
 	IZY, // ($11),Y where $11 is ZPGaddr
 
-	LAB, // alias for abs, but for jmp/jsr instructions
-	REL, // $11 where $11 is signed 2's compl (used for branches)
+	/// PC-relative (1 byte), e.g. `bcc whatever`.
+	/// Signed offset added to PC (+2 for size of branch instruction).
+	REL,
+	/// Alias for `ABS` but for `jmp`/`jsr` instructions, to distinguish their operand types.
+	LAB,
 }
 
 impl AddrMode {
-	pub fn is_mem(&self) -> bool {
-		use AddrMode::*;
-		matches!(self, ABS | ABX | ABY | IND | IZX | IZY | ZPG | ZPX | ZPY)
-	}
-
-	pub fn op_bytes(&self) -> usize {
+	/// How many operand bytes are needed for this mode?
+	fn op_bytes(&self) -> usize {
 		use AddrMode::*;
 		match self {
 			IMP => 0,
@@ -52,11 +64,14 @@ impl AddrMode {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Opcode
+// MetaOp
 // ------------------------------------------------------------------------------------------------
 
+/// The "fundamental operation" that an instruction performs, regardless of addressing mode.
+/// Each meta-op can cover multiple real instructions with different addressing modes.
+/// These correspond (mostly) with what a programmer would type.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum MetaOp {
+enum MetaOp {
 	UNK,
 	ADC, AND,  ASLA, ASL,  BCC,  BCS,  BEQ,  BIT, BMI, BNE,
 	BPL, BRK,  BVC,  BVS,  CLC,  CLD,  CLI,  CLV, CMP, CPX,
@@ -68,7 +83,8 @@ pub enum MetaOp {
 }
 
 impl MetaOp {
-	pub fn mnemonic_old(&self) -> &'static str {
+	/// The traditional mnemonics, but not so screamy.
+	fn mnemonic_old(&self) -> &'static str {
 		use MetaOp::*;
 		match self {
 			UNK  => "???",
@@ -91,7 +107,9 @@ impl MetaOp {
 		}
 	}
 
-	pub fn mnemonic_new(&self) -> &'static str {
+	/// My more "modern" mnemonics. Get those damn registers out of the mnemonics!
+	/// Destination on the left!!
+	fn mnemonic_new(&self) -> &'static str {
 		use MetaOp::*;
 		match self {
 			UNK  => "???",
@@ -115,13 +133,23 @@ impl MetaOp {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+// Opcode
+// ------------------------------------------------------------------------------------------------
+
+/// A 65xx opcode.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Opcode {
-	pub opcode:      u8,
-	pub meta_op:     MetaOp,
-	pub addr_mode:   AddrMode,
-	pub ctrl:        bool,
-	pub access:      Option<MemAccess>,
+	/// The actual opcode byte.
+	opcode:      u8,
+	/// Which meta-op this is.
+	meta_op:     MetaOp,
+	/// What addressing mode is used.
+	addr_mode:   AddrMode,
+	/// Is this a control flow instruction?
+	ctrl:        bool,
+	/// Does this access memory, and how?
+	access:      Option<MemAccess>,
 }
 
 impl Opcode {
@@ -138,20 +166,34 @@ impl Opcode {
 
 impl OpcodeTrait for &Opcode {
 	fn is_control    (&self) -> bool { self.ctrl }
+
+	/// True for conditional branches.
 	fn is_conditional(&self) -> bool { self.addr_mode == AddrMode::REL }
+
+	/// True for opcode `0x4C` (absolute `jmp`).
 	fn is_jump       (&self) -> bool { self.opcode == 0x4C }                // jmp absolute
+
+	/// True for opcode `0x6C` (indirect `jmp`).
 	fn is_indir_jump (&self) -> bool { self.opcode == 0x6C }                // jmp indirect
+
+	/// True for opcode `0x20` (`jsr`).
 	fn is_call       (&self) -> bool { self.opcode == 0x20 }                // jsr
+
+	/// True for opcodes `0x40` and `0x60` (`rts` and `rti`).
 	fn is_return     (&self) -> bool { matches!(self.opcode, 0x40 | 0x60) } // rts/rti
+
+	/// True for invalid opcodes.
 	fn is_invalid    (&self) -> bool { self.opcode == INVALID_OPCODE }
 }
 
+/// Sentinel value used for invalid opcodes.
 pub const INVALID_OPCODE: u8 = 0xFF;
 
 // ------------------------------------------------------------------------------------------------
-// Operand
+// Reg
 // ------------------------------------------------------------------------------------------------
 
+/// 65xx registers.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Reg {
 	A, X, Y, S, P
@@ -161,6 +203,12 @@ impl Default for Reg {
 	fn default() -> Reg { Reg::A }
 }
 
+// ------------------------------------------------------------------------------------------------
+// Operand
+// ------------------------------------------------------------------------------------------------
+
+/// Kinds of operands. Explicit operands are always either `Imm` or `Mem`; `Reg` is only
+/// implicit (aka inherent).
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 #[display("{:?}")]
 pub enum Operand {
@@ -185,11 +233,12 @@ impl OperandTrait for Operand {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Instruction
+// Operands
 // ------------------------------------------------------------------------------------------------
 
 const MAX_OPS: usize = 2; // ? we'll see
 
+/// Tiny container for instruction operands.
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Operands {
 	len: usize,
@@ -213,23 +262,34 @@ impl Operands {
 		self.len += 1;
 	}
 
-	fn len(&self) -> usize {
+	pub fn len(&self) -> usize {
 		self.len
 	}
 
-	fn get(&self, i: usize) -> Operand {
+	pub fn get(&self, i: usize) -> Operand {
 		assert!(i < self.len);
 		self.ops[i]
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+// Instruction
+// ------------------------------------------------------------------------------------------------
+
+/// A 65xx instruction.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-#[derive(new)]
 pub struct Instruction {
 	va:       VAddr,
 	opcode:   &'static Opcode,
 	size:     usize,
 	ops:      Operands,
+}
+
+// can't use #[derive(new)] cause that always makes a `pub` function...
+impl Instruction {
+	fn new(va: VAddr, opcode: &'static Opcode, size: usize, ops: Operands) -> Self {
+		Self { va, opcode, size, ops }
+	}
 }
 
 impl InstructionTrait for Instruction {
@@ -247,8 +307,6 @@ impl InstructionTrait for Instruction {
 // Disassembler
 // ------------------------------------------------------------------------------------------------
 
-pub struct Disassembler;
-
 fn out_of_bytes(offs: usize, va: VAddr, expected: usize, got: usize) -> DisasError {
 	DisasError { offs, va, kind: DisasErrorKind::OutOfBytes { expected, got } }
 }
@@ -256,6 +314,9 @@ fn out_of_bytes(offs: usize, va: VAddr, expected: usize, got: usize) -> DisasErr
 fn unknown_instruction(offs: usize, va: VAddr) -> DisasError {
 	DisasError { offs, va, kind: DisasErrorKind::UnknownInstruction }
 }
+
+/// The 65xx disassembler.
+pub struct Disassembler;
 
 impl DisassemblerTrait for Disassembler {
 	type TInstruction = Instruction;
@@ -319,7 +380,7 @@ fn decode_operands(opcode: &'static Opcode, va: VAddr, img: &[u8]) -> Operands {
 // Opcode table
 // ------------------------------------------------------------------------------------------------
 
-pub fn lookup_opcode(opcode: u8) -> &'static Opcode {
+fn lookup_opcode(opcode: u8) -> &'static Opcode {
 	OPCODE_TABLE.get(&opcode).unwrap_or(&&OP_INVALID)
 }
 
@@ -486,6 +547,10 @@ const OPCODES: &[Opcode] = &[
 	Opcode::new(0xFD, MetaOp::SBC,  AddrMode::ABX, false, Some(MemAccess::Offset)),
 	Opcode::new(0xFE, MetaOp::INC,  AddrMode::ABX, false, Some(MemAccess::Offset)),
 ];
+
+// ------------------------------------------------------------------------------------------------
+// Tests!
+// ------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
