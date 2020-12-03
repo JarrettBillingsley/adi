@@ -24,16 +24,15 @@ pub enum MemAccess {
 }
 
 // hmmmmmmm
-pub trait InstructionTrait<TOpcode, TOperand>
-where
-	TOpcode: OpcodeTrait,
-	TOperand: OperandTrait
-{
+pub trait InstructionTrait {
+	type TOpcode: OpcodeTrait;
+	type TOperand: OperandTrait;
+
 	fn va(&self) -> VAddr;
-	fn opcode(&self) -> TOpcode;
+	fn opcode(&self) -> Self::TOpcode;
 	fn size(&self) -> usize;
 	fn num_ops(&self) -> usize;
-	fn get_op(&self, i: usize) -> TOperand;
+	fn get_op(&self, i: usize) -> Self::TOperand;
 	// TODO: implied ops as a separate thing?
 }
 
@@ -56,28 +55,20 @@ pub trait OperandTrait {
 	}
 }
 
-pub trait DisassemblerTrait<TOpcode, TOperand, TInstruction>
-where
-	TOpcode: OpcodeTrait,
-	TOperand: OperandTrait,
-	TInstruction: InstructionTrait<TOpcode, TOperand>
-{
+pub trait DisassemblerTrait {
+	type TInstruction: InstructionTrait;
 	// TODO: this should return a Result type
-	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> TInstruction;
+	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> Self::TInstruction;
 	// fn disas_range(&self, start: VAddr, end: Option<VAddr>) -> dyn Iterator<Item = TInstruction>;
 }
 
-pub trait PrinterTrait<TOpcode, TOperand, TInstruction>
-where
-	TOpcode: OpcodeTrait,
-	TOperand: OperandTrait,
-	TInstruction: InstructionTrait<TOpcode, TOperand>
-{
+pub trait PrinterTrait {
+	type TInstruction: InstructionTrait;
 	fn new(prog: &Program) -> Self;
 	fn prog(&self) -> &Program;
-	fn fmt_mnemonic(&self, i: &TInstruction) -> String;
-	fn fmt_operands(&self, i: &TInstruction) -> String;
-	fn fmt_instr(&self, i: &TInstruction) -> String {
+	fn fmt_mnemonic(&self, i: &Self::TInstruction) -> String;
+	fn fmt_operands(&self, i: &Self::TInstruction) -> String;
+	fn fmt_instr(&self, i: &Self::TInstruction) -> String {
 		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i))
 	}
 }

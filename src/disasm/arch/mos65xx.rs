@@ -231,7 +231,10 @@ pub struct Instruction {
 	ops:      Operands,
 }
 
-impl InstructionTrait<&'static Opcode, Operand> for Instruction {
+impl InstructionTrait for Instruction {
+	type TOpcode = &'static Opcode;
+	type TOperand = Operand;
+
 	fn va(&self) -> VAddr                 { self.va }
 	fn opcode(&self) -> &'static Opcode   { self.opcode }
 	fn size(&self) -> usize               { self.size }
@@ -245,7 +248,9 @@ impl InstructionTrait<&'static Opcode, Operand> for Instruction {
 
 pub struct Disassembler;
 
-impl DisassemblerTrait<&'static Opcode, Operand, Instruction> for Disassembler {
+impl DisassemblerTrait for Disassembler {
+	type TInstruction = Instruction;
+
 	fn disas_instr(&self, img: &[u8], offs: usize, va: VAddr) -> Instruction {
 		let opcode = lookup_opcode(img[offs]);
 		let op_offs = offs + 1;
