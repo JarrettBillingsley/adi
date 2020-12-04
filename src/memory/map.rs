@@ -29,6 +29,7 @@ pub struct MemoryMap<'a> {
 	name_map: HashMap<&'a str, usize>, // from names to `regions` index
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl<'a> MemoryMap<'a> {
 	/// given a number of bits in the address and a list of regions, constructs a
 	/// new MemoryMap. does sanity checks to ensure regions don't overlap or have

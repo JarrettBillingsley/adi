@@ -69,7 +69,7 @@ impl RefMap {
 		self.outrefs.get(&src)
 	}
 
-	pub fn all_outrefs<'a>(&'a self) -> BTreeIter<'a, Location, RefSet> {
+	pub fn all_outrefs(&self) -> BTreeIter<'_, Location, RefSet> {
 		self.outrefs.iter()
 	}
 
@@ -84,7 +84,7 @@ impl RefMap {
 	fn _remove_outref(&mut self, src: Location, dst: Location) {
 		let set = self.outrefs.get_mut(&src).unwrap_or_else(|| panic!("no outrefs from {}", src));
 		assert!(set.remove(&dst));
-		if set.len() == 0 {
+		if set.is_empty() {
 			self.outrefs.remove(&src);
 		}
 	}
@@ -92,7 +92,7 @@ impl RefMap {
 	fn _remove_inref(&mut self, src: Location, dst: Location) {
 		let set = self.inrefs.get_mut(&dst).unwrap_or_else(|| panic!("no inrefs to {}", dst));
 		assert!(set.remove(&src));
-		if set.len() == 0 {
+		if set.is_empty() {
 			self.inrefs.remove(&dst);
 		}
 	}

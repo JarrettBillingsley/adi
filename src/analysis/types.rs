@@ -7,7 +7,6 @@ use generational_arena::{ Arena, Index };
 
 use crate::memory::{
 	types::Location,
-	spans::SpanOwner,
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -27,7 +26,8 @@ pub struct Function {
 	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
 	name: Option<String>,
 
-	/// All its `BasicBlock`s. The first entry is the head (entry point).
+	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
+	/// ordering of the rest of them.
 	bbs: Vec<BasicBlock>, // [0] is head
 }
 
@@ -55,12 +55,12 @@ pub struct BasicBlock {
 	/// Its globally-unique location.
 	loc: Location,
 
+	/// Where its terminator (last instruction) is located.
+	term_loc: Location,
+
 	/// How it ends, and what its successors are.
 	term: BBTerm,
 }
-
-/// A `BasicBlock` owns a span.
-impl SpanOwner for BasicBlock {}
 
 impl BasicBlock {
 	pub fn successors(&self) -> Successors {
@@ -80,17 +80,17 @@ pub enum BBTerm {
 	/// A return instruction.
 	Return,
 	/// Execution falls through to the next BB.
-	FallThru(BBId),
+	FallThru(Location),
 	/// Unconditional jump.
-	Jump(BBId),
+	Jump(Location),
 	/// Conditional branch within a function.
-	Cond { t: BBId, f: BBId },
+	Cond { t: Location, f: Location },
 	/// Jump table with any number of destinations.
-	JumpTbl(Vec<BBId>),
+	JumpTbl(Vec<Location>),
 }
 
-/// Iterator type of `BBTerm`'s successors.
-pub type Successors<'a> = Chain<option::IntoIter<&'a BBId>, slice::Iter<'a, BBId>>;
+/// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
+pub type Successors<'a> = Chain<option::IntoIter<&'a Location>, slice::Iter<'a, Location>>;
 
 impl BBTerm {
 	/// Iterator of successors of this BB.
@@ -112,6 +112,7 @@ impl BBTerm {
 
 /// An index of all functions in the program. Functions are created, destroyed, and looked up
 /// through this object.
+#[derive(Default)]
 pub struct FuncIndex {
 	arena: Arena<Function>,
 }

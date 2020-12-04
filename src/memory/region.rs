@@ -28,6 +28,7 @@ pub struct MemoryRegion<'a> {
 	pub size: usize,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl<'a> MemoryRegion<'a> {
 	/// true if these two regions overlap one another.
 	pub fn overlaps(&self, other: &MemoryRegion) -> bool {
@@ -64,7 +65,7 @@ pub enum MemoryRegionKind {
 
 impl MemoryRegionKind {
 	/// true if the region of memory is bankable (i.e. its contents can be swapped out).
-	pub fn is_bankable(&self) -> bool {
+	pub fn is_bankable(self) -> bool {
 		use MemoryRegionKind::*;
 		matches!(self, RamBank | RomBank | NvRamBank)
 	}

@@ -57,7 +57,7 @@ pub enum AddrMode {
 
 impl AddrMode {
 	/// How many operand bytes are needed for this mode?
-	pub fn op_bytes(&self) -> usize {
+	pub fn op_bytes(self) -> usize {
 		use AddrMode::*;
 		match self {
 			IMP => 0,
@@ -67,13 +67,13 @@ impl AddrMode {
 	}
 
 	/// Is this a zero-page addressing mode?
-	pub fn is_zero_page(&self) -> bool {
+	pub fn is_zero_page(self) -> bool {
 		use AddrMode::*;
 		matches!(self, ZPG | ZPX | ZPY | IZX | IZY)
 	}
 
 	/// Operand printing template
-	pub fn operand_template(&self, flavor: SyntaxFlavor) -> &'static str {
+	pub fn operand_template(self, flavor: SyntaxFlavor) -> &'static str {
 		use AddrMode::*;
 
 		match flavor {
@@ -123,7 +123,7 @@ pub enum MetaOp {
 
 impl MetaOp {
 	/// Instruction mnemonics
-	pub fn mnemonic(&self, flavor: SyntaxFlavor) -> &'static str {
+	pub fn mnemonic(self, flavor: SyntaxFlavor) -> &'static str {
 		use MetaOp::*;
 		match flavor {
 			SyntaxFlavor::Old =>

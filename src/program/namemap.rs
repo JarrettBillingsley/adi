@@ -18,6 +18,7 @@ pub const AUTOGEN_NAME_PREFIX: &str = "loc";
 // ------------------------------------------------------------------------------------------------
 
 /// A bidirectional mapping between names and locations.
+#[derive(Default)]
 pub struct NameMap<'a> {
 	names_to_locs: HashMap<&'a str, Location>,
 	locs_to_names: BTreeMap<Location, &'a str>,

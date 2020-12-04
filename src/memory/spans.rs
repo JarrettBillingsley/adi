@@ -12,37 +12,29 @@ use super::types::*;
 // Span
 // ------------------------------------------------------------------------------------------------
 
-// TODO: what IS this?
-pub trait SpanOwner: Debug + Send + Sync {}
-
 /// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
-///
-/// Its "owner" is some kind of object which "manages" this span. For example, code spans can be
-/// managed by BasicBlock objects. (data spans might have some kind of Array or Variable object?)
 #[derive(Debug, Display)]
 #[derive(new)]
-#[display("{kind} [0x{start:08X} .. 0x{end:08X})")]
-pub struct Span<'a> {
+#[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
+pub struct Span {
 	/// address of first byte.
 	pub start: SegOffset,
 	/// address of first byte after span.
 	pub end: SegOffset,
 	/// what kind of span it is.
 	pub kind: SpanKind,
-	/// the owner, if any.
-	pub owner: Option<&'a dyn SpanOwner>,
 }
 
 /// What kind of thing the span covers.
-#[derive(Debug, Display, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SpanKind {
 	/// Unknown (not yet analyzed)
 	Unk,
 	/// Code (that is, a basic block of a function)
-	Code,
+	Code(crate::analysis::types::BBId),
 	/// Data (anything that isn't code)
-	Data,
+	Data, // TODO: like, an array/variable owner type
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -54,21 +46,32 @@ pub enum SpanKind {
 ///
 /// Looking up spans by address is efficient (logarithmic time). Looking up spans in other ways
 /// requires the use of an index.
-pub struct SpanMap<'a> {
+///
+/// Rules:
+/// 1. spans can only go between unk and non-unk - not e.g. directly from code to data.
+///     - adjacent unk spans are coalesced.
+/// 2. span map is not directly modified.
+///     - exists in service of code and data indexes.
+/// 3. spans can be deleted or shortened...
+///     - but can't have their *starts* changed.
+///     - have to delete existing span and make a new one for that.
+/// 4. spans cannot be bisected.
+///     - that leaves two non-contiguous spans with the same owner, which makes no sense
+pub struct SpanMap {
 	// There's some duplication between the index into the map and Span::start.
 	// Ideally we'd use BTreeSet using Span::start as the sorting key.
 	// But I don't think it's possible to use BTreeSet::range using a SegOffset as
 	// the range bounds when the value is a Span. So, a map (and duplication) it is.
-	spans: BTreeMap<SegOffset, Span<'a>>,
+	spans: BTreeMap<SegOffset, Span>,
 	end:   SegOffset,
 }
 
-impl<'a> SpanMap<'a> {
+impl SpanMap {
 	/// Creates a new `SpanMap` with a single unknown span that covers the entire segment.
 	pub fn new(size: usize) -> Self {
 		let end = SegOffset(size);
 		let mut spans = BTreeMap::new();
-		spans.insert(SegOffset(0), Span::new(SegOffset(0), end, SpanKind::Unk, None));
+		spans.insert(SegOffset(0), Span::new(SegOffset(0), end, SpanKind::Unk));
 		Self { spans, end }
 	}
 
@@ -91,14 +94,14 @@ impl<'a> SpanMap<'a> {
 	}
 
 	/// Iterator over all spans (SegOffset, Span).
-	pub fn iter(&self) -> BTreeValues<'a, SegOffset, Span> {
+	pub fn iter(&self) -> BTreeValues<'_, SegOffset, Span> {
 		self.spans.values()
 	}
 
-	/// Redefines a range of memory as being of a certain kind with a given owner.
+	/// Redefines a range of memory as being of a certain kind.
 	pub fn redefine(&mut self,
 		// TODO: SegRange for a pair of offsets (more Rustic)
-		start: SegOffset, end: SegOffset, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
+		start: SegOffset, end: SegOffset, kind: SpanKind) {
 
 		assert!(start < end);
 		assert!(end <= self.end);
@@ -108,8 +111,12 @@ impl<'a> SpanMap<'a> {
 
 		// SHORTCUT: if we're just rewriting a span, don't bother splitting things up.
 		if start == first_start && end == first_end {
-			self.rewrite(first_start, kind, owner);
+			self.change_kind(first_start, kind);
 		} else {
+			// tricky: the start and end locations can come in the middle of existing spans.
+			// so, we have to check if we're changing the end location of the first span or
+			// the start location of the last span. in addition, there can be any number of
+			// spans in between, or a single span might be bisected!
 			let (_, last_end) = self.range_from_offset(end);
 			let mut middle = self.spans.split_off(&first_start);
 			let mut rest   = middle.split_off(&last_end);
@@ -119,23 +126,22 @@ impl<'a> SpanMap<'a> {
 			// rest holds all the unaffected spans after end.
 			// any changes will happen in middle.
 
-			assert!(middle.len() >= 1);
+			assert!(!middle.is_empty());
 
 			let mut middle_iter = middle.range(..);
 			let first = middle_iter.next().unwrap().1;
 			let last  = if middle.len() > 1 { middle_iter.next_back().unwrap().1 } else { first };
 
-			// TODO: update indexes
 			if start != first_start {
 				// gotta split the first span into [first_start..start)
-				self.spans.insert(first_start, Span::new(first.start, start, first.kind, first.owner));
+				self.spans.insert(first_start, Span::new(first_start, start, first.kind));
 			}
 
-			self.spans.insert(start, Span::new(start, end, kind, owner));
+			self.spans.insert(start, Span::new(start, end, kind));
 
 			if end != last_end {
 				// now to split the last span into [end..last_end)
-				self.spans.insert(end, Span::new(end, last.end, last.kind, last.owner));
+				self.spans.insert(end, Span::new(end, last.end, last.kind));
 			}
 
 			// finally, glob on the remainder
@@ -146,12 +152,14 @@ impl<'a> SpanMap<'a> {
 		self.check_invariants();
 	}
 
-	fn rewrite(&mut self, start: SegOffset, kind: SpanKind, owner: Option<&'a dyn SpanOwner>) {
-		// println!("rewriting 0x{:08X}!", start);
+	/// Given the start of a span, change its kind.
+	/// Panics if the given start offset is not the start of a span.
+	pub fn change_kind(&mut self, start: SegOffset, kind: SpanKind) {
 		let span = self.spans.get_mut(&start).unwrap();
-		span.kind = kind;
-		span.owner = owner;
-		// TODO: update indexes
+
+		if span.kind != kind {
+			span.kind = kind;
+		}
 	}
 
 	fn range_from_offset(&self, offs: SegOffset) -> (SegOffset, SegOffset) {
@@ -161,22 +169,31 @@ impl<'a> SpanMap<'a> {
 
 	#[cfg(debug_assertions)]
 	fn check_invariants(&self) {
-		// INVARIANT: span[i].end == span[i + 1].start
-		let spans = self.spans.values().collect::<Vec<_>>();
+		let spans = self.spans.iter().collect::<Vec<(&SegOffset, &Span)>>();
 
-		for i in 0 .. spans.len() - 1 {
-			assert_eq!(spans[i].end, spans[i + 1].start);
+		// INVARIANT: span map is never empty
+		assert!(!spans.is_empty());
+
+		// INVARIANT: span[0].start == 0
+		assert_eq!(*spans.first().unwrap().0, SegOffset(0));
+
+		// INVARIANT: span[n].end == span[n + 1].start
+		for pair in spans.windows(2) {
+			match pair {
+				[(_, cur_span), (next_start, _)] => assert_eq!(cur_span.end, **next_start),
+				_ => unreachable!()
+			}
 		}
 
 		// INVARIANT: span[n - 1].end == self.end
-		assert_eq!(spans[spans.len() - 1].end, self.end);
+		assert_eq!(spans.last().unwrap().1.end, self.end);
 	}
 
 	#[cfg(any(test, debug_assertions))]
 	#[allow(dead_code)]
 	pub fn dump_spans(&self) {
 		println!("-----------------");
-		for (_, s) in &self.spans {
+		for s in self.spans.values() {
 			println!("{}", s);
 		}
 	}

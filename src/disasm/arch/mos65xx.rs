@@ -53,7 +53,7 @@ impl InstDesc {
 	}
 }
 
-impl InstDescTrait for &InstDesc {
+impl InstDescTrait for InstDesc {
 	fn is_control    (&self) -> bool { self.ctrl }
 
 	fn is_conditional(&self) -> bool { self.addr_mode == AddrMode::REL }
@@ -145,14 +145,14 @@ const MAX_BYTES: usize = 3;
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Instruction {
 	va:    VAddr,
-	desc:  &'static InstDesc,
+	desc:  InstDesc,
 	size:  usize,
 	op:    Option<Operand>,
 	bytes: [u8; MAX_BYTES],
 }
 
 impl Instruction {
-	fn new(va: VAddr, desc: &'static InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
+	fn new(va: VAddr, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
 	-> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
@@ -161,11 +161,11 @@ impl Instruction {
 }
 
 impl InstructionTrait for Instruction {
-	type TDesc = &'static InstDesc;
+	type TDesc = InstDesc;
 	type TOperand = Operand;
 
 	fn va(&self) -> VAddr                 { self.va }
-	fn desc(&self) -> &'static InstDesc   { self.desc }
+	fn desc(&self) -> InstDesc            { self.desc }
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
 	fn get_op(&self, i: usize) -> Operand {
@@ -187,7 +187,7 @@ impl DisassemblerTrait for Disassembler {
 
 	fn disas_instr(&self, img: &[u8], va: VAddr) -> DisasResult<Instruction> {
 		// do we have enough bytes?
-		if img.len() == 0 {
+		if img.is_empty() {
 			return Err(DisasError::out_of_bytes(va, 1, 0));
 		}
 
@@ -212,7 +212,7 @@ impl DisassemblerTrait for Disassembler {
 	}
 }
 
-fn decode_operand(desc: &'static InstDesc, va: VAddr, img: &[u8]) -> Option<Operand> {
+fn decode_operand(desc: InstDesc, va: VAddr, img: &[u8]) -> Option<Operand> {
 	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
 		if let Some(access) = desc.access {
@@ -252,7 +252,7 @@ impl Printer {
 		Self { flavor }
 	}
 
-	fn fmt_imm(&self, imm: u8) -> String {
+	fn fmt_imm(self, imm: u8) -> String {
 		match self.flavor {
 			SyntaxFlavor::Old =>
 				if imm < 0x10 { format!("#{}", imm) } else { format!("#${:X}", imm) },
@@ -261,7 +261,7 @@ impl Printer {
 		}
 	}
 
-	fn fmt_addr(&self, addr: u16, zpg: bool) -> String {
+	fn fmt_addr(self, addr: u16, zpg: bool) -> String {
 		match self.flavor {
 			SyntaxFlavor::Old =>
 				if zpg { format!("${:02X}", addr) } else { format!("${:04X}", addr) },

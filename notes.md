@@ -115,3 +115,53 @@ I'm kind of working under the assumption that the image segments are easily dete
 	- like, "bank 4 sometimes appears at A000 and other times at C000"
 	- nothing in the hardware *prevents* this but not likely to happen, since these CPUs don't really support position-independent code.
 	- so is it OK to tie a segment to a particular VA? probably?
+
+## Blathering
+
+- BBs have successors they need to refer to.
+	- but that feels like duplicating the info that's in the ref map.
+	- is that okay? I mean, I guess the ref map is just there for "xrefs" lookups
+	- the ref map also doesn't have any implied ordering of references, which the BBs need
+- I think it's okay to duplicate references from the ref map...
+	- cause it's really there to act as a fast index for all references.
+	- it's more of a cache. if it gets out of sync, that's bad, but it's not likely to break stuff.
+- but the span map info should *not* be duplicated.
+	- e.g. BBs only know their starting location; their end is dictated by the span map.
+
+- inrefs to a BB can be from the same function or from other functions
+	- the head has inrefs from other functions
+	- the rest of the BBs have inrefs from the same function
+- outrefs from a BB terminator can be to the same function or to other functions
+	- same function for control flow
+	- other functions for tailcalls
+
+- so what... what would need to happen if you deleted a function? undefined it as code?
+	- for all of its basic blocks,
+		- remove all same-func inrefs to BBs
+		- remove *all* outrefs from terms
+		- remove all outrefs *period* (for each BB span, remove range of outrefs for that span)
+		- redefine each span to be unknown
+			- *should adjacent unknown spans be coalesced? I think yes*
+	- remove the function from the FuncIndex
+
+- wait. wouldn't the owners be the ones *initiating the changes in the first place?*
+	- like. why would we be changing the span map without them knowing?
+- for example, if the user selects some stuff in the interface and chooses "undefine"...
+	- we'd use the span map to *find the owners*
+	- but then *tell the owners directly* to change/delete themselves
+	- then *they* would tell the span map "change/undefine me plz"
+- we could go a step further and say that *undef <-> code/data is OK*, but **code <-> data is not**
+	- if you wanna go between them, have to undefine them and then redefine anew
+	- the interface might let you "go directly" but underneath this is what it does
+
+## Span map rules
+
+1. can only go between unk and non-unk.
+	- adjacent unk spans are coalesced.
+2. span map is not directly modified.
+	- exists in service of code and data indexes.
+3. spans can be deleted or shortened...
+	- but can't have their *starts* changed.
+	- have to delete existing span and make a new one for that.
+4. spans cannot be bisected.
+	- that leaves two non-contiguous spans with the same owner, which makes no sense

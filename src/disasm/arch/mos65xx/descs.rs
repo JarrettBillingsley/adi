@@ -5,14 +5,14 @@ use super::*;
 // InstDesc table
 // ------------------------------------------------------------------------------------------------
 
-pub fn lookup_desc(opcode: u8) -> &'static InstDesc {
-	INST_DESC_TABLE.get(&opcode).unwrap_or(&&OP_INVALID)
+pub fn lookup_desc(opcode: u8) -> InstDesc {
+	*INST_DESC_TABLE.get(&opcode).unwrap_or(&&OP_INVALID)
 }
 
 lazy_static! {
-	static ref INST_DESC_TABLE: HashMap<u8, &'static InstDesc> = {
+	static ref INST_DESC_TABLE: HashMap<u8, InstDesc> = {
 		let mut m = HashMap::new();
-		for o in INST_DESCS { m.insert(o.opcode as u8, o); }
+		for desc in INST_DESCS { m.insert(desc.opcode as u8, *desc); }
 		m
 	};
 }
