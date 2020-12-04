@@ -9,4 +9,6 @@ fn span_map() {
 	// m.redefine(SegOffset(0x0800), SegOffset(0x01800), SpanKind::Unk,  None);
 	// m.redefine(SegOffset(0x0000), SegOffset(0x00800), SpanKind::Code, None);
 	// m.redefine(SegOffset(0x0000), SegOffset(0x10000), SpanKind::Unk, None);
+	// TODO: test span_after!
+	// TODO: test Unk coalescing!
 }

@@ -1,12 +1,11 @@
-use parse_display::*;
-use derive_new::*;
-use std::collections::{
-	BTreeMap,
-	// btree_map::Values as BTreeValues,
-};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+use parse_display::*;
+use derive_new::*;
+
 use super::types::*;
+use crate::analysis::types::BBId;
 
 // ------------------------------------------------------------------------------------------------
 // Span
@@ -37,7 +36,7 @@ pub enum SpanKind {
 	/// Unknown (not yet analyzed)
 	Unk,
 	/// Code (that is, a basic block of a function)
-	Code(crate::analysis::types::BBId),
+	Code(BBId),
 	/// Data (anything that isn't code)
 	Data, // TODO: like, an array/variable owner type
 }
@@ -96,11 +95,8 @@ impl SpanMap {
 	pub fn span_after(&self, offs: SegOffset) -> Option<Span> {
 		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
 
-		if self.spans.contains_key(&offs) {
-			self.spans.range(offs + 1 ..)
-		} else {
-			self.spans.range(offs ..)
-		}.next().map(|a| Span::new(a))
+		use std::ops::Bound;
+		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next().map(|a| Span::new(a))
 	}
 
 	/// Iterator over all spans (SegOffset, SpanInternal).
