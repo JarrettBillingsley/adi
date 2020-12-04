@@ -156,17 +156,18 @@ impl<'a> Segment<'a> {
 	// ---------------------------------------------------------------------------------------------
 	// Span management (spanagement?)
 
-	/// Redefines a range of addresses (by segment offsets) to be a new span.
-	pub fn redefine_span_offsets(&mut self,
-		start: SegOffset, end: SegOffset, kind: SpanKind) {
-		self.spans.redefine(start, end, kind)
-	}
+	// TODO
+	// /// Redefines a range of addresses (by segment offsets) to be a new span.
+	// pub fn redefine_span_offsets(&mut self,
+	// 	start: SegOffset, end: SegOffset, kind: SpanKind) {
+	// 	self.spans.redefine(start, end, kind)
+	// }
 
-	/// Redefines a range of addresses (by VAs) to be a new span.
-	pub fn redefine_span_vas(&mut self,
-		start: VAddr, end: VAddr, kind: SpanKind) {
-		self.spans.redefine(self.offset_from_va(start), self.offset_from_va(end), kind)
-	}
+	// /// Redefines a range of addresses (by VAs) to be a new span.
+	// pub fn redefine_span_vas(&mut self,
+	// 	start: VAddr, end: VAddr, kind: SpanKind) {
+	// 	self.spans.redefine(self.offset_from_va(start), self.offset_from_va(end), kind)
+	// }
 
 	/// Get the span which contains the given offset.
 	pub fn span_from_offset(&self, offs: SegOffset) -> Span {

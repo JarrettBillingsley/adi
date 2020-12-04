@@ -53,14 +53,15 @@ pub enum SpanKind {
 ///
 /// Rules:
 /// 1. spans can only go between unk and non-unk - not e.g. directly from code to data.
-///     - adjacent unk spans are coalesced.
+///     - adjacent unk spans are coalesced, as they have no owner.
 /// 2. span map is not directly modified.
 ///     - exists in service of code and data indexes.
 /// 3. spans can be deleted or shortened...
 ///     - but can't have their *starts* changed.
 ///     - have to delete existing span and make a new one for that.
-/// 4. spans cannot be bisected.
+/// 4. defined spans cannot be bisected.
 ///     - that leaves two non-contiguous spans with the same owner, which makes no sense
+///     - but it's fine to bisect an unknown span for the same reason it's fine to coalesce them.
 pub struct SpanMap {
 	spans: BTreeMap<SegOffset, SpanInternal>,
 	end:   SegOffset,
@@ -90,6 +91,11 @@ impl SpanMap {
 		Span::new(self.spans.range(..= offs).next_back().expect("how even"))
 	}
 
+	// fn span_at_mut(&mut self, offs: SegOffset) -> (&SegOffset, &mut SpanInternal) {
+	// 	assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
+	// 	self.spans.range_mut(..= offs).next_back().expect("how even")
+	// }
+
 	/// Given an offset into the segment, gets the span which comes after the containing span,
 	/// or None if the containing span is the last one in the segment.
 	pub fn span_after(&self, offs: SegOffset) -> Option<Span> {
@@ -99,79 +105,118 @@ impl SpanMap {
 		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next().map(|a| Span::new(a))
 	}
 
-	/// Iterator over all spans (SegOffset, SpanInternal).
+	/// Given an offset into the segment, gets the span which comes before the containing span,
+	/// or None if the containing span is the first one in the segment.
+	pub fn span_before(&self, offs: SegOffset) -> Option<Span> {
+		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
+
+		// upper bound excluded!
+		self.spans.range(.. offs).next_back().map(|a| Span::new(a))
+	}
+
+	/// Iterator over all spans in the segment, in order.
 	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
 		self.spans.iter().map(|tup| Span::new(tup))
 	}
 
-	/// Redefines a range of memory as being of a certain kind.
-	pub fn redefine(&mut self,
-		// TODO: SegRange for a pair of offsets (more Rustic)
-		start: SegOffset, end: SegOffset, kind: SpanKind) {
+	/// Define a code or data span at `start` that stretches `len` bytes.
+	///
+	/// # Panics
+	///
+	/// - if `len` is 0.
+	/// - if `kind` is `SpanKind::Unk`.
+	/// - if `start` is past the end of the segment.
+	/// - if `start` is not at the beginning of, or within, an unknown span.
+	/// - if `start + len` is past the end of that same span.
+	pub fn define(&mut self, start: SegOffset, len: usize, kind: SpanKind) {
+		assert_ne!(len, 0, "length cannot be 0");
+		assert_ne!(kind, SpanKind::Unk, "must give a non-unknown span kind");
+		assert!(start < self.end, "start is past end of segment");
 
-		assert!(start < end);
-		assert!(end <= self.end);
+		// find out who lives here
+		let old     = self.span_at(start);
+		let new_end = start + len;
 
-		// get the span inside which start falls
-		let (first_start, first_end) = self.range_from_offset(start);
+		assert_eq!(old.kind, SpanKind::Unk, "defining an already-defined span");
+		assert!(new_end <= old.end, "new span overflows into next span");
 
-		// SHORTCUT: if we're just rewriting a span, don't bother splitting things up.
-		if start == first_start && end == first_end {
-			self.change_kind(first_start, kind);
+		// first check if we need to add a new unknown span after the new span
+		if new_end < old.end {
+			// make new unknown span [new_end .. old.end)
+			self.spans.insert(new_end, SpanInternal::new(old.end, SpanKind::Unk));
+		}
+
+		// now let's check if we're redefining the old span, or making a new one
+		if start == old.start {
+			// start == old.start => redefine (and optionally resize) the old span
+			let old_span  = self.spans.get_mut(&old.start).unwrap();
+			old_span.kind = kind;
+			old_span.end  = new_end; // no-op if new_end == old.end
 		} else {
-			// tricky: the start and end locations can come in the middle of existing spans.
-			// so, we have to check if we're changing the end location of the first span or
-			// the start location of the last span. in addition, there can be any number of
-			// spans in between, or a single span might be bisected!
-			let (_, last_end) = self.range_from_offset(end);
-			let mut middle = self.spans.split_off(&first_start);
-			let mut rest   = middle.split_off(&last_end);
-
-			// at this point:
-			// self.spans holds all the unaffected spans before start.
-			// rest holds all the unaffected spans after end.
-			// any changes will happen in middle.
-
-			assert!(!middle.is_empty());
-
-			let mut middle_iter = middle.range(..);
-			let first = middle_iter.next().unwrap().1;
-			let last  = if middle.len() > 1 { middle_iter.next_back().unwrap().1 } else { first };
-
-			if start != first_start {
-				// gotta split the first span into [first_start..start)
-				self.spans.insert(first_start, SpanInternal::new(start, first.kind));
-			}
-
-			self.spans.insert(start, SpanInternal::new(end, kind));
-
-			if end != last_end {
-				// now to split the last span into [end..last_end)
-				self.spans.insert(end, SpanInternal::new(last.end, last.kind));
-			}
-
-			// finally, glob on the remainder
-			self.spans.append(&mut rest);
+			// make the new span [start .. new_end)
+			self.spans.insert(start, SpanInternal::new(new_end, kind));
+			// and shorten the old one to [.. start)
+			self.spans.get_mut(&old.start).unwrap().end = start;
 		}
 
 		#[cfg(debug_assertions)]
 		self.check_invariants();
 	}
 
-	/// Given the start of a span, change its kind.
-	/// Panics if the given start offset is not the start of a span.
-	pub fn change_kind(&mut self, start: SegOffset, kind: SpanKind) {
-		let span = self.spans.get_mut(&start).unwrap();
+	/// Undefine the span at `start`. Has no effect if that span is already undefined.
+	/// Adjacent undefined spans are coalesced.
+	///
+	/// # Panics
+	///
+	/// - if `start` is not the beginning of a span.
+	pub fn undefine(&mut self, start: SegOffset) {
+		let old = self.span_at(start);
+		assert_eq!(start, old.start, "no span at this location");
 
-		if span.kind != kind {
-			span.kind = kind;
+		use SpanKind::Unk;
+
+		if old.kind != Unk {
+			let prev = self.span_before(start);
+			let next = self.span_after(start);
+
+			match (prev, next) {
+				(None, Some(next @ Span { kind: Unk, .. })) => {
+					// coalesce with next: delete next span, and make old span longer
+					self.spans.remove(&next.start).expect("wat");
+
+					let old = self.spans.get_mut(&old.start).unwrap();
+					old.end = next.end;
+					old.kind = Unk;
+				}
+
+				(Some(prev @ Span { kind: Unk, .. }), None) => {
+					// coalesce with prev: delete old span, and make prev span longer
+					self.spans.remove(&old.start).expect("wat");
+					self.spans.get_mut(&prev.start).unwrap().end = old.end;
+				}
+
+				(Some(prev @ Span { kind: Unk, .. }), Some(next @ Span { kind: Unk, .. })) => {
+					// coalesce with BOTH: delete old AND next, and make prev span longer
+					self.spans.remove(&old.start).expect("wat");
+					self.spans.remove(&next.start).expect("wat");
+					self.spans.get_mut(&prev.start).unwrap().end = next.end;
+				}
+
+				_ => {
+					// no coalescing to do.
+					self.spans.get_mut(&old.start).unwrap().kind = Unk;
+				}
+			}
 		}
+
+		#[cfg(debug_assertions)]
+		self.check_invariants();
 	}
 
-	fn range_from_offset(&self, offs: SegOffset) -> (SegOffset, SegOffset) {
-		let Span { start, end, .. } = self.span_at(offs);
-		(start, end)
-	}
+	// fn range_from_offset(&self, offs: SegOffset) -> (SegOffset, SegOffset) {
+	// 	let Span { start, end, .. } = self.span_at(offs);
+	// 	(start, end)
+	// }
 
 	#[cfg(debug_assertions)]
 	fn check_invariants(&self) {
@@ -184,9 +229,15 @@ impl SpanMap {
 		assert_eq!(spans.first().unwrap().start, SegOffset(0));
 
 		// INVARIANT: span[n].end == span[n + 1].start
+		// INVARIANT: span[n] and span[n + 1] can't both be undefined
 		for pair in spans.windows(2) {
 			match pair {
-				[cur, next] => assert_eq!(cur.end, next.start),
+				[cur, next] => {
+					assert_eq!(cur.end, next.start);
+					if cur.kind == SpanKind::Unk {
+						assert_ne!(next.kind, SpanKind::Unk);
+					}
+				}
 				_ => unreachable!()
 			}
 		}
