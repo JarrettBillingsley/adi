@@ -97,7 +97,7 @@ fn test_nes() -> std::io::Result<()> {
 	let disas = mos65xx::Disassembler;
 	let print = mos65xx::Printer::new(mos65xx::SyntaxFlavor::New);
 
-	let mut iter = disas.disas_all(&prg0[..0x100], VAddr(0x8000));
+	let mut iter = disas.disas_all(&prg0[..10], VAddr(0x8000));
 
 	for inst in &mut iter {
 		print!("0x{:4X}  ", inst.va());

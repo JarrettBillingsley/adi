@@ -3,13 +3,15 @@ name = "adi"
 version = "0.1.0"
 authors = ["Jarrett Billingsley <jarrett.billingsley@gmail.com>"]
 edition = "2018"
+description = "A RE (reverse engineering) framework aimed at software for retro 8- and 16-bit machines."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-err-derive = "0.2.4"
-derive-new = "0.5.8"
-colored = "1.9.3"
-parse-display = "0.1.2"
 better-panic = "0.2.0"
+colored = "1.9.3"
+derive-new = "0.5.8"
+err-derive = "0.2.4"
+generational-arena = "0.2.8"
 lazy_static = "1.4.0"
+parse-display = "0.1.2"

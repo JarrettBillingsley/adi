@@ -4,7 +4,7 @@ use std::collections::{
 	BTreeMap,
 	btree_map::Values as BTreeValues,
 };
-use std::fmt::{ Debug, Display };
+use std::fmt::Debug;
 
 use super::types::*;
 
@@ -13,7 +13,7 @@ use super::types::*;
 // ------------------------------------------------------------------------------------------------
 
 // TODO: what IS this?
-pub trait SpanOwner: Debug + Display + Send + Sync {}
+pub trait SpanOwner: Debug + Send + Sync {}
 
 /// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
