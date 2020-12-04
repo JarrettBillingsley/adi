@@ -1,7 +1,4 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
-use std::collections::{
-	btree_map::Values as BTreeValues,
-};
 
 use super::types::*;
 use super::spans::*;
@@ -172,22 +169,22 @@ impl<'a> Segment<'a> {
 	}
 
 	/// Get the span which contains the given offset.
-	pub fn span_from_offset(&self, offs: SegOffset) -> (&SegOffset, &Span) {
+	pub fn span_from_offset(&self, offs: SegOffset) -> Span {
 		self.spans.span_at(offs)
 	}
 
 	/// Get the span which contains the given VA.
-	pub fn span_from_va(&self, va: VAddr) -> (&SegOffset, &Span) {
+	pub fn span_from_va(&self, va: VAddr) -> Span {
 		self.spans.span_at(self.offset_from_va(va))
 	}
 
 	/// Get the span which contains the given PA.
-	pub fn span_from_pa(&self, pa: PAddr) -> (&SegOffset, &Span) {
+	pub fn span_from_pa(&self, pa: PAddr) -> Span {
 		self.spans.span_at(self.offset_from_pa(pa))
 	}
 
 	/// Iterator over all spans in this segment, in order.
-	pub fn all_spans(&self) -> BTreeValues<'_, SegOffset, Span> {
+	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
 		self.spans.iter()
 	}
 }

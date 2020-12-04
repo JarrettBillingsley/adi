@@ -151,7 +151,7 @@ impl<'a> Program<'a> {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
 			let va = seg.va_from_offset(loc.offs);
-			let start = *seg.span_from_offset(loc.offs).0;
+			let start = seg.span_from_offset(loc.offs).start;
 
 			match self.names.name_for_loc(Location::new(loc.seg, start)) {
 				Some(name) =>

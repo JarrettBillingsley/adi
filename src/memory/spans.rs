@@ -2,7 +2,7 @@ use parse_display::*;
 use derive_new::*;
 use std::collections::{
 	BTreeMap,
-	btree_map::Values as BTreeValues,
+	// btree_map::Values as BTreeValues,
 };
 use std::fmt::Debug;
 
@@ -15,18 +15,19 @@ use super::types::*;
 /// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
 #[derive(Debug, Display)]
-#[derive(new)]
-#[display("")]
+#[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
 pub struct Span {
+	/// address of first byte of span.
+	pub start: SegOffset,
 	/// address of first byte after span.
-	pub end: SegOffset,
+	pub end:   SegOffset,
 	/// what kind of span it is.
-	pub kind: SpanKind,
+	pub kind:  SpanKind,
 }
 
 impl Span {
-	fn fmt(&self, start: SegOffset) -> String {
-		format!("{:?} [0x{:08X} .. 0x{:08X})", self.kind, start, self.end)
+	fn new((start, span): (&SegOffset, &SpanInternal)) -> Self {
+		Self { start: *start, end: span.end, kind: span.kind }
 	}
 }
 
@@ -62,8 +63,17 @@ pub enum SpanKind {
 /// 4. spans cannot be bisected.
 ///     - that leaves two non-contiguous spans with the same owner, which makes no sense
 pub struct SpanMap {
-	spans: BTreeMap<SegOffset, Span>,
+	spans: BTreeMap<SegOffset, SpanInternal>,
 	end:   SegOffset,
+}
+
+// The span map actually uses this type - only the end and kind fields, since the start
+// is the key.
+#[derive(Debug)]
+#[derive(new)]
+struct SpanInternal {
+	end:  SegOffset,
+	kind: SpanKind,
 }
 
 impl SpanMap {
@@ -71,31 +81,31 @@ impl SpanMap {
 	pub fn new(size: usize) -> Self {
 		let end = SegOffset(size);
 		let mut spans = BTreeMap::new();
-		spans.insert(SegOffset(0), Span::new(end, SpanKind::Unk));
+		spans.insert(SegOffset(0), SpanInternal::new(end, SpanKind::Unk));
 		Self { spans, end }
 	}
 
-	/// Given an offset into the segment, gets the Span which contains it.
-	pub fn span_at(&self, offs: SegOffset) -> (&SegOffset, &Span) {
+	/// Given an offset into the segment, gets the span which contains it.
+	pub fn span_at(&self, offs: SegOffset) -> Span {
 		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
-		self.spans.range(..= offs).next_back().expect("how even")
+		Span::new(self.spans.range(..= offs).next_back().expect("how even"))
 	}
 
-	/// Given an offset into the segment, gets the Span which comes after the containing Span,
-	/// or None if the containing Span is the last one in the segment.
-	pub fn span_after(&self, offs: SegOffset) -> Option<&Span> {
+	/// Given an offset into the segment, gets the span which comes after the containing span,
+	/// or None if the containing span is the last one in the segment.
+	pub fn span_after(&self, offs: SegOffset) -> Option<Span> {
 		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
 
 		if self.spans.contains_key(&offs) {
 			self.spans.range(offs + 1 ..)
 		} else {
 			self.spans.range(offs ..)
-		}.next().map(|(_, a)| a)
+		}.next().map(|a| Span::new(a))
 	}
 
-	/// Iterator over all spans (SegOffset, Span).
-	pub fn iter(&self) -> BTreeValues<'_, SegOffset, Span> {
-		self.spans.values()
+	/// Iterator over all spans (SegOffset, SpanInternal).
+	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
+		self.spans.iter().map(|tup| Span::new(tup))
 	}
 
 	/// Redefines a range of memory as being of a certain kind.
@@ -134,14 +144,14 @@ impl SpanMap {
 
 			if start != first_start {
 				// gotta split the first span into [first_start..start)
-				self.spans.insert(first_start, Span::new(start, first.kind));
+				self.spans.insert(first_start, SpanInternal::new(start, first.kind));
 			}
 
-			self.spans.insert(start, Span::new(end, kind));
+			self.spans.insert(start, SpanInternal::new(end, kind));
 
 			if end != last_end {
 				// now to split the last span into [end..last_end)
-				self.spans.insert(end, Span::new(last.end, last.kind));
+				self.spans.insert(end, SpanInternal::new(last.end, last.kind));
 			}
 
 			// finally, glob on the remainder
@@ -163,38 +173,38 @@ impl SpanMap {
 	}
 
 	fn range_from_offset(&self, offs: SegOffset) -> (SegOffset, SegOffset) {
-		let (start, Span { end, .. }) = self.span_at(offs);
-		(*start, *end)
+		let Span { start, end, .. } = self.span_at(offs);
+		(start, end)
 	}
 
 	#[cfg(debug_assertions)]
 	fn check_invariants(&self) {
-		let spans = self.spans.iter().collect::<Vec<(&SegOffset, &Span)>>();
+		let spans: Vec<_> = self.iter().collect();
 
 		// INVARIANT: span map is never empty
 		assert!(!spans.is_empty());
 
 		// INVARIANT: span[0].start == 0
-		assert_eq!(*spans.first().unwrap().0, SegOffset(0));
+		assert_eq!(spans.first().unwrap().start, SegOffset(0));
 
 		// INVARIANT: span[n].end == span[n + 1].start
 		for pair in spans.windows(2) {
 			match pair {
-				[(_, cur_span), (next_start, _)] => assert_eq!(cur_span.end, **next_start),
+				[cur, next] => assert_eq!(cur.end, next.start),
 				_ => unreachable!()
 			}
 		}
 
 		// INVARIANT: span[n - 1].end == self.end
-		assert_eq!(spans.last().unwrap().1.end, self.end);
+		assert_eq!(spans.last().unwrap().end, self.end);
 	}
 
 	#[cfg(any(test, debug_assertions))]
 	#[allow(dead_code)]
 	pub fn dump_spans(&self) {
 		println!("-----------------");
-		for (start, span) in self.spans.iter() {
-			println!("{}", span.fmt(*start));
+		for tup in self.spans.iter() {
+			println!("{}", Span::new(tup));
 		}
 	}
 }
