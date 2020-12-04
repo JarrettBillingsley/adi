@@ -16,14 +16,18 @@ use super::types::*;
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
 #[derive(Debug, Display)]
 #[derive(new)]
-#[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
+#[display("")]
 pub struct Span {
-	/// address of first byte.
-	pub start: SegOffset,
 	/// address of first byte after span.
 	pub end: SegOffset,
 	/// what kind of span it is.
 	pub kind: SpanKind,
+}
+
+impl Span {
+	fn fmt(&self, start: SegOffset) -> String {
+		format!("{:?} [0x{:08X} .. 0x{:08X})", self.kind, start, self.end)
+	}
 }
 
 /// What kind of thing the span covers.
@@ -58,10 +62,6 @@ pub enum SpanKind {
 /// 4. spans cannot be bisected.
 ///     - that leaves two non-contiguous spans with the same owner, which makes no sense
 pub struct SpanMap {
-	// There's some duplication between the index into the map and Span::start.
-	// Ideally we'd use BTreeSet using Span::start as the sorting key.
-	// But I don't think it's possible to use BTreeSet::range using a SegOffset as
-	// the range bounds when the value is a Span. So, a map (and duplication) it is.
 	spans: BTreeMap<SegOffset, Span>,
 	end:   SegOffset,
 }
@@ -71,14 +71,14 @@ impl SpanMap {
 	pub fn new(size: usize) -> Self {
 		let end = SegOffset(size);
 		let mut spans = BTreeMap::new();
-		spans.insert(SegOffset(0), Span::new(SegOffset(0), end, SpanKind::Unk));
+		spans.insert(SegOffset(0), Span::new(end, SpanKind::Unk));
 		Self { spans, end }
 	}
 
 	/// Given an offset into the segment, gets the Span which contains it.
-	pub fn span_at(&self, offs: SegOffset) -> &Span {
+	pub fn span_at(&self, offs: SegOffset) -> (&SegOffset, &Span) {
 		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
-		self.spans.range(..= offs).next_back().expect("how even").1
+		self.spans.range(..= offs).next_back().expect("how even")
 	}
 
 	/// Given an offset into the segment, gets the Span which comes after the containing Span,
@@ -134,14 +134,14 @@ impl SpanMap {
 
 			if start != first_start {
 				// gotta split the first span into [first_start..start)
-				self.spans.insert(first_start, Span::new(first_start, start, first.kind));
+				self.spans.insert(first_start, Span::new(start, first.kind));
 			}
 
-			self.spans.insert(start, Span::new(start, end, kind));
+			self.spans.insert(start, Span::new(end, kind));
 
 			if end != last_end {
 				// now to split the last span into [end..last_end)
-				self.spans.insert(end, Span::new(end, last.end, last.kind));
+				self.spans.insert(end, Span::new(last.end, last.kind));
 			}
 
 			// finally, glob on the remainder
@@ -163,8 +163,8 @@ impl SpanMap {
 	}
 
 	fn range_from_offset(&self, offs: SegOffset) -> (SegOffset, SegOffset) {
-		let Span { start, end, .. } = *self.span_at(offs);
-		(start, end)
+		let (start, Span { end, .. }) = self.span_at(offs);
+		(*start, *end)
 	}
 
 	#[cfg(debug_assertions)]
@@ -193,8 +193,8 @@ impl SpanMap {
 	#[allow(dead_code)]
 	pub fn dump_spans(&self) {
 		println!("-----------------");
-		for s in self.spans.values() {
-			println!("{}", s);
+		for (start, span) in self.spans.iter() {
+			println!("{}", span.fmt(*start));
 		}
 	}
 }

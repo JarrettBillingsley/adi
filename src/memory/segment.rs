@@ -172,17 +172,17 @@ impl<'a> Segment<'a> {
 	}
 
 	/// Get the span which contains the given offset.
-	pub fn span_from_offset(&self, offs: SegOffset) -> &Span {
+	pub fn span_from_offset(&self, offs: SegOffset) -> (&SegOffset, &Span) {
 		self.spans.span_at(offs)
 	}
 
 	/// Get the span which contains the given VA.
-	pub fn span_from_va(&self, va: VAddr) -> &Span {
+	pub fn span_from_va(&self, va: VAddr) -> (&SegOffset, &Span) {
 		self.spans.span_at(self.offset_from_va(va))
 	}
 
 	/// Get the span which contains the given PA.
-	pub fn span_from_pa(&self, pa: PAddr) -> &Span {
+	pub fn span_from_pa(&self, pa: PAddr) -> (&SegOffset, &Span) {
 		self.spans.span_at(self.offset_from_pa(pa))
 	}
 

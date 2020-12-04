@@ -165,3 +165,4 @@ I'm kind of working under the assumption that the image segments are easily dete
 	- have to delete existing span and make a new one for that.
 4. spans cannot be bisected.
 	- that leaves two non-contiguous spans with the same owner, which makes no sense
+	- have to shorten existing span, then create new span
