@@ -25,26 +25,26 @@ pub use refmap::*;
 // ------------------------------------------------------------------------------------------------
 
 /// A Program contains an image, a Memory object, and collections of names and references.
-pub struct Program<'a> {
-	image: RomImage<'a>,
-	mem:   Memory<'a>,
-	names: NameMap<'a>,
+pub struct Program {
+	image: RomImage,
+	mem:   Memory,
+	names: NameMap,
 	#[allow(dead_code)]
 	refs:  RefMap,
 }
 
-impl<'a> Program<'a> {
-	pub fn new(image: RomImage<'a>, mem: Memory<'a>) -> Self {
+impl Program {
+	pub fn new(image: RomImage, mem: Memory) -> Self {
 		Self { image, mem, names: NameMap::new(), refs: RefMap::new() }
 	}
 
 	/// Gets the RomImage object associated with this Program.
-	pub fn image(&self) -> &RomImage<'a> {
+	pub fn image(&self) -> &RomImage {
 		&self.image
 	}
 
 	/// Gets the Memory object associated with this Program.
-	pub fn mem(&self) -> &Memory<'a> {
+	pub fn mem(&self) -> &Memory {
 		&self.mem
 	}
 
@@ -53,7 +53,7 @@ impl<'a> Program<'a> {
 
 	/// Given a reference to a segment, gets a slice of the ROM image that it covers.
 	/// Panics if the segment has no physical mapping.
-	pub fn image_slice_from_segment(&'a self, seg: &'a Segment) -> &'a [u8] {
+	pub fn image_slice_from_segment(&self, seg: &Segment) -> &[u8] {
 		assert!(!seg.is_fake(), "segment {} has no physical mapping", seg.name);
 		seg.get_image_slice(&self.image).unwrap()
 	}
@@ -88,18 +88,18 @@ impl<'a> Program<'a> {
 	// Names
 
 	/// Assigns a name to a given Location. Renames it if it already has one.
-	pub fn add_name(&mut self, name: &'a str, loc: Location) {
+	pub fn add_name(&mut self, name: &str, loc: Location) {
 		self.names.add(name, loc);
 	}
 
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique Location.
-	pub fn add_name_va(&mut self, name: &'a str, va: VAddr) {
+	pub fn add_name_va(&mut self, name: &str, va: VAddr) {
 		let loc = self.mem.va_to_loc(va).unwrap();
 		self.add_name(name, loc);
 	}
 
 	/// Removes a name. Panics if the name doesn't exist.
-	pub fn remove_name(&mut self, name: &'a str) {
+	pub fn remove_name(&mut self, name: &str) {
 		self.names.remove_name(name)
 	}
 
@@ -124,29 +124,29 @@ impl<'a> Program<'a> {
 	}
 
 	/// Gets the location for a name. Panics if the name doesn't exist.
-	pub fn loc_from_name(&self, name: &'a str) -> Location {
+	pub fn loc_from_name(&self, name: &str) -> Location {
 		self.names.loc_for_name(name).unwrap()
 	}
 
 	/// All (name, Location) pairs in arbitrary order.
-	pub fn all_names(&self) -> HashIter<'a, &str, Location> {
+	pub fn all_names(&self) -> HashIter<'_, String, Location> {
 		self.names.names()
 	}
 
 	/// All (Location, name) pairs in Location order.
-	pub fn all_names_by_loc(&self) -> BTreeIter<'a, Location, &str> {
+	pub fn all_names_by_loc(&self) -> BTreeIter<'_, Location, String> {
 		self.names.locations()
 	}
 
 	/// All (Location, name) pairs in a given range of Locations, in Location order.
 	pub fn names_in_range(&self, range: impl RangeBounds<Location>)
-	-> BTreeRange<'a, Location, &str> {
+	-> BTreeRange<'_, Location, String> {
 		self.names.names_in_range(range)
 	}
 
 	/// All (Location, name) pairs in a given range of VAs, in Location order.
 	pub fn names_in_va_range(&self, range: impl RangeBounds<VAddr>)
-	-> BTreeRange<'a, Location, &str> {
+	-> BTreeRange<'_, Location, String> {
 		let range = va_range_to_loc_range(range, |va| self.mem.va_to_loc(va).unwrap());
 		self.names_in_range(range)
 	}
@@ -158,7 +158,7 @@ impl<'a> Program<'a> {
 		// no mapped segment?? uhhhh....... try region name?
 		} else if let Some(region) = self.mem.map().region_for_va(va) {
 			// name it "REGIONNAME_loc_0C30"
-			self.generate_name(region.name, va)
+			self.generate_name(&region.name, va)
 		} else {
 			// DUNNO!
 			self.generate_name("UNK", va)
@@ -182,7 +182,7 @@ impl<'a> Program<'a> {
 					self.generate_name(name, va),
 				None =>
 					// no name, so name it "SEGNAME_loc_0C30"
-					self.generate_name(seg.name, va),
+					self.generate_name(&seg.name, va),
 			}
 		}
 	}
@@ -192,7 +192,7 @@ impl<'a> Program<'a> {
 	}
 }
 
-impl<'a> Display for Program<'a> {
+impl Display for Program {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Image: {} (0x{:X} bytes)", self.image.name, self.image.data.len())?;
 
@@ -200,7 +200,7 @@ impl<'a> Display for Program<'a> {
 	}
 }
 
-impl<'a> NameLookupTrait for Program<'a> {
+impl NameLookupTrait for Program {
 	fn lookup(&self, addr: VAddr) -> Option<String> {
 		Some(self.name_of_va(addr))
 	}

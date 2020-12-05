@@ -9,9 +9,9 @@ use super::spans::*;
 
 /// A single segment. Can be an image segment (data comes from a ROM image) or a fake
 /// segment (there is no data, e.g. RAM, but it's useful to put spans there).
-pub struct Segment<'a> {
+pub struct Segment {
 	pub id:    SegId,
-	pub name:  &'a str,
+	pub name:  String,
 	pub vbase: VAddr,
 	pub vend:  VAddr,
 	pub size:  usize,
@@ -19,7 +19,7 @@ pub struct Segment<'a> {
 	pub image: Option<ImageRange>,
 }
 
-impl<'a> Display for Segment<'a> {
+impl Display for Segment {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self.image {
 			Some(image) =>
@@ -32,16 +32,16 @@ impl<'a> Display for Segment<'a> {
 }
 
 #[allow(clippy::len_without_is_empty)]
-impl<'a> Segment<'a> {
+impl Segment {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
-	pub fn new(id: SegId, name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
+	pub fn new(id: SegId, name: &str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
 		let size = vend - vbase;
 		let image = pbase.map(|pbase| ImageRange { pbase, pend: pbase + size });
 
 		Self {
 			id,
-			name,
+			name: name.into(),
 			vbase,
 			vend,
 			size,
@@ -70,15 +70,16 @@ impl<'a> Segment<'a> {
 
 	/// Given a ROM image, get the slice of that image that this segment covers,
 	/// or None if this is a fake segment.
-	pub fn get_image_slice(&self, image: &'a RomImage) -> Option<&'a [u8]> {
+	pub fn get_image_slice<'img>(&self, image: &'img RomImage) -> Option<&'img [u8]> {
 		self.get_image_slice_offs(image, SegOffset(0))
 	}
 
-	pub fn get_image_slice_va(&self, image: &'a RomImage, va: VAddr) -> Option<&'a [u8]> {
+	pub fn get_image_slice_va<'img>(&self, image: &'img RomImage, va: VAddr) -> Option<&'img [u8]> {
 		self.get_image_slice_offs(image, self.offset_from_va(va))
 	}
 
-	pub fn get_image_slice_offs(&self, image: &'a RomImage, offs: SegOffset) -> Option<&'a [u8]> {
+	pub fn get_image_slice_offs<'img>(&self, image: &'img RomImage, offs: SegOffset)
+	-> Option<&'img [u8]> {
 		match self.image {
 			Some(range) => Some(&image.data[range.pbase.0 + offs.0 .. range.pend.0]),
 			None => None,

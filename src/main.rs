@@ -14,17 +14,18 @@ fn main() -> std::io::Result<()> {
 }
 
 fn test_nes() -> std::io::Result<()> {
+	use MemoryRegionKind::*;
 	let regions = &[
 		// default
-		MemoryRegion::new("RAM",     VAddr(0x0000), VAddr(0x0800),  true,  MemoryRegionKind::Ram   ),
-		MemoryRegion::new("RAMECHO", VAddr(0x0800), VAddr(0x2000),  true,  MemoryRegionKind::Mirror),
-		MemoryRegion::new("PPU",     VAddr(0x2000), VAddr(0x2008),  true,  MemoryRegionKind::Mmio  ),
-		MemoryRegion::new("PPUECHO", VAddr(0x2008), VAddr(0x4000),  true,  MemoryRegionKind::Mirror),
-		MemoryRegion::new("IOREG",   VAddr(0x4000), VAddr(0x4020),  true,  MemoryRegionKind::Mmio  ),
-		MemoryRegion::new("WEIRD",   VAddr(0x5000), VAddr(0x6000), true, MemoryRegionKind::RamBank),
+		MemoryRegion::new("RAM".into(),     VAddr(0x0000), VAddr(0x0800), true, Ram   ),
+		MemoryRegion::new("RAMECHO".into(), VAddr(0x0800), VAddr(0x2000), true, Mirror),
+		MemoryRegion::new("PPU".into(),     VAddr(0x2000), VAddr(0x2008), true, Mmio  ),
+		MemoryRegion::new("PPUECHO".into(), VAddr(0x2008), VAddr(0x4000), true, Mirror),
+		MemoryRegion::new("IOREG".into(),   VAddr(0x4000), VAddr(0x4020), true, Mmio  ),
+		MemoryRegion::new("WEIRD".into(),   VAddr(0x5000), VAddr(0x6000), true, RamBank),
 
 		// ROM-specific
-		MemoryRegion::new("PRGROM",  VAddr(0x8000), VAddr(0x10000), false, MemoryRegionKind::Rom),
+		MemoryRegion::new("PRGROM".into(),  VAddr(0x8000), VAddr(0x10000), false, Rom),
 	];
 
 	// default
@@ -42,7 +43,7 @@ fn test_nes() -> std::io::Result<()> {
 
 	// let's set it up
 	let img_data = std::fs::read("tests/data/smb.prg")?;
-	let img = RomImage::new("smb.prg", &img_data);
+	let img = RomImage::new("smb.prg".into(), img_data);
 	let map = MemoryMap::new(16, regions);
 	let mut mem = MemoryBuilder::new(Endian::Little, map, config);
 		// default segments

@@ -8,12 +8,12 @@ use super::types::*;
 // ------------------------------------------------------------------------------------------------
 
 /// Describes part of a CPU's memory map - the name, address range, and so on.
-#[derive(Debug, Display)]
+#[derive(Debug, Display, Clone)]
 #[derive(new)]
 #[display("{name} [0x{base:08X} .. 0x{end:08X})")]
-pub struct MemoryRegion<'a> {
+pub struct MemoryRegion {
 	/// Human-readable name.
-	pub name: &'a str,
+	pub name: String,
 	/// Address of first byte.
 	pub base: VAddr,
 	/// Address of first byte *after* this region.
@@ -29,7 +29,7 @@ pub struct MemoryRegion<'a> {
 }
 
 #[allow(clippy::len_without_is_empty)]
-impl<'a> MemoryRegion<'a> {
+impl MemoryRegion {
 	/// true if these two regions overlap one another.
 	pub fn overlaps(&self, other: &MemoryRegion) -> bool {
 		!(self.end <= other.base || other.end <= self.base)

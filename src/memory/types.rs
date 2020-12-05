@@ -158,9 +158,9 @@ pub struct ImageRange {
 
 /// The contents of a ROM image file.
 #[derive(new)]
-pub struct RomImage<'a> {
-	pub name: &'a str,
-	pub data: &'a [u8],
+pub struct RomImage {
+	pub name: String,
+	pub data: Vec<u8>,
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -14,28 +14,28 @@ use super::region::*;
 ///
 /// Once created, the memory map cannot change (can't add/remove regions).
 #[derive(Debug)]
-pub struct MemoryMap<'a> {
+pub struct MemoryMap {
 	/// how many bits an address is.
-	pub bits:     usize,
+	pub bits:   usize,
 	/// how many digits in a formatted address.
-	pub digits:   usize,
+	pub digits: usize,
 	/// all the memory regions in the memory map.
-	regions:  &'a [MemoryRegion<'a>],
+	regions:    Vec<MemoryRegion>,
 	/// the first invalid address, and the size of the virtual address space.
-	pub end:      VAddr,
+	pub end:    VAddr,
 	/// maps from virtual addresses to an index into `regions`.
-	addr_map: BTreeMap<VAddr, usize>,  // from VAs to `regions` index
+	addr_map:   BTreeMap<VAddr, usize>,  // from VAs to `regions` index
 	/// maps from names into `regions`.
-	name_map: HashMap<&'a str, usize>, // from names to `regions` index
+	name_map:   HashMap<String, usize>, // from names to `regions` index
 }
 
 #[allow(clippy::len_without_is_empty)]
-impl<'a> MemoryMap<'a> {
+impl MemoryMap {
 	/// given a number of bits in the address and a list of regions, constructs a
 	/// new MemoryMap. does sanity checks to ensure regions don't overlap or have
 	/// the same name, and also builds the `addr_map` and `name_map` maps for quick
 	/// lookups.
-	pub fn new(bits: usize, regions: &'a [MemoryRegion]) -> Self {
+	pub fn new(bits: usize, regions: &[MemoryRegion]) -> Self {
 		// sanity checks.
 		for i in 0 .. regions.len() {
 			let r = &regions[i];
@@ -56,13 +56,13 @@ impl<'a> MemoryMap<'a> {
 		// fill in the maps.
 		for (i, r) in regions.iter().enumerate() {
 			addr_map.insert(r.base, i);
-			name_map.insert(r.name, i);
+			name_map.insert(r.name.clone(), i);
 		}
 
 		Self {
 			bits,
 			digits: ((bits + 3) & !3) >> 2,
-			regions,
+			regions: regions.into(),
 
 			end: VAddr(2_usize.pow(bits as u32)),
 			addr_map,
@@ -90,11 +90,11 @@ impl<'a> MemoryMap<'a> {
 
 	/// Given a name, gets the memory region with that name, if any.
 	pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion> {
-		self.name_map.get(&name).map(|&idx| &self.regions[idx])
+		self.name_map.get(name).map(|&idx| &self.regions[idx])
 	}
 
 	/// Iterator over all memory regions.
-	pub fn all_regions(&'a self) -> impl Iterator<Item = &'a MemoryRegion<'a>> {
+	pub fn all_regions(&self) -> impl Iterator<Item = &MemoryRegion> {
 		let func = move |&idx| &self.regions[idx];
 		self.addr_map.values().map(func)
 	}

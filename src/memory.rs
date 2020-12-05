@@ -28,21 +28,21 @@ pub use spans::*;
 // ------------------------------------------------------------------------------------------------
 
 /// Builder for the Memory object.
-pub struct MemoryBuilder<'a> {
+pub struct MemoryBuilder {
 	endianness:   Endian,
-	segs:         Vec<Segment<'a>>,
-	mem_map:      MemoryMap<'a>,
-	config:       MemoryConfig<'a>,
-	seg_name_map: HashMap<&'a str, usize>,
+	segs:         Vec<Segment>,
+	mem_map:      MemoryMap,
+	config:       MemoryConfig,
+	seg_name_map: HashMap<String, usize>,
 }
 
 /// Builder for Memory objects. This exists mainly to check that the MemoryConfig
 /// is valid before construction.
-impl<'a> MemoryBuilder<'a> {
+impl MemoryBuilder {
 	pub fn new(
 		endianness: Endian,
-		mem_map:    MemoryMap<'a>,
-		config:     MemoryConfig<'a>
+		mem_map:    MemoryMap,
+		config:     MemoryConfig
 	) -> Self {
 		Self {
 			endianness,
@@ -54,16 +54,16 @@ impl<'a> MemoryBuilder<'a> {
 	}
 
 	/// Add a segment. Name cannot be a duplicate of an existing one.
-	pub fn segment(&mut self, name: &'a str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) ->
+	pub fn segment(&mut self, name: &str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) ->
 		&mut Self {
 		let id = self.segs.len();
-		assert!(self.seg_name_map.insert(name, id).is_none(), "duplicate segment name {}", name);
+		assert!(self.seg_name_map.insert(name.into(), id).is_none(), "duplicate seg name {}", name);
 		self.segs.push(Segment::new(SegId(id.try_into().unwrap()), name, vbase, vend, pbase));
 		self
 	}
 
 	/// Construct the Memory object.
-	pub fn build(self) -> Memory<'a> {
+	pub fn build(self) -> Memory {
 		// check the config.
 		// it's OK for memory regions to be unmapped (e.g. for mirror areas, optional areas)
 		for (region_name, seg_name) in self.config.iter() {
@@ -89,26 +89,26 @@ impl<'a> MemoryBuilder<'a> {
 
 /// This is the data structure on which everything else is built.
 /// Ties together a memory map, memory config, and segments.
-pub struct Memory<'a> {
+pub struct Memory {
 	endianness:   Endian,
-	mem_map:      MemoryMap<'a>,
-	config:       MemoryConfig<'a>,
-	segs:         Vec<Segment<'a>>,
-	seg_name_map: HashMap<&'a str, usize>,
+	mem_map:      MemoryMap,
+	config:       MemoryConfig,
+	segs:         Vec<Segment>,
+	seg_name_map: HashMap<String, usize>,
 	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 }
 
-impl<'a> Memory<'a> {
+impl Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
 	/// Get the memory address space map.
-	pub fn map(&'a self) -> &'a MemoryMap<'a> {
+	pub fn map(&self) -> &MemoryMap {
 		&self.mem_map
 	}
 
 	/// Get the memory configuration.
-	pub fn config(&'a self) -> &'a MemoryConfig<'a> {
+	pub fn config(&self) -> &MemoryConfig {
 		&self.config
 	}
 
@@ -147,24 +147,25 @@ impl<'a> Memory<'a> {
 	/// Given a region name, get the Segment mapped to it (if any).
 	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
 		self.config.segment_for_region(region_name)
-		.and_then(|seg_name| self.segment_for_name(seg_name))
+		.and_then(|seg_name| self.segment_for_name(&seg_name))
 	}
 
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VAddr) -> Option<&Segment> {
 		self.mem_map.region_for_va(va)
-		.and_then(|region| self.config.segment_for_region(region.name))
+		.and_then(|region| self.config.segment_for_region(&region.name))
+		.as_ref()
 		.and_then(|name|   self.segment_for_name(name))
 	}
 
 	/// Same as above but mutable.
-	pub fn segment_for_va_mut(&'a mut self, va: VAddr) -> Option<&mut Segment> {
+	pub fn segment_for_va_mut(&mut self, va: VAddr) -> Option<&mut Segment> {
 		let name = self.mem_map.region_for_va(va)
-			.and_then(|region| self.config.segment_for_region(region.name));
+			.and_then(|region| self.config.segment_for_region(&region.name));
 
 		// Rust refuses to let me do a similar thing to above and I can't figure out why.
 		match name {
-			Some(name) => match self.seg_name_map.get(&name) {
+			Some(name) => match self.seg_name_map.get(name) {
 				Some(&idx) => Some(&mut self.segs[idx]),
 				None       => None,
 			},
@@ -174,13 +175,13 @@ impl<'a> Memory<'a> {
 
 	/// Given a segment name, get the Segment named that (if any).
 	pub fn segment_for_name(&self, name: &str) -> Option<&Segment> {
-		self.seg_name_map.get(&name).map(|&idx| &self.segs[idx])
+		self.seg_name_map.get(name).map(|&idx| &self.segs[idx])
 	}
 
 	/// Same as above but mutable.
-	pub fn segment_for_name_mut(&'a mut self, name: &str) -> Option<&mut Segment> {
+	pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment> {
 		// Rust refuses to let me do a similar thing to above and I can't figure out why.
-		match self.seg_name_map.get(&name) {
+		match self.seg_name_map.get(name) {
 			Some(&idx) => Some(&mut self.segs[idx]),
 			None       => None,
 		}
@@ -192,7 +193,7 @@ impl<'a> Memory<'a> {
 	}
 
 	/// Same as above but mutable.
-	pub fn segment_from_loc_mut(&'a mut self, loc: Location) -> &mut Segment {
+	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
 		&mut self.segs[loc.seg.0 as usize]
 	}
 
@@ -209,7 +210,7 @@ impl<'a> Memory<'a> {
 			if region.is_bankable() {
 				None
 			} else {
-				self.segment_for_region(region.name)
+				self.segment_for_region(&region.name)
 				.and_then(|seg| {
 					let offs = seg.offset_from_va(va);
 					Some(Location::new(seg.id, offs))
@@ -225,7 +226,7 @@ impl<'a> Memory<'a> {
 	}
 }
 
-impl<'a> Display for Memory<'a> {
+impl Display for Memory {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.mem_map.len(), self.endianness)?;
 		writeln!(f, "\nSegments:")?;
@@ -239,7 +240,7 @@ impl<'a> Display for Memory<'a> {
 		for region in self.mem_map.all_regions() {
 			write!(f, "{:>40}", region.to_string())?;
 
-			match self.segment_for_region(region.name) {
+			match self.segment_for_region(&region.name) {
 				Some(seg) => writeln!(f, " => {}", seg)?,
 				None      => writeln!(f, " (unmapped)")?,
 			}

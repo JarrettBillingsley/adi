@@ -23,45 +23,47 @@ use std::iter::FromIterator;
 ///     ("a", "b"),
 ///     ("c", "d"),
 /// ]);
-/// assert_eq!(config.segment_for_region("a"), Some("b"));
+/// assert_eq!(config.segment_for_region("a"), Some(&"b".to_string()));
 /// assert_eq!(config.segment_for_region("x"), None);
 /// ```
 #[derive(Debug, PartialEq, Eq)]
-pub struct MemoryConfig<'a> {
-	assignments: HashMap<&'a str, &'a str>,
+pub struct MemoryConfig {
+	assignments: HashMap<String, String>,
 }
 
-type MemoryConfigIterItem<'a> = &'a (&'a str, &'a str);
+type IterItem<'itr> = &'itr (&'itr str, &'itr str);
 
-impl<'a> FromIterator<MemoryConfigIterItem<'a>> for MemoryConfig<'a> {
-	fn from_iter<I: IntoIterator<Item=MemoryConfigIterItem<'a>>>(iter: I) -> Self {
-		MemoryConfig::new(iter.into_iter().copied().collect())
+impl<'src> FromIterator<IterItem<'src>> for MemoryConfig {
+	fn from_iter<I>(iter: I) -> Self
+	where I: IntoIterator<Item = IterItem<'src>> {
+		MemoryConfig::new(iter.into_iter().map(|&(k, v)| (k.into(), v.into())).collect())
 	}
 }
 
-impl<'a> MemoryConfig<'a> {
+impl MemoryConfig {
 	/// ctor
-	fn new(assignments: HashMap<&'a str, &'a str>) -> Self {
+	fn new(assignments: HashMap<String, String>) -> Self {
 		Self {
 			assignments
 		}
 	}
 
 	/// Gets the segment mapped to the given region (if any).
-	pub fn segment_for_region(&self, region_name: &str) -> Option<&str> {
-		self.assignments.get(region_name).copied()
+	pub fn segment_for_region(&self, region_name: &str) -> Option<&String> {
+		self.assignments.get(region_name)
 	}
 
 	/// Iterates over the mappings (region name, segment name).
-	pub fn iter(&self) -> HashIter<'a, &str, &str> {
+	pub fn iter(&self) -> HashIter<'_, String, String> {
 		self.assignments.iter()
 	}
 
 	/// Construct a new `MemoryConfig` using this one as a base, and the items in `iter`
 	/// will be added to the mappings (and will replace any existing mappings).
-	pub fn derive<I: IntoIterator<Item=MemoryConfigIterItem<'a>>>(&self, iter: I) -> Self {
+	pub fn derive<'src, I>(&self, src: I) -> Self
+	where I: IntoIterator<Item = IterItem<'src>> {
 		let mut ret = Self::new(self.assignments.clone());
-		ret.assignments.extend(iter.into_iter().copied());
+		ret.assignments.extend(src.into_iter().map(|&(k, v)| (k.into(), v.into())));
 		ret
 	}
 }
