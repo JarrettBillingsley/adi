@@ -15,47 +15,41 @@ fn main() -> std::io::Result<()> {
 
 fn test_nes() -> std::io::Result<()> {
 	use MemoryRegionKind::*;
-	let regions = &[
-		// default
-		MemoryRegion::new("RAM".into(),     VAddr(0x0000), VAddr(0x0800), true, Ram   ),
-		MemoryRegion::new("RAMECHO".into(), VAddr(0x0800), VAddr(0x2000), true, Mirror),
-		MemoryRegion::new("PPU".into(),     VAddr(0x2000), VAddr(0x2008), true, Mmio  ),
-		MemoryRegion::new("PPUECHO".into(), VAddr(0x2008), VAddr(0x4000), true, Mirror),
-		MemoryRegion::new("IOREG".into(),   VAddr(0x4000), VAddr(0x4020), true, Mmio  ),
-		MemoryRegion::new("WEIRD".into(),   VAddr(0x5000), VAddr(0x6000), true, RamBank),
 
+	// let's set it up
+	let img = RomImage::new("smb.prg".into(), std::fs::read("tests/data/smb.prg")?);
+
+	let map = MemoryMap::new(16, &[
+		// default
+		MemoryRegion::new("RAM".into(),     VAddr(0x0000), VAddr(0x0800),  true, Ram   ),
+		MemoryRegion::new("RAMECHO".into(), VAddr(0x0800), VAddr(0x2000),  true, Mirror),
+		MemoryRegion::new("PPU".into(),     VAddr(0x2000), VAddr(0x2008),  true, Mmio  ),
+		MemoryRegion::new("PPUECHO".into(), VAddr(0x2008), VAddr(0x4000),  true, Mirror),
+		MemoryRegion::new("IOREG".into(),   VAddr(0x4000), VAddr(0x4020),  true, Mmio  ),
 		// ROM-specific
 		MemoryRegion::new("PRGROM".into(),  VAddr(0x8000), VAddr(0x10000), false, Rom),
-	];
+	]);
 
-	// default
-	let nes_config = MemoryConfig::from_iter(&[
+	let config = MemoryConfig::from_iter(&[
 		// Region, Segment
+		// default
 		("RAM",    "RAM"),
 		("PPU",    "PPU"),
 		("IOREG",  "IOREG"),
-	]);
-
-	// ROM-specific
-	let config = nes_config.derive(&[
+	]).derive(&[
+		// ROM-specific (TODO: bankable regions can change the mem config; eesh)
 		("PRGROM", "PRG0"),
 	]);
 
-	// let's set it up
-	let img_data = std::fs::read("tests/data/smb.prg")?;
-	let img = RomImage::new("smb.prg".into(), img_data);
-	let map = MemoryMap::new(16, regions);
-	let mut mem = MemoryBuilder::new(Endian::Little, map, config);
-		// default segments
-		mem.segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
-		mem.segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
-		mem.segment("IOREG", VAddr(0x4000), VAddr(0x4020), None);
+	let mut mem = Memory::new(Endian::Little, map, config);
+	// default
+	mem.add_segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
+	mem.add_segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
+	mem.add_segment("IOREG", VAddr(0x4000), VAddr(0x4020), None);
+	// ROM-specific
+	mem.add_segment("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0)));
 
-		// ROM-specific segments
-		mem.segment("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0)));
-	let mem = mem.build();
 	let mut prog = Program::new(img, mem);
-
 	setup_nes_labels(&mut prog);
 
 	println!("{}", prog.mem());
@@ -95,8 +89,9 @@ fn test_nes() -> std::io::Result<()> {
 	let prg0 = prog.image_slice_from_segment(prg0);
 
 	// Disassembly/printing!
-	let disas = mos65xx::Disassembler;
-	let print = mos65xx::Printer::new(mos65xx::SyntaxFlavor::New);
+	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
+	let disas = Disassembler;
+	let print = Printer::new(SyntaxFlavor::New);
 
 	let mut iter = disas.disas_all(&prg0[..10], VAddr(0x8000));
 

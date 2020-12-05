@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 // ------------------------------------------------------------------------------------------------
@@ -24,66 +23,6 @@ pub use segment::*;
 pub use spans::*;
 
 // ------------------------------------------------------------------------------------------------
-// MemoryBuilder
-// ------------------------------------------------------------------------------------------------
-
-/// Builder for the Memory object.
-pub struct MemoryBuilder {
-	endianness:   Endian,
-	segs:         Vec<Segment>,
-	mem_map:      MemoryMap,
-	config:       MemoryConfig,
-	seg_name_map: HashMap<String, usize>,
-}
-
-/// Builder for Memory objects. This exists mainly to check that the MemoryConfig
-/// is valid before construction.
-impl MemoryBuilder {
-	pub fn new(
-		endianness: Endian,
-		mem_map:    MemoryMap,
-		config:     MemoryConfig
-	) -> Self {
-		Self {
-			endianness,
-			segs: vec![],
-			mem_map,
-			config,
-			seg_name_map: HashMap::new(),
-		}
-	}
-
-	/// Add a segment. Name cannot be a duplicate of an existing one.
-	pub fn segment(&mut self, name: &str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) ->
-		&mut Self {
-		let id = self.segs.len();
-		assert!(self.seg_name_map.insert(name.into(), id).is_none(), "duplicate seg name {}", name);
-		self.segs.push(Segment::new(SegId(id.try_into().unwrap()), name, vbase, vend, pbase));
-		self
-	}
-
-	/// Construct the Memory object.
-	pub fn build(self) -> Memory {
-		// check the config.
-		// it's OK for memory regions to be unmapped (e.g. for mirror areas, optional areas)
-		for (region_name, seg_name) in self.config.iter() {
-			let region = self.mem_map.region_for_name(&region_name).unwrap();
-			let seg = &self.segs[*self.seg_name_map.get(seg_name).unwrap()];
-			// if it's bankable, it must be real.
-			assert!(!(region.is_bankable() && seg.is_fake()));
-		}
-
-		Memory {
-			endianness:   self.endianness,
-			segs:         self.segs,
-			mem_map:      self.mem_map,
-			config:       self.config,
-			seg_name_map: self.seg_name_map,
-		}
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
 // Memory
 // ------------------------------------------------------------------------------------------------
 
@@ -95,10 +34,19 @@ pub struct Memory {
 	config:       MemoryConfig,
 	segs:         Vec<Segment>,
 	seg_name_map: HashMap<String, usize>,
+	next_seg_id:  SegId,
 	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 }
 
 impl Memory {
+	pub fn new(endianness: Endian, mem_map: MemoryMap, config: MemoryConfig) -> Self {
+		Self { endianness, mem_map, config,
+			segs: Vec::new(),
+			seg_name_map: HashMap::new(),
+			next_seg_id: SegId(0),
+		}
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
@@ -143,6 +91,30 @@ impl Memory {
 
 	// ---------------------------------------------------------------------------------------------
 	// Segments
+
+	/// Adds a new segment.
+	///
+	/// # Panics
+	///
+	/// - if `name` is already the name of an existing segment.
+	/// - if the segment is mapped to a bankable region, but `pbase` is `None`.
+	pub fn add_segment(&mut self, name: &str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) {
+		let existing = self.seg_name_map.insert(name.into(), self.segs.len());
+		assert!(existing.is_none(), "duplicate segment name {}", name);
+
+		let fake = pbase.is_none();
+		for (region_name, seg_name) in self.config.iter() {
+			if seg_name == name {
+				let region = self.mem_map.region_for_name(&region_name).unwrap();
+				// if it's bankable, it must be real.
+				assert!(!(region.is_bankable() && fake));
+			}
+		}
+
+		let id = self.next_seg_id;
+		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
+		self.segs.push(Segment::new(id, name, vbase, vend, pbase));
+	}
 
 	/// Given a region name, get the Segment mapped to it (if any).
 	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
@@ -197,7 +169,7 @@ impl Memory {
 		&mut self.segs[loc.seg.0 as usize]
 	}
 
-	// TODO: adding/removing/redefining/iterating segments
+	// TODO: removing/redefining/iterating segments
 
 	// ---------------------------------------------------------------------------------------------
 	// Address translation
