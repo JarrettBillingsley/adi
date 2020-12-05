@@ -13,7 +13,7 @@ use crate::analysis::types::BBId;
 
 /// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
-#[derive(Debug, Display)]
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 #[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
 pub struct Span {
 	/// address of first byte of span.
@@ -86,20 +86,23 @@ impl SpanMap {
 	}
 
 	/// Given an offset into the segment, gets the span which contains it.
+	///
+	/// # Panics
+	///
+	/// - if `offs` is after the last address.
 	pub fn span_at(&self, offs: SegOffset) -> Span {
-		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
+		assert!(offs < self.end);
 		Span::new(self.spans.range(..= offs).next_back().expect("how even"))
 	}
 
-	// fn span_at_mut(&mut self, offs: SegOffset) -> (&SegOffset, &mut SpanInternal) {
-	// 	assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
-	// 	self.spans.range_mut(..= offs).next_back().expect("how even")
-	// }
-
 	/// Given an offset into the segment, gets the span which comes after the containing span,
 	/// or None if the containing span is the last one in the segment.
+	///
+	/// # Panics
+	///
+	/// - if `offs` is after the last address.
 	pub fn span_after(&self, offs: SegOffset) -> Option<Span> {
-		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
+		assert!(offs < self.end);
 
 		use std::ops::Bound;
 		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next().map(|a| Span::new(a))
@@ -107,11 +110,16 @@ impl SpanMap {
 
 	/// Given an offset into the segment, gets the span which comes before the containing span,
 	/// or None if the containing span is the first one in the segment.
+	///
+	/// # Panics
+	///
+	/// - if `offs` is after the last address.
 	pub fn span_before(&self, offs: SegOffset) -> Option<Span> {
-		assert!(offs <= self.end); // TODO: should this be inclusive or exclusive...?
+		assert!(offs < self.end);
 
-		// upper bound excluded!
-		self.spans.range(.. offs).next_back().map(|a| Span::new(a))
+		let mut iter = self.spans.range(..= offs);
+		iter.next_back();
+		iter.next_back().map(|tup| Span::new(tup))
 	}
 
 	/// Iterator over all spans in the segment, in order.
@@ -180,26 +188,25 @@ impl SpanMap {
 			let next = self.span_after(start);
 
 			match (prev, next) {
-				(None, Some(next @ Span { kind: Unk, .. })) => {
-					// coalesce with next: delete next span, and make old span longer
-					self.spans.remove(&next.start).expect("wat");
-
-					let old = self.spans.get_mut(&old.start).unwrap();
-					old.end = next.end;
-					old.kind = Unk;
-				}
-
-				(Some(prev @ Span { kind: Unk, .. }), None) => {
-					// coalesce with prev: delete old span, and make prev span longer
-					self.spans.remove(&old.start).expect("wat");
-					self.spans.get_mut(&prev.start).unwrap().end = old.end;
-				}
-
 				(Some(prev @ Span { kind: Unk, .. }), Some(next @ Span { kind: Unk, .. })) => {
 					// coalesce with BOTH: delete old AND next, and make prev span longer
 					self.spans.remove(&old.start).expect("wat");
 					self.spans.remove(&next.start).expect("wat");
 					self.spans.get_mut(&prev.start).unwrap().end = next.end;
+				}
+
+				(Some(prev @ Span { kind: Unk, .. }), _) => {
+					// coalesce with prev: delete old span, and make prev span longer
+					self.spans.remove(&old.start).expect("wat");
+					self.spans.get_mut(&prev.start).unwrap().end = old.end;
+				}
+
+				(_, Some(next @ Span { kind: Unk, .. })) => {
+					// coalesce with next: delete next span, and make old span longer
+					self.spans.remove(&next.start).expect("wat");
+					let old = self.spans.get_mut(&old.start).unwrap();
+					old.end = next.end;
+					old.kind = Unk;
 				}
 
 				_ => {
@@ -212,11 +219,6 @@ impl SpanMap {
 		#[cfg(debug_assertions)]
 		self.check_invariants();
 	}
-
-	// fn range_from_offset(&self, offs: SegOffset) -> (SegOffset, SegOffset) {
-	// 	let Span { start, end, .. } = self.span_at(offs);
-	// 	(start, end)
-	// }
 
 	#[cfg(debug_assertions)]
 	fn check_invariants(&self) {
