@@ -58,6 +58,32 @@ impl<'a> Program<'a> {
 		seg.get_image_slice(&self.image).unwrap()
 	}
 
+	pub fn read_8_va(&self, va: VAddr) -> Option<u8> {
+		self.mem.segment_for_va(va)
+		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
+		.map(|slice| slice[0])
+	}
+
+	pub fn read_le_16_va(&self, va: VAddr) -> Option<u16> {
+		self.mem.segment_for_va(va)
+		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
+		.and_then(|slice| if slice.len() < 2 { None } else {
+			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
+		})
+	}
+
+	pub fn read_8_loc(&self, loc: Location) -> Option<u8> {
+		self.mem.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
+		.map(|slice| slice[0])
+	}
+
+	pub fn read_le_16_loc(&self, loc: Location) -> Option<u16> {
+		self.mem.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
+		.and_then(|slice| if slice.len() < 2 { None } else {
+			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
+		})
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Names
 

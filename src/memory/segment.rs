@@ -71,8 +71,16 @@ impl<'a> Segment<'a> {
 	/// Given a ROM image, get the slice of that image that this segment covers,
 	/// or None if this is a fake segment.
 	pub fn get_image_slice(&self, image: &'a RomImage) -> Option<&'a [u8]> {
+		self.get_image_slice_offs(image, SegOffset(0))
+	}
+
+	pub fn get_image_slice_va(&self, image: &'a RomImage, va: VAddr) -> Option<&'a [u8]> {
+		self.get_image_slice_offs(image, self.offset_from_va(va))
+	}
+
+	pub fn get_image_slice_offs(&self, image: &'a RomImage, offs: SegOffset) -> Option<&'a [u8]> {
 		match self.image {
-			Some(range) => Some(&image.data[range.pbase.0 .. range.pend.0]),
+			Some(range) => Some(&image.data[range.pbase.0 + offs.0 .. range.pend.0]),
 			None => None,
 		}
 	}

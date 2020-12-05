@@ -117,6 +117,12 @@ fn test_nes() -> std::io::Result<()> {
 		println!("{}", err);
 	}
 
+	println!();
+
+	println!("{:04X}", prog.read_le_16_loc(prog.loc_from_name("VEC_NMI")).unwrap());
+	println!("{:04X}", prog.read_le_16_loc(prog.loc_from_name("VEC_RESET")).unwrap());
+	println!("{:04X}", prog.read_le_16_loc(prog.loc_from_name("VEC_IRQ")).unwrap());
+
 	Ok(())
 }
 

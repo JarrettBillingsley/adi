@@ -166,3 +166,29 @@ I'm kind of working under the assumption that the image segments are easily dete
 4. spans cannot be bisected.
 	- that leaves two non-contiguous spans with the same owner, which makes no sense
 	- have to shorten existing span, then create new span
+
+## Analysis algorithm
+
+(reconstructing my thoughts from the Python code)
+
+**The analyzer has two work queues,** one for functions and one for jump tables. `analyzeQueue` picks jobs off the front to do until they're both empty.
+
+**Function analysis** starts at an entry point. It starts decoding instructions there, extending a BB until it hits control flow. That ends the BB and possibly starts a new one (or stops analysis).
+
+It also logs jump/branch targets as it sees them, and...... Okay it's not really as elegant or straightforward as I was thinking
+
+Maybe this can be done differently. Two phases?
+
+First "roughing" phase feels out the boundaries of the function. It's not *guaranteed* that a function's code is contiguous, but it's pretty common. So, we can kinda follow control flow to see where it goes, until we get to a return/halt instruction. Jumps to unexplored/other functions and calls can be ignored at this point.
+
+We can build up "proto-BBs" by having ranges of instructions which we know "belong" to this function. But we won't actually modify the span map yet. This will avoid all the "nudging the end of the BB up by 1 byte over and over" that the old algorithm did.
+
+## **ASSUMPTION:** instructions will never cross segments.
+
+- `https://wiki.nesdev.com/w/index.php/Tricky-to-emulate_games` lists only a *single* game that breaks this rule (The Magic of Scheherazade)
+- for practical reasons, I really doubt programmers would do this very much
+
+## **ASSUMPTION:** a single function's code will be entirely contained within one segment.
+
+- if it isn't, we can split it into two functions and have the first tailcall the other.
+
