@@ -32,18 +32,26 @@ pub struct Memory {
 	endianness:   Endian,
 	mem_map:      MemoryMap,
 	config:       MemoryConfig,
+	image:        RomImage,
 	segs:         Vec<Segment>,
 	seg_name_map: HashMap<String, usize>,
 	next_seg_id:  SegId,
+	seg_id_map:   HashMap<SegId, usize>,
 	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 }
 
 impl Memory {
-	pub fn new(endianness: Endian, mem_map: MemoryMap, config: MemoryConfig) -> Self {
-		Self { endianness, mem_map, config,
-			segs: Vec::new(),
+	pub fn new(
+		endianness: Endian,
+		mem_map:    MemoryMap,
+		config:     MemoryConfig,
+		image:      RomImage
+	) -> Self {
+		Self { endianness, mem_map, config, image,
+			segs:         Vec::new(),
 			seg_name_map: HashMap::new(),
-			next_seg_id: SegId(0),
+			next_seg_id:  SegId(0),
+			seg_id_map:   HashMap::new(),
 		}
 	}
 
@@ -63,6 +71,11 @@ impl Memory {
 	/// Gets endianness.
 	pub fn endianness(&self) -> Endian {
 		self.endianness
+	}
+
+	/// Gets the image.
+	pub fn image(&self) -> &RomImage {
+		&self.image
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -113,6 +126,7 @@ impl Memory {
 
 		let id = self.next_seg_id;
 		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
+		self.seg_id_map.insert(id, self.segs.len());
 		self.segs.push(Segment::new(id, name, vbase, vend, pbase));
 	}
 
@@ -161,12 +175,12 @@ impl Memory {
 
 	/// Given a location, get the Segment which contains it.
 	pub fn segment_from_loc(&self, loc: Location) -> &Segment {
-		&self.segs[loc.seg.0 as usize]
+		&self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
-		&mut self.segs[loc.seg.0 as usize]
+		&mut self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
 	}
 
 	// TODO: removing/redefining/iterating segments
@@ -196,11 +210,48 @@ impl Memory {
 	pub fn fmt_addr(&self, addr: usize) -> String {
 		format!("{:0width$X}", addr, width = self.mem_map.digits)
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Image
+
+	/// Given a reference to a segment, gets a slice of the ROM image that it covers.
+	/// Panics if the segment has no physical mapping.
+	pub fn image_slice_from_segment(&self, seg: &Segment) -> &[u8] {
+		assert!(!seg.is_fake(), "segment {} has no physical mapping", seg.name);
+		seg.get_image_slice(&self.image).unwrap()
+	}
+
+	pub fn read_8_va(&self, va: VAddr) -> Option<u8> {
+		self.segment_for_va(va)
+		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
+		.map(|slice| slice[0])
+	}
+
+	pub fn read_le_16_va(&self, va: VAddr) -> Option<u16> {
+		self.segment_for_va(va)
+		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
+		.and_then(|slice| if slice.len() < 2 { None } else {
+			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
+		})
+	}
+
+	pub fn read_8_loc(&self, loc: Location) -> Option<u8> {
+		self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
+		.map(|slice| slice[0])
+	}
+
+	pub fn read_le_16_loc(&self, loc: Location) -> Option<u16> {
+		self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
+		.and_then(|slice| if slice.len() < 2 { None } else {
+			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
+		})
+	}
 }
 
 impl Display for Memory {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.mem_map.len(), self.endianness)?;
+		writeln!(f, "Image: '{}' (0x{:X} bytes)", self.image.name, self.image.data.len())?;
 		writeln!(f, "\nSegments:")?;
 
 		for seg in self.segs.iter() {

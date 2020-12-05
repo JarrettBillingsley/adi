@@ -1,5 +1,4 @@
 
-use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::collections::{
 	btree_map::Iter as BTreeIter,
 	btree_map::Range as BTreeRange,
@@ -24,64 +23,23 @@ pub use refmap::*;
 // Program
 // ------------------------------------------------------------------------------------------------
 
-/// A Program contains an image, a Memory object, and collections of names and references.
+/// A Program contains a Memory object and indexes of names, references, functions, and variables.
 pub struct Program {
-	image: RomImage,
 	mem:   Memory,
 	names: NameMap,
 	#[allow(dead_code)]
 	refs:  RefMap,
+	// TODO: FuncIndex, VarIndex(?)
 }
 
 impl Program {
-	pub fn new(image: RomImage, mem: Memory) -> Self {
-		Self { image, mem, names: NameMap::new(), refs: RefMap::new() }
-	}
-
-	/// Gets the RomImage object associated with this Program.
-	pub fn image(&self) -> &RomImage {
-		&self.image
+	pub fn new(mem: Memory) -> Self {
+		Self { mem, names: NameMap::new(), refs: RefMap::new() }
 	}
 
 	/// Gets the Memory object associated with this Program.
 	pub fn mem(&self) -> &Memory {
 		&self.mem
-	}
-
-	// ---------------------------------------------------------------------------------------------
-	// Image
-
-	/// Given a reference to a segment, gets a slice of the ROM image that it covers.
-	/// Panics if the segment has no physical mapping.
-	pub fn image_slice_from_segment(&self, seg: &Segment) -> &[u8] {
-		assert!(!seg.is_fake(), "segment {} has no physical mapping", seg.name);
-		seg.get_image_slice(&self.image).unwrap()
-	}
-
-	pub fn read_8_va(&self, va: VAddr) -> Option<u8> {
-		self.mem.segment_for_va(va)
-		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
-		.map(|slice| slice[0])
-	}
-
-	pub fn read_le_16_va(&self, va: VAddr) -> Option<u16> {
-		self.mem.segment_for_va(va)
-		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
-		.and_then(|slice| if slice.len() < 2 { None } else {
-			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
-		})
-	}
-
-	pub fn read_8_loc(&self, loc: Location) -> Option<u8> {
-		self.mem.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
-		.map(|slice| slice[0])
-	}
-
-	pub fn read_le_16_loc(&self, loc: Location) -> Option<u16> {
-		self.mem.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
-		.and_then(|slice| if slice.len() < 2 { None } else {
-			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
-		})
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -189,14 +147,6 @@ impl Program {
 
 	fn generate_name(&self, base: &str, va: VAddr) -> String {
 		format!("{}_{}_{}", base, AUTOGEN_NAME_PREFIX, self.mem.fmt_addr(va.0))
-	}
-}
-
-impl Display for Program {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		writeln!(f, "Image: {} (0x{:X} bytes)", self.image.name, self.image.data.len())?;
-
-		Ok(())
 	}
 }
 

@@ -41,7 +41,8 @@ fn test_nes() -> std::io::Result<()> {
 		("PRGROM", "PRG0"),
 	]);
 
-	let mut mem = Memory::new(Endian::Little, map, config);
+	let mut mem = Memory::new(Endian::Little, map, config, img);
+
 	// default
 	mem.add_segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
 	mem.add_segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
@@ -49,10 +50,11 @@ fn test_nes() -> std::io::Result<()> {
 	// ROM-specific
 	mem.add_segment("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0)));
 
-	let mut prog = Program::new(img, mem);
+	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
 
-	println!("{}", prog.mem());
+	let mem = prog.mem();
+	println!("{}", mem);
 
 	for (loc, name) in prog.all_names_by_loc() {
 		println!("{}: {}", loc, name);
@@ -75,18 +77,18 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("location for 0x0000: {:?}", prog.mem().va_to_loc(VAddr(0x0000)));
-	println!("location for 0x2000: {:?}", prog.mem().va_to_loc(VAddr(0x2000)));
-	println!("location for 0x2001: {:?}", prog.mem().va_to_loc(VAddr(0x2001)));
-	println!("location for 0x2008: {:?}", prog.mem().va_to_loc(VAddr(0x2008)));
-	println!("location for 0x0400: {:?}", prog.mem().va_to_loc(VAddr(0x0400)));
-	println!("location for 0x5000: {:?}", prog.mem().va_to_loc(VAddr(0x5000)));
-	println!("location for 0x8000: {:?}", prog.mem().va_to_loc(VAddr(0x8000)));
+	println!("location for 0x0000: {:?}", mem.va_to_loc(VAddr(0x0000)));
+	println!("location for 0x2000: {:?}", mem.va_to_loc(VAddr(0x2000)));
+	println!("location for 0x2001: {:?}", mem.va_to_loc(VAddr(0x2001)));
+	println!("location for 0x2008: {:?}", mem.va_to_loc(VAddr(0x2008)));
+	println!("location for 0x0400: {:?}", mem.va_to_loc(VAddr(0x0400)));
+	println!("location for 0x5000: {:?}", mem.va_to_loc(VAddr(0x5000)));
+	println!("location for 0x8000: {:?}", mem.va_to_loc(VAddr(0x8000)));
 
 	println!();
 
-	let prg0 = prog.mem().segment_for_name("PRG0").unwrap();
-	let prg0 = prog.image_slice_from_segment(prg0);
+	let prg0 = mem.segment_for_name("PRG0").unwrap();
+	let prg0 = mem.image_slice_from_segment(prg0);
 
 	// Disassembly/printing!
 	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
@@ -115,9 +117,9 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("{:04X}", prog.read_le_16_loc(prog.loc_from_name("VEC_NMI")).unwrap());
-	println!("{:04X}", prog.read_le_16_loc(prog.loc_from_name("VEC_RESET")).unwrap());
-	println!("{:04X}", prog.read_le_16_loc(prog.loc_from_name("VEC_IRQ")).unwrap());
+	println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_NMI")).unwrap());
+	println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_RESET")).unwrap());
+	println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_IRQ")).unwrap());
 
 	Ok(())
 }

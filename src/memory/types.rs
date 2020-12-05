@@ -119,7 +119,7 @@ impl Sub for SegOffset {
 // ------------------------------------------------------------------------------------------------
 
 /// newtype for segment IDs. each segment gets a unique ID (index into an array).
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct SegId(pub u16);
 
 // ------------------------------------------------------------------------------------------------
@@ -142,17 +142,6 @@ impl Debug for Location {
 }
 
 // ------------------------------------------------------------------------------------------------
-// ImageRange
-// ------------------------------------------------------------------------------------------------
-
-/// A range of physical addresses within an image.
-#[derive(Debug, Clone, Copy)]
-pub struct ImageRange {
-	pub pbase: PAddr,
-	pub pend:  PAddr,
-}
-
-// ------------------------------------------------------------------------------------------------
 // RomImage
 // ------------------------------------------------------------------------------------------------
 
@@ -161,6 +150,17 @@ pub struct ImageRange {
 pub struct RomImage {
 	pub name: String,
 	pub data: Vec<u8>,
+}
+
+// ------------------------------------------------------------------------------------------------
+// ImageRange
+// ------------------------------------------------------------------------------------------------
+
+/// A range of physical addresses within an image.
+#[derive(Debug, Clone, Copy)]
+pub struct ImageRange {
+	pub pbase: PAddr,
+	pub pend:  PAddr,
 }
 
 // ------------------------------------------------------------------------------------------------
