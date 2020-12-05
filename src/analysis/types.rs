@@ -75,7 +75,7 @@ impl BasicBlock {
 /// The kinds of terminators for a `BasicBlock`.
 #[derive(Debug, Clone)]
 pub enum BBTerm {
-	/// Hit a dead end (e.g. invalid instruction).
+	/// Hit a dead end (e.g. invalid instruction, or user undefined some code).
 	DeadEnd,
 	/// A return instruction.
 	Return,

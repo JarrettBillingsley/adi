@@ -5,28 +5,6 @@ use crate::memory::*;
 use super::error::*;
 
 // ------------------------------------------------------------------------------------------------
-// InstDescTrait
-// ------------------------------------------------------------------------------------------------
-
-/// Trait for instruction descriptors. Methods are used by analysis to determine control flow.
-pub trait InstDescTrait {
-	/// Is this a control flow instruction?
-	fn is_control    (&self) -> bool;
-	/// Is this conditional or unconditional?
-	fn is_conditional(&self) -> bool;
-	/// Is this an absolute jump?
-	fn is_jump       (&self) -> bool;
-	/// Is this an indirect jump (i.e. through a register)?
-	fn is_indir_jump (&self) -> bool;
-	/// Is this a function call?
-	fn is_call       (&self) -> bool;
-	/// Is this a function return?
-	fn is_return     (&self) -> bool;
-	/// Is this an invalid instruction?
-	fn is_invalid    (&self) -> bool;
-}
-
-// ------------------------------------------------------------------------------------------------
 // MemAccess
 // ------------------------------------------------------------------------------------------------
 
@@ -72,31 +50,37 @@ pub trait OperandTrait {
 
 /// Trait for instructions. Used by analysis and such.
 pub trait InstructionTrait {
-	/// Associated type of instruction descs returned by `desc`.
-	type TDesc: InstDescTrait;
-
 	/// Associated type of operands returned by `get_op`.
 	type TOperand: OperandTrait;
 
 	/// Get virtual address.
 	fn va(&self) -> VAddr;
-
-	/// Get desc.
-	fn desc(&self) -> Self::TDesc;
-
 	/// Get size, in bytes.
 	fn size(&self) -> usize;
-
 	/// How many operands it has.
 	fn num_ops(&self) -> usize;
-
 	/// Accessor for operands.
 	fn get_op(&self, i: usize) -> Self::TOperand;
-
 	/// Accessor for original bytes.
 	fn bytes(&self) -> &[u8];
-
 	// TODO: implied ops as a separate thing?
+
+	/// Is this a control flow instruction?
+	fn is_control    (&self) -> bool;
+	/// Is this conditional or unconditional?
+	fn is_conditional(&self) -> bool;
+	/// Is this an absolute jump?
+	fn is_jump       (&self) -> bool;
+	/// Is this an indirect jump (i.e. through a register)?
+	fn is_indir_jump (&self) -> bool;
+	/// Is this a function call?
+	fn is_call       (&self) -> bool;
+	/// Is this a function return?
+	fn is_return     (&self) -> bool;
+	/// Is this an invalid instruction?
+	fn is_invalid    (&self) -> bool;
+	/// Is this some kind of halt instruction from which there is no recovery?
+	fn is_halt       (&self) -> bool;
 }
 
 // ------------------------------------------------------------------------------------------------

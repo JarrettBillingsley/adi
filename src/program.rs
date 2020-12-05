@@ -58,9 +58,6 @@ impl<'a> Program<'a> {
 		seg.get_image_slice(&self.image).unwrap()
 	}
 
-	// TODO: spanagement? or just leave that to the segment (segment_for_name_mut)
-	// TODO: refs... explicitly managed? or created/destroyed through other means?
-
 	// ---------------------------------------------------------------------------------------------
 	// Names
 

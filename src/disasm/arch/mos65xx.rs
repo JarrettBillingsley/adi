@@ -53,17 +53,6 @@ impl InstDesc {
 	}
 }
 
-impl InstDescTrait for InstDesc {
-	fn is_control    (&self) -> bool { self.ctrl }
-
-	fn is_conditional(&self) -> bool { self.addr_mode == AddrMode::REL }
-	fn is_jump       (&self) -> bool { matches!(self.opcode, Opcode::JMP_LAB) }
-	fn is_indir_jump (&self) -> bool { matches!(self.opcode, Opcode::JMP_IND) }
-	fn is_call       (&self) -> bool { matches!(self.opcode, Opcode::JSR_LAB) }
-	fn is_return     (&self) -> bool { matches!(self.opcode, Opcode::RTS_IMP | Opcode::RTI_IMP) }
-	fn is_invalid    (&self) -> bool { matches!(self.opcode, Opcode::INVALID) }
-}
-
 // ------------------------------------------------------------------------------------------------
 // Operand
 // ------------------------------------------------------------------------------------------------
@@ -161,11 +150,9 @@ impl Instruction {
 }
 
 impl InstructionTrait for Instruction {
-	type TDesc = InstDesc;
 	type TOperand = Operand;
 
 	fn va(&self) -> VAddr                 { self.va }
-	fn desc(&self) -> InstDesc            { self.desc }
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
 	fn get_op(&self, i: usize) -> Operand {
@@ -173,6 +160,17 @@ impl InstructionTrait for Instruction {
 		self.op.unwrap()
 	}
 	fn bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
+
+	fn is_control    (&self) -> bool { self.desc.ctrl }
+	fn is_conditional(&self) -> bool { self.desc.addr_mode == AddrMode::REL }
+	fn is_jump       (&self) -> bool { matches!(self.desc.opcode, Opcode::JMP_LAB) }
+	fn is_indir_jump (&self) -> bool { matches!(self.desc.opcode, Opcode::JMP_IND) }
+	fn is_call       (&self) -> bool { matches!(self.desc.opcode, Opcode::JSR_LAB) }
+	fn is_invalid    (&self) -> bool { matches!(self.desc.opcode, Opcode::INVALID) }
+	fn is_halt       (&self) -> bool { false }
+	fn is_return     (&self) -> bool {
+		matches!(self.desc.opcode, Opcode::RTS_IMP | Opcode::RTI_IMP)
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
