@@ -87,8 +87,7 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	let prg0 = mem.segment_for_name("PRG0").unwrap();
-	let prg0 = mem.image_slice_from_segment(prg0);
+	let prg0 = mem.get_image_slice(mem.segment_for_name("PRG0").unwrap()).unwrap();
 
 	// Disassembly/printing!
 	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };

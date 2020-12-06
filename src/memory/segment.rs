@@ -70,15 +70,20 @@ impl Segment {
 
 	/// Given a ROM image, get the slice of that image that this segment covers,
 	/// or None if this is a fake segment.
-	pub fn get_image_slice<'img>(&self, image: &'img RomImage) -> Option<&'img [u8]> {
+	pub(crate) fn get_image_slice<'img>(&self, image: &'img RomImage) -> Option<&'img [u8]> {
 		self.get_image_slice_offs(image, SegOffset(0))
 	}
 
-	pub fn get_image_slice_va<'img>(&self, image: &'img RomImage, va: VAddr) -> Option<&'img [u8]> {
+	/// Given a ROM image, get the slice of that image starting at `va` until the end
+	/// of the segment, or None if this is a fake segment.
+	pub(crate) fn get_image_slice_va<'img>(&self, image: &'img RomImage, va: VAddr)
+	-> Option<&'img [u8]> {
 		self.get_image_slice_offs(image, self.offset_from_va(va))
 	}
 
-	pub fn get_image_slice_offs<'img>(&self, image: &'img RomImage, offs: SegOffset)
+	/// Given a ROM image, get the slice of that image starting at `offs` until the end
+	/// of the segment, or None if this is a fake segment.
+	pub(crate) fn get_image_slice_offs<'img>(&self, image: &'img RomImage, offs: SegOffset)
 	-> Option<&'img [u8]> {
 		match self.image {
 			Some(range) => Some(&image.data[range.pbase.0 + offs.0 .. range.pend.0]),
@@ -88,12 +93,12 @@ impl Segment {
 
 	/// Whether the given offset is valid for this segment.
 	pub fn contains_offset(&self, offs: SegOffset) -> bool {
-		(.. SegOffset(self.size)).contains(&offs)
+		offs.0 < self.size
 	}
 
 	/// Whether this segment contains a given VA.
 	pub fn contains_va(&self, addr: VAddr) -> bool {
-		(self.vbase .. self.vend).contains(&addr)
+		self.vbase <= addr && addr < self.vend
 	}
 
 	/// Whether this segment and another segment overlap in the virtual address space.
@@ -104,7 +109,7 @@ impl Segment {
 	/// Whether this segment contains a given PA.
 	pub fn contains_pa(&self, addr: PAddr) -> bool {
 		match self.image {
-			Some(i) => (i.pbase .. i.pend).contains(&addr),
+			Some(i) => i.pbase <= addr && addr < i.pend,
 			None    => false,
 		}
 	}

@@ -42,6 +42,11 @@ impl Program {
 		&self.mem
 	}
 
+	/// Gets the Memory object associated with this Program.
+	pub fn mem_mut(&mut self) -> &mut Memory {
+		&mut self.mem
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Names
 

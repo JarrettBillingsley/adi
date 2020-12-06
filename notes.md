@@ -192,3 +192,29 @@ We can build up "proto-BBs" by having ranges of instructions which we know "belo
 
 - if it isn't, we can split it into two functions and have the first tailcall the other.
 
+---
+
+I'm thinking Segment should really be split into two things:
+
+1. An "internal" type which holds all the actual data and has accessors with checks
+2. A "public" type that gives a straightforward interface
+
+Because Segment doesn't own its slice, you have to get the slice from Memory, but that's awkward because
+
+
+
+
+
+......
+
+wait.
+
+two segments can never overlap in their physical slices of the ROM.
+furthermore, there's no reason we *have* to keep the original ROM image around.
+**why don't the segments just own their image, and you pass the slice of the image to add_segment on creation?**
+
+why does Memory have to be involved with the image at all?
+
+this also allows us to *add new images* by just attaching them to new segments.
+
+YEAH. OKAY. WHY AM I MAKING THIS SO HARD

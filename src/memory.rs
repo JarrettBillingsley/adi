@@ -133,29 +133,26 @@ impl Memory {
 	/// Given a region name, get the Segment mapped to it (if any).
 	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
 		self.config.segment_for_region(region_name)
-		.and_then(|seg_name| self.segment_for_name(&seg_name))
+			.and_then(|seg_name| self.segment_for_name(&seg_name))
 	}
 
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VAddr) -> Option<&Segment> {
 		self.mem_map.region_for_va(va)
-		.and_then(|region| self.config.segment_for_region(&region.name))
-		.as_ref()
-		.and_then(|name|   self.segment_for_name(name))
+			.and_then(|region| self.config.segment_for_region(&region.name))
+			.and_then(|name|   self.segment_for_name(name))
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_for_va_mut(&mut self, va: VAddr) -> Option<&mut Segment> {
-		let name = self.mem_map.region_for_va(va)
-			.and_then(|region| self.config.segment_for_region(&region.name));
+		let idx = self.mem_map.region_for_va(va)
+			.and_then(|region| self.config.segment_for_region(&region.name))
+			.and_then(|name|   self.seg_name_map.get(name));
 
 		// Rust refuses to let me do a similar thing to above and I can't figure out why.
-		match name {
-			Some(name) => match self.seg_name_map.get(name) {
-				Some(&idx) => Some(&mut self.segs[idx]),
-				None       => None,
-			},
-			None => None,
+		match idx {
+			Some(&idx) => Some(&mut self.segs[idx]),
+			None       => None,
 		}
 	}
 
@@ -166,11 +163,8 @@ impl Memory {
 
 	/// Same as above but mutable.
 	pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment> {
-		// Rust refuses to let me do a similar thing to above and I can't figure out why.
-		match self.seg_name_map.get(name) {
-			Some(&idx) => Some(&mut self.segs[idx]),
-			None       => None,
-		}
+		let segs = &mut self.segs;
+		self.seg_name_map.get_mut(name).map(move |&mut idx| &mut segs[idx])
 	}
 
 	/// Given a location, get the Segment which contains it.
@@ -214,11 +208,22 @@ impl Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Image
 
-	/// Given a reference to a segment, gets a slice of the ROM image that it covers.
-	/// Panics if the segment has no physical mapping.
-	pub fn image_slice_from_segment(&self, seg: &Segment) -> &[u8] {
-		assert!(!seg.is_fake(), "segment {} has no physical mapping", seg.name);
-		seg.get_image_slice(&self.image).unwrap()
+	/// Given a reference to a segment, get the slice of the ROM image that it segment covers,
+	/// or None if it is a fake segment.
+	pub fn get_image_slice(&self, seg: &Segment) -> Option<&[u8]> {
+		seg.get_image_slice(&self.image)
+	}
+
+	/// Given a reference to a segment, get the slice of the ROM image starting at `va` until
+	/// the end of the segment, or None if it is a fake segment.
+	pub fn get_image_slice_va(&self, seg: &Segment, va: VAddr) -> Option<&[u8]> {
+		seg.get_image_slice_va(&self.image, va)
+	}
+
+	/// Given a reference to a segment, get the slice of the ROM image starting at `offs` until
+	/// the end of the segment, or None if it is a fake segment.
+	pub fn get_image_slice_offs(&self, seg: &Segment, offs: SegOffset) -> Option<&[u8]> {
+		seg.get_image_slice_offs(&self.image, offs)
 	}
 
 	pub fn read_8_va(&self, va: VAddr) -> Option<u8> {
