@@ -13,8 +13,8 @@ use crate::disasm::NameLookupTrait;
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-pub mod namemap;
-pub mod refmap;
+mod namemap;
+mod refmap;
 
 pub use namemap::*;
 pub use refmap::*;

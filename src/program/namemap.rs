@@ -8,7 +8,7 @@ use std::collections::{
 };
 use std::ops::RangeBounds;
 
-use crate::memory::segment::Location;
+use crate::memory::Location;
 
 // TODO: make this parameterizable
 pub const AUTOGEN_NAME_PREFIX: &str = "loc";

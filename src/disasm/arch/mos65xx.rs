@@ -11,7 +11,7 @@ use crate::disasm::types::{
 	DisassemblerTrait,
 };
 use crate::disasm::error::{ DisasError, DisasResult };
-use crate::memory::va::VA;
+use crate::memory::VA;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

@@ -7,13 +7,13 @@ use parse_display::Display;
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-pub mod config;
-pub mod image;
-pub mod map;
-pub mod region;
-pub mod segment;
-pub mod spans;
-pub mod va;
+mod config;
+mod image;
+mod map;
+mod region;
+mod segment;
+mod spans;
+mod va;
 
 #[cfg(test)]
 mod tests;

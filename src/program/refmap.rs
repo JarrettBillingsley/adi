@@ -8,7 +8,7 @@ use std::collections::{
 	btree_map::Iter as BTreeIter,
 };
 
-use crate::memory::segment::Location;
+use crate::memory::Location;
 
 // ------------------------------------------------------------------------------------------------
 // RefMap
@@ -102,7 +102,7 @@ impl RefMap {
 mod tests {
 	use super::*;
 	use std::iter::FromIterator;
-	use crate::memory::segment::SegId;
+	use crate::memory::SegId;
 
 	#[test]
 	fn basic() {

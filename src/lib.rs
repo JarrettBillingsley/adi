@@ -1,8 +1,8 @@
 
-pub mod analysis;
-pub mod disasm;
-pub mod memory;
-pub mod program;
+mod analysis;
+mod disasm;
+mod memory;
+mod program;
 
 pub use analysis::*;
 pub use disasm::*;

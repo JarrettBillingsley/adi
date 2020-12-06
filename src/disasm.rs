@@ -1,8 +1,8 @@
 
-pub mod arch;
-pub mod error;
-pub mod platform;
-pub mod types;
+mod arch;
+mod error;
+mod platform;
+mod types;
 
 pub use arch::*;
 pub use error::*;

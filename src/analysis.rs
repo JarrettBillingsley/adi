@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use derive_new::new;
 
 use crate::program::Program;
-use crate::memory::segment::Location;
+use crate::memory::Location;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

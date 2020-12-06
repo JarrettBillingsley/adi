@@ -17,7 +17,7 @@ use std::iter::FromIterator;
 /// For example:
 ///
 /// ```
-/// use adi::memory::MemoryConfig;
+/// use adi::MemoryConfig;
 /// use std::iter::FromIterator;
 /// let config = MemoryConfig::from_iter(&[
 ///     ("a", "b"),
