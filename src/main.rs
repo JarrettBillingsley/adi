@@ -17,7 +17,7 @@ fn test_nes() -> std::io::Result<()> {
 	use MemoryRegionKind::*;
 
 	// let's set it up
-	let img = RomImage::new("smb.prg".into(), std::fs::read("tests/data/smb.prg")?);
+	let img = Image::new_from_file("tests/data/smb.prg")?;
 
 	let map = MemoryMap::new(16, &[
 		// default
@@ -41,14 +41,14 @@ fn test_nes() -> std::io::Result<()> {
 		("PRGROM", "PRG0"),
 	]);
 
-	let mut mem = Memory::new(Endian::Little, map, config, img);
+	let mut mem = Memory::new(Endian::Little, map, config);
 
 	// default
 	mem.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
 	mem.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
 	mem.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
 	// ROM-specific
-	mem.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(PA(0)));
+	mem.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
 
 	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
@@ -87,14 +87,14 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	let prg0 = mem.get_image_slice(mem.segment_for_name("PRG0").unwrap()).unwrap();
+	let prg0 = mem.segment_for_name("PRG0").unwrap().image_slice_all();
 
 	// Disassembly/printing!
 	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
 	let disas = Disassembler;
 	let print = Printer::new(SyntaxFlavor::New);
 
-	let mut iter = disas.disas_all(&prg0[..10], VA(0x8000));
+	let mut iter = disas.disas_all(&prg0.data()[..10], VA(0x8000));
 
 	for inst in &mut iter {
 		print!("0x{:4X}  ", inst.va());
@@ -116,9 +116,9 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_NMI")).unwrap());
-	println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_RESET")).unwrap());
-	println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_IRQ")).unwrap());
+	// println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_NMI")).unwrap());
+	// println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_RESET")).unwrap());
+	// println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_IRQ")).unwrap());
 
 	Ok(())
 }

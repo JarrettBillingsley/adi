@@ -52,41 +52,6 @@ impl SubAssign<usize> for VA {
 }
 
 // ------------------------------------------------------------------------------------------------
-// PA
-// ------------------------------------------------------------------------------------------------
-
-/// newtype for physical addresses (i.e. offsets into an image).
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct PA(pub usize);
-
-impl UpperHex for PA {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		UpperHex::fmt(&self.0, f)
-	}
-}
-
-impl Add<usize> for PA {
-	type Output = Self;
-	fn add(self, other: usize) -> Self {
-		PA(self.0 + other)
-	}
-}
-
-impl Add<Offset> for PA {
-	type Output = Self;
-	fn add(self, other: Offset) -> Self {
-		PA(self.0 + other.0)
-	}
-}
-
-impl Sub for PA {
-	type Output = usize;
-	fn sub(self, other: Self) -> usize {
-		self.0 - other.0
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
 // Offset
 // ------------------------------------------------------------------------------------------------
 
@@ -139,28 +104,6 @@ impl Debug for Location {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{}", self)
 	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// RomImage
-// ------------------------------------------------------------------------------------------------
-
-/// The contents of a ROM image file.
-#[derive(new)]
-pub struct RomImage {
-	pub name: String,
-	pub data: Vec<u8>,
-}
-
-// ------------------------------------------------------------------------------------------------
-// ImageRange
-// ------------------------------------------------------------------------------------------------
-
-/// A range of physical addresses within an image.
-#[derive(Debug, Clone, Copy)]
-pub struct ImageRange {
-	pub pbase: PA,
-	pub pend:  PA,
 }
 
 // ------------------------------------------------------------------------------------------------

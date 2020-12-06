@@ -1,5 +1,7 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::ops::{ Range, RangeBounds, Bound };
 
+use super::image::*;
 use super::types::*;
 use super::spans::*;
 
@@ -16,15 +18,18 @@ pub struct Segment {
 	pub vend:  VA,
 	pub size:  usize,
 	pub spans: SpanMap,
-	pub image: Option<ImageRange>,
+	pub image: Option<Image>,
 }
 
 impl Display for Segment {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		match self.image {
-			Some(image) =>
-				write!(f, "{} (image) VA [{:08X}..{:08X}) PA: [{:08X}..{:08X})",
-					self.name, self.vbase, self.vend, image.pbase, image.pend),
+		match &self.image {
+			Some(image) => {
+				let orig = image.orig_range();
+
+				write!(f, "{} (image '{}') VA [{:08X}..{:08X}) PA: [{:08X}..{:08X})",
+					self.name, image.name(), self.vbase, self.vend, orig.start.0, orig.end.0)
+			}
 			None =>
 				write!(f, "{} (fake) VA [{:08X}..{:08X})", self.name, self.vbase, self.vend),
 		}
@@ -35,9 +40,8 @@ impl Display for Segment {
 impl Segment {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
-	pub fn new(id: SegId, name: &str, vbase: VA, vend: VA, pbase: Option<PA>) -> Self {
+	pub fn new(id: SegId, name: &str, vbase: VA, vend: VA, image: Option<Image>) -> Self {
 		let size = vend - vbase;
-		let image = pbase.map(|pbase| ImageRange { pbase, pend: pbase + size });
 
 		Self {
 			id,
@@ -64,31 +68,15 @@ impl Segment {
 	}
 
 	/// Gets the range of physical addresses this segment is mapped to.
-	pub fn get_image_range(&self) -> ImageRange {
-		self.image.unwrap()
+	/// Panics if this is a fake segment.
+	pub fn image_range(&self) -> Range<Offset> {
+		self.image.as_ref().expect("fake segment!").orig_range()
 	}
 
-	/// Given a ROM image, get the slice of that image that this segment covers,
-	/// or None if this is a fake segment.
-	pub(crate) fn get_image_slice<'img>(&self, image: &'img RomImage) -> Option<&'img [u8]> {
-		self.get_image_slice_offs(image, Offset(0))
-	}
-
-	/// Given a ROM image, get the slice of that image starting at `va` until the end
-	/// of the segment, or None if this is a fake segment.
-	pub(crate) fn get_image_slice_va<'img>(&self, image: &'img RomImage, va: VA)
-	-> Option<&'img [u8]> {
-		self.get_image_slice_offs(image, self.offset_from_va(va))
-	}
-
-	/// Given a ROM image, get the slice of that image starting at `offs` until the end
-	/// of the segment, or None if this is a fake segment.
-	pub(crate) fn get_image_slice_offs<'img>(&self, image: &'img RomImage, offs: Offset)
-	-> Option<&'img [u8]> {
-		match self.image {
-			Some(range) => Some(&image.data[range.pbase.0 + offs.0 .. range.pend.0]),
-			None => None,
-		}
+	/// Convenience method to get a slice of the whole image, since
+	/// `image_slice` is overloaded and `image_slice(..)` is ambiguous.
+	pub fn image_slice_all(&self) -> ImageSlice {
+		self.image_slice(Offset(0)..)
 	}
 
 	/// Whether the given offset is valid for this segment.
@@ -106,22 +94,6 @@ impl Segment {
 		!(self.vend <= other.vbase || other.vend <= self.vbase)
 	}
 
-	/// Whether this segment contains a given PA.
-	pub fn contains_pa(&self, addr: PA) -> bool {
-		match self.image {
-			Some(i) => i.pbase <= addr && addr < i.pend,
-			None    => false,
-		}
-	}
-
-	/// Whether this segment and another segment overlap in the physical address space.
-	/// (That really should never happen, I don't think...)
-	pub fn overlaps_pa(&self, other: &Segment) -> bool {
-		let i = self.get_image_range();
-		let o = other.get_image_range();
-		!(i.pend <= o.pbase || o.pend <= i.pbase)
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// Conversions between segment offsets, virtual addresses, physical addresses, and names
 	// (there are so many for "convenience" I guess)
@@ -133,38 +105,50 @@ impl Segment {
 		Offset(va - self.vbase)
 	}
 
-	/// Given a PA, convert it to an offset into this segment.
-	pub fn offset_from_pa(&self, pa: PA) -> Offset {
-		assert!(self.contains_pa(pa));
-		let pbase = self.get_image_range().pbase;
-		Offset(pa - pbase)
-	}
-
 	/// Given an offset into this segment, get the VA.
 	pub fn va_from_offset(&self, offs: Offset) -> VA {
 		assert!(self.contains_offset(offs));
 		self.vbase + offs
 	}
 
-	/// Given a PA in this segment, get the VA.
-	pub fn va_from_pa(&self, pa: PA) -> VA {
-		assert!(self.contains_pa(pa));
-		let pbase = self.get_image_range().pbase;
-		self.vbase + (pa - pbase)
+	/// Given VA bounds, convert them into offset bounds.
+	pub fn offset_bounds_from_va_bounds(&self, bounds: impl RangeBounds<VA>)
+	-> impl RangeBounds<Offset> {
+		use Bound::*;
+
+		let start = match bounds.start_bound() {
+			Included(&s) => Included(self.offset_from_va(s)),
+			Excluded(&s) => Excluded(self.offset_from_va(s)),
+			Unbounded    => Unbounded,
+		};
+
+		let end = match bounds.end_bound() {
+			Included(&e) => Included(self.offset_from_va(e)),
+			Excluded(&e) => Excluded(self.offset_from_va(e)),
+			Unbounded    => Unbounded,
+		};
+
+		(start, end)
 	}
 
-	/// Given an offset into this segment, get the PA.
-	pub fn pa_from_offset(&self, offs: Offset) -> PA {
-		assert!(self.contains_offset(offs));
-		let pbase = self.get_image_range().pbase;
-		pbase + offs
-	}
+	/// Given offset bounds, convert them into VA bounds.
+	pub fn va_bounds_from_offset_bounds(&self, bounds: impl RangeBounds<Offset>)
+	-> impl RangeBounds<VA> {
+		use Bound::*;
 
-	/// Given a VA in this segment, get the PA.
-	pub fn pa_from_va(&self, va: VA) -> PA {
-		assert!(self.contains_va(va));
-		let pbase = self.get_image_range().pbase;
-		pbase + (va - self.vbase)
+		let start = match bounds.start_bound() {
+			Included(&s) => Included(self.va_from_offset(s)),
+			Excluded(&s) => Excluded(self.va_from_offset(s)),
+			Unbounded    => Unbounded,
+		};
+
+		let end = match bounds.end_bound() {
+			Included(&e) => Included(self.va_from_offset(e)),
+			Excluded(&e) => Excluded(self.va_from_offset(e)),
+			Unbounded    => Unbounded,
+		};
+
+		(start, end)
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -180,13 +164,22 @@ impl Segment {
 		self.spans.span_at(self.offset_from_va(va))
 	}
 
-	/// Get the span which contains the given PA.
-	pub fn span_from_pa(&self, pa: PA) -> Span {
-		self.spans.span_at(self.offset_from_pa(pa))
-	}
-
 	/// Iterator over all spans in this segment, in order.
 	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
 		self.spans.iter()
+	}
+}
+
+impl ImageSliceable<VA> for Segment {
+	/// Get a read-only slice of this image's data.
+	fn image_slice(&self, range: impl RangeBounds<VA>) -> ImageSlice {
+		self.image_slice(self.offset_bounds_from_va_bounds(range))
+	}
+}
+
+impl ImageSliceable<Offset> for Segment {
+	/// Get a read-only slice of this image's data.
+	fn image_slice(&self, range: impl RangeBounds<Offset>) -> ImageSlice {
+		self.image.as_ref().expect("trying to slice a fake segment").image_slice(range)
 	}
 }

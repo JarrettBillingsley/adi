@@ -6,21 +6,23 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 // ------------------------------------------------------------------------------------------------
 
 pub mod config;
+pub mod image;
 pub mod map;
-pub mod types;
 pub mod region;
 pub mod segment;
 pub mod spans;
+pub mod types;
 
 #[cfg(test)]
 mod tests;
 
 pub use config::*;
+pub use image::*;
 pub use map::*;
-pub use types::*;
 pub use region::*;
 pub use segment::*;
 pub use spans::*;
+pub use types::*;
 
 // ------------------------------------------------------------------------------------------------
 // Memory
@@ -32,7 +34,6 @@ pub struct Memory {
 	endianness:   Endian,
 	mem_map:      MemoryMap,
 	config:       MemoryConfig,
-	image:        RomImage,
 	segs:         Vec<Segment>,
 	seg_name_map: HashMap<String, usize>,
 	next_seg_id:  SegId,
@@ -44,10 +45,9 @@ impl Memory {
 	pub fn new(
 		endianness: Endian,
 		mem_map:    MemoryMap,
-		config:     MemoryConfig,
-		image:      RomImage
+		config:     MemoryConfig
 	) -> Self {
-		Self { endianness, mem_map, config, image,
+		Self { endianness, mem_map, config,
 			segs:         Vec::new(),
 			seg_name_map: HashMap::new(),
 			next_seg_id:  SegId(0),
@@ -71,11 +71,6 @@ impl Memory {
 	/// Gets endianness.
 	pub fn endianness(&self) -> Endian {
 		self.endianness
-	}
-
-	/// Gets the image.
-	pub fn image(&self) -> &RomImage {
-		&self.image
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -111,11 +106,11 @@ impl Memory {
 	///
 	/// - if `name` is already the name of an existing segment.
 	/// - if the segment is mapped to a bankable region, but `pbase` is `None`.
-	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, pbase: Option<PA>) {
+	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) {
 		let existing = self.seg_name_map.insert(name.into(), self.segs.len());
 		assert!(existing.is_none(), "duplicate segment name {}", name);
 
-		let fake = pbase.is_none();
+		let fake = image.is_none();
 		for (region_name, seg_name) in self.config.iter() {
 			if seg_name == name {
 				let region = self.mem_map.region_for_name(&region_name).unwrap();
@@ -127,7 +122,7 @@ impl Memory {
 		let id = self.next_seg_id;
 		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
 		self.seg_id_map.insert(id, self.segs.len());
-		self.segs.push(Segment::new(id, name, vbase, vend, pbase));
+		self.segs.push(Segment::new(id, name, vbase, vend, image));
 	}
 
 	/// Given a region name, get the Segment mapped to it (if any).
@@ -208,55 +203,36 @@ impl Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Image
 
-	/// Given a reference to a segment, get the slice of the ROM image that it segment covers,
-	/// or None if it is a fake segment.
-	pub fn get_image_slice(&self, seg: &Segment) -> Option<&[u8]> {
-		seg.get_image_slice(&self.image)
-	}
+	// pub fn read_8_va(&self, va: VA) -> Option<u8> {
+	// 	self.segment_for_va(va)
+	// 	.and_then(|seg| seg.get_image_slice_va(&self.image, va))
+	// 	.map(|slice| slice[0])
+	// }
 
-	/// Given a reference to a segment, get the slice of the ROM image starting at `va` until
-	/// the end of the segment, or None if it is a fake segment.
-	pub fn get_image_slice_va(&self, seg: &Segment, va: VA) -> Option<&[u8]> {
-		seg.get_image_slice_va(&self.image, va)
-	}
+	// pub fn read_le_16_va(&self, va: VA) -> Option<u16> {
+	// 	self.segment_for_va(va)
+	// 	.and_then(|seg| seg.get_image_slice_va(&self.image, va))
+	// 	.and_then(|slice| if slice.len() < 2 { None } else {
+	// 		Some((slice[0] as u16) | ((slice[1] as u16) << 8))
+	// 	})
+	// }
 
-	/// Given a reference to a segment, get the slice of the ROM image starting at `offs` until
-	/// the end of the segment, or None if it is a fake segment.
-	pub fn get_image_slice_offs(&self, seg: &Segment, offs: Offset) -> Option<&[u8]> {
-		seg.get_image_slice_offs(&self.image, offs)
-	}
+	// pub fn read_8_loc(&self, loc: Location) -> Option<u8> {
+	// 	self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
+	// 	.map(|slice| slice[0])
+	// }
 
-	pub fn read_8_va(&self, va: VA) -> Option<u8> {
-		self.segment_for_va(va)
-		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
-		.map(|slice| slice[0])
-	}
-
-	pub fn read_le_16_va(&self, va: VA) -> Option<u16> {
-		self.segment_for_va(va)
-		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
-		.and_then(|slice| if slice.len() < 2 { None } else {
-			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
-		})
-	}
-
-	pub fn read_8_loc(&self, loc: Location) -> Option<u8> {
-		self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
-		.map(|slice| slice[0])
-	}
-
-	pub fn read_le_16_loc(&self, loc: Location) -> Option<u16> {
-		self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
-		.and_then(|slice| if slice.len() < 2 { None } else {
-			Some((slice[0] as u16) | ((slice[1] as u16) << 8))
-		})
-	}
+	// pub fn read_le_16_loc(&self, loc: Location) -> Option<u16> {
+	// 	self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
+	// 	.and_then(|slice| if slice.len() < 2 { None } else {
+	// 		Some((slice[0] as u16) | ((slice[1] as u16) << 8))
+	// 	})
+	// }
 }
 
 impl Display for Memory {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.mem_map.len(), self.endianness)?;
-		writeln!(f, "Image: '{}' (0x{:X} bytes)", self.image.name, self.image.data.len())?;
 		writeln!(f, "\nSegments:")?;
 
 		for seg in self.segs.iter() {
