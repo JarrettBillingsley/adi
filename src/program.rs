@@ -6,8 +6,8 @@ use std::collections::{
 };
 use std::ops::{ Bound, RangeBounds };
 
-use super::memory::{ Memory, Location, VA };
-use super::disasm::types::NameLookupTrait;
+use crate::memory::{ Memory, Location, VA };
+use crate::disasm::NameLookupTrait;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

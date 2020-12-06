@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
-use crate::disasm::types::{ MemAccess };
+use crate::disasm::MemAccess;
 use super::{ InstDesc, Opcode, MetaOp, AddrMode };
 
 // ------------------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 use std::marker::PhantomData;
 
 use crate::memory::VA;
-use super::error::{ DisasResult, DisasError };
+use crate::disasm::{ DisasResult, DisasError };
 
 // ------------------------------------------------------------------------------------------------
 // MemAccess

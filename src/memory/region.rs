@@ -1,7 +1,7 @@
 use parse_display::Display;
 use derive_new::new;
 
-use super::va::VA;
+use crate::memory::VA;
 
 // ------------------------------------------------------------------------------------------------
 // Memory map regions

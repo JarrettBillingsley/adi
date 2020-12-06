@@ -3,8 +3,7 @@ use std::collections::{
 	HashMap,
 };
 
-use super::va::VA;
-use super::region::{ MemoryRegion };
+use crate::memory::{ VA, MemoryRegion };
 
 // ------------------------------------------------------------------------------------------------
 // Memory map

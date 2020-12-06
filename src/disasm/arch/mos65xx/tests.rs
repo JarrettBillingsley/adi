@@ -1,8 +1,3 @@
-// use super::*;
-// use super::descs::*;
-// use super::opcodes::*;
-// use super::types::*;
-
 use super::{
 	Opcode,
 	MetaOp,
@@ -15,7 +10,7 @@ use super::{
 	lookup_desc,
 };
 
-use crate::memory::va::VA;
+use crate::memory::VA;
 use crate::disasm::{ NameLookupTrait, DisasError, DisassemblerTrait, PrinterTrait };
 
 #[test]

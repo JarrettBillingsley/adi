@@ -5,9 +5,7 @@ use std::fmt::{ Debug, };
 use derive_new::new;
 use parse_display::Display;
 
-use super::image::{ Image, ImageSlice, ImageRead, ImageSliceable };
-use super::spans::{ SpanMap, Span };
-use super::va::VA;
+use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, VA };
 
 // ------------------------------------------------------------------------------------------------
 // SegId
