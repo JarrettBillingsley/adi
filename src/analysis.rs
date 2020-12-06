@@ -10,7 +10,7 @@ use crate::memory::segment::Location;
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-pub mod types;
+mod types;
 
 pub use types::*;
 
