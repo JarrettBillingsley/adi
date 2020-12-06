@@ -104,7 +104,7 @@ impl SpanMap {
 		assert!(offs < self.end);
 
 		use std::ops::Bound;
-		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next().map(|a| Span::new(a))
+		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next().map(Span::new)
 	}
 
 	/// Given an offset into the segment, gets the span which comes before the containing span,
@@ -118,12 +118,12 @@ impl SpanMap {
 
 		let mut iter = self.spans.range(..= offs);
 		iter.next_back();
-		iter.next_back().map(|tup| Span::new(tup))
+		iter.next_back().map(Span::new)
 	}
 
 	/// Iterator over all spans in the segment, in order.
 	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
-		self.spans.iter().map(|tup| Span::new(tup))
+		self.spans.iter().map(Span::new)
 	}
 
 	/// Define a code or data span at `start` that stretches `len` bytes.
