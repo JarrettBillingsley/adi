@@ -1,8 +1,6 @@
 use std::ops::{ Range, RangeBounds, Bound, Index };
 use std::convert::TryInto;
 
-use super::types::*;
-
 // ------------------------------------------------------------------------------------------------
 // ImageRead
 // ------------------------------------------------------------------------------------------------
@@ -42,13 +40,6 @@ impl Index<usize> for ImageSlice<'_> {
 	}
 }
 
-impl Index<Offset> for ImageSlice<'_> {
-	type Output = u8;
-	fn index(&self, idx: Offset) -> &Self::Output {
-		&self[idx.0]
-	}
-}
-
 impl ImageRead<usize> for ImageSlice<'_> {
 	fn read_u8(&self, idx: usize) -> u8 {
 		self.data[idx]
@@ -75,32 +66,6 @@ impl ImageRead<usize> for ImageSlice<'_> {
 	}
 }
 
-impl ImageRead<Offset> for ImageSlice<'_> {
-	fn read_u8(&self, idx: Offset) -> u8 {
-		self.data[idx.0]
-	}
-
-	fn read_le_u16(&self, idx: Offset) -> u16 {
-		let data = &self.data[idx.0 .. idx.0 + 2];
-		u16::from_le_bytes(data.try_into().unwrap())
-	}
-
-	fn read_be_u16(&self, idx: Offset) -> u16 {
-		let data = &self.data[idx.0 .. idx.0 + 2];
-		u16::from_be_bytes(data.try_into().unwrap())
-	}
-
-	fn read_le_u32(&self, idx: Offset) -> u32 {
-		let data = &self.data[idx.0 .. idx.0 + 4];
-		u32::from_le_bytes(data.try_into().unwrap())
-	}
-
-	fn read_be_u32(&self, idx: Offset) -> u32 {
-		let data = &self.data[idx.0 .. idx.0 + 4];
-		u32::from_be_bytes(data.try_into().unwrap())
-	}
-}
-
 // ------------------------------------------------------------------------------------------------
 // ImageSliceable
 // ------------------------------------------------------------------------------------------------
@@ -116,9 +81,9 @@ pub trait ImageSliceable<Index> {
 
 /// A read-only image of a ROM or executable, or a slice thereof.
 pub struct Image {
-	name: String,
-	data: Vec<u8>,
-	orig_offs: Offset,
+	name:      String,
+	data:      Vec<u8>,
+	orig_offs: usize,
 }
 
 impl Image {
@@ -127,7 +92,7 @@ impl Image {
 		Self {
 			name:      name.into(),
 			data:      data.into(),
-			orig_offs: Offset(0),
+			orig_offs: 0,
 		}
 	}
 
@@ -138,7 +103,7 @@ impl Image {
 	}
 
 	/// Create a *new* image whose data is a copy of a range of this one's.
-	pub fn new_from_range(&self, range: Range<Offset>) -> Image {
+	pub fn new_from_range(&self, range: Range<usize>) -> Image {
 		let (start, end) = self.check_range(range);
 
 		Image {
@@ -154,34 +119,34 @@ impl Image {
 	}
 
 	/// Get the range of the original file from which this was created.
-	pub fn orig_range(&self) -> Range<Offset> {
+	pub fn orig_range(&self) -> Range<usize> {
 		self.orig_offs .. self.orig_offs + self.data.len()
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// private
 
-	fn check_range(&self, range: Range<Offset>) -> (usize, usize) {
-		let (start, end) = (range.start.0, range.end.0);
+	fn check_range(&self, range: Range<usize>) -> (usize, usize) {
+		let (start, end) = (range.start, range.end);
 		assert!(end > start, "no zero-size slices");
 		assert!(end <= self.data.len(), "range exceeds data length");
 		(start, end)
 	}
 }
 
-impl ImageSliceable<Offset> for Image {
+impl ImageSliceable<usize> for Image {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<Offset>) -> ImageSlice {
+	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
 		let start = match range.start_bound() {
 			Bound::Included(&s) => s,
 			Bound::Excluded(&s) => s + 1,
-			Bound::Unbounded    => Offset(0),
+			Bound::Unbounded    => 0,
 		};
 
 		let end = match range.end_bound() {
 			Bound::Included(&e) => e + 1,
 			Bound::Excluded(&e) => e,
-			Bound::Unbounded    => Offset(self.data.len()),
+			Bound::Unbounded    => self.data.len(),
 		};
 
 		let (start, end) = self.check_range(start .. end);

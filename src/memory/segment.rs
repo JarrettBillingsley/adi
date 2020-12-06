@@ -28,7 +28,7 @@ impl Display for Segment {
 				let orig = image.orig_range();
 
 				write!(f, "{} (image '{}') VA [{:08X}..{:08X}) PA: [{:08X}..{:08X})",
-					self.name, image.name(), self.vbase, self.vend, orig.start.0, orig.end.0)
+					self.name, image.name(), self.vbase, self.vend, orig.start, orig.end)
 			}
 			None =>
 				write!(f, "{} (fake) VA [{:08X}..{:08X})", self.name, self.vbase, self.vend),
@@ -62,11 +62,6 @@ impl Segment {
 		self.size
 	}
 
-	/// Whether the given offset is valid for this segment.
-	pub fn contains_offset(&self, offs: Offset) -> bool {
-		offs.0 < self.size
-	}
-
 	/// Whether this segment contains a given VA.
 	pub fn contains_va(&self, addr: VA) -> bool {
 		self.vbase <= addr && addr < self.vend
@@ -87,34 +82,34 @@ impl Segment {
 
 	/// Gets the range of physical addresses this segment is mapped to.
 	/// Panics if this is a fake segment.
-	pub fn image_range(&self) -> Range<Offset> {
+	pub fn image_range(&self) -> Range<usize> {
 		self.image.as_ref().expect("fake segment!").orig_range()
 	}
 
 	/// Convenience method to get a slice of the whole image, since
 	/// `image_slice` is overloaded so `image_slice(..)` is ambiguous.
 	pub fn image_slice_all(&self) -> ImageSlice {
-		self.image_slice(Offset(0)..)
+		self.image_slice(0..)
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Conversions between segment offsets and virtual addresses
 
 	/// Given a VA, convert it to an offset into this segment.
-	pub fn offset_from_va(&self, va: VA) -> Offset {
+	pub fn offset_from_va(&self, va: VA) -> usize {
 		assert!(self.contains_va(va));
-		Offset(va - self.vbase)
+		va - self.vbase
 	}
 
 	/// Given an offset into this segment, get the VA.
-	pub fn va_from_offset(&self, offs: Offset) -> VA {
-		assert!(self.contains_offset(offs));
+	pub fn va_from_offset(&self, offs: usize) -> VA {
+		assert!(offs < self.size);
 		self.vbase + offs
 	}
 
 	/// Given VA bounds, convert them into offset bounds.
 	pub fn offset_bounds_from_va_bounds(&self, bounds: impl RangeBounds<VA>)
-	-> impl RangeBounds<Offset> {
+	-> impl RangeBounds<usize> {
 		use Bound::*;
 
 		let start = match bounds.start_bound() {
@@ -133,7 +128,7 @@ impl Segment {
 	}
 
 	/// Given offset bounds, convert them into VA bounds.
-	pub fn va_bounds_from_offset_bounds(&self, bounds: impl RangeBounds<Offset>)
+	pub fn va_bounds_from_offset_bounds(&self, bounds: impl RangeBounds<usize>)
 	-> impl RangeBounds<VA> {
 		use Bound::*;
 
@@ -156,7 +151,7 @@ impl Segment {
 	// Span management (spanagement?)
 
 	/// Get the span which contains the given offset.
-	pub fn span_from_offset(&self, offs: Offset) -> Span {
+	pub fn span_from_offset(&self, offs: usize) -> Span {
 		self.spans.span_at(offs)
 	}
 
@@ -178,9 +173,9 @@ impl ImageSliceable<VA> for Segment {
 	}
 }
 
-impl ImageSliceable<Offset> for Segment {
+impl ImageSliceable<usize> for Segment {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<Offset>) -> ImageSlice {
+	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
 		self.image.as_ref().expect("trying to slice a fake segment").image_slice(range)
 	}
 }
@@ -216,10 +211,10 @@ impl ImageRead<Location> for Segment {
 	}
 }
 
-impl ImageRead<Offset> for Segment {
-	fn read_u8    (&self, idx: Offset) -> u8  { self.image_slice_all().read_u8(idx)     }
-	fn read_le_u16(&self, idx: Offset) -> u16 { self.image_slice_all().read_le_u16(idx) }
-	fn read_be_u16(&self, idx: Offset) -> u16 { self.image_slice_all().read_be_u16(idx) }
-	fn read_le_u32(&self, idx: Offset) -> u32 { self.image_slice_all().read_le_u32(idx) }
-	fn read_be_u32(&self, idx: Offset) -> u32 { self.image_slice_all().read_be_u32(idx) }
+impl ImageRead<usize> for Segment {
+	fn read_u8    (&self, idx: usize) -> u8  { self.image_slice_all().read_u8(idx)     }
+	fn read_le_u16(&self, idx: usize) -> u16 { self.image_slice_all().read_le_u16(idx) }
+	fn read_be_u16(&self, idx: usize) -> u16 { self.image_slice_all().read_be_u16(idx) }
+	fn read_le_u32(&self, idx: usize) -> u32 { self.image_slice_all().read_le_u32(idx) }
+	fn read_be_u32(&self, idx: usize) -> u32 { self.image_slice_all().read_be_u32(idx) }
 }

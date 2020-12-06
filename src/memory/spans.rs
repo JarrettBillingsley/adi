@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use parse_display::*;
 use derive_new::*;
 
-use super::types::*;
 use crate::analysis::types::BBId;
 
 // ------------------------------------------------------------------------------------------------
@@ -17,15 +16,15 @@ use crate::analysis::types::BBId;
 #[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
 pub struct Span {
 	/// address of first byte of span.
-	pub start: Offset,
+	pub start: usize,
 	/// address of first byte after span.
-	pub end:   Offset,
+	pub end:   usize,
 	/// what kind of span it is.
 	pub kind:  SpanKind,
 }
 
 impl Span {
-	fn new((start, span): (&Offset, &SpanInternal)) -> Self {
+	fn new((start, span): (&usize, &SpanInternal)) -> Self {
 		Self { start: *start, end: span.end, kind: span.kind }
 	}
 }
@@ -63,8 +62,8 @@ pub enum SpanKind {
 ///     - that leaves two non-contiguous spans with the same owner, which makes no sense
 ///     - but it's fine to bisect an unknown span for the same reason it's fine to coalesce them.
 pub struct SpanMap {
-	spans: BTreeMap<Offset, SpanInternal>,
-	end:   Offset,
+	spans: BTreeMap<usize, SpanInternal>,
+	end:   usize,
 }
 
 // The span map actually uses this type - only the end and kind fields, since the start
@@ -72,16 +71,16 @@ pub struct SpanMap {
 #[derive(Debug)]
 #[derive(new)]
 struct SpanInternal {
-	end:  Offset,
+	end:  usize,
 	kind: SpanKind,
 }
 
 impl SpanMap {
 	/// Creates a new `SpanMap` with a single unknown span that covers the entire segment.
 	pub fn new(size: usize) -> Self {
-		let end = Offset(size);
+		let end = size;
 		let mut spans = BTreeMap::new();
-		spans.insert(Offset(0), SpanInternal::new(end, SpanKind::Unk));
+		spans.insert(0, SpanInternal::new(end, SpanKind::Unk));
 		Self { spans, end }
 	}
 
@@ -90,7 +89,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `offs` is after the last address.
-	pub fn span_at(&self, offs: Offset) -> Span {
+	pub fn span_at(&self, offs: usize) -> Span {
 		assert!(offs < self.end);
 		Span::new(self.spans.range(..= offs).next_back().expect("how even"))
 	}
@@ -101,7 +100,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `offs` is after the last address.
-	pub fn span_after(&self, offs: Offset) -> Option<Span> {
+	pub fn span_after(&self, offs: usize) -> Option<Span> {
 		assert!(offs < self.end);
 
 		use std::ops::Bound;
@@ -114,7 +113,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `offs` is after the last address.
-	pub fn span_before(&self, offs: Offset) -> Option<Span> {
+	pub fn span_before(&self, offs: usize) -> Option<Span> {
 		assert!(offs < self.end);
 
 		let mut iter = self.spans.range(..= offs);
@@ -136,7 +135,7 @@ impl SpanMap {
 	/// - if `start` is past the end of the segment.
 	/// - if `start` is not at the beginning of, or within, an unknown span.
 	/// - if `start + len` is past the end of that same span.
-	pub fn define(&mut self, start: Offset, len: usize, kind: SpanKind) {
+	pub fn define(&mut self, start: usize, len: usize, kind: SpanKind) {
 		assert_ne!(len, 0, "length cannot be 0");
 		assert_ne!(kind, SpanKind::Unk, "must give a non-unknown span kind");
 		assert!(start < self.end, "start is past end of segment");
@@ -177,7 +176,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `start` is not the beginning of a span.
-	pub fn undefine(&mut self, start: Offset) {
+	pub fn undefine(&mut self, start: usize) {
 		let old = self.span_at(start);
 		assert_eq!(start, old.start, "no span at this location");
 
@@ -228,7 +227,7 @@ impl SpanMap {
 		assert!(!spans.is_empty());
 
 		// INVARIANT: span[0].start == 0
-		assert_eq!(spans.first().unwrap().start, Offset(0));
+		assert_eq!(spans.first().unwrap().start, 0);
 
 		// INVARIANT: span[n].end == span[n + 1].start
 		// INVARIANT: span[n] and span[n + 1] can't both be undefined

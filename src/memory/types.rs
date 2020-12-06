@@ -31,13 +31,6 @@ impl AddAssign<usize> for VA {
 	}
 }
 
-impl Add<Offset> for VA {
-	type Output = Self;
-	fn add(self, other: Offset) -> Self {
-		VA(self.0 + other.0)
-	}
-}
-
 impl Sub for VA {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
@@ -48,34 +41,6 @@ impl Sub for VA {
 impl SubAssign<usize> for VA {
 	fn sub_assign(&mut self, other: usize) {
 		self.0 -= other;
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// Offset
-// ------------------------------------------------------------------------------------------------
-
-/// newtype for offsets into segments.
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Offset(pub usize);
-
-impl UpperHex for Offset {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		UpperHex::fmt(&self.0, f)
-	}
-}
-
-impl Add<usize> for Offset {
-	type Output = Self;
-	fn add(self, other: usize) -> Self {
-		Offset(self.0 + other)
-	}
-}
-
-impl Sub for Offset {
-	type Output = usize;
-	fn sub(self, other: Self) -> usize {
-		self.0 - other.0
 	}
 }
 
@@ -97,7 +62,7 @@ pub struct SegId(pub u16);
 #[display("{seg.0:04X}:{offs:08X}")]
 pub struct Location {
 	pub seg:  SegId,
-	pub offs: Offset,
+	pub offs: usize,
 }
 
 impl Debug for Location {
