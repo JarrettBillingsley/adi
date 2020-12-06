@@ -1,6 +1,7 @@
 
 use std::error::Error;
-use std::fmt::{ Display, Formatter, Result as FmtResult };
+
+use parse_display::Display;
 
 use crate::memory::VA;
 
@@ -9,27 +10,15 @@ use crate::memory::VA;
 // ------------------------------------------------------------------------------------------------
 
 /// The kinds of disassembly errors.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 pub enum DisasErrorKind {
 	/// Unknown instruction - undefined opcode.
+	#[display("unknown instruction")]
 	UnknownInstruction,
 
 	/// Ran out of bytes.
+	#[display("out of bytes (expected {expected}, got {got})")]
 	OutOfBytes { expected: usize, got: usize },
-}
-
-impl Display for DisasErrorKind {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		use DisasErrorKind::*;
-
-		match self {
-			UnknownInstruction =>
-				write!(f, "unknown instruction"),
-
-			OutOfBytes { expected, got } =>
-				write!(f, "out of bytes (expected {}, got {})", expected, got),
-		}
-	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -37,18 +26,13 @@ impl Display for DisasErrorKind {
 // ------------------------------------------------------------------------------------------------
 
 /// The disassembly error type.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[display("disassembly error at VA 0x{va:08X}: {kind}")]
 pub struct DisasError {
 	/// VA passed to `disas_instr`.
 	pub va:   VA,
 	/// kind of error.
 	pub kind: DisasErrorKind,
-}
-
-impl Display for DisasError {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "disassembly error at VA 0x{:08X}: {}", self.va, self.kind)
-	}
 }
 
 impl Error for DisasError {}

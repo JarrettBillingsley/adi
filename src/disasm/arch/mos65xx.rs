@@ -2,7 +2,7 @@ use std::default::Default;
 
 use parse_display::Display;
 
-use crate::disasm::types::{
+use crate::disasm::{
 	MemAccess,
 	OperandTrait,
 	InstructionTrait,
