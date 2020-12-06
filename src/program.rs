@@ -6,7 +6,7 @@ use std::collections::{
 };
 use std::ops::{ Bound, RangeBounds };
 
-use super::memory::*;
+use super::memory::{ Memory, Location, VA };
 use super::disasm::types::NameLookupTrait;
 
 // ------------------------------------------------------------------------------------------------

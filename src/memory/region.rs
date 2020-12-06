@@ -1,5 +1,5 @@
-use parse_display::*;
-use derive_new::*;
+use parse_display::Display;
+use derive_new::new;
 
 use super::va::VA;
 

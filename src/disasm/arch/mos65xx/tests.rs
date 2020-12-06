@@ -1,7 +1,22 @@
-use super::*;
-use super::descs::*;
-use super::opcodes::*;
-use super::types::*;
+// use super::*;
+// use super::descs::*;
+// use super::opcodes::*;
+// use super::types::*;
+
+use super::{
+	Opcode,
+	MetaOp,
+	SyntaxFlavor,
+	Disassembler,
+	Operand,
+	MemAccess,
+	Printer,
+	Instruction,
+	lookup_desc,
+};
+
+use crate::memory::va::VA;
+use crate::disasm::{ NameLookupTrait, DisasError, DisassemblerTrait, PrinterTrait };
 
 #[test]
 fn opcode_lookup() {

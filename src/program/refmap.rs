@@ -1,5 +1,5 @@
 
-use derive_new::*;
+use derive_new::new;
 
 use std::collections::{
 	BTreeMap,
@@ -102,15 +102,16 @@ impl RefMap {
 mod tests {
 	use super::*;
 	use std::iter::FromIterator;
+	use crate::memory::segment::SegId;
 
 	#[test]
 	fn basic() {
 		let mut ref_map = RefMap::new();
-		let a = Location::new(SegId(0), Offset(0x00));
-		let b = Location::new(SegId(0), Offset(0x10));
-		let c = Location::new(SegId(0), Offset(0x20));
-		let d = Location::new(SegId(0), Offset(0x30));
-		let e = Location::new(SegId(0), Offset(0x40));
+		let a = Location::new(SegId(0), 0x00);
+		let b = Location::new(SegId(0), 0x10);
+		let c = Location::new(SegId(0), 0x20);
+		let d = Location::new(SegId(0), 0x30);
+		let e = Location::new(SegId(0), 0x40);
 
 		// one-to-many
 		ref_map.add(a, b);

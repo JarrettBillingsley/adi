@@ -2,7 +2,7 @@
 use std::error::Error;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
-use crate::memory::*;
+use crate::memory::VA;
 
 // ------------------------------------------------------------------------------------------------
 // DisasErrorKind

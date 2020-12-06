@@ -1,8 +1,8 @@
 
 use std::marker::PhantomData;
 
-use crate::memory::*;
-use super::error::*;
+use crate::memory::VA;
+use super::error::{ DisasResult, DisasError };
 
 // ------------------------------------------------------------------------------------------------
 // MemAccess

@@ -1,12 +1,17 @@
-use std::collections::HashMap;
 use std::default::Default;
 
-use lazy_static::*;
-use parse_display::*;
+use parse_display::Display;
 
-use crate::disasm::types::*;
-use crate::disasm::error::*;
-use crate::memory::va::*;
+use crate::disasm::types::{
+	MemAccess,
+	OperandTrait,
+	InstructionTrait,
+	PrinterTrait,
+	NameLookupTrait,
+	DisassemblerTrait,
+};
+use crate::disasm::error::{ DisasError, DisasResult };
+use crate::memory::va::VA;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -18,8 +23,8 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-use descs::*;
-use opcodes::*;
+use descs::{ lookup_desc };
+use opcodes::{ Opcode };
 pub use types::*;
 
 // ------------------------------------------------------------------------------------------------

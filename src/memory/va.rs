@@ -1,4 +1,4 @@
-use parse_display::*;
+use parse_display::Display;
 
 use std::ops::{ Add, AddAssign, Sub, SubAssign };
 use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };

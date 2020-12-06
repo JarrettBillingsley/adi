@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
-use parse_display::*;
+use parse_display::Display;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

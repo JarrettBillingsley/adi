@@ -4,7 +4,7 @@ use std::collections::{
 };
 
 use super::va::VA;
-use super::region::*;
+use super::region::{ MemoryRegion };
 
 // ------------------------------------------------------------------------------------------------
 // Memory map

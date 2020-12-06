@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use parse_display::*;
-use derive_new::*;
+use parse_display::Display;
+use derive_new::new;
 
 use crate::analysis::types::BBId;
 

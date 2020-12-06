@@ -2,11 +2,11 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::ops::{ Range, RangeBounds, Bound };
 use std::fmt::{ Debug, };
 
-use derive_new::*;
-use parse_display::*;
+use derive_new::new;
+use parse_display::Display;
 
-use super::image::*;
-use super::spans::*;
+use super::image::{ Image, ImageSlice, ImageRead, ImageSliceable };
+use super::spans::{ SpanMap, Span };
 use super::va::VA;
 
 // ------------------------------------------------------------------------------------------------

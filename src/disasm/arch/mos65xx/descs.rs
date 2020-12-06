@@ -1,5 +1,9 @@
+use std::collections::HashMap;
 
-use super::*;
+use lazy_static::lazy_static;
+
+use crate::disasm::types::{ MemAccess };
+use super::{ InstDesc, Opcode, MetaOp, AddrMode };
 
 // ------------------------------------------------------------------------------------------------
 // InstDesc table

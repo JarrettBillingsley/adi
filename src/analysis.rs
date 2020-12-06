@@ -1,7 +1,7 @@
 
 use std::collections::VecDeque;
 
-use derive_new::*;
+use derive_new::new;
 
 use crate::program::Program;
 use crate::memory::segment::Location;
