@@ -54,7 +54,7 @@ pub trait InstructionTrait {
 	type TOperand: OperandTrait;
 
 	/// Get virtual address.
-	fn va(&self) -> VAddr;
+	fn va(&self) -> VA;
 	/// Get size, in bytes.
 	fn size(&self) -> usize;
 	/// How many operands it has.
@@ -93,10 +93,10 @@ pub trait DisassemblerTrait {
 	type TInstruction: InstructionTrait;
 
 	/// Disassemble a single instruction from `img[offs..]` with the given VA.
-	fn disas_instr(&self, img: &[u8], va: VAddr) -> DisasResult<Self::TInstruction>;
+	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>;
 
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
-	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VAddr)
+	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VA)
 		-> DisasAll<'dis, 'img, Self>
 	where Self: Sized {
 		DisasAll::new(self, img, va)
@@ -118,14 +118,14 @@ pub trait DisassemblerTrait {
 pub struct DisasAll<'dis, 'img, D: DisassemblerTrait> {
 	disas: &'dis D,
 	img:   &'img [u8],
-	va:    VAddr,
+	va:    VA,
 	offs:  usize,
 	err:   Option<DisasError>,
 	_inst: PhantomData<<D as DisassemblerTrait>::TInstruction>,
 }
 
 impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
-	fn new(disas: &'dis D, img: &'img [u8], va: VAddr) -> Self {
+	fn new(disas: &'dis D, img: &'img [u8], va: VA) -> Self {
 		Self { disas, img, va, offs: 0, err: None, _inst: PhantomData }
 	}
 
@@ -193,14 +193,14 @@ pub trait PrinterTrait {
 
 /// Trait to abstract the process of looking up names of addresses.
 pub trait NameLookupTrait {
-	fn lookup(&self, addr: VAddr) -> Option<String>;
+	fn lookup(&self, addr: VA) -> Option<String>;
 }
 
 /// A dummy struct that implements `NameLookupTrait` whose `lookup` method always returns `None`.
 pub struct NullLookup;
 
 impl NameLookupTrait for NullLookup {
-	fn lookup(&self, _addr: VAddr) -> Option<String> {
+	fn lookup(&self, _addr: VA) -> Option<String> {
 		None
 	}
 }

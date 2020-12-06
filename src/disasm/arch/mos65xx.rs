@@ -133,7 +133,7 @@ const MAX_BYTES: usize = 3;
 /// A 65xx instruction.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Instruction {
-	va:    VAddr,
+	va:    VA,
 	desc:  InstDesc,
 	size:  usize,
 	op:    Option<Operand>,
@@ -141,7 +141,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-	fn new(va: VAddr, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
+	fn new(va: VA, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
 	-> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
@@ -152,7 +152,7 @@ impl Instruction {
 impl InstructionTrait for Instruction {
 	type TOperand = Operand;
 
-	fn va(&self) -> VAddr                 { self.va }
+	fn va(&self) -> VA                 { self.va }
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
 	fn get_op(&self, i: usize) -> Operand {
@@ -183,7 +183,7 @@ pub struct Disassembler;
 impl DisassemblerTrait for Disassembler {
 	type TInstruction = Instruction;
 
-	fn disas_instr(&self, img: &[u8], va: VAddr) -> DisasResult<Instruction> {
+	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {
 			return Err(DisasError::out_of_bytes(va, 1, 0));
@@ -210,7 +210,7 @@ impl DisassemblerTrait for Disassembler {
 	}
 }
 
-fn decode_operand(desc: InstDesc, va: VAddr, img: &[u8]) -> Option<Operand> {
+fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> Option<Operand> {
 	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
 		if let Some(access) = desc.access {
@@ -284,7 +284,7 @@ impl PrinterTrait for Printer {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::Imm(imm)      => self.fmt_imm(imm),
 				Operand::Mem(addr, ..) => {
-					match l.lookup(VAddr(addr as usize)) {
+					match l.lookup(VA(addr as usize)) {
 						Some(name) => name,
 						None       => self.fmt_addr(addr, i.desc.addr_mode.is_zero_page()),
 					}

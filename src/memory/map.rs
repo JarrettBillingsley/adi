@@ -22,9 +22,9 @@ pub struct MemoryMap {
 	/// all the memory regions in the memory map.
 	regions:    Vec<MemoryRegion>,
 	/// the first invalid address, and the size of the virtual address space.
-	pub end:    VAddr,
+	pub end:    VA,
 	/// maps from virtual addresses to an index into `regions`.
-	addr_map:   BTreeMap<VAddr, usize>,  // from VAs to `regions` index
+	addr_map:   BTreeMap<VA, usize>,  // from VAs to `regions` index
 	/// maps from names into `regions`.
 	name_map:   HashMap<String, usize>, // from names to `regions` index
 }
@@ -64,7 +64,7 @@ impl MemoryMap {
 			digits: ((bits + 3) & !3) >> 2,
 			regions: regions.into(),
 
-			end: VAddr(2_usize.pow(bits as u32)),
+			end: VA(2_usize.pow(bits as u32)),
 			addr_map,
 			name_map,
 		}
@@ -74,7 +74,7 @@ impl MemoryMap {
 	pub fn len(&self) -> usize { self.end.0 }
 
 	/// Given a virtual address, get the memory region which contains it, if any.
-	pub fn region_for_va(&self, va: VAddr) -> Option<&MemoryRegion> {
+	pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion> {
 		assert!(va < self.end);
 
 		// find the last entry whose start <= va

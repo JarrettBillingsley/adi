@@ -12,8 +12,8 @@ use super::spans::*;
 pub struct Segment {
 	pub id:    SegId,
 	pub name:  String,
-	pub vbase: VAddr,
-	pub vend:  VAddr,
+	pub vbase: VA,
+	pub vend:  VA,
 	pub size:  usize,
 	pub spans: SpanMap,
 	pub image: Option<ImageRange>,
@@ -35,7 +35,7 @@ impl Display for Segment {
 impl Segment {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
-	pub fn new(id: SegId, name: &str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) -> Self {
+	pub fn new(id: SegId, name: &str, vbase: VA, vend: VA, pbase: Option<PA>) -> Self {
 		let size = vend - vbase;
 		let image = pbase.map(|pbase| ImageRange { pbase, pend: pbase + size });
 
@@ -71,19 +71,19 @@ impl Segment {
 	/// Given a ROM image, get the slice of that image that this segment covers,
 	/// or None if this is a fake segment.
 	pub(crate) fn get_image_slice<'img>(&self, image: &'img RomImage) -> Option<&'img [u8]> {
-		self.get_image_slice_offs(image, SegOffset(0))
+		self.get_image_slice_offs(image, Offset(0))
 	}
 
 	/// Given a ROM image, get the slice of that image starting at `va` until the end
 	/// of the segment, or None if this is a fake segment.
-	pub(crate) fn get_image_slice_va<'img>(&self, image: &'img RomImage, va: VAddr)
+	pub(crate) fn get_image_slice_va<'img>(&self, image: &'img RomImage, va: VA)
 	-> Option<&'img [u8]> {
 		self.get_image_slice_offs(image, self.offset_from_va(va))
 	}
 
 	/// Given a ROM image, get the slice of that image starting at `offs` until the end
 	/// of the segment, or None if this is a fake segment.
-	pub(crate) fn get_image_slice_offs<'img>(&self, image: &'img RomImage, offs: SegOffset)
+	pub(crate) fn get_image_slice_offs<'img>(&self, image: &'img RomImage, offs: Offset)
 	-> Option<&'img [u8]> {
 		match self.image {
 			Some(range) => Some(&image.data[range.pbase.0 + offs.0 .. range.pend.0]),
@@ -92,12 +92,12 @@ impl Segment {
 	}
 
 	/// Whether the given offset is valid for this segment.
-	pub fn contains_offset(&self, offs: SegOffset) -> bool {
+	pub fn contains_offset(&self, offs: Offset) -> bool {
 		offs.0 < self.size
 	}
 
 	/// Whether this segment contains a given VA.
-	pub fn contains_va(&self, addr: VAddr) -> bool {
+	pub fn contains_va(&self, addr: VA) -> bool {
 		self.vbase <= addr && addr < self.vend
 	}
 
@@ -107,7 +107,7 @@ impl Segment {
 	}
 
 	/// Whether this segment contains a given PA.
-	pub fn contains_pa(&self, addr: PAddr) -> bool {
+	pub fn contains_pa(&self, addr: PA) -> bool {
 		match self.image {
 			Some(i) => i.pbase <= addr && addr < i.pend,
 			None    => false,
@@ -128,40 +128,40 @@ impl Segment {
 	// (remains to be seen how many of these are actually used in practice)
 
 	/// Given a VA, convert it to an offset into this segment.
-	pub fn offset_from_va(&self, va: VAddr) -> SegOffset {
+	pub fn offset_from_va(&self, va: VA) -> Offset {
 		assert!(self.contains_va(va));
-		SegOffset(va - self.vbase)
+		Offset(va - self.vbase)
 	}
 
 	/// Given a PA, convert it to an offset into this segment.
-	pub fn offset_from_pa(&self, pa: PAddr) -> SegOffset {
+	pub fn offset_from_pa(&self, pa: PA) -> Offset {
 		assert!(self.contains_pa(pa));
 		let pbase = self.get_image_range().pbase;
-		SegOffset(pa - pbase)
+		Offset(pa - pbase)
 	}
 
 	/// Given an offset into this segment, get the VA.
-	pub fn va_from_offset(&self, offs: SegOffset) -> VAddr {
+	pub fn va_from_offset(&self, offs: Offset) -> VA {
 		assert!(self.contains_offset(offs));
 		self.vbase + offs
 	}
 
 	/// Given a PA in this segment, get the VA.
-	pub fn va_from_pa(&self, pa: PAddr) -> VAddr {
+	pub fn va_from_pa(&self, pa: PA) -> VA {
 		assert!(self.contains_pa(pa));
 		let pbase = self.get_image_range().pbase;
 		self.vbase + (pa - pbase)
 	}
 
 	/// Given an offset into this segment, get the PA.
-	pub fn pa_from_offset(&self, offs: SegOffset) -> PAddr {
+	pub fn pa_from_offset(&self, offs: Offset) -> PA {
 		assert!(self.contains_offset(offs));
 		let pbase = self.get_image_range().pbase;
 		pbase + offs
 	}
 
 	/// Given a VA in this segment, get the PA.
-	pub fn pa_from_va(&self, va: VAddr) -> PAddr {
+	pub fn pa_from_va(&self, va: VA) -> PA {
 		assert!(self.contains_va(va));
 		let pbase = self.get_image_range().pbase;
 		pbase + (va - self.vbase)
@@ -171,17 +171,17 @@ impl Segment {
 	// Span management (spanagement?)
 
 	/// Get the span which contains the given offset.
-	pub fn span_from_offset(&self, offs: SegOffset) -> Span {
+	pub fn span_from_offset(&self, offs: Offset) -> Span {
 		self.spans.span_at(offs)
 	}
 
 	/// Get the span which contains the given VA.
-	pub fn span_from_va(&self, va: VAddr) -> Span {
+	pub fn span_from_va(&self, va: VA) -> Span {
 		self.spans.span_at(self.offset_from_va(va))
 	}
 
 	/// Get the span which contains the given PA.
-	pub fn span_from_pa(&self, pa: PAddr) -> Span {
+	pub fn span_from_pa(&self, pa: PA) -> Span {
 		self.spans.span_at(self.offset_from_pa(pa))
 	}
 

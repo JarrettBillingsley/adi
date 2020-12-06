@@ -56,7 +56,7 @@ impl Program {
 	}
 
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique Location.
-	pub fn add_name_va(&mut self, name: &str, va: VAddr) {
+	pub fn add_name_va(&mut self, name: &str, va: VA) {
 		let loc = self.mem.va_to_loc(va).unwrap();
 		self.add_name(name, loc);
 	}
@@ -108,14 +108,14 @@ impl Program {
 	}
 
 	/// All (Location, name) pairs in a given range of VAs, in Location order.
-	pub fn names_in_va_range(&self, range: impl RangeBounds<VAddr>)
+	pub fn names_in_va_range(&self, range: impl RangeBounds<VA>)
 	-> BTreeRange<'_, Location, String> {
 		let range = va_range_to_loc_range(range, |va| self.mem.va_to_loc(va).unwrap());
 		self.names_in_range(range)
 	}
 
 	/// Gets the name of a given VA if one exists, or generates one if not.
-	pub fn name_of_va(&self, va: VAddr) -> String {
+	pub fn name_of_va(&self, va: VA) -> String {
 		if let Some(loc) = self.mem.va_to_loc(va) {
 			self.name_of_loc(loc)
 		// no mapped segment?? uhhhh....... try region name?
@@ -150,18 +150,18 @@ impl Program {
 		}
 	}
 
-	fn generate_name(&self, base: &str, va: VAddr) -> String {
+	fn generate_name(&self, base: &str, va: VA) -> String {
 		format!("{}_{}_{}", base, AUTOGEN_NAME_PREFIX, self.mem.fmt_addr(va.0))
 	}
 }
 
 impl NameLookupTrait for Program {
-	fn lookup(&self, addr: VAddr) -> Option<String> {
+	fn lookup(&self, addr: VA) -> Option<String> {
 		Some(self.name_of_va(addr))
 	}
 }
 
-fn va_range_to_loc_range(range: impl RangeBounds<VAddr>, f: impl Fn(VAddr) -> Location)
+fn va_range_to_loc_range(range: impl RangeBounds<VA>, f: impl Fn(VA) -> Location)
 -> impl RangeBounds<Location> {
 	// this is the right way to convert RangeBounds but it feels so wrong.
 	let start = match range.start_bound() {

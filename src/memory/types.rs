@@ -5,81 +5,81 @@ use std::ops::{ Add, AddAssign, Sub, SubAssign };
 use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };
 
 // ------------------------------------------------------------------------------------------------
-// VAddr
+// VA
 // ------------------------------------------------------------------------------------------------
 
 /// newtype for virtual addresses.
 #[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct VAddr(pub usize);
+pub struct VA(pub usize);
 
-impl UpperHex for VAddr {
+impl UpperHex for VA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		UpperHex::fmt(&self.0, f)
 	}
 }
 
-impl Add<usize> for VAddr {
+impl Add<usize> for VA {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
-		VAddr(self.0 + other)
+		VA(self.0 + other)
 	}
 }
 
-impl AddAssign<usize> for VAddr {
+impl AddAssign<usize> for VA {
 	fn add_assign(&mut self, other: usize) {
 		self.0 += other;
 	}
 }
 
-impl Add<SegOffset> for VAddr {
+impl Add<Offset> for VA {
 	type Output = Self;
-	fn add(self, other: SegOffset) -> Self {
-		VAddr(self.0 + other.0)
+	fn add(self, other: Offset) -> Self {
+		VA(self.0 + other.0)
 	}
 }
 
-impl Sub for VAddr {
+impl Sub for VA {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
 		self.0 - other.0
 	}
 }
 
-impl SubAssign<usize> for VAddr {
+impl SubAssign<usize> for VA {
 	fn sub_assign(&mut self, other: usize) {
 		self.0 -= other;
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-// PAddr
+// PA
 // ------------------------------------------------------------------------------------------------
 
 /// newtype for physical addresses (i.e. offsets into an image).
 #[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct PAddr(pub usize);
+pub struct PA(pub usize);
 
-impl UpperHex for PAddr {
+impl UpperHex for PA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		UpperHex::fmt(&self.0, f)
 	}
 }
 
-impl Add<usize> for PAddr {
+impl Add<usize> for PA {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
-		PAddr(self.0 + other)
+		PA(self.0 + other)
 	}
 }
 
-impl Add<SegOffset> for PAddr {
+impl Add<Offset> for PA {
 	type Output = Self;
-	fn add(self, other: SegOffset) -> Self {
-		PAddr(self.0 + other.0)
+	fn add(self, other: Offset) -> Self {
+		PA(self.0 + other.0)
 	}
 }
 
-impl Sub for PAddr {
+impl Sub for PA {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
 		self.0 - other.0
@@ -87,27 +87,27 @@ impl Sub for PAddr {
 }
 
 // ------------------------------------------------------------------------------------------------
-// SegOffset
+// Offset
 // ------------------------------------------------------------------------------------------------
 
 /// newtype for offsets into segments.
 #[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct SegOffset(pub usize);
+pub struct Offset(pub usize);
 
-impl UpperHex for SegOffset {
+impl UpperHex for Offset {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		UpperHex::fmt(&self.0, f)
 	}
 }
 
-impl Add<usize> for SegOffset {
+impl Add<usize> for Offset {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
-		SegOffset(self.0 + other)
+		Offset(self.0 + other)
 	}
 }
 
-impl Sub for SegOffset {
+impl Sub for Offset {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
 		self.0 - other.0
@@ -132,7 +132,7 @@ pub struct SegId(pub u16);
 #[display("{seg.0:04X}:{offs:08X}")]
 pub struct Location {
 	pub seg:  SegId,
-	pub offs: SegOffset,
+	pub offs: Offset,
 }
 
 impl Debug for Location {
@@ -159,8 +159,8 @@ pub struct RomImage {
 /// A range of physical addresses within an image.
 #[derive(Debug, Clone, Copy)]
 pub struct ImageRange {
-	pub pbase: PAddr,
-	pub pend:  PAddr,
+	pub pbase: PA,
+	pub pend:  PA,
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -15,9 +15,9 @@ pub struct MemoryRegion {
 	/// Human-readable name.
 	pub name: String,
 	/// Address of first byte.
-	pub base: VAddr,
+	pub base: VA,
 	/// Address of first byte *after* this region.
-	pub end:  VAddr,
+	pub end:  VA,
 	/// Whether this is provided by the hardware or by a cartridge etc.
 	pub hw:   bool,
 	/// What kind of thing is at these addresses.

@@ -21,13 +21,13 @@ fn test_nes() -> std::io::Result<()> {
 
 	let map = MemoryMap::new(16, &[
 		// default
-		MemoryRegion::new("RAM".into(),     VAddr(0x0000), VAddr(0x0800),  true, Ram   ),
-		MemoryRegion::new("RAMECHO".into(), VAddr(0x0800), VAddr(0x2000),  true, Mirror),
-		MemoryRegion::new("PPU".into(),     VAddr(0x2000), VAddr(0x2008),  true, Mmio  ),
-		MemoryRegion::new("PPUECHO".into(), VAddr(0x2008), VAddr(0x4000),  true, Mirror),
-		MemoryRegion::new("IOREG".into(),   VAddr(0x4000), VAddr(0x4020),  true, Mmio  ),
+		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  true, Ram   ),
+		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  true, Mirror),
+		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  true, Mmio  ),
+		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  true, Mirror),
+		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  true, Mmio  ),
 		// ROM-specific
-		MemoryRegion::new("PRGROM".into(),  VAddr(0x8000), VAddr(0x10000), false, Rom),
+		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), false, Rom),
 	]);
 
 	let config = MemoryConfig::from_iter(&[
@@ -44,11 +44,11 @@ fn test_nes() -> std::io::Result<()> {
 	let mut mem = Memory::new(Endian::Little, map, config, img);
 
 	// default
-	mem.add_segment("RAM",   VAddr(0x0000), VAddr(0x0800), None);
-	mem.add_segment("PPU",   VAddr(0x2000), VAddr(0x2008), None);
-	mem.add_segment("IOREG", VAddr(0x4000), VAddr(0x4020), None);
+	mem.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
+	mem.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
+	mem.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
 	// ROM-specific
-	mem.add_segment("PRG0",  VAddr(0x8000), VAddr(0x10000), Some(PAddr(0)));
+	mem.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(PA(0)));
 
 	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
@@ -62,28 +62,28 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	for (loc, name) in prog.names_in_va_range(..VAddr(0x2004)) {
+	for (loc, name) in prog.names_in_va_range(..VA(0x2004)) {
 		println!("{}: {}", loc, name);
 	}
 
 	println!();
 
-	println!("name for 0x2000: {}", prog.name_of_va(VAddr(0x2000)));
-	println!("name for 0x2001: {}", prog.name_of_va(VAddr(0x2001)));
-	println!("name for 0x2008: {}", prog.name_of_va(VAddr(0x2008)));
-	println!("name for 0x0400: {}", prog.name_of_va(VAddr(0x0400)));
-	println!("name for 0x5000: {}", prog.name_of_va(VAddr(0x5000)));
-	println!("name for 0x8000: {}", prog.name_of_va(VAddr(0x8000)));
+	println!("name for 0x2000: {}", prog.name_of_va(VA(0x2000)));
+	println!("name for 0x2001: {}", prog.name_of_va(VA(0x2001)));
+	println!("name for 0x2008: {}", prog.name_of_va(VA(0x2008)));
+	println!("name for 0x0400: {}", prog.name_of_va(VA(0x0400)));
+	println!("name for 0x5000: {}", prog.name_of_va(VA(0x5000)));
+	println!("name for 0x8000: {}", prog.name_of_va(VA(0x8000)));
 
 	println!();
 
-	println!("location for 0x0000: {:?}", mem.va_to_loc(VAddr(0x0000)));
-	println!("location for 0x2000: {:?}", mem.va_to_loc(VAddr(0x2000)));
-	println!("location for 0x2001: {:?}", mem.va_to_loc(VAddr(0x2001)));
-	println!("location for 0x2008: {:?}", mem.va_to_loc(VAddr(0x2008)));
-	println!("location for 0x0400: {:?}", mem.va_to_loc(VAddr(0x0400)));
-	println!("location for 0x5000: {:?}", mem.va_to_loc(VAddr(0x5000)));
-	println!("location for 0x8000: {:?}", mem.va_to_loc(VAddr(0x8000)));
+	println!("location for 0x0000: {:?}", mem.va_to_loc(VA(0x0000)));
+	println!("location for 0x2000: {:?}", mem.va_to_loc(VA(0x2000)));
+	println!("location for 0x2001: {:?}", mem.va_to_loc(VA(0x2001)));
+	println!("location for 0x2008: {:?}", mem.va_to_loc(VA(0x2008)));
+	println!("location for 0x0400: {:?}", mem.va_to_loc(VA(0x0400)));
+	println!("location for 0x5000: {:?}", mem.va_to_loc(VA(0x5000)));
+	println!("location for 0x8000: {:?}", mem.va_to_loc(VA(0x8000)));
 
 	println!();
 
@@ -94,7 +94,7 @@ fn test_nes() -> std::io::Result<()> {
 	let disas = Disassembler;
 	let print = Printer::new(SyntaxFlavor::New);
 
-	let mut iter = disas.disas_all(&prg0[..10], VAddr(0x8000));
+	let mut iter = disas.disas_all(&prg0[..10], VA(0x8000));
 
 	for inst in &mut iter {
 		print!("0x{:4X}  ", inst.va());
@@ -125,7 +125,7 @@ fn test_nes() -> std::io::Result<()> {
 
 fn setup_nes_labels(prog: &mut Program) {
 	for StdName(name, addr) in NES_STD_NAMES {
-		prog.add_name_va(name, VAddr(*addr));
+		prog.add_name_va(name, VA(*addr));
 	}
 }
 

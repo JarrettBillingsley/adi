@@ -106,11 +106,11 @@ mod tests {
 	#[test]
 	fn basic() {
 		let mut ref_map = RefMap::new();
-		let a = Location::new(SegId(0), SegOffset(0x00));
-		let b = Location::new(SegId(0), SegOffset(0x10));
-		let c = Location::new(SegId(0), SegOffset(0x20));
-		let d = Location::new(SegId(0), SegOffset(0x30));
-		let e = Location::new(SegId(0), SegOffset(0x40));
+		let a = Location::new(SegId(0), Offset(0x00));
+		let b = Location::new(SegId(0), Offset(0x10));
+		let c = Location::new(SegId(0), Offset(0x20));
+		let d = Location::new(SegId(0), Offset(0x30));
+		let e = Location::new(SegId(0), Offset(0x40));
 
 		// one-to-many
 		ref_map.add(a, b);

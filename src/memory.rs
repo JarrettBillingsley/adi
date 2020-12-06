@@ -82,7 +82,7 @@ impl Memory {
 	// Regions
 
 	/// Given a range of two VAs, do they cross over the boundary between two regions?
-	pub fn range_crosses_regions(&self, start: VAddr, end: VAddr) -> bool {
+	pub fn range_crosses_regions(&self, start: VA, end: VA) -> bool {
 		assert!(end > start);
 
 		match (self.mem_map.region_for_va(start), self.mem_map.region_for_va(end)) {
@@ -93,7 +93,7 @@ impl Memory {
 	}
 
 	/// Given a virtual address, get the memory region which contains it, if any.
-	pub fn region_for_va(&self, va: VAddr) -> Option<&MemoryRegion> {
+	pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion> {
 		self.mem_map.region_for_va(va)
 	}
 
@@ -111,7 +111,7 @@ impl Memory {
 	///
 	/// - if `name` is already the name of an existing segment.
 	/// - if the segment is mapped to a bankable region, but `pbase` is `None`.
-	pub fn add_segment(&mut self, name: &str, vbase: VAddr, vend: VAddr, pbase: Option<PAddr>) {
+	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, pbase: Option<PA>) {
 		let existing = self.seg_name_map.insert(name.into(), self.segs.len());
 		assert!(existing.is_none(), "duplicate segment name {}", name);
 
@@ -137,14 +137,14 @@ impl Memory {
 	}
 
 	/// Given a VA, get the Segment which contains it (if any).
-	pub fn segment_for_va(&self, va: VAddr) -> Option<&Segment> {
+	pub fn segment_for_va(&self, va: VA) -> Option<&Segment> {
 		self.mem_map.region_for_va(va)
 			.and_then(|region| self.config.segment_for_region(&region.name))
 			.and_then(|name|   self.segment_for_name(name))
 	}
 
 	/// Same as above but mutable.
-	pub fn segment_for_va_mut(&mut self, va: VAddr) -> Option<&mut Segment> {
+	pub fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment> {
 		let idx = self.mem_map.region_for_va(va)
 			.and_then(|region| self.config.segment_for_region(&region.name))
 			.and_then(|name|   self.seg_name_map.get(name));
@@ -184,7 +184,7 @@ impl Memory {
 
 	/// Tries to find a unique location for the given VA.
 	/// If there is no mapping, or if the region is bankable, returns None.
-	pub fn va_to_loc(&self, va: VAddr) -> Option<Location> {
+	pub fn va_to_loc(&self, va: VA) -> Option<Location> {
 		self.mem_map.region_for_va(va)
 		.and_then(|region| {
 			if region.is_bankable() {
@@ -216,23 +216,23 @@ impl Memory {
 
 	/// Given a reference to a segment, get the slice of the ROM image starting at `va` until
 	/// the end of the segment, or None if it is a fake segment.
-	pub fn get_image_slice_va(&self, seg: &Segment, va: VAddr) -> Option<&[u8]> {
+	pub fn get_image_slice_va(&self, seg: &Segment, va: VA) -> Option<&[u8]> {
 		seg.get_image_slice_va(&self.image, va)
 	}
 
 	/// Given a reference to a segment, get the slice of the ROM image starting at `offs` until
 	/// the end of the segment, or None if it is a fake segment.
-	pub fn get_image_slice_offs(&self, seg: &Segment, offs: SegOffset) -> Option<&[u8]> {
+	pub fn get_image_slice_offs(&self, seg: &Segment, offs: Offset) -> Option<&[u8]> {
 		seg.get_image_slice_offs(&self.image, offs)
 	}
 
-	pub fn read_8_va(&self, va: VAddr) -> Option<u8> {
+	pub fn read_8_va(&self, va: VA) -> Option<u8> {
 		self.segment_for_va(va)
 		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
 		.map(|slice| slice[0])
 	}
 
-	pub fn read_le_16_va(&self, va: VAddr) -> Option<u16> {
+	pub fn read_le_16_va(&self, va: VA) -> Option<u16> {
 		self.segment_for_va(va)
 		.and_then(|seg| seg.get_image_slice_va(&self.image, va))
 		.and_then(|slice| if slice.len() < 2 { None } else {

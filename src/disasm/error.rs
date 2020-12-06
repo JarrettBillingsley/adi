@@ -40,7 +40,7 @@ impl Display for DisasErrorKind {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct DisasError {
 	/// VA passed to `disas_instr`.
-	pub va:   VAddr,
+	pub va:   VA,
 	/// kind of error.
 	pub kind: DisasErrorKind,
 }
@@ -55,12 +55,12 @@ impl Error for DisasError {}
 
 impl DisasError {
 	/// Shorthand constructors.
-	pub fn out_of_bytes(va: VAddr, expected: usize, got: usize) -> DisasError {
+	pub fn out_of_bytes(va: VA, expected: usize, got: usize) -> DisasError {
 		DisasError { va, kind: DisasErrorKind::OutOfBytes { expected, got } }
 	}
 
 	/// Ditto.
-	pub fn unknown_instruction(va: VAddr) -> DisasError {
+	pub fn unknown_instruction(va: VA) -> DisasError {
 		DisasError { va, kind: DisasErrorKind::UnknownInstruction }
 	}
 }

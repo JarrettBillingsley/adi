@@ -29,11 +29,11 @@ fn mnemonics() {
 	let size = desc.addr_mode.op_bytes() + 1;
 	let mut operands = Operands::new();
 	for op in ops { operands.push(*op); }
-	Instruction::new(VAddr(va), desc, size, operands)
+	Instruction::new(VA(va), desc, size, operands)
 } */
 
 fn disas(va: usize, img: &[u8]) -> Instruction {
-	let va = VAddr(va);
+	let va = VA(va);
 	match Disassembler.disas_instr(img, va) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
@@ -41,7 +41,7 @@ fn disas(va: usize, img: &[u8]) -> Instruction {
 }
 
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
-	let va = VAddr(va);
+	let va = VA(va);
 	match Disassembler.disas_instr(img, va) {
 		Ok(inst) => {
 			assert_eq!(inst.va, va);
@@ -56,7 +56,7 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 }
 
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
-	let va = VAddr(va);
+	let va = VA(va);
 	match Disassembler.disas_instr(img, va) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
@@ -130,7 +130,7 @@ fn disasm_range() {
 	];
 
 	let p = Printer::new(SyntaxFlavor::Old);
-	let mut iter = Disassembler.disas_all(code, VAddr(0));
+	let mut iter = Disassembler.disas_all(code, VA(0));
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
@@ -148,18 +148,18 @@ fn disasm_range() {
 fn disasm_failure() {
 	use Opcode::*;
 
-	check_fail(0, &[],                    DisasError::out_of_bytes(VAddr(0), 1, 0));
-	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VAddr(0)));
-	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VAddr(0)));
-	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VAddr(0), 2, 1));
-	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VAddr(0), 3, 1));
-	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VAddr(0), 3, 2));
+	check_fail(0, &[],                    DisasError::out_of_bytes(VA(0), 1, 0));
+	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VA(0)));
+	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VA(0)));
+	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VA(0), 2, 1));
+	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VA(0), 3, 1));
+	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VA(0), 3, 2));
 }
 
 struct DummyLookup;
 
 impl NameLookupTrait for DummyLookup {
-	fn lookup(&self, addr: VAddr) -> Option<String> {
+	fn lookup(&self, addr: VA) -> Option<String> {
 		match addr.0 {
 			0x0030 => Some("v_ztable".into()),
 			0xBEEF => Some("beefmaster".into()),
