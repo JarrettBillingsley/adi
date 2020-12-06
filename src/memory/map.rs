@@ -3,7 +3,7 @@ use std::collections::{
 	HashMap,
 };
 
-use super::types::*;
+use super::va::VA;
 use super::region::*;
 
 // ------------------------------------------------------------------------------------------------

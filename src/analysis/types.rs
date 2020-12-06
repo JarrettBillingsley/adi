@@ -5,7 +5,7 @@ use std::slice;
 
 use generational_arena::{ Arena, Index };
 
-use crate::memory::types::Location;
+use crate::memory::segment::Location;
 
 // ------------------------------------------------------------------------------------------------
 // Function

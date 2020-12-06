@@ -8,7 +8,7 @@ use std::collections::{
 	btree_map::Iter as BTreeIter,
 };
 
-use crate::memory::types::*;
+use crate::memory::segment::Location;
 
 // ------------------------------------------------------------------------------------------------
 // RefMap

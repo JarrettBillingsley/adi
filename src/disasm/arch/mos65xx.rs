@@ -6,7 +6,7 @@ use parse_display::*;
 
 use crate::disasm::types::*;
 use crate::disasm::error::*;
-use crate::memory::types::*;
+use crate::memory::va::*;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
+use parse_display::*;
+
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
@@ -11,7 +13,7 @@ pub mod map;
 pub mod region;
 pub mod segment;
 pub mod spans;
-pub mod types;
+pub mod va;
 
 #[cfg(test)]
 mod tests;
@@ -22,7 +24,19 @@ pub use map::*;
 pub use region::*;
 pub use segment::*;
 pub use spans::*;
-pub use types::*;
+pub use va::*;
+
+// ------------------------------------------------------------------------------------------------
+// Endian
+// ------------------------------------------------------------------------------------------------
+
+/// Byte order.
+#[derive(Debug, Display, PartialEq, Eq, Clone, Copy)]
+pub enum Endian {
+	#[display("little")] Little,
+	#[display("big")]    Big,
+	#[display("n/a")]    NA,
+}
 
 // ------------------------------------------------------------------------------------------------
 // Memory

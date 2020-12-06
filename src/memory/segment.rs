@@ -1,9 +1,40 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::ops::{ Range, RangeBounds, Bound };
+use std::fmt::{ Debug, };
+
+use derive_new::*;
+use parse_display::*;
 
 use super::image::*;
-use super::types::*;
 use super::spans::*;
+use super::va::VA;
+
+// ------------------------------------------------------------------------------------------------
+// SegId
+// ------------------------------------------------------------------------------------------------
+
+/// newtype for segment IDs. each segment gets a unique ID (index into an array).
+#[derive(Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct SegId(pub u16);
+
+// ------------------------------------------------------------------------------------------------
+// Location
+// ------------------------------------------------------------------------------------------------
+
+/// A unique location consisting of Segment ID and an offset within that Segment.
+#[derive(Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(new)]
+#[display("{seg.0:04X}:{offs:08X}")]
+pub struct Location {
+	pub seg:  SegId,
+	pub offs: usize,
+}
+
+impl Debug for Location {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{}", self)
+	}
+}
 
 // ------------------------------------------------------------------------------------------------
 // Segment
