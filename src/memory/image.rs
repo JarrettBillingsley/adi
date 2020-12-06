@@ -1,6 +1,114 @@
-use std::ops::{ Range, RangeBounds, Bound };
+use std::ops::{ Range, RangeBounds, Bound, Index };
+use std::convert::TryInto;
 
 use super::types::*;
+
+// ------------------------------------------------------------------------------------------------
+// ImageRead
+// ------------------------------------------------------------------------------------------------
+
+pub trait ImageRead<Index> {
+	fn read_u8(&self, index: Index) -> u8;
+	fn read_le_u16(&self, index: Index) -> u16;
+	fn read_be_u16(&self, index: Index) -> u16;
+	fn read_le_u32(&self, index: Index) -> u32;
+	fn read_be_u32(&self, index: Index) -> u32;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ImageSlice
+// ------------------------------------------------------------------------------------------------
+
+/// A read-only slice of an `Image`'s data.
+pub struct ImageSlice<'img> {
+	data: &'img [u8],
+}
+
+impl<'img> ImageSlice<'img> {
+	// TODO: more interface
+	pub fn data(&self) -> &'img [u8] {
+		self.data
+	}
+
+	pub fn into_data(self) -> &'img [u8] {
+		self.data
+	}
+}
+
+impl Index<usize> for ImageSlice<'_> {
+	type Output = u8;
+	fn index(&self, idx: usize) -> &Self::Output {
+		&self.data[idx]
+	}
+}
+
+impl Index<Offset> for ImageSlice<'_> {
+	type Output = u8;
+	fn index(&self, idx: Offset) -> &Self::Output {
+		&self[idx.0]
+	}
+}
+
+impl ImageRead<usize> for ImageSlice<'_> {
+	fn read_u8(&self, idx: usize) -> u8 {
+		self.data[idx]
+	}
+
+	fn read_le_u16(&self, idx: usize) -> u16 {
+		let data = &self.data[idx .. idx + 2];
+		u16::from_le_bytes(data.try_into().unwrap())
+	}
+
+	fn read_be_u16(&self, idx: usize) -> u16 {
+		let data = &self.data[idx .. idx + 2];
+		u16::from_be_bytes(data.try_into().unwrap())
+	}
+
+	fn read_le_u32(&self, idx: usize) -> u32 {
+		let data = &self.data[idx .. idx + 4];
+		u32::from_le_bytes(data.try_into().unwrap())
+	}
+
+	fn read_be_u32(&self, idx: usize) -> u32 {
+		let data = &self.data[idx .. idx + 4];
+		u32::from_be_bytes(data.try_into().unwrap())
+	}
+}
+
+impl ImageRead<Offset> for ImageSlice<'_> {
+	fn read_u8(&self, idx: Offset) -> u8 {
+		self.data[idx.0]
+	}
+
+	fn read_le_u16(&self, idx: Offset) -> u16 {
+		let data = &self.data[idx.0 .. idx.0 + 2];
+		u16::from_le_bytes(data.try_into().unwrap())
+	}
+
+	fn read_be_u16(&self, idx: Offset) -> u16 {
+		let data = &self.data[idx.0 .. idx.0 + 2];
+		u16::from_be_bytes(data.try_into().unwrap())
+	}
+
+	fn read_le_u32(&self, idx: Offset) -> u32 {
+		let data = &self.data[idx.0 .. idx.0 + 4];
+		u32::from_le_bytes(data.try_into().unwrap())
+	}
+
+	fn read_be_u32(&self, idx: Offset) -> u32 {
+		let data = &self.data[idx.0 .. idx.0 + 4];
+		u32::from_be_bytes(data.try_into().unwrap())
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// ImageSliceable
+// ------------------------------------------------------------------------------------------------
+
+/// Trait for getting `ImageSlice`s from things.
+pub trait ImageSliceable<Index> {
+	fn image_slice(&self, bounds: impl RangeBounds<Index>) -> ImageSlice;
+}
 
 // ------------------------------------------------------------------------------------------------
 // Image
@@ -11,23 +119,6 @@ pub struct Image {
 	name: String,
 	data: Vec<u8>,
 	orig_offs: Offset,
-}
-
-/// A read-only slice of an `Image`'s data.
-pub struct ImageSlice<'img> {
-	data: &'img [u8],
-}
-
-impl ImageSlice<'_> {
-	// TODO: more interface
-	pub fn data(&self) -> &[u8] {
-		self.data
-	}
-}
-
-/// Trait for getting `ImageSlice`s from things.
-pub trait ImageSliceable<Index> {
-	fn image_slice(&self, bounds: impl RangeBounds<Index>) -> ImageSlice;
 }
 
 impl Image {

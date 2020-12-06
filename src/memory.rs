@@ -199,35 +199,6 @@ impl Memory {
 	pub fn fmt_addr(&self, addr: usize) -> String {
 		format!("{:0width$X}", addr, width = self.mem_map.digits)
 	}
-
-	// ---------------------------------------------------------------------------------------------
-	// Image
-
-	// pub fn read_8_va(&self, va: VA) -> Option<u8> {
-	// 	self.segment_for_va(va)
-	// 	.and_then(|seg| seg.get_image_slice_va(&self.image, va))
-	// 	.map(|slice| slice[0])
-	// }
-
-	// pub fn read_le_16_va(&self, va: VA) -> Option<u16> {
-	// 	self.segment_for_va(va)
-	// 	.and_then(|seg| seg.get_image_slice_va(&self.image, va))
-	// 	.and_then(|slice| if slice.len() < 2 { None } else {
-	// 		Some((slice[0] as u16) | ((slice[1] as u16) << 8))
-	// 	})
-	// }
-
-	// pub fn read_8_loc(&self, loc: Location) -> Option<u8> {
-	// 	self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
-	// 	.map(|slice| slice[0])
-	// }
-
-	// pub fn read_le_16_loc(&self, loc: Location) -> Option<u16> {
-	// 	self.segment_from_loc(loc).get_image_slice_offs(&self.image, loc.offs)
-	// 	.and_then(|slice| if slice.len() < 2 { None } else {
-	// 		Some((slice[0] as u16) | ((slice[1] as u16) << 8))
-	// 	})
-	// }
 }
 
 impl Display for Memory {

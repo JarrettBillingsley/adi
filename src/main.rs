@@ -87,14 +87,15 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	let prg0 = mem.segment_for_name("PRG0").unwrap().image_slice_all();
+	let seg = mem.segment_for_name("PRG0").unwrap();
+	let prg0 = seg.image_slice_all().into_data();
 
 	// Disassembly/printing!
 	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
 	let disas = Disassembler;
 	let print = Printer::new(SyntaxFlavor::New);
 
-	let mut iter = disas.disas_all(&prg0.data()[..10], VA(0x8000));
+	let mut iter = disas.disas_all(&prg0[..10], VA(0x8000));
 
 	for inst in &mut iter {
 		print!("0x{:4X}  ", inst.va());
@@ -116,9 +117,9 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	// println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_NMI")).unwrap());
-	// println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_RESET")).unwrap());
-	// println!("{:04X}", mem.read_le_16_loc(prog.loc_from_name("VEC_IRQ")).unwrap());
+	for name in &["VEC_NMI", "VEC_RESET", "VEC_IRQ"] {
+		println!("{:>10}: {:04X}", name, seg.read_le_u16(prog.loc_from_name(name)));
+	}
 
 	Ok(())
 }

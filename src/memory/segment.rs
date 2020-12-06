@@ -62,23 +62,6 @@ impl Segment {
 		self.size
 	}
 
-	/// True if this is a "fake" segment (has no physical image mapping).
-	pub fn is_fake(&self) -> bool {
-		self.image.is_none()
-	}
-
-	/// Gets the range of physical addresses this segment is mapped to.
-	/// Panics if this is a fake segment.
-	pub fn image_range(&self) -> Range<Offset> {
-		self.image.as_ref().expect("fake segment!").orig_range()
-	}
-
-	/// Convenience method to get a slice of the whole image, since
-	/// `image_slice` is overloaded and `image_slice(..)` is ambiguous.
-	pub fn image_slice_all(&self) -> ImageSlice {
-		self.image_slice(Offset(0)..)
-	}
-
 	/// Whether the given offset is valid for this segment.
 	pub fn contains_offset(&self, offs: Offset) -> bool {
 		offs.0 < self.size
@@ -95,9 +78,27 @@ impl Segment {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Conversions between segment offsets, virtual addresses, physical addresses, and names
-	// (there are so many for "convenience" I guess)
-	// (remains to be seen how many of these are actually used in practice)
+	// Image
+
+	/// True if this is a "fake" segment (has no physical image mapping).
+	pub fn is_fake(&self) -> bool {
+		self.image.is_none()
+	}
+
+	/// Gets the range of physical addresses this segment is mapped to.
+	/// Panics if this is a fake segment.
+	pub fn image_range(&self) -> Range<Offset> {
+		self.image.as_ref().expect("fake segment!").orig_range()
+	}
+
+	/// Convenience method to get a slice of the whole image, since
+	/// `image_slice` is overloaded so `image_slice(..)` is ambiguous.
+	pub fn image_slice_all(&self) -> ImageSlice {
+		self.image_slice(Offset(0)..)
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Conversions between segment offsets and virtual addresses
 
 	/// Given a VA, convert it to an offset into this segment.
 	pub fn offset_from_va(&self, va: VA) -> Offset {
@@ -182,4 +183,43 @@ impl ImageSliceable<Offset> for Segment {
 	fn image_slice(&self, range: impl RangeBounds<Offset>) -> ImageSlice {
 		self.image.as_ref().expect("trying to slice a fake segment").image_slice(range)
 	}
+}
+
+impl ImageRead<VA> for Segment {
+	fn read_u8    (&self, idx: VA) -> u8  { self.read_u8(self.offset_from_va(idx))     }
+	fn read_le_u16(&self, idx: VA) -> u16 { self.read_le_u16(self.offset_from_va(idx)) }
+	fn read_be_u16(&self, idx: VA) -> u16 { self.read_be_u16(self.offset_from_va(idx)) }
+	fn read_le_u32(&self, idx: VA) -> u32 { self.read_le_u32(self.offset_from_va(idx)) }
+	fn read_be_u32(&self, idx: VA) -> u32 { self.read_be_u32(self.offset_from_va(idx)) }
+}
+
+impl ImageRead<Location> for Segment {
+	fn read_u8(&self, idx: Location) -> u8      {
+		assert!(idx.seg == self.id);
+		self.read_u8(idx.offs)
+	}
+	fn read_le_u16(&self, idx: Location) -> u16 {
+		assert!(idx.seg == self.id);
+		self.read_le_u16(idx.offs)
+	}
+	fn read_be_u16(&self, idx: Location) -> u16 {
+		assert!(idx.seg == self.id);
+		self.read_be_u16(idx.offs)
+	}
+	fn read_le_u32(&self, idx: Location) -> u32 {
+		assert!(idx.seg == self.id);
+		self.read_le_u32(idx.offs)
+	}
+	fn read_be_u32(&self, idx: Location) -> u32 {
+		assert!(idx.seg == self.id);
+		self.read_be_u32(idx.offs)
+	}
+}
+
+impl ImageRead<Offset> for Segment {
+	fn read_u8    (&self, idx: Offset) -> u8  { self.image_slice_all().read_u8(idx)     }
+	fn read_le_u16(&self, idx: Offset) -> u16 { self.image_slice_all().read_le_u16(idx) }
+	fn read_be_u16(&self, idx: Offset) -> u16 { self.image_slice_all().read_be_u16(idx) }
+	fn read_le_u32(&self, idx: Offset) -> u32 { self.image_slice_all().read_le_u32(idx) }
+	fn read_be_u32(&self, idx: Offset) -> u32 { self.image_slice_all().read_be_u32(idx) }
 }
