@@ -119,7 +119,7 @@ impl Memory {
 	/// # Panics
 	///
 	/// - if `name` is already the name of an existing segment.
-	/// - if the segment is mapped to a bankable region, but `pbase` is `None`.
+	/// - if the segment is mapped to a bankable region, but `image` is `None`.
 	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) {
 		let existing = self.seg_name_map.insert(name.into(), self.segs.len());
 		assert!(existing.is_none(), "duplicate segment name {}", name);

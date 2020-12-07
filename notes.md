@@ -2,84 +2,9 @@
 `x_from_y` = "infallibly get an x from a y. panic if it doesn't exist."
 `x_for_y`  = "try to get an x corresponding to y, if one exists."
 
-## Base types
+# TODO:
 
-- `VAddr`
-	- a virtual address in the CPU's normal address space.
-- `PAddr`
-	- a physical address; really an offset into a `RomImage`'s data.
-- `SegOffset`
-	- a positive offset from the beginning of a `Segment`.
-- `SegId`
-	- a unique identifier given to each `Segment`.
-- `Location`
-	- a pair of (`SegId`, `SegOffset`); globally unique "address" to anything.
-- `ImageRange`
-	- like `Range<PAddr>`, but `Copy`
-- `RomImage`
-	- a read-only executable file, ROM, etc.
-- `Endian`
-	- endianness (big, little, or n/a)
-
-## Memory types
-
-- `MemoryRegion`
-	- part of a CPU's memory map - which address ranges mean what.
-- `MemoryMap`
-	- an immutable collection of `MemoryRegion`s to describe a CPU's VA map.
-- `Span`
-	- a range of memory addresses in a `Segment`. can be code, data, unknown. can have owner.
-- `SpanMap`
-	- covers an address space in `Span`s. think of the colored image map in IDA. types:
-- `Segment`
-	- a unique address space at a specific VAddr, containing a `SpanMap`. types:
-		- **Image segment:** a slice of an image (rom, executable, whatever).
-		- **Fake segment:** everything else, so we can name and refer to things.
-- `MemoryConfig`
-	- a mapping from `MemoryRegion` names to `Segment` names.
-- `Memory`
-	- consists of `MemoryMap`, `MemoryConfig`, and `Segment`s.
-
-## Program types
-
-- `NameMap`
-	- bidirectional mapping between names and `Location`s.
-- `RefMap`
-	- many-to-many mapping of directed edges between pairs of `Location`s.
-- `Program`
-	- consists of a `RomImage`, `Memory`, `NameMap`, and `RefMap`.
-
-## Disasm types
-
-- `Architecture`: a CPU ISA. consists of:
-	- `Disassembler`, to turn raw binary data into instructions
-	- `Printer`, to turn binary data into a textual representation
-- `Platform`: the system a CPU exists within. consists of:
-	- `Architecture`
-	- `MemoryMap`
-	- maybe `RomImage`s, for things like system ROMs?
-
-## Analysis types
-
-- `Function`: a set of `BasicBlock`s which comprise a single function. has a "head" BB.
-- `BasicBlock`: a sequence of instructions; part of a `Function`, exists within a `Span`.
-
-## Ideas
-
-- represent as much implicitly as possible.
-- duplicating state is evil.
-- don't store a BB's start and end; just its start, and let the associated span define the end.
-- the span map should be the *primary* data structure.
-- querying it by address is fast.
-- querying it by type is not... "Find all code spans which are heads of functions" is slow.
-- which is why I wanted a map of functions elsewhere.
-- but then that map and the span map can get out of sync.
-- so maybe the span map needs some kind of facility for indexing it.
-- it's still "dumb," just points to "owners" for each span...
-- but setting the owner for a span can also update these indexes.
-- e.g. if the owner is a function head BB, can update the function index to point to this.
-
-I'm kind of working under the assumption that the image segments are easily determined and more or less fixed after loading. That isn't necessarily the case IRL... but for now, I'm gonna assume  we're not gonna be dumping "raw" images into this thing, and that we already know something about  what the image looks like.
+- write some FUCKING tests
 
 ## Memory Banking
 
@@ -116,7 +41,7 @@ I'm kind of working under the assumption that the image segments are easily dete
 	- nothing in the hardware *prevents* this but not likely to happen, since these CPUs don't really support position-independent code.
 	- so is it OK to tie a segment to a particular VA? probably?
 
-## Blathering
+## Basic Block Blathering
 
 - BBs have successors they need to refer to.
 	- but that feels like duplicating the info that's in the ref map.
@@ -141,31 +66,7 @@ I'm kind of working under the assumption that the image segments are easily dete
 		- remove *all* outrefs from terms
 		- remove all outrefs *period* (for each BB span, remove range of outrefs for that span)
 		- redefine each span to be unknown
-			- *should adjacent unknown spans be coalesced? I think yes*
 	- remove the function from the FuncIndex
-
-- wait. wouldn't the owners be the ones *initiating the changes in the first place?*
-	- like. why would we be changing the span map without them knowing?
-- for example, if the user selects some stuff in the interface and chooses "undefine"...
-	- we'd use the span map to *find the owners*
-	- but then *tell the owners directly* to change/delete themselves
-	- then *they* would tell the span map "change/undefine me plz"
-- we could go a step further and say that *undef <-> code/data is OK*, but **code <-> data is not**
-	- if you wanna go between them, have to undefine them and then redefine anew
-	- the interface might let you "go directly" but underneath this is what it does
-
-## Span map rules
-
-1. can only go between unk and non-unk.
-	- adjacent unk spans are coalesced.
-2. span map is not directly modified.
-	- exists in service of code and data indexes.
-3. spans can be deleted or shortened...
-	- but can't have their *starts* changed.
-	- have to delete existing span and make a new one for that.
-4. spans cannot be bisected.
-	- that leaves two non-contiguous spans with the same owner, which makes no sense
-	- have to shorten existing span, then create new span
 
 ## Analysis algorithm
 
@@ -192,10 +93,3 @@ We can build up "proto-BBs" by having ranges of instructions which we know "belo
 
 - if it isn't, we can split it into two functions and have the first tailcall the other.
 - this doesn't account for functions that have a BB in the other segment and like, bounce back and forth but cmon really?
-
----
-
-TODO:
-
-- Segment::read_xxx methods
-- write some FUCKING tests
