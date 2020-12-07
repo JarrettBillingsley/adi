@@ -46,7 +46,7 @@ pub struct Segment {
 	pub vbase: VA,
 	pub vend:  VA,
 	pub size:  usize,
-	pub spans: SpanMap,
+	spans: SpanMap,
 	pub image: Option<Image>,
 }
 
@@ -78,7 +78,7 @@ impl Segment {
 			vbase,
 			vend,
 			size,
-			spans: SpanMap::new(size),
+			spans: SpanMap::new(id, size),
 			image,
 		}
 	}
@@ -122,22 +122,61 @@ impl Segment {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Conversions between segment offsets and virtual addresses
+	// Conversions between locations and virtual addresses
 
-	/// Given a VA, convert it to an offset into this segment.
-	pub fn offset_from_va(&self, va: VA) -> usize {
+	/// Given a VA, convert it to a Location. Panics if this segment doesn't contain the VA.
+	pub fn loc_from_va(&self, va: VA) -> Location {
+		assert!(self.contains_va(va));
+		Location { seg: self.id, offs: va - self.vbase }
+	}
+
+	/// Given a Location, get the VA. Panics if the Location doesn't refer to this segment.
+	pub fn va_from_loc(&self, loc: Location) -> VA {
+		assert!(loc.seg == self.id);
+		self.va_from_offset(loc.offs)
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Span management (spanagement?)
+
+	/// Get the span which contains the given location.
+	pub fn span_at_loc(&self, loc: Location) -> Span {
+		assert!(loc.seg == self.id);
+		self.spans.span_at(loc.offs)
+	}
+
+	/// Get the span which contains the given VA.
+	pub fn span_at_va(&self, va: VA) -> Span {
+		self.spans.span_at(self.offset_from_va(va))
+	}
+
+	/// Iterator over all spans in this segment, in order.
+	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
+		self.spans.iter()
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// PRIVATE
+
+	// Get the span which contains the given offset.
+	fn span_from_offset(&self, offs: usize) -> Span {
+		self.spans.span_at(offs)
+	}
+
+	// Given a VA, convert it to an offset into this segment.
+	fn offset_from_va(&self, va: VA) -> usize {
 		assert!(self.contains_va(va));
 		va - self.vbase
 	}
 
-	/// Given an offset into this segment, get the VA.
-	pub fn va_from_offset(&self, offs: usize) -> VA {
+	// Given an offset into this segment, get the VA.
+	fn va_from_offset(&self, offs: usize) -> VA {
 		assert!(offs < self.size);
 		self.vbase + offs
 	}
 
-	/// Given VA bounds, convert them into offset bounds.
-	pub fn offset_bounds_from_va_bounds(&self, bounds: impl RangeBounds<VA>)
+	// Given VA bounds, convert them into offset bounds.
+	fn offset_bounds_from_va_bounds(&self, bounds: impl RangeBounds<VA>)
 	-> impl RangeBounds<usize> {
 		use Bound::*;
 
@@ -156,8 +195,28 @@ impl Segment {
 		(start, end)
 	}
 
-	/// Given offset bounds, convert them into VA bounds.
-	pub fn va_bounds_from_offset_bounds(&self, bounds: impl RangeBounds<usize>)
+	// Given VA bounds, convert them into offset bounds.
+	fn offset_bounds_from_loc_bounds(&self, bounds: impl RangeBounds<Location>)
+	-> impl RangeBounds<usize> {
+		use Bound::*;
+
+		let start = match bounds.start_bound() {
+			Included(&Location { seg, offs }) => { assert!(seg == self.id); Included(offs) }
+			Excluded(&Location { seg, offs }) => { assert!(seg == self.id); Excluded(offs) }
+			Unbounded                         => Unbounded,
+		};
+
+		let end = match bounds.end_bound() {
+			Included(&Location { seg, offs }) => { assert!(seg == self.id); Included(offs) }
+			Excluded(&Location { seg, offs }) => { assert!(seg == self.id); Excluded(offs) }
+			Unbounded                         => Unbounded,
+		};
+
+		(start, end)
+	}
+
+	// Given offset bounds, convert them into VA bounds.
+	fn va_bounds_from_offset_bounds(&self, bounds: impl RangeBounds<usize>)
 	-> impl RangeBounds<VA> {
 		use Bound::*;
 
@@ -175,24 +234,6 @@ impl Segment {
 
 		(start, end)
 	}
-
-	// ---------------------------------------------------------------------------------------------
-	// Span management (spanagement?)
-
-	/// Get the span which contains the given offset.
-	pub fn span_from_offset(&self, offs: usize) -> Span {
-		self.spans.span_at(offs)
-	}
-
-	/// Get the span which contains the given VA.
-	pub fn span_from_va(&self, va: VA) -> Span {
-		self.spans.span_at(self.offset_from_va(va))
-	}
-
-	/// Iterator over all spans in this segment, in order.
-	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
-		self.spans.iter()
-	}
 }
 
 impl ImageSliceable<VA> for Segment {
@@ -206,6 +247,13 @@ impl ImageSliceable<usize> for Segment {
 	/// Get a read-only slice of this image's data.
 	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
 		self.image.as_ref().expect("trying to slice a fake segment").image_slice(range)
+	}
+}
+
+impl ImageSliceable<Location> for Segment {
+	/// Get a read-only slice of this image's data.
+	fn image_slice(&self, range: impl RangeBounds<Location>) -> ImageSlice {
+		self.image_slice(self.offset_bounds_from_loc_bounds(range))
 	}
 }
 

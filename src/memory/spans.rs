@@ -5,6 +5,7 @@ use parse_display::Display;
 use derive_new::new;
 
 use crate::analysis::BBId;
+use crate::memory::{ Location, SegId };
 
 // ------------------------------------------------------------------------------------------------
 // Span
@@ -13,19 +14,36 @@ use crate::analysis::BBId;
 /// Describes a "slice" of a Segment. The start and end positions are given as offsets into the
 /// segment, to avoid confusion when dealing with virtual and physical addresses.
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
-#[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
+#[display("{kind:?} [0x{start.offs:08X} .. 0x{end.offs:08X})")]
 pub struct Span {
 	/// address of first byte of span.
-	pub start: usize,
+	pub start: Location,
 	/// address of first byte after span.
-	pub end:   usize,
+	pub end:   Location,
 	/// what kind of span it is.
 	pub kind:  SpanKind,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl Span {
-	fn new((start, span): (&usize, &SpanInternal)) -> Self {
-		Self { start: *start, end: span.end, kind: span.kind }
+	fn new(seg: SegId, (&start, span): (&usize, &SpanInternal)) -> Self {
+		Self {
+			start: Location::new(seg, start),
+			end:   Location::new(seg, span.end),
+			kind:  span.kind
+		}
+	}
+
+	pub fn seg(&self) -> SegId {
+		self.start.seg
+	}
+
+	pub fn len(&self) -> usize {
+		self.end.offs - self.start.offs
+	}
+
+	pub fn is_unknown(&self) -> bool {
+		self.kind == SpanKind::Unk
 	}
 }
 
@@ -34,6 +52,8 @@ impl Span {
 pub enum SpanKind {
 	/// Unknown (not yet analyzed)
 	Unk,
+	/// Currently being analyzed
+	Ana,
 	/// Code (that is, a basic block of a function)
 	Code(BBId),
 	/// Data (anything that isn't code)
@@ -61,7 +81,8 @@ pub enum SpanKind {
 /// 4. defined spans cannot be bisected.
 ///     - that leaves two non-contiguous spans with the same owner, which makes no sense
 ///     - but it's fine to bisect an unknown span for the same reason it's fine to coalesce them.
-pub struct SpanMap {
+pub(crate) struct SpanMap {
+	seg:   SegId,
 	spans: BTreeMap<usize, SpanInternal>,
 	end:   usize,
 }
@@ -77,11 +98,11 @@ struct SpanInternal {
 
 impl SpanMap {
 	/// Creates a new `SpanMap` with a single unknown span that covers the entire segment.
-	pub fn new(size: usize) -> Self {
+	pub fn new(seg: SegId, size: usize) -> Self {
 		let end = size;
 		let mut spans = BTreeMap::new();
 		spans.insert(0, SpanInternal::new(end, SpanKind::Unk));
-		Self { spans, end }
+		Self { seg, spans, end }
 	}
 
 	/// Given an offset into the segment, gets the span which contains it.
@@ -91,7 +112,7 @@ impl SpanMap {
 	/// - if `offs` is after the last address.
 	pub fn span_at(&self, offs: usize) -> Span {
 		assert!(offs < self.end);
-		Span::new(self.spans.range(..= offs).next_back().expect("how even"))
+		Span::new(self.seg, self.spans.range(..= offs).next_back().expect("how even"))
 	}
 
 	/// Given an offset into the segment, gets the span which comes after the containing span,
@@ -104,7 +125,8 @@ impl SpanMap {
 		assert!(offs < self.end);
 
 		use std::ops::Bound;
-		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next().map(Span::new)
+		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next()
+			.map(|s| Span::new(self.seg, s))
 	}
 
 	/// Given an offset into the segment, gets the span which comes before the containing span,
@@ -118,12 +140,13 @@ impl SpanMap {
 
 		let mut iter = self.spans.range(..= offs);
 		iter.next_back();
-		iter.next_back().map(Span::new)
+		iter.next_back().map(|s| Span::new(self.seg, s))
 	}
 
 	/// Iterator over all spans in the segment, in order.
 	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
-		self.spans.iter().map(Span::new)
+		let seg = self.seg;
+		self.spans.iter().map(move |s| Span::new(seg, s))
 	}
 
 	/// Define a code or data span at `start` that stretches `len` bytes.
@@ -145,25 +168,25 @@ impl SpanMap {
 		let new_end = start + len;
 
 		assert_eq!(old.kind, SpanKind::Unk, "defining an already-defined span");
-		assert!(new_end <= old.end, "new span overflows into next span");
+		assert!(new_end <= old.end.offs, "new span overflows into next span");
 
 		// first check if we need to add a new unknown span after the new span
-		if new_end < old.end {
-			// make new unknown span [new_end .. old.end)
-			self.spans.insert(new_end, SpanInternal::new(old.end, SpanKind::Unk));
+		if new_end < old.end.offs {
+			// make new unknown span [new_end .. old.end.offs)
+			self.spans.insert(new_end, SpanInternal::new(old.end.offs, SpanKind::Unk));
 		}
 
 		// now let's check if we're redefining the old span, or making a new one
-		if start == old.start {
-			// start == old.start => redefine (and optionally resize) the old span
-			let old_span  = self.spans.get_mut(&old.start).unwrap();
+		if start == old.start.offs {
+			// start == old.start.offs => redefine (and optionally resize) the old span
+			let old_span  = self.spans.get_mut(&old.start.offs).unwrap();
 			old_span.kind = kind;
 			old_span.end  = new_end; // no-op if new_end == old.end
 		} else {
 			// make the new span [start .. new_end)
 			self.spans.insert(start, SpanInternal::new(new_end, kind));
 			// and shorten the old one to [.. start)
-			self.spans.get_mut(&old.start).unwrap().end = start;
+			self.spans.get_mut(&old.start.offs).unwrap().end = start;
 		}
 
 		#[cfg(debug_assertions)]
@@ -178,7 +201,7 @@ impl SpanMap {
 	/// - if `start` is not the beginning of a span.
 	pub fn undefine(&mut self, start: usize) {
 		let old = self.span_at(start);
-		assert_eq!(start, old.start, "no span at this location");
+		assert_eq!(start, old.start.offs, "no span at this location");
 
 		use SpanKind::Unk;
 
@@ -189,28 +212,28 @@ impl SpanMap {
 			match (prev, next) {
 				(Some(prev @ Span { kind: Unk, .. }), Some(next @ Span { kind: Unk, .. })) => {
 					// coalesce with BOTH: delete old AND next, and make prev span longer
-					self.spans.remove(&old.start).expect("wat");
-					self.spans.remove(&next.start).expect("wat");
-					self.spans.get_mut(&prev.start).unwrap().end = next.end;
+					self.spans.remove(&old.start.offs).expect("wat");
+					self.spans.remove(&next.start.offs).expect("wat");
+					self.spans.get_mut(&prev.start.offs).unwrap().end = next.end.offs;
 				}
 
 				(Some(prev @ Span { kind: Unk, .. }), _) => {
 					// coalesce with prev: delete old span, and make prev span longer
-					self.spans.remove(&old.start).expect("wat");
-					self.spans.get_mut(&prev.start).unwrap().end = old.end;
+					self.spans.remove(&old.start.offs).expect("wat");
+					self.spans.get_mut(&prev.start.offs).unwrap().end = old.end.offs;
 				}
 
 				(_, Some(next @ Span { kind: Unk, .. })) => {
 					// coalesce with next: delete next span, and make old span longer
-					self.spans.remove(&next.start).expect("wat");
-					let old = self.spans.get_mut(&old.start).unwrap();
-					old.end = next.end;
+					self.spans.remove(&next.start.offs).expect("wat");
+					let old = self.spans.get_mut(&old.start.offs).unwrap();
+					old.end = next.end.offs;
 					old.kind = Unk;
 				}
 
 				_ => {
 					// no coalescing to do.
-					self.spans.get_mut(&old.start).unwrap().kind = Unk;
+					self.spans.get_mut(&old.start.offs).unwrap().kind = Unk;
 				}
 			}
 		}
@@ -227,7 +250,7 @@ impl SpanMap {
 		assert!(!spans.is_empty());
 
 		// INVARIANT: span[0].start == 0
-		assert_eq!(spans.first().unwrap().start, 0);
+		assert_eq!(spans.first().unwrap().start.offs, 0);
 
 		// INVARIANT: span[n].end == span[n + 1].start
 		// INVARIANT: span[n] and span[n + 1] can't both be undefined
@@ -244,15 +267,14 @@ impl SpanMap {
 		}
 
 		// INVARIANT: span[n - 1].end == self.end
-		assert_eq!(spans.last().unwrap().end, self.end);
+		assert_eq!(spans.last().unwrap().end.offs, self.end);
 	}
 
 	#[cfg(any(test, debug_assertions))]
-	#[allow(dead_code)]
 	pub fn dump_spans(&self) {
 		println!("-----------------");
 		for tup in self.spans.iter() {
-			println!("{}", Span::new(tup));
+			println!("{}", Span::new(self.seg, tup));
 		}
 	}
 }

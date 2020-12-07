@@ -194,10 +194,7 @@ impl Memory {
 				None
 			} else {
 				self.segment_for_region(&region.name)
-				.map(|seg| {
-					let offs = seg.offset_from_va(va);
-					Location::new(seg.id, offs)
-				})
+				.map(|seg| seg.loc_from_va(va))
 			}
 		})
 	}

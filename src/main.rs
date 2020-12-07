@@ -121,6 +121,18 @@ fn test_nes() -> std::io::Result<()> {
 		println!("{:>10}: {:04X}", name, seg.read_le_u16(prog.loc_from_name(name)));
 	}
 
+	// -------------------------------------------
+
+	let reset_va = VA(seg.read_le_u16(prog.loc_from_name("VEC_RESET")) as usize);
+	let reset_loc = seg.loc_from_va(reset_va);
+
+	{
+		// huh huh huh
+		let mut anal = Analyzer::new(&mut prog, disas, print);
+		anal.enqueue_function(reset_loc);
+		anal.analyze_queue();
+	}
+
 	Ok(())
 }
 

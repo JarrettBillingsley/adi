@@ -32,7 +32,6 @@ pub struct Program {
 
 	#[new(default)]
 	names: NameMap,
-	#[allow(dead_code)]
 	#[new(value = "RefMap::new()")]
 	refs:  RefMap,
 	// TODO: FuncIndex, VarIndex(?)
@@ -138,10 +137,10 @@ impl Program {
 		} else {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
-			let va = seg.va_from_offset(loc.offs);
-			let start = seg.span_from_offset(loc.offs).start;
+			let va = seg.va_from_loc(loc);
+			let start = seg.span_at_loc(loc).start;
 
-			match self.names.name_for_loc(Location::new(loc.seg, start)) {
+			match self.names.name_for_loc(start) {
 				Some(name) =>
 					// there's already a name, so name it like "main_loc_0C30"
 					self.generate_name(name, va),

@@ -5,6 +5,9 @@
 # TODO:
 
 - write some FUCKING tests
+- disas is working with a raw &[u8] but should be an ImageSlice probably
+- use more traits to overload methods like `x_from_y` and `x_for_y`
+- move analysis::func to program
 
 ## Memory Banking
 

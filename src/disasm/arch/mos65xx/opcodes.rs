@@ -1,6 +1,6 @@
 
 /// The "REAL" 65xx opcodes. Each opcode is named with its mnemonic and its addressing mode.
-#[allow(non_camel_case_types, dead_code)]
+#[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Opcode {
