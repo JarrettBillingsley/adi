@@ -74,7 +74,6 @@ pub trait InstructionTrait {
 	fn get_op(&self, i: usize) -> Self::TOperand;
 	/// Accessor for original bytes.
 	fn bytes(&self) -> &[u8];
-	// TODO: implied ops as a separate thing?
 
 	/// Is this a control flow instruction?
 	fn is_control    (&self) -> bool;

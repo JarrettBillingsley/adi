@@ -23,7 +23,6 @@ pub struct ImageSlice<'img> {
 }
 
 impl<'img> ImageSlice<'img> {
-	// TODO: more interface
 	pub fn data(&self) -> &'img [u8] {
 		self.data
 	}

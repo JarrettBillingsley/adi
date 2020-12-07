@@ -1,4 +1,5 @@
 use std::default::Default;
+use std::convert::TryInto;
 
 use parse_display::Display;
 use derive_new::new;
@@ -413,8 +414,7 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> Option<Operand> {
 			let addr = match desc.addr_mode {
 				ZPG | ZPX | ZPY | IZX | IZY => img[0] as u16,
 
-				// TODO: should really use u16::from_le_bytes but it's awkward with slices
-				ABS | ABX | ABY | IND | LAB => img[0] as u16 | ((img[1] as u16) << 8),
+				ABS | ABX | ABY | IND | LAB => u16::from_le_bytes(img.try_into().unwrap()),
 
 				// +2 to include size of the branch instruction itself
 				REL => ((va.0 as i32) + (img[0] as i8 as i32) + 2) as u16,

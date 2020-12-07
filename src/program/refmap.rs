@@ -21,7 +21,6 @@ pub type RefSet = BTreeSet<Location>;
 /// multiple "inrefs" - references *from* other locations. Looking up these refs is
 #[derive(new)]
 pub struct RefMap {
-	// TODO: does this need to be BTreeMap/Set? (do we need ordering?)
 	#[new(value = "BTreeMap::new()")]
 	inrefs:  BTreeMap<Location, RefSet>,
 	#[new(value = "BTreeMap::new()")]

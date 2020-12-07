@@ -189,5 +189,3 @@ fn span_map_iter() {
 	assert_eq!(m.span_after(0xF000), None);
 	assert_eq!(m.span_after(0xFFFF), None);
 }
-
-// TODO: test config, map, region, segment...

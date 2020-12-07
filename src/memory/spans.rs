@@ -57,7 +57,7 @@ pub enum SpanKind {
 	/// Code (that is, a basic block of a function)
 	Code(BBId),
 	/// Data (anything that isn't code)
-	Data, // TODO: like, an array/variable owner type
+	Data,
 }
 
 // ------------------------------------------------------------------------------------------------

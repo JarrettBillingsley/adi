@@ -37,7 +37,7 @@ fn test_nes() -> std::io::Result<()> {
 		("PPU",    "PPU"),
 		("IOREG",  "IOREG"),
 	]).derive(&[
-		// ROM-specific (TODO: bankable regions can change the mem config; eesh)
+		// ROM-specific
 		("PRGROM", "PRG0"),
 	]);
 

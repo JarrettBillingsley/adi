@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use derive_new::new;
 
 use crate::program::Program;
-use crate::memory::{ Location, ImageSliceable };
+use crate::memory::{ Location, ImageSliceable, SpanKind };
 use crate::disasm::{ DisassemblerTrait, InstructionTrait, PrinterTrait };
 
 // ------------------------------------------------------------------------------------------------
@@ -85,23 +85,22 @@ where
 
 	fn analyze_func(&mut self, loc: Location) {
 		// OKAY. first, let's look at this location to see what's here.
-		// we want a fresh undefined region of memory.
+		// we want a fresh, undefined region of memory.
 		let seg = self.prog.mem_mut().segment_from_loc_mut(loc);
 		let span = seg.span_at_loc(loc);
 
-		if !span.is_unknown() {
-			// TODO: if the span is under analysis, something bad has happened
-			// (should never be in the middle of analyzing something when we start analysis)
-			println!("wahhhhh {} already visited", loc);
-			return;
+		match span.kind {
+			SpanKind::Unk      => {} // yeeeeee that's what we want
+			SpanKind::Ana      => panic!("span at {} is somehow being analyzed", loc),
+			SpanKind::Code(..) => todo!("span at {} already analyzed", loc),
+			SpanKind::Data     => todo!("uh oh. what do we do here? {}", loc),
 		}
 
-		// now, we need the fuckin. DATA. the S L I C E
+		// now, we need the actual data.
 		let slice = seg.image_slice(span.start .. span.end).into_data();
 		let va = seg.va_from_loc(loc);
 		for inst in self.dis.disas_all(slice, va) {
 			println!("{:04X} {:?}", inst.va(), inst.bytes());
-			// println!("{}", self.print.fmt_instr(&inst, self.prog));
 		}
 
 		// let mut func = ProtoFunc::new();

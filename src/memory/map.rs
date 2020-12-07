@@ -97,6 +97,4 @@ impl MemoryMap {
 		let func = move |&idx| &self.regions[idx];
 		self.addr_map.values().map(func)
 	}
-
-	// TODO: iterators for bankable regions, ROM regions, etc?
 }

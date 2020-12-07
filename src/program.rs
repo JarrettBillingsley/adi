@@ -34,7 +34,6 @@ pub struct Program {
 	names: NameMap,
 	#[new(value = "RefMap::new()")]
 	refs:  RefMap,
-	// TODO: FuncIndex, VarIndex(?)
 }
 
 impl Program {

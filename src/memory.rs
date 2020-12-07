@@ -59,7 +59,6 @@ pub struct Memory {
 	next_seg_id:  SegId,
 	#[new(default)]
 	seg_id_map:   HashMap<SegId, usize>,
-	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 }
 
 impl Memory {
@@ -179,8 +178,6 @@ impl Memory {
 	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
 		&mut self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
 	}
-
-	// TODO: removing/redefining/iterating segments
 
 	// ---------------------------------------------------------------------------------------------
 	// Address translation

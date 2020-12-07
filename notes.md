@@ -8,6 +8,15 @@
 - disas is working with a raw &[u8] but should be an ImageSlice probably
 - use more traits to overload methods like `x_from_y` and `x_for_y`
 - move analysis::func to program
+- implied operands in InstructionTrait
+- bankable region mem configs
+- Memory: removing/redefining/iterating segments
+- Program: FuncIndex, VarIndex(?)
+- Platform
+- MemoryMap: iterators for bankable regions, ROM regions, etc?
+- SpanKind: like, an array/variable owner type
+- memory tests: test config, map, region, segment...
+- RefMap: does this need to be BTreeMap/Set? (do we need ordering?)
 
 ## Memory Banking
 
