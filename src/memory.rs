@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
+use derive_new::new;
 use parse_display::Display;
 
 // ------------------------------------------------------------------------------------------------
@@ -44,31 +45,24 @@ pub enum Endian {
 
 /// This is the data structure on which everything else is built.
 /// Ties together a memory map, memory config, and segments.
+#[derive(new)]
 pub struct Memory {
 	endianness:   Endian,
 	mem_map:      MemoryMap,
 	config:       MemoryConfig,
+
+	#[new(default)]
 	segs:         Vec<Segment>,
+	#[new(default)]
 	seg_name_map: HashMap<String, usize>,
+	#[new(value = "SegId(0)")]
 	next_seg_id:  SegId,
+	#[new(default)]
 	seg_id_map:   HashMap<SegId, usize>,
 	// TODO: bankable regions config (stored here, or just passed into methods as needed?)
 }
 
 impl Memory {
-	pub fn new(
-		endianness: Endian,
-		mem_map:    MemoryMap,
-		config:     MemoryConfig
-	) -> Self {
-		Self { endianness, mem_map, config,
-			segs:         Vec::new(),
-			seg_name_map: HashMap::new(),
-			next_seg_id:  SegId(0),
-			seg_id_map:   HashMap::new(),
-		}
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 

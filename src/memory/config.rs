@@ -42,6 +42,7 @@ impl<'src> FromIterator<IterItem<'src>> for MemoryConfig {
 
 impl MemoryConfig {
 	/// ctor
+	// can't use derive_new cause needs to be private
 	fn new(assignments: HashMap<String, String>) -> Self {
 		Self {
 			assignments

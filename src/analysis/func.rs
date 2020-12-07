@@ -3,6 +3,7 @@ use std::iter::Chain;
 use std::option;
 use std::slice;
 
+use derive_new::new;
 use generational_arena::{ Arena, Index };
 
 use crate::memory::Location;
@@ -17,22 +18,19 @@ pub struct FuncId(Index);
 
 /// A single function.
 #[derive(Debug)]
+#[derive(new)]
 pub struct Function {
 	/// Its globally-unique identifier.
 	id: FuncId,
 
 	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
+	#[new(value = "None")]
 	name: Option<String>,
 
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
 	/// ordering of the rest of them.
+	#[new(default)]
 	bbs: Vec<BasicBlock>, // [0] is head
-}
-
-impl Function {
-	fn new(id: FuncId) -> Self {
-		Self { id, name: None, bbs: Vec::new() }
-	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -111,16 +109,13 @@ impl BBTerm {
 /// An index of all functions in the program. Functions are created, destroyed, and looked up
 /// through this object.
 #[derive(Default)]
+#[derive(new)]
 pub struct FuncIndex {
+	#[new(default)]
 	arena: Arena<Function>,
 }
 
 impl FuncIndex {
-	/// Ctor
-	pub fn new() -> Self {
-		Self { arena: Arena::new() }
-	}
-
 	/// Creates a new function and returns its ID.
 	pub fn new_func(&mut self) -> FuncId {
 		FuncId(self.arena.insert_with(|id| Function::new(FuncId(id))))

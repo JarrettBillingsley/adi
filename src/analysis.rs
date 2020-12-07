@@ -10,9 +10,33 @@ use crate::memory::Location;
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-mod types;
+mod func;
 
-pub use types::*;
+pub use func::*;
+
+// ------------------------------------------------------------------------------------------------
+// ProtoBB
+// ------------------------------------------------------------------------------------------------
+
+/// Most of a BasicBlock, except the ID. Used for initial exploration of a function
+/// when we haven't committed the results to the Program yet.
+#[derive(Debug)]
+struct ProtoBB {
+	/// Its globally-unique location.
+	loc: Location,
+	/// Where its terminator (last instruction) is located.
+	term_loc: Location,
+	/// How it ends, and what its successors are.
+	term: BBTerm,
+}
+
+/// Used for initial exploration, like above.
+#[derive(Debug)]
+#[derive(new)]
+struct ProtoFunc {
+	#[new(default)]
+	bbs: Vec<ProtoBB>, // 0 is the head
+}
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer

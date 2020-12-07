@@ -6,6 +6,8 @@ use std::collections::{
 };
 use std::ops::{ Bound, RangeBounds };
 
+use derive_new::new;
+
 use crate::memory::{ Memory, Location, VA };
 use crate::disasm::NameLookupTrait;
 
@@ -24,19 +26,19 @@ pub use refmap::*;
 // ------------------------------------------------------------------------------------------------
 
 /// A Program contains a Memory object and indexes of names, references, functions, and variables.
+#[derive(new)]
 pub struct Program {
 	mem:   Memory,
+
+	#[new(default)]
 	names: NameMap,
 	#[allow(dead_code)]
+	#[new(value = "RefMap::new()")]
 	refs:  RefMap,
 	// TODO: FuncIndex, VarIndex(?)
 }
 
 impl Program {
-	pub fn new(mem: Memory) -> Self {
-		Self { mem, names: NameMap::new(), refs: RefMap::new() }
-	}
-
 	/// Gets the Memory object associated with this Program.
 	pub fn mem(&self) -> &Memory {
 		&self.mem
