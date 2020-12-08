@@ -6,11 +6,10 @@
 
 - write some FUCKING tests
 - use more traits to overload methods like `x_from_y` and `x_for_y`
-- move `analysis::func` to program
 - implied operands in `InstructionTrait`
 - bankable region mem configs
 - `Memory`: removing/redefining/iterating segments
-- `Program`: `FuncIndex`, `VarIndex`(?)
+- `Program`: `VarIndex`(?)
 - `Platform`
 - `MemoryMap`: iterators for bankable regions, ROM regions, etc?
 - `SpanKind`: like, an array/variable owner type
@@ -108,3 +107,61 @@ We can build up "proto-BBs" by having ranges of instructions which we know "belo
 
 - if it isn't, we can split it into two functions and have the first tailcall the other.
 - this doesn't account for functions that have a BB in the other segment and like, bounce back and forth but cmon really?
+
+---
+
+```
+	8000  set i
+	8001  clr d
+	8002  li  a, 0x10
+	8004  st  a, [PPU_CTRL_REG1]
+	8007  li  x, 0xFF
+	8009  mov s, x
+
+	800A  ld  a, [PPU_STATUS]
+	800D  bpl PRG0_loc_800A
+
+	800F  ld  a, [PPU_STATUS]
+	8012  bpl PRG0_loc_800F
+
+	8014  li  y, 0xFE
+	8016  li  x, 5
+
+	8018  ld  a, [RAM_loc_07D7 + x]
+	801B  cmp a, 10
+	801D  bcs PRG0_loc_802B
+
+	801F  dec x
+	8020  bpl PRG0_loc_8018
+
+	8022  ld  a, [RAM_loc_07FF]
+	8025  cmp a, 0xA5
+	8027  bne PRG0_loc_802B
+
+	8029  li  y, 0xD6
+
+	802B  jsr PRG0_loc_90CC
+	802E  st  a, [SND_DMC_COUNTER]
+	8031  st  a, [RAM_loc_0770]
+	8034  li  a, 0xA5
+	8036  st  a, [RAM_loc_07FF]
+	8039  st  a, [RAM_loc_07A7]
+	803C  li  a, 15
+	803E  st  a, [SND_MASTER_CTRL]
+	8041  li  a, 6
+	8043  st  a, [PPU_CTRL_REG2]
+	8046  jsr PRG0_loc_8220
+	8049  jsr PRG0_loc_8E19
+	804C  inc [RAM_loc_0774]
+	804F  ld  a, [RAM_loc_0778]
+	8052  or  a, 0x80
+	8054  jsr PRG0_loc_8EED
+
+	8057  jmp PRG0_loc_8057
+
+805A  or  a, [[RAM_loc_00A4 + x]]
+805C  inc y
+805D  cmp x, [RAM_loc_0010]
+8060  xor a, [[RAM_loc_0041 + x]]
+8062  jmp PPUECHO_loc_3C34
+```

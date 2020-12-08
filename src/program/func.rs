@@ -42,10 +42,13 @@ pub struct Function {
 }
 
 impl Function {
-	pub fn add_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm) -> BBId {
-		let id = BBId(self.id, self.bbs.len());
-		self.bbs.push(BasicBlock { id, loc, term_loc, term });
-		id
+	pub fn add_bb(&mut self, bb: BasicBlock) {
+		assert!(bb.id == self.next_id());
+		self.bbs.push(bb);
+	}
+
+	pub fn next_id(&self) -> BBId {
+		BBId(self.id, self.bbs.len())
 	}
 
 	pub fn head_id(&self) -> BBId {
@@ -76,24 +79,29 @@ impl Debug for BBId {
 
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
+#[derive(new)]
 pub struct BasicBlock {
 	/// Its globally-unique id.
-	id: BBId,
+	pub id: BBId,
 
 	/// Its globally-unique location.
-	loc: Location,
+	pub loc: Location,
 
 	/// Where its terminator (last instruction) is located.
-	term_loc: Location,
+	pub term_loc: Location,
 
 	/// How it ends, and what its successors are.
-	term: BBTerm,
+	pub term: BBTerm,
 }
 
 impl BasicBlock {
 	pub fn successors(&self) -> Successors {
 		self.term.successors()
 	}
+}
+
+pub trait IntoBasicBlock {
+	fn into_bb(self, id: BBId) -> BasicBlock;
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -1,19 +1,16 @@
 
 use std::collections::VecDeque;
+use std::iter::IntoIterator;
 
 use derive_new::new;
 
-use crate::program::Program;
+use crate::program::{ Program, BasicBlock, BBTerm, BBId, IntoBasicBlock };
 use crate::memory::{ Location, ImageSliceable, SpanKind };
 use crate::disasm::{ DisasErrorKind, DisassemblerTrait, InstructionTrait, PrinterTrait };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
-
-mod func;
-
-pub use func::*;
 
 // ------------------------------------------------------------------------------------------------
 // ProtoBB
@@ -34,6 +31,15 @@ struct ProtoBB {
 	end: Location,
 }
 
+impl IntoBasicBlock for ProtoBB {
+	fn into_bb(self, id: BBId) -> BasicBlock {
+		BasicBlock::new(id, self.loc, self.term_loc, self.term)
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+struct PBBIdx(usize);
+
 /// Used for initial exploration, like above.
 #[derive(Debug)]
 #[derive(new)]
@@ -41,10 +47,6 @@ struct ProtoFunc {
 	#[new(default)]
 	bbs: Vec<ProtoBB>, // 0 is the head
 }
-
-// not a newtype, just for sanity
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-struct PBBIdx(usize);
 
 impl ProtoFunc {
 	fn new_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm, end: Location)
@@ -83,6 +85,10 @@ impl ProtoFunc {
 		assert!(self.bbs[idx.0].term_loc == Location::invalid());
 		self.bbs[idx.0].term_loc = term_loc;
 	}
+
+	fn into_iter(self) -> impl Iterator<Item = impl IntoBasicBlock> {
+		self.bbs.into_iter()
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -100,10 +106,6 @@ pub struct Analyzer<'prog, D: DisassemblerTrait, P: PrinterTrait> {
 	prog:  &'prog mut Program,
 	dis:   D,
 	print: P,
-
-	#[new(default)]
-	fi:    FuncIndex, // TEMPORARY
-
 	#[new(value = "VecDeque::new()")]
 	queue: VecDeque<AnalysisItem>,
 }
@@ -131,7 +133,7 @@ where
 			}
 		}
 
-		for (_, func) in self.fi.iter() {
+		for (_, func) in self.prog.funcs().iter() {
 			println!("---------------------------------------------------------------------------");
 			println!("{:#?}", func);
 		}
@@ -160,15 +162,13 @@ where
 	}
 
 	fn analyze_func(&mut self, loc: Location) {
-		// TODO: check if there is already a function defined here, and if so, bail.
-
 		println!();
 		println!("------------------------------------------------------------------------");
 		println!("- begin function analysis at {}", loc);
 
 		let kind = self.prog.mem().segment_from_loc(loc).span_at_loc(loc).kind;
 		if let SpanKind::Code(bbid) = kind {
-			let orig_func_head = self.fi.get(bbid.func()).head_id();
+			let orig_func_head = self.prog.funcs().get(bbid.func()).head_id();
 
 			if bbid == orig_func_head {
 				println!("oh, I've seen this one already. NEVERMIIIND");
@@ -177,7 +177,6 @@ where
 				todo!("have to split function at {} and make predecessor(s) tailcalls", loc);
 			}
 		}
-
 
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
@@ -350,15 +349,7 @@ where
 		// println!("{:#?}", func);
 
 		// now, turn the proto func into a real boy!!
-		let fid = self.fi.new_func();
-		let new_func = self.fi.get_mut(fid);
-
-		let seg = self.prog.mem_mut().segment_from_loc_mut(loc);
-
-		for bb in func.bbs {
-			let bbid = new_func.add_bb(bb.loc, bb.term_loc, bb.term.clone());
-			seg.redefine_span(bb.loc, SpanKind::Code(bbid));
-		}
+		self.prog.new_func(loc, func.into_iter());
 
 		// finally, turn the crank by putting more work on the queue
 		for jt in new_jumptables {

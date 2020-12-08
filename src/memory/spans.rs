@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use parse_display::Display;
 use derive_new::new;
 
-use crate::analysis::BBId;
+use crate::program::BBId;
 use crate::memory::{ Location, SegId };
 
 // ------------------------------------------------------------------------------------------------

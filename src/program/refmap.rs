@@ -19,6 +19,7 @@ pub type RefSet = BTreeSet<Location>;
 /// A many-to-many mapping of references - "arrows" pointing from one location to another.
 /// Every location can have multiple "outrefs" - references *to* other locations and
 /// multiple "inrefs" - references *from* other locations. Looking up these refs is
+#[derive(Default)]
 #[derive(new)]
 pub struct RefMap {
 	#[new(value = "BTreeMap::new()")]

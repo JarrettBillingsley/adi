@@ -8,16 +8,18 @@ use std::ops::{ Bound, RangeBounds };
 
 use derive_new::new;
 
-use crate::memory::{ Memory, Location, VA };
+use crate::memory::{ Memory, Location, VA, SpanKind };
 use crate::disasm::NameLookupTrait;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
+mod func;
 mod namemap;
 mod refmap;
 
+pub use func::*;
 pub use namemap::*;
 pub use refmap::*;
 
@@ -32,8 +34,12 @@ pub struct Program {
 
 	#[new(default)]
 	names: NameMap,
-	#[new(value = "RefMap::new()")]
+
+	#[new(default)]
 	refs:  RefMap,
+
+	#[new(default)]
+	funcs: FuncIndex,
 }
 
 impl Program {
@@ -45,6 +51,32 @@ impl Program {
 	/// Gets the Memory object associated with this Program.
 	pub fn mem_mut(&mut self) -> &mut Memory {
 		&mut self.mem
+	}
+
+	// TODO: FuncIndex should proooobably not be publicly exposed?
+	pub fn funcs(&self) -> &FuncIndex {
+		&self.funcs
+	}
+
+	pub fn funcs_mut(&mut self) -> &mut FuncIndex {
+		&mut self.funcs
+	}
+
+	pub fn new_func(&mut self, loc: Location, bbs: impl Iterator<Item = impl IntoBasicBlock>)
+	-> FuncId {
+		let fid = self.funcs.new_func();
+		let new_func = self.funcs.get_mut(fid);
+		let seg = self.mem.segment_from_loc_mut(loc);
+
+		for bb in bbs {
+			let bbid = new_func.next_id();
+			let bb = bb.into_bb(bbid);
+			let bb_loc = bb.loc;
+			new_func.add_bb(bb);
+			seg.redefine_span(bb_loc, SpanKind::Code(bbid));
+		}
+
+		fid
 	}
 
 	// ---------------------------------------------------------------------------------------------
