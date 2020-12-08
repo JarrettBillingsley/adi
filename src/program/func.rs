@@ -42,17 +42,25 @@ pub struct Function {
 }
 
 impl Function {
+	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
 	pub fn add_bb(&mut self, bb: BasicBlock) {
 		assert!(bb.id == self.next_id());
 		self.bbs.push(bb);
 	}
 
+	/// The next available basic block ID.
 	pub fn next_id(&self) -> BBId {
 		BBId(self.id, self.bbs.len())
 	}
 
+	/// The basic block ID of the function's head.
 	pub fn head_id(&self) -> BBId {
 		self.bbs[0].id
+	}
+
+	/// Where the function starts.
+	pub fn start_loc(&self) -> Location {
+		self.bbs[0].loc
 	}
 }
 
@@ -66,6 +74,7 @@ impl Function {
 pub struct BBId(FuncId, usize);
 
 impl BBId {
+	/// The ID of the function which owns this.
 	pub fn func(&self) -> FuncId {
 		self.0
 	}
@@ -95,11 +104,18 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
+	/// An iterator over this block's successors.
 	pub fn successors(&self) -> Successors {
 		self.term.successors()
 	}
+
+	/// The ID of the function which owns this.
+	pub fn func(&self) -> FuncId {
+		self.id.func()
+	}
 }
 
+/// Trait used for defining functions in `Program`.
 pub trait IntoBasicBlock {
 	fn into_bb(self, id: BBId) -> BasicBlock;
 }
@@ -131,7 +147,7 @@ pub enum BBTerm {
 pub type Successors<'a> = Chain<option::IntoIter<&'a Location>, slice::Iter<'a, Location>>;
 
 impl BBTerm {
-	/// Iterator of successors of this BB.
+	/// An iterator over the owning block's successors.
 	pub fn successors(&self) -> Successors {
 		use BBTerm::*;
 
@@ -173,7 +189,13 @@ impl FuncIndex {
 		self.arena.get_mut(id.0).expect("stale FuncId")
 	}
 
+	/// Iterator over all functions in the index, in arbitrary order.
 	pub fn iter(&self) -> impl Iterator<Item = (FuncId, &Function)> {
 		self.arena.iter().map(|(id, f)| (FuncId(id), f))
+	}
+
+	/// Same as above but mutable.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function)> {
+		self.arena.iter_mut().map(|(id, f)| (FuncId(id), f))
 	}
 }

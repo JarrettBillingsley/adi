@@ -43,27 +43,63 @@ pub struct Program {
 }
 
 impl Program {
+	// ---------------------------------------------------------------------------------------------
+	// Memory
+
 	/// Gets the Memory object associated with this Program.
 	pub fn mem(&self) -> &Memory {
 		&self.mem
 	}
 
-	/// Gets the Memory object associated with this Program.
+	/// Same as above, but mutable.
 	pub fn mem_mut(&mut self) -> &mut Memory {
 		&mut self.mem
 	}
 
-	// TODO: FuncIndex should proooobably not be publicly exposed?
-	pub fn funcs(&self) -> &FuncIndex {
-		&self.funcs
+	// ---------------------------------------------------------------------------------------------
+	// Functions
+
+	/// Get the function object with the given ID.
+	pub fn get_func(&self, id: FuncId) -> &Function {
+		self.funcs.get(id)
 	}
 
-	pub fn funcs_mut(&mut self) -> &mut FuncIndex {
-		&mut self.funcs
+	/// Same as above, but mutable.
+	pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function {
+		self.funcs.get_mut(id)
 	}
 
+	/// Iterator over all functions in the program, in arbitrary order.
+	pub fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function)> {
+		self.funcs.iter()
+	}
+
+	/// Same as above, but mutable.
+	pub fn all_funcs_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function)> {
+		self.funcs.iter_mut()
+	}
+
+	/// Gets the ID of the function which starts at the given location, if one exists.
+	pub fn func_defined_at(&self, loc: Location) -> Option<FuncId> {
+		let func_id = self.func_that_contains(loc)?;
+		if self.funcs.get(func_id).start_loc() == loc {
+			Some(func_id)
+		} else {
+			None
+		}
+	}
+
+	/// Gets the ID of the function that contains the given location, or None if none does.
+	pub fn func_that_contains(&self, loc: Location) -> Option<FuncId> {
+		Some(self.mem.segment_from_loc(loc).span_at_loc(loc).bb()?.func())
+	}
+
+	/// Creates a new function at the given location, with basic blocks given by the iterator.
+	/// Returns the new function's globally unique ID.
 	pub fn new_func(&mut self, loc: Location, bbs: impl Iterator<Item = impl IntoBasicBlock>)
 	-> FuncId {
+		assert!(self.func_defined_at(loc).is_none(), "redefining a function at {}", loc);
+
 		let fid = self.funcs.new_func();
 		let new_func = self.funcs.get_mut(fid);
 		let seg = self.mem.segment_from_loc_mut(loc);
@@ -181,6 +217,9 @@ impl Program {
 			}
 		}
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Private
 
 	fn generate_name(&self, base: &str, va: VA) -> String {
 		format!("{}_{}_{}", base, AUTOGEN_NAME_PREFIX, self.mem.fmt_addr(va.0))

@@ -34,16 +34,28 @@ impl Span {
 		}
 	}
 
+	/// The ID of the segment which owns this span.
 	pub fn seg(&self) -> SegId {
 		self.start.seg
 	}
 
+	/// The length of this span.
 	pub fn len(&self) -> usize {
 		self.end.offs - self.start.offs
 	}
 
+	/// If this is an unknown span.
 	pub fn is_unknown(&self) -> bool {
 		self.kind == SpanKind::Unk
+	}
+
+	/// If this is a code span, the ID of the basic block which owns it; None otherwise.
+	pub fn bb(&self) -> Option<BBId> {
+		if let SpanKind::Code(ret) = self.kind {
+			Some(ret)
+		} else {
+			None
+		}
 	}
 }
 

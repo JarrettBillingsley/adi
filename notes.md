@@ -16,9 +16,13 @@
 - memory tests: test config, map, region, segment...
 - `RefMap`: does this need to be `BTreeMap/Set`? (do we need ordering?)
 - `Segment`: more spanagement (since the spanmap is not public)
-- analysis: if a function has multiple exit points, one path *may* be a tailcalled function
-	- but can't know until someone else calls it
-	- so have to be able to split off part of a CFG into its own function
+- analysis:
+	- if a function has multiple exit points, one path *may* be a tailcalled function
+		- but can't know until someone else calls it
+		- so have to be able to split off part of a CFG into its own function
+	- do more thorough function analysis
+		- generate refs (to code and data)
+	- clean the fucking thing up
 
 ## Memory Banking
 

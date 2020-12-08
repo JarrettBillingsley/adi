@@ -133,7 +133,7 @@ where
 			}
 		}
 
-		for (_, func) in self.prog.funcs().iter() {
+		for (_, func) in self.prog.all_funcs() {
 			println!("---------------------------------------------------------------------------");
 			println!("{:#?}", func);
 		}
@@ -168,7 +168,7 @@ where
 
 		let kind = self.prog.mem().segment_from_loc(loc).span_at_loc(loc).kind;
 		if let SpanKind::Code(bbid) = kind {
-			let orig_func_head = self.prog.funcs().get(bbid.func()).head_id();
+			let orig_func_head = self.prog.get_func(bbid.func()).head_id();
 
 			if bbid == orig_func_head {
 				println!("oh, I've seen this one already. NEVERMIIIND");
