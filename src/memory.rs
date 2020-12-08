@@ -184,7 +184,7 @@ impl Memory {
 
 	/// Tries to find a unique location for the given VA.
 	/// If there is no mapping, or if the region is bankable, returns None.
-	pub fn va_to_loc(&self, va: VA) -> Option<Location> {
+	pub fn loc_for_va(&self, va: VA) -> Option<Location> {
 		self.mem_map.region_for_va(va)
 		.and_then(|region| {
 			if region.is_bankable() {

@@ -77,13 +77,13 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("location for 0x0000: {:?}", mem.va_to_loc(VA(0x0000)));
-	println!("location for 0x2000: {:?}", mem.va_to_loc(VA(0x2000)));
-	println!("location for 0x2001: {:?}", mem.va_to_loc(VA(0x2001)));
-	println!("location for 0x2008: {:?}", mem.va_to_loc(VA(0x2008)));
-	println!("location for 0x0400: {:?}", mem.va_to_loc(VA(0x0400)));
-	println!("location for 0x5000: {:?}", mem.va_to_loc(VA(0x5000)));
-	println!("location for 0x8000: {:?}", mem.va_to_loc(VA(0x8000)));
+	println!("location for 0x0000: {:?}", mem.loc_for_va(VA(0x0000)));
+	println!("location for 0x2000: {:?}", mem.loc_for_va(VA(0x2000)));
+	println!("location for 0x2001: {:?}", mem.loc_for_va(VA(0x2001)));
+	println!("location for 0x2008: {:?}", mem.loc_for_va(VA(0x2008)));
+	println!("location for 0x0400: {:?}", mem.loc_for_va(VA(0x0400)));
+	println!("location for 0x5000: {:?}", mem.loc_for_va(VA(0x5000)));
+	println!("location for 0x8000: {:?}", mem.loc_for_va(VA(0x8000)));
 
 	println!();
 

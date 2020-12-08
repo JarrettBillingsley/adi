@@ -277,6 +277,27 @@ impl OperandTrait for Operand {
 			_ => None,
 		}
 	}
+
+	fn addr(&self) -> VA {
+		match self {
+			Operand::Mem(a, _) => VA(*a as usize),
+			_ => panic!("not a memory operand"),
+		}
+	}
+
+	fn uimm(&self) -> u64 {
+		match self {
+			Operand::Imm(i) => *i as u64,
+			_ => panic!("not an immediate operand"),
+		}
+	}
+
+	fn simm(&self) -> i64 {
+		match self {
+			Operand::Imm(i) => (*i as i8) as i64,
+			_ => panic!("not an immediate operand"),
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -367,6 +388,20 @@ impl InstructionTrait for Instruction {
 	fn is_halt       (&self) -> bool { false }
 	fn is_return     (&self) -> bool {
 		matches!(self.desc.opcode, Opcode::RTS_IMP | Opcode::RTI_IMP)
+	}
+
+	fn control_target(&self) -> Option<VA> {
+		if self.desc.ctrl {
+			if let Some(operand) = self.op {
+				if let Operand::Mem(addr, _) = operand {
+					return Some(VA(addr as usize))
+				}
+
+				unreachable!("control instructions can only have memory operands");
+			}
+		}
+
+		None
 	}
 }
 

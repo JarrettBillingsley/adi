@@ -5,18 +5,21 @@
 # TODO:
 
 - write some FUCKING tests
-- disas is working with a raw &[u8] but should be an ImageSlice probably
 - use more traits to overload methods like `x_from_y` and `x_for_y`
-- move analysis::func to program
-- implied operands in InstructionTrait
+- move `analysis::func` to program
+- implied operands in `InstructionTrait`
 - bankable region mem configs
-- Memory: removing/redefining/iterating segments
-- Program: FuncIndex, VarIndex(?)
-- Platform
-- MemoryMap: iterators for bankable regions, ROM regions, etc?
-- SpanKind: like, an array/variable owner type
+- `Memory`: removing/redefining/iterating segments
+- `Program`: `FuncIndex`, `VarIndex`(?)
+- `Platform`
+- `MemoryMap`: iterators for bankable regions, ROM regions, etc?
+- `SpanKind`: like, an array/variable owner type
 - memory tests: test config, map, region, segment...
-- RefMap: does this need to be BTreeMap/Set? (do we need ordering?)
+- `RefMap`: does this need to be `BTreeMap/Set`? (do we need ordering?)
+- `Segment`: more spanagement (since the spanmap is not public)
+- analysis: if a function has multiple exit points, one path *may* be a tailcalled function
+	- but can't know until someone else calls it
+	- so have to be able to split off part of a CFG into its own function
 
 ## Memory Banking
 

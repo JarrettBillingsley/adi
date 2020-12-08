@@ -57,7 +57,7 @@ impl Program {
 
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique Location.
 	pub fn add_name_va(&mut self, name: &str, va: VA) {
-		let loc = self.mem.va_to_loc(va).unwrap();
+		let loc = self.mem.loc_for_va(va).unwrap();
 		self.add_name(name, loc);
 	}
 
@@ -110,13 +110,13 @@ impl Program {
 	/// All (Location, name) pairs in a given range of VAs, in Location order.
 	pub fn names_in_va_range(&self, range: impl RangeBounds<VA>)
 	-> BTreeRange<'_, Location, String> {
-		let range = va_range_to_loc_range(range, |va| self.mem.va_to_loc(va).unwrap());
+		let range = va_range_to_loc_range(range, |va| self.mem.loc_for_va(va).unwrap());
 		self.names_in_range(range)
 	}
 
 	/// Gets the name of a given VA if one exists, or generates one if not.
 	pub fn name_of_va(&self, va: VA) -> String {
-		if let Some(loc) = self.mem.va_to_loc(va) {
+		if let Some(loc) = self.mem.loc_for_va(va) {
 			self.name_of_loc(loc)
 		// no mapped segment?? uhhhh....... try region name?
 		} else if let Some(region) = self.mem.map().region_for_va(va) {

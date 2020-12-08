@@ -2,6 +2,7 @@
 use std::iter::Chain;
 use std::option;
 use std::slice;
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use derive_new::new;
 use generational_arena::{ Arena, Index };
@@ -13,8 +14,15 @@ use crate::memory::Location;
 // ------------------------------------------------------------------------------------------------
 
 /// Newtype which uniquely identifies a `Function`.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub struct FuncId(Index);
+
+impl Debug for FuncId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		let (index, generation) = self.0.into_raw_parts();
+		write!(f, "FuncId({}, {})", index, generation)
+	}
+}
 
 /// A single function.
 #[derive(Debug)]
@@ -33,14 +41,38 @@ pub struct Function {
 	bbs: Vec<BasicBlock>, // [0] is head
 }
 
+impl Function {
+	pub fn add_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm) -> BBId {
+		let id = BBId(self.id, self.bbs.len());
+		self.bbs.push(BasicBlock { id, loc, term_loc, term });
+		id
+	}
+
+	pub fn head_id(&self) -> BBId {
+		self.bbs[0].id
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // BasicBlock
 // ------------------------------------------------------------------------------------------------
 
 /// Newtype which uniquely identifies a `BasicBlock`. Consists of a `FuncId` and
 /// an index into that function's `bbs` vec.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub struct BBId(FuncId, usize);
+
+impl BBId {
+	pub fn func(&self) -> FuncId {
+		self.0
+	}
+}
+
+impl Debug for BBId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "BBId({:?}, {})", self.0, self.1)
+	}
+}
 
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
@@ -73,6 +105,8 @@ impl BasicBlock {
 pub enum BBTerm {
 	/// Hit a dead end (e.g. invalid instruction, or user undefined some code).
 	DeadEnd,
+	/// A halt instruction.
+	Halt,
 	/// A return instruction.
 	Return,
 	/// Execution falls through to the next BB.
@@ -94,7 +128,7 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return        => None    .into_iter().chain(&[]),
+			DeadEnd | Return | Halt => None    .into_iter().chain(&[]),
 			FallThru(id) | Jump(id) => Some(id).into_iter().chain(&[]),
 			Cond { t, f }           => Some(t) .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(ids)            => None    .into_iter().chain(ids),
@@ -129,5 +163,9 @@ impl FuncIndex {
 	/// Same as above but mutable.
 	pub fn get_mut(&mut self, id: FuncId) -> &mut Function {
 		self.arena.get_mut(id.0).expect("stale FuncId")
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = (FuncId, &Function)> {
+		self.arena.iter().map(|(id, f)| (FuncId(id), f))
 	}
 }

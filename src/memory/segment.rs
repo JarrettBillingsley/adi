@@ -5,7 +5,7 @@ use std::fmt::{ Debug, };
 use derive_new::new;
 use parse_display::Display;
 
-use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, VA };
+use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind, VA };
 
 // ------------------------------------------------------------------------------------------------
 // SegId
@@ -26,6 +26,12 @@ pub struct SegId(pub u16);
 pub struct Location {
 	pub seg:  SegId,
 	pub offs: usize,
+}
+
+impl Location {
+	pub const fn invalid() -> Self {
+		Self { seg: SegId(u16::MAX), offs: usize::MAX }
+	}
 }
 
 impl Debug for Location {
@@ -153,6 +159,41 @@ impl Segment {
 	/// Iterator over all spans in this segment, in order.
 	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
 		self.spans.iter()
+	}
+
+	pub fn span_begin_analysis(&mut self, loc: Location) {
+		assert!(loc.seg == self.id);
+		// may not be at the beginning of a span, so have to use define
+		let end = self.spans.span_at(loc.offs).end;
+		self.spans.define(loc.offs, end.offs - loc.offs, SpanKind::Ana);
+	}
+
+	pub fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
+		assert!(loc.seg == self.id);
+		assert!(self.spans.span_at(loc.offs).kind == SpanKind::Ana);
+		self.spans.undefine(loc.offs);
+		self.spans.define(loc.offs, end.offs - loc.offs, kind);
+	}
+
+	/// Split the span that owns `loc` into two parts; the second part will be given `kind`.
+	/// Panics if the existing span is Unknown, or if the length of either part will be 0.
+	pub fn split_span(&mut self, loc: Location, kind: SpanKind) {
+		assert!(loc.seg == self.id);
+		let existing = self.spans.span_at(loc.offs);
+
+		assert!(existing.start.offs < loc.offs);
+		assert!(loc.offs < existing.end.offs);
+
+		let first_len = loc.offs - existing.start.offs;
+		let second_len = existing.end.offs - loc.offs;
+
+		self.spans.truncate(existing.start.offs, first_len);
+		self.spans.define(loc.offs, second_len, kind);
+	}
+
+	pub fn redefine_span(&mut self, start: Location, kind: SpanKind) {
+		assert!(start.seg == self.id);
+		self.spans.redefine(start.offs, kind);
 	}
 
 	// ---------------------------------------------------------------------------------------------

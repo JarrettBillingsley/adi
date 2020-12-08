@@ -58,6 +58,10 @@ pub enum SpanKind {
 	Code(BBId),
 	/// Data (anything that isn't code)
 	Data,
+
+	/// Code that's been analyzed, but not yet put into a real BB.
+	/// The data is just for use by the analysis algorithm.
+	AnaCode(usize),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -89,7 +93,7 @@ pub(crate) struct SpanMap {
 
 // The span map actually uses this type - only the end and kind fields, since the start
 // is the key.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[derive(new)]
 struct SpanInternal {
 	end:  usize,
@@ -147,6 +151,74 @@ impl SpanMap {
 	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
 		let seg = self.seg;
 		self.spans.iter().map(move |s| Span::new(seg, s))
+	}
+
+	/// Redefine a span that begins at `start` with a new `kind`. Has no effect
+	/// if the kind is equal to the old kind. Valid transitions:
+	///
+	/// - from `Unk` to anything
+	/// - from anything to `Unk` (same effect as `undefine`)
+	/// - from `AnaCode` to `Code`
+	///
+	/// # Panics
+	///
+	/// - if `start` is not the start of a span.
+	/// - if it is not one of the valid transitions above.
+	pub fn redefine(&mut self, start: usize, kind: SpanKind) {
+		let old = self.spans.get_mut(&start).expect("no span at this location");
+
+		if old.kind != kind {
+			use SpanKind::*;
+
+			match (old.kind, kind) {
+				(Unk, Unk) => {} // do NOTHING
+				(Unk, _) |
+				(AnaCode(..), Code(..)) => {
+					// redefine it!
+					old.kind = kind;
+				}
+
+				(_, Unk) => self.undefine(start),
+				(_, _) => panic!("trying to redefine a {:?} as a {:?}", old.kind, kind),
+			}
+		}
+	}
+
+	/// Shorten an existing span that begins at `old_start` to `new_len` bytes.
+	/// The empty space is marked unknown. Has no effect if `new_len` is equal to its old length.
+	///
+	/// # Panics
+	///
+	/// - if `old_start` is not the start of a span
+	/// - if `new_len` is 0
+	/// - if the existing span is `SpanKind::Unk`
+	pub fn truncate(&mut self, old_start: usize, new_len: usize) {
+		let old = *self.spans.get(&old_start).expect("no span at this location");
+		assert!(new_len != 0);
+		assert!(old.kind != SpanKind::Unk);
+
+		let old_len = old.end - old_start;
+
+		if new_len < old_len {
+			let new_start = old_start + new_len;
+			let mut new_end = old.end;
+
+			if let Some(after) = self.span_after(old_start) {
+				if after.kind == SpanKind::Unk {
+					// ditch that old unknown span!
+					self.spans.remove(&after.start.offs);
+					new_end = after.end.offs;
+				}
+			}
+
+			// make a new unknown span [new_start .. new_end)
+			self.spans.insert(new_start, SpanInternal::new(new_end, SpanKind::Unk));
+			// and shorten the old one to [.. new_start)
+			self.spans.get_mut(&old_start).unwrap().end = new_start;
+		}
+
+		#[cfg(debug_assertions)]
+		self.check_invariants();
 	}
 
 	/// Define a code or data span at `start` that stretches `len` bytes.

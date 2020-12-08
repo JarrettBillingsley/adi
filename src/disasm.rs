@@ -53,6 +53,15 @@ pub trait OperandTrait {
 
 	/// How, if any way, does this operand access memory?
 	fn access(&self) -> Option<MemAccess>;
+
+	/// If access is Some, get the address it refers to; panics otherwise.
+	fn addr(&self) -> VA;
+
+	/// If this is an immediate value, get it as an unsigned number; panics otherwise.
+	fn uimm(&self) -> u64;
+
+	/// If this is an immediate value, get it as a signed number; panics otherwise.
+	fn simm(&self) -> i64;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -91,6 +100,9 @@ pub trait InstructionTrait {
 	fn is_invalid    (&self) -> bool;
 	/// Is this some kind of halt instruction from which there is no recovery?
 	fn is_halt       (&self) -> bool;
+
+	/// If this is a control instruction, the target address of that control, if it has one.
+	fn control_target(&self) -> Option<VA>;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -102,8 +114,23 @@ pub trait DisassemblerTrait {
 	/// Associated type of instructions given by this disassembler.
 	type TInstruction: InstructionTrait;
 
-	/// Disassemble a single instruction from `img[offs..]` with the given VA.
+	/// Disassemble a single instruction from `img` with the given VA.
 	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>;
+
+	fn find_last_instr(&self, img: &[u8], va: VA) -> DisasResult<Option<Self::TInstruction>>
+	where Self: Sized{
+		let mut iter = self.disas_all(img, va);
+		let mut last = None;
+		for inst in &mut iter {
+			last = Some(inst);
+		}
+
+		if let Some(err) = iter.err() {
+			Err(err)
+		} else {
+			Ok(last)
+		}
+	}
 
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
 	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VA)
@@ -152,6 +179,11 @@ impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
 	/// The offset into the slice where an error occurred, if any.
 	pub fn err_offset(&self) -> usize {
 		self.offs
+	}
+
+	/// The VA where an error occurred, if any.
+	pub fn err_va(&self) -> VA {
+		self.va
 	}
 }
 
