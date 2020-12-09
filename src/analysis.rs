@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use std::iter::IntoIterator;
 
 use derive_new::new;
+use log::*;
 
 use crate::program::{ Program, BasicBlock, BBTerm, BBId, IntoBasicBlock };
 use crate::memory::{ Location, ImageSliceable, SpanKind };
@@ -53,7 +54,7 @@ impl ProtoFunc {
 	-> PBBIdx {
 		let ret = self.bbs.len();
 
-		println!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
+		debug!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				loc, term_loc, end, term);
 
 		self.bbs.push(ProtoBB { loc, term_loc, term, end });
@@ -71,7 +72,7 @@ impl ProtoFunc {
 		self.bbs[idx.0].term = BBTerm::FallThru(start);
 		self.bbs[idx.0].end = start;
 
-		println!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
+		debug!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				new.loc, new.term_loc, new.end, new.term);
 		self.bbs.push(new);
 		PBBIdx(ret)
@@ -134,8 +135,8 @@ where
 		}
 
 		for (_, func) in self.prog.all_funcs() {
-			println!("---------------------------------------------------------------------------");
-			println!("{:#?}", func);
+			debug!("---------------------------------------------------------------------------");
+			debug!("{:#?}", func);
 		}
 	}
 
@@ -151,27 +152,25 @@ where
 				func.set_term_loc(idx, term_loc);
 			}
 
+			// should not happen, since the split method will panic if you try to
+			// make an empty span.
 			Ok(None) => panic!("trying to find terminator of an empty bb???"),
 
-			// TODO:
-			// I think it's possible to have DisasErrorKind::OutOfBytes if we had an erroneous
-			// split, like if something branches into the middle of an instruction.
-			// in that case, we probably should not have done the split at all...
+			// should not happen, if we didn't do an invalid split.
 			Err(e) =>   todo!("what does this mean??? {}", e),
 		}
 	}
 
 	fn analyze_func(&mut self, loc: Location) {
-		println!();
-		println!("------------------------------------------------------------------------");
-		println!("- begin function analysis at {}", loc);
+		debug!("------------------------------------------------------------------------");
+		debug!("- begin function analysis at {}", loc);
 
 		let kind = self.prog.mem().segment_from_loc(loc).span_at_loc(loc).kind;
 		if let SpanKind::Code(bbid) = kind {
 			let orig_func_head = self.prog.get_func(bbid.func()).head_id();
 
 			if bbid == orig_func_head {
-				println!("oh, I've seen this one already. NEVERMIIIND");
+				debug!("oh, I've seen this one already. NEVERMIIIND");
 				return;
 			} else {
 				todo!("have to split function at {} and make predecessor(s) tailcalls", loc);
@@ -187,7 +186,7 @@ where
 		let mut new_funcs = Vec::<Location>::new();
 
 		while let Some(start) = potential_bbs.pop_front() {
-			println!("evaluating potential bb at {}", start);
+			debug!("evaluating potential bb at {}", start);
 
 			// ok. we have a potential BB to analyze.
 			// let's look at this location to see what's here.
@@ -206,6 +205,8 @@ where
 
 					// oh, we've already analyzed this.
 					if start != old_start {
+						// TODO: ensure that `start` actually points to the beginning of an instruction
+
 						// ooh, now we have to split the existing bb.
 						let new_bb = func.split_bb(id, start);
 
@@ -240,7 +241,7 @@ where
 			let mut term: Option<BBTerm> = None;
 
 			for inst in &mut iter {
-				// println!("{:04X} {:?}", inst.va(), inst.bytes());
+				// debug!("{:04X} {:?}", inst.va(), inst.bytes());
 				let next_addr = inst.va() + inst.size();
 				term_loc = end;
 				end = next_addr;
@@ -279,7 +280,7 @@ where
 					// if it's into the same segment, it might be part of this function.
 					// if not, it's probably a tailcall to another function.
 					if seg.contains_va(target) {
-						println!("pushing potential bb at {}", target_loc);
+						debug!("pushing potential bb at {}", target_loc);
 						potential_bbs.push_back(target_loc);
 					}
 
@@ -289,7 +290,7 @@ where
 					// if it's into the same segment, it might be part of this function.
 					// if not, it's probably a tailcall to another function.
 					if seg.contains_va(target) {
-						println!("pushing potential bb at {}", target_loc);
+						debug!("pushing potential bb at {}", target_loc);
 						potential_bbs.push_back(target_loc);
 					}
 
@@ -300,13 +301,13 @@ where
 					potential_bbs.push_back(f);
 
 					term = Some(BBTerm::Cond { t: target_loc, f });
-					println!("pushing potential bb at {}", f);
+					debug!("pushing potential bb at {}", f);
 					break;
 				} else {
 					assert!(inst.is_call());
 
 					// clearly gotta be another function, so.
-					println!("func call to {}", target_loc);
+					debug!("func call to {}", target_loc);
 					new_funcs.push(target_loc);
 
 				}
@@ -318,14 +319,14 @@ where
 					DisasErrorKind::OutOfBytes { expected, got } => {
 						assert!(end == iter.err_va());
 						term = Some(BBTerm::DeadEnd);
-						println!("out of bytes (ex {} got {})", expected, got);
-						println!("dead ended term {} end {}", term_loc, end);
+						debug!("out of bytes (ex {} got {})", expected, got);
+						debug!("dead ended term {} end {}", term_loc, end);
 					}
 
 					DisasErrorKind::UnknownInstruction => {
 						assert!(end == iter.err_va());
 						term = Some(BBTerm::DeadEnd);
-						println!("dead ended term {} end {}", term_loc, end);
+						debug!("dead ended term {} end {}", term_loc, end);
 					}
 				}
 			} else if term.is_none() {
@@ -340,13 +341,13 @@ where
 
 			let bb_id = func.new_bb(start, term_loc, term, end);
 
-			println!("{} {}", span.start, span.end);
+			debug!("{} {}", span.start, span.end);
 
 			self.prog.mem_mut().segment_from_loc_mut(start).span_end_analysis(
 				start, end, SpanKind::AnaCode(bb_id.0));
 		}
 
-		// println!("{:#?}", func);
+		// debug!("{:#?}", func);
 
 		// now, turn the proto func into a real boy!!
 		self.prog.new_func(loc, func.into_iter());
@@ -357,7 +358,7 @@ where
 		}
 
 		for f in new_funcs {
-			// println!("discovered function at {}", f);
+			// debug!("discovered function at {}", f);
 			self.enqueue_function(f);
 		}
 	}

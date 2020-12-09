@@ -1,16 +1,33 @@
 
-use better_panic::{ Settings, Verbosity };
 use std::iter::FromIterator;
+
+use better_panic::{ Settings as PanicSettings, Verbosity as PanicVerbosity };
+use simplelog::*;
+
 use adi::*;
 
-fn main() -> std::io::Result<()> {
-	Settings::new()
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+	setup_logging()?;
+	setup_panic();
+	test_nes()?;
+	Ok(())
+}
+
+fn setup_logging() -> Result<(), TermLogError> {
+	let log_config = ConfigBuilder::new()
+		.set_time_level(LevelFilter::Off)
+		.set_thread_level(LevelFilter::Off)
+		.set_target_level(LevelFilter::Off)
+		.build();
+	TermLogger::init(LevelFilter::Trace, log_config, TerminalMode::Mixed)
+}
+
+fn setup_panic() {
+	PanicSettings::new()
 		.lineno_suffix(true)
 		// .most_recent_first(false)
-		.verbosity(Verbosity::Full)
+		.verbosity(PanicVerbosity::Full)
 		.install();
-
-	test_nes()
 }
 
 fn test_nes() -> std::io::Result<()> {
