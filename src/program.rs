@@ -7,6 +7,7 @@ use std::collections::{
 use std::ops::{ Bound, RangeBounds };
 
 use derive_new::new;
+use delegate::delegate;
 
 use crate::memory::{ Memory, Location, VA, SpanKind };
 use crate::disasm::NameLookupTrait;
@@ -59,24 +60,21 @@ impl Program {
 	// ---------------------------------------------------------------------------------------------
 	// Functions
 
-	/// Get the function object with the given ID.
-	pub fn get_func(&self, id: FuncId) -> &Function {
-		self.funcs.get(id)
-	}
-
-	/// Same as above, but mutable.
-	pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function {
-		self.funcs.get_mut(id)
-	}
-
-	/// Iterator over all functions in the program, in arbitrary order.
-	pub fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function)> {
-		self.funcs.iter()
-	}
-
-	/// Same as above, but mutable.
-	pub fn all_funcs_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function)> {
-		self.funcs.iter_mut()
+	delegate! {
+		to self.funcs {
+			/// Get the function object with the given ID.
+			#[call(get)]
+			pub fn get_func(&self, id: FuncId) -> &Function;
+			/// Same as above, but mutable.
+			#[call(get_mut)]
+			pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function;
+			/// Iterator over all functions in the program, in arbitrary order.
+			#[call(iter)]
+			pub fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function)>;
+			/// Same as above, but mutable.
+			#[call(iter_mut)]
+			pub fn all_funcs_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function)>;
+		}
 	}
 
 	/// Gets the ID of the function which starts at the given location, if one exists.
@@ -118,35 +116,38 @@ impl Program {
 	// ---------------------------------------------------------------------------------------------
 	// Names
 
-	/// Assigns a name to a given Location. Renames it if it already has one.
-	pub fn add_name(&mut self, name: &str, loc: Location) {
-		self.names.add(name, loc);
-	}
-
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique Location.
 	pub fn add_name_va(&mut self, name: &str, va: VA) {
 		let loc = self.mem.loc_for_va(va).unwrap();
 		self.add_name(name, loc);
 	}
 
-	/// Removes a name. Panics if the name doesn't exist.
-	pub fn remove_name(&mut self, name: &str) {
-		self.names.remove_name(name)
-	}
-
-	/// Removes the name from a location. Panics if there is no name.
-	pub fn remove_name_from_loc(&mut self, loc: Location) {
-		self.names.remove_loc(loc);
-	}
-
-	/// Whether this name exists.
-	pub fn has_name(&self, name: &str) -> bool {
-		self.names.has_name(name)
-	}
-
-	/// Whether this location has a name.
-	pub fn has_name_for_loc(&self, loc: Location) -> bool {
-		self.names.has_loc(loc)
+	delegate! {
+		to self.names {
+			/// Assigns a name to a given Location. Renames it if it already has one.
+			#[call(add)]
+			pub fn add_name(&mut self, name: &str, loc: Location);
+			/// Removes a name. Panics if the name doesn't exist.
+			pub fn remove_name(&mut self, name: &str);
+			/// Removes the name from a location. Panics if there is no name.
+			#[call(remove_loc)]
+			pub fn remove_name_from_loc(&mut self, loc: Location);
+			/// Whether this name exists.
+			pub fn has_name(&self, name: &str) -> bool;
+			/// Whether this location has a name.
+			#[call(has_loc)]
+			pub fn has_name_for_loc(&self, loc: Location) -> bool;
+			/// All (name, Location) pairs in arbitrary order.
+			#[call(names)]
+			pub fn all_names(&self) -> HashIter<'_, String, Location>;
+			/// All (Location, name) pairs in Location order.
+			#[call(locations)]
+			pub fn all_names_by_loc(&self) -> BTreeIter<'_, Location, String>;
+			/// All (Location, name) pairs in a given range of Locations, in Location order.
+			#[call(names_in_range)]
+			pub fn names_in_range(&self, range: impl RangeBounds<Location>)
+			-> BTreeRange<'_, Location, String>;
+		}
 	}
 
 	/// Gets the name for a location. Panics if it has none.
@@ -157,22 +158,6 @@ impl Program {
 	/// Gets the location for a name. Panics if the name doesn't exist.
 	pub fn loc_from_name(&self, name: &str) -> Location {
 		self.names.loc_for_name(name).unwrap()
-	}
-
-	/// All (name, Location) pairs in arbitrary order.
-	pub fn all_names(&self) -> HashIter<'_, String, Location> {
-		self.names.names()
-	}
-
-	/// All (Location, name) pairs in Location order.
-	pub fn all_names_by_loc(&self) -> BTreeIter<'_, Location, String> {
-		self.names.locations()
-	}
-
-	/// All (Location, name) pairs in a given range of Locations, in Location order.
-	pub fn names_in_range(&self, range: impl RangeBounds<Location>)
-	-> BTreeRange<'_, Location, String> {
-		self.names.names_in_range(range)
 	}
 
 	/// All (Location, name) pairs in a given range of VAs, in Location order.

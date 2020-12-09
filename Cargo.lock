@@ -15,6 +15,7 @@ version = "0.1.0"
 dependencies = [
  "better-panic",
  "colored",
+ "delegate",
  "derive-new",
  "err-derive",
  "generational-arena",
@@ -141,6 +142,17 @@ dependencies = [
  "regex",
  "termios",
  "winapi",
+]
+
+[[package]]
+name = "delegate"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a57ed03a3563e9d6214c1eec5bd3b151fc21fb2052448b97692c8df30d113c8c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

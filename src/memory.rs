@@ -3,6 +3,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use derive_new::new;
 use parse_display::Display;
+use delegate::delegate;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -94,14 +95,13 @@ impl Memory {
 		}
 	}
 
-	/// Given a virtual address, get the memory region which contains it, if any.
-	pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion> {
-		self.mem_map.region_for_va(va)
-	}
-
-	/// Given a name, gets the memory region with that name, if any.
-	pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion> {
-		self.mem_map.region_for_name(name)
+	delegate! {
+		to self.mem_map {
+			/// Given a virtual address, get the memory region which contains it, if any.
+			pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion>;
+			/// Given a name, gets the memory region with that name, if any.
+			pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion>;
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------

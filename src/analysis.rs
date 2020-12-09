@@ -38,10 +38,11 @@ impl IntoBasicBlock for ProtoBB {
 	}
 }
 
+/// Newtype wrapper for the index of a `ProtoBB` in a `ProtoFunc`.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 struct PBBIdx(usize);
 
-/// Used for initial exploration, like above.
+/// Used for initial exploration, like `ProtoBB`.
 #[derive(Debug)]
 #[derive(new)]
 struct ProtoFunc {
@@ -50,6 +51,7 @@ struct ProtoFunc {
 }
 
 impl ProtoFunc {
+	/// Adds a new basic block and returns its index.
 	fn new_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm, end: Location)
 	-> PBBIdx {
 		let ret = self.bbs.len();
@@ -61,6 +63,11 @@ impl ProtoFunc {
 		PBBIdx(ret)
 	}
 
+	/// Splits an existing basic block `idx` in two at location `start`. The existing BB
+	/// is shortened, and its terminator is set to fall through to the new one. **Important:
+	/// the existing BB's terminator location is set to an invalid location and must be
+	/// re-found after calling this method.**
+	/// Returns the new BB's index.
 	fn split_bb(&mut self, idx: PBBIdx, start: Location) -> PBBIdx {
 		let ret = self.bbs.len();
 
@@ -68,6 +75,8 @@ impl ProtoFunc {
 		assert!(start.offs < self.bbs[idx.0].end.offs);
 		let new = ProtoBB { loc: start, ..self.bbs[idx.0].clone() };
 
+		// TODO: I'm pretty sure I can find the last instruction before the terminator BEFORE
+		// splitting so that this won't be necessary.
 		self.bbs[idx.0].term_loc = Location::invalid();
 		self.bbs[idx.0].term = BBTerm::FallThru(start);
 		self.bbs[idx.0].end = start;
@@ -78,15 +87,18 @@ impl ProtoFunc {
 		PBBIdx(ret)
 	}
 
+	/// Get the BB at the given index.
 	fn get_bb(&self, idx: PBBIdx) -> &ProtoBB {
 		&self.bbs[idx.0]
 	}
 
+	/// Set the terminator location of a BB that was split by `split_bb`.
 	fn set_term_loc(&mut self, idx: PBBIdx, term_loc: Location) {
 		assert!(self.bbs[idx.0].term_loc == Location::invalid());
 		self.bbs[idx.0].term_loc = term_loc;
 	}
 
+	/// Consuming iterator over the BBs (for promotion to a real function).
 	fn into_iter(self) -> impl Iterator<Item = impl IntoBasicBlock> {
 		self.bbs.into_iter()
 	}
@@ -96,12 +108,18 @@ impl ProtoFunc {
 // Analyzer
 // ------------------------------------------------------------------------------------------------
 
+/// Things that can be put onto an `Analyzer`'s analysis queue.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum AnalysisItem {
+	/// A function.
 	Func(Location),
+
+	/// A jump table. The location points to the jump instruction.
 	JumpTable(Location),
 }
 
+/// Analyzes code, discovers functions, builds control flow graphs, and defines
+/// functions in a program.
 #[derive(new)]
 pub struct Analyzer<'prog, D: DisassemblerTrait, P: PrinterTrait> {
 	prog:  &'prog mut Program,
@@ -117,14 +135,18 @@ where
 	D: DisassemblerTrait<TInstruction = I>,
 	P: PrinterTrait<TInstruction = I>,
 {
+	/// Puts a location on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, loc: Location) {
 		self.queue.push_back(AnalysisItem::Func(loc))
 	}
 
+	/// Puts a location on the queue that should be the jump instruction for a jump table.
 	pub fn enqueue_jump_table(&mut self, loc: Location) {
 		self.queue.push_back(AnalysisItem::JumpTable(loc))
 	}
 
+	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
+	/// so this can do a lot of work in a single call.
 	pub fn analyze_queue(&mut self) {
 		loop {
 			match self.queue.pop_front() {
