@@ -7,7 +7,7 @@ use log::*;
 
 use crate::program::{ Program, BasicBlock, BBTerm, BBId, IntoBasicBlock };
 use crate::memory::{ Location, ImageSliceable, SpanKind };
-use crate::disasm::{ DisasErrorKind, DisassemblerTrait, InstructionTrait, PrinterTrait };
+use crate::disasm::{ DisasErrorKind, DisassemblerTrait, InstructionTrait };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -56,7 +56,7 @@ impl ProtoFunc {
 	-> PBBIdx {
 		let ret = self.bbs.len();
 
-		debug!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
+		trace!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				loc, term_loc, end, term);
 
 		self.bbs.push(ProtoBB { loc, term_loc, term, end });
@@ -81,7 +81,7 @@ impl ProtoFunc {
 		self.bbs[idx.0].term = BBTerm::FallThru(start);
 		self.bbs[idx.0].end = start;
 
-		debug!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
+		trace!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				new.loc, new.term_loc, new.end, new.term);
 		self.bbs.push(new);
 		PBBIdx(ret)
@@ -121,19 +121,17 @@ enum AnalysisItem {
 /// Analyzes code, discovers functions, builds control flow graphs, and defines
 /// functions in a program.
 #[derive(new)]
-pub struct Analyzer<'prog, D: DisassemblerTrait, P: PrinterTrait> {
+pub struct Analyzer<'prog, D: DisassemblerTrait> {
 	prog:  &'prog mut Program,
 	dis:   D,
-	print: P,
 	#[new(value = "VecDeque::new()")]
 	queue: VecDeque<AnalysisItem>,
 }
 
-impl<I, D, P> Analyzer<'_, D, P>
+impl<I, D> Analyzer<'_, D>
 where
 	I: InstructionTrait,
 	D: DisassemblerTrait<TInstruction = I>,
-	P: PrinterTrait<TInstruction = I>,
 {
 	/// Puts a location on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, loc: Location) {
@@ -154,11 +152,6 @@ where
 				Some(AnalysisItem::Func(loc))      => self.analyze_func(loc),
 				Some(AnalysisItem::JumpTable(loc)) => self.analyze_jump_table(loc),
 			}
-		}
-
-		for (_, func) in self.prog.all_funcs() {
-			debug!("---------------------------------------------------------------------------");
-			debug!("{:#?}", func);
 		}
 	}
 
@@ -184,18 +177,23 @@ where
 	}
 
 	fn analyze_func(&mut self, loc: Location) {
-		debug!("------------------------------------------------------------------------");
-		debug!("- begin function analysis at {}", loc);
+		trace!("------------------------------------------------------------------------");
+		trace!("- begin function analysis at {}", loc);
 
-		let kind = self.prog.mem().segment_from_loc(loc).span_at_loc(loc).kind;
-		if let SpanKind::Code(bbid) = kind {
+		if let Some(bbid) = self.prog.mem().segment_from_loc(loc).span_at_loc(loc).bb() {
 			let orig_func_head = self.prog.get_func(bbid.func()).head_id();
 
 			if bbid == orig_func_head {
-				debug!("oh, I've seen this one already. NEVERMIIIND");
+				// the beginning of an already-analyzed function.
+				trace!("oh, I've seen this one already. NEVERMIIIND");
 				return;
 			} else {
-				todo!("have to split function at {} and make predecessor(s) tailcalls", loc);
+				// the middle of an already-analyzed function. TODO: maybe we should
+				// split the function, maybe not. Consider diamond-shaped CFG where we
+				// call a BB in the middle of one path. who owns the BBs at/after
+				// the rejoining point?
+				trace!("middle of an existing function... let's move on");
+				return;
 			}
 		}
 
@@ -208,7 +206,7 @@ where
 		let mut new_funcs = Vec::<Location>::new();
 
 		while let Some(start) = potential_bbs.pop_front() {
-			debug!("evaluating potential bb at {}", start);
+			trace!("evaluating potential bb at {}", start);
 
 			// ok. we have a potential BB to analyze.
 			// let's look at this location to see what's here.
@@ -218,7 +216,11 @@ where
 			match span.kind {
 				SpanKind::Unk         => {} // yeeeeee that's what we want
 				SpanKind::Ana         => panic!("span at {} is somehow being analyzed", start),
-				SpanKind::Code(..)    => todo!("span at {} already analyzed; fallthru?", start),
+				SpanKind::Code(..)    => {
+					// oh, we're at another function. guess we'll fall through into it.
+					// just break out of the loop; it will set the terminator to fall through.
+					break;
+				}
 				SpanKind::Data        => todo!("uh oh. what do we do here? {}", start),
 				SpanKind::AnaCode(id) => {
 					let id = PBBIdx(id);
@@ -263,7 +265,7 @@ where
 			let mut term: Option<BBTerm> = None;
 
 			for inst in &mut iter {
-				// debug!("{:04X} {:?}", inst.va(), inst.bytes());
+				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				let next_addr = inst.va() + inst.size();
 				term_loc = end;
 				end = next_addr;
@@ -302,7 +304,7 @@ where
 					// if it's into the same segment, it might be part of this function.
 					// if not, it's probably a tailcall to another function.
 					if seg.contains_va(target) {
-						debug!("pushing potential bb at {}", target_loc);
+						trace!("pushing potential bb at {}", target_loc);
 						potential_bbs.push_back(target_loc);
 					}
 
@@ -312,7 +314,7 @@ where
 					// if it's into the same segment, it might be part of this function.
 					// if not, it's probably a tailcall to another function.
 					if seg.contains_va(target) {
-						debug!("pushing potential bb at {}", target_loc);
+						trace!("pushing potential bb at {}", target_loc);
 						potential_bbs.push_back(target_loc);
 					}
 
@@ -323,13 +325,13 @@ where
 					potential_bbs.push_back(f);
 
 					term = Some(BBTerm::Cond { t: target_loc, f });
-					debug!("pushing potential bb at {}", f);
+					trace!("pushing potential bb at {}", f);
 					break;
 				} else {
 					assert!(inst.is_call());
 
 					// clearly gotta be another function, so.
-					debug!("func call to {}", target_loc);
+					trace!("func call to {}", target_loc);
 					new_funcs.push(target_loc);
 
 				}
@@ -341,14 +343,14 @@ where
 					DisasErrorKind::OutOfBytes { expected, got } => {
 						assert!(end == iter.err_va());
 						term = Some(BBTerm::DeadEnd);
-						debug!("out of bytes (ex {} got {})", expected, got);
-						debug!("dead ended term {} end {}", term_loc, end);
+						trace!("out of bytes (ex {} got {})", expected, got);
+						trace!("dead ended term {} end {}", term_loc, end);
 					}
 
 					DisasErrorKind::UnknownInstruction => {
 						assert!(end == iter.err_va());
 						term = Some(BBTerm::DeadEnd);
-						debug!("dead ended term {} end {}", term_loc, end);
+						trace!("dead ended term {} end {}", term_loc, end);
 					}
 				}
 			} else if term.is_none() {
@@ -363,13 +365,11 @@ where
 
 			let bb_id = func.new_bb(start, term_loc, term, end);
 
-			debug!("{} {}", span.start, span.end);
-
 			self.prog.mem_mut().segment_from_loc_mut(start).span_end_analysis(
 				start, end, SpanKind::AnaCode(bb_id.0));
 		}
 
-		// debug!("{:#?}", func);
+		// trace!("{:#?}", func);
 
 		// now, turn the proto func into a real boy!!
 		self.prog.new_func(loc, func.into_iter());
@@ -380,12 +380,13 @@ where
 		}
 
 		for f in new_funcs {
-			// debug!("discovered function at {}", f);
+			// trace!("discovered function at {}", f);
 			self.enqueue_function(f);
 		}
 	}
 
 	fn analyze_jump_table(&mut self, _loc: Location) {
-		todo!()
+		trace!("there's a jumptable at {}", _loc);
+		// todo!()
 	}
 }

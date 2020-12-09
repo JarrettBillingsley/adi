@@ -196,6 +196,11 @@ impl Segment {
 		self.spans.redefine(start.offs, kind);
 	}
 
+	#[cfg(any(test, debug_assertions))]
+	pub fn dump_spans(&self) {
+		self.spans.dump_spans();
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// PRIVATE
 

@@ -18,6 +18,7 @@ fn setup_logging() -> Result<(), TermLogError> {
 		.set_time_level(LevelFilter::Off)
 		.set_thread_level(LevelFilter::Off)
 		.set_target_level(LevelFilter::Off)
+		.set_location_level(LevelFilter::Debug)
 		.build();
 	TermLogger::init(LevelFilter::Trace, log_config, TerminalMode::Mixed)
 }
@@ -27,10 +28,11 @@ fn setup_panic() {
 		.lineno_suffix(true)
 		// .most_recent_first(false)
 		.verbosity(PanicVerbosity::Full)
-		.install();
+	.install();
 }
 
 fn test_nes() -> std::io::Result<()> {
+	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
 	use MemoryRegionKind::*;
 
 	// let's set it up
@@ -73,7 +75,10 @@ fn test_nes() -> std::io::Result<()> {
 	let mem = prog.mem();
 	println!("{}", mem);
 
-	for (loc, name) in prog.all_names_by_loc() {
+	let seg = mem.segment_for_name("PRG0").unwrap();
+
+
+/*	for (loc, name) in prog.all_names_by_loc() {
 		println!("{}: {}", loc, name);
 	}
 
@@ -104,11 +109,10 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	let seg = mem.segment_for_name("PRG0").unwrap();
+
 	let prg0 = seg.image_slice_all().into_data();
 
 	// Disassembly/printing!
-	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
 	let disas = Disassembler;
 	let print = Printer::new(SyntaxFlavor::New);
 
@@ -136,19 +140,32 @@ fn test_nes() -> std::io::Result<()> {
 
 	for name in &["VEC_NMI", "VEC_RESET", "VEC_IRQ"] {
 		println!("{:>10}: {:04X}", name, seg.read_le_u16(prog.loc_from_name(name)));
-	}
+	}*/
 
 	// -------------------------------------------
 
 	let reset_va = VA(seg.read_le_u16(prog.loc_from_name("VEC_RESET")) as usize);
 	let reset_loc = seg.loc_from_va(reset_va);
+	let nmi_va = VA(seg.read_le_u16(prog.loc_from_name("VEC_NMI")) as usize);
+	let nmi_loc = seg.loc_from_va(nmi_va);
 
 	{
 		// huh huh huh
-		let mut anal = Analyzer::new(&mut prog, disas, print);
+		let mut anal = Analyzer::new(&mut prog, Disassembler);
 		anal.enqueue_function(reset_loc);
+		anal.enqueue_function(nmi_loc);
 		anal.analyze_queue();
 	}
+
+	println!("found {} functions.", prog.all_funcs().count());
+
+	for (_, func) in prog.all_funcs() {
+		// println!("---------------------------------------------------------------------------");
+		// println!("{:#?}", func);
+		println!("{}", prog.name_of_loc(func.start_loc()));
+	}
+
+	// prog.mem().segment_for_name("PRG0").unwrap().dump_spans();
 
 	Ok(())
 }
