@@ -1,6 +1,8 @@
 
 use std::marker::PhantomData;
 
+use parse_display::Display;
+
 use crate::memory::VA;
 
 // ------------------------------------------------------------------------------------------------
@@ -68,6 +70,37 @@ pub trait OperandTrait {
 // InstructionTrait
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+/// What rough class of instruction one is.
+pub enum InstructionKind {
+	/// Invalid instruction.
+	Invalid,
+	/// Something else.
+	Other,
+	/// Control flow - function call.
+	Call,
+	/// Control flow - function return.
+	Ret,
+	/// Control flow - conditional jump/branch.
+	Cond,
+	/// Control flow - unconditional jump/branch.
+	Uncond,
+	/// Control flow - indirect jump/branch.
+	Indir,
+	/// Control flow - halt/stop.
+	Halt,
+}
+
+impl InstructionKind {
+	fn is_control(&self) -> bool {
+		use InstructionKind::*;
+		match self {
+			Call | Ret | Cond | Uncond | Indir | Halt  => true,
+			Invalid | Other => false,
+		}
+	}
+}
+
 /// Trait for instructions. Used by analysis and such.
 pub trait InstructionTrait {
 	/// Associated type of operands returned by `get_op`.
@@ -83,26 +116,42 @@ pub trait InstructionTrait {
 	fn get_op(&self, i: usize) -> Self::TOperand;
 	/// Accessor for original bytes.
 	fn bytes(&self) -> &[u8];
-
-	/// Is this a control flow instruction?
-	fn is_control    (&self) -> bool;
-	/// Is this conditional or unconditional?
-	fn is_conditional(&self) -> bool;
-	/// Is this an absolute jump?
-	fn is_jump       (&self) -> bool;
-	/// Is this an indirect jump (i.e. through a register)?
-	fn is_indir_jump (&self) -> bool;
-	/// Is this a function call?
-	fn is_call       (&self) -> bool;
-	/// Is this a function return?
-	fn is_return     (&self) -> bool;
-	/// Is this an invalid instruction?
-	fn is_invalid    (&self) -> bool;
-	/// Is this some kind of halt instruction from which there is no recovery?
-	fn is_halt       (&self) -> bool;
-
+	/// Get kind of instruction.
+	fn kind(&self) -> InstructionKind;
 	/// If this is a control instruction, the target address of that control, if it has one.
 	fn control_target(&self) -> Option<VA>;
+
+	/// Get the virtual address of the instruction after this one.
+	fn next_addr(&self) -> VA {
+		self.va() + self.size()
+	}
+
+	/// Is this a control flow instruction?
+	fn is_control(&self) -> bool { self.kind().is_control() }
+
+	/// Is this an invalid instruction?
+	fn is_invalid(&self) -> bool { matches!(self.kind(), InstructionKind::Invalid) }
+
+	/// Is this some other kind of instruction?
+	fn is_other  (&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
+
+	/// Is this a function call?
+	fn is_call   (&self) -> bool { matches!(self.kind(), InstructionKind::Call) }
+
+	/// Is this a function return ?
+	fn is_ret    (&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
+
+	/// Is this a conditional jump/branch?
+	fn is_cond   (&self) -> bool { matches!(self.kind(), InstructionKind::Cond) }
+
+	/// Is this an unconditional jump/branch?
+	fn is_uncond (&self) -> bool { matches!(self.kind(), InstructionKind::Uncond) }
+
+	/// Is this an indirect jump/branch (i.e. through a register)?
+	fn is_indir  (&self) -> bool { matches!(self.kind(), InstructionKind::Indir) }
+
+	/// Is this some kind of halt instruction from which there is no recovery?
+	fn is_halt   (&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -117,18 +166,16 @@ pub trait DisassemblerTrait {
 	/// Disassemble a single instruction from `img` with the given VA.
 	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>;
 
-	fn find_last_instr(&self, img: &[u8], va: VA) -> DisasResult<Option<Self::TInstruction>>
+	/// Find the last instruction in `img`. Returns `None` if `img` is empty.
+	fn find_last_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>
 	where Self: Sized{
 		let mut iter = self.disas_all(img, va);
-		let mut last = None;
-		for inst in &mut iter {
-			last = Some(inst);
-		}
+		let last = (&mut iter).last();
 
 		if let Some(err) = iter.err() {
 			Err(err)
 		} else {
-			Ok(last)
+			Ok(last.unwrap())
 		}
 	}
 

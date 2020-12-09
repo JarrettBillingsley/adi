@@ -5,9 +5,14 @@ use std::iter::IntoIterator;
 use derive_new::new;
 use log::*;
 
-use crate::program::{ Program, BasicBlock, BBTerm, BBId, IntoBasicBlock };
-use crate::memory::{ Location, ImageSliceable, SpanKind };
-use crate::disasm::{ DisasErrorKind, DisassemblerTrait, InstructionTrait };
+use crate::program::{ Program, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
+use crate::memory::{ Location, ImageSliceable, SpanKind, VA };
+use crate::disasm::{
+	DisasResult,
+	DisassemblerTrait,
+	InstructionTrait,
+	InstructionKind
+};
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -52,14 +57,16 @@ struct ProtoFunc {
 
 impl ProtoFunc {
 	/// Adds a new basic block and returns its index.
-	fn new_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm, end: Location)
-	-> PBBIdx {
-		let ret = self.bbs.len();
-
+	fn new_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm, end: Location) -> PBBIdx {
 		trace!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				loc, term_loc, end, term);
 
-		self.bbs.push(ProtoBB { loc, term_loc, term, end });
+		self.push_bb(ProtoBB { loc, term_loc, term, end })
+	}
+
+	fn push_bb(&mut self, bb: ProtoBB) -> PBBIdx {
+		let ret = self.bbs.len();
+		self.bbs.push(bb);
 		PBBIdx(ret)
 	}
 
@@ -68,34 +75,27 @@ impl ProtoFunc {
 	/// the existing BB's terminator location is set to an invalid location and must be
 	/// re-found after calling this method.**
 	/// Returns the new BB's index.
-	fn split_bb(&mut self, idx: PBBIdx, start: Location) -> PBBIdx {
-		let ret = self.bbs.len();
+	fn split_bb(&mut self, idx: PBBIdx, term_loc: Location, new_start: Location) -> PBBIdx {
+		let old = &mut self.bbs[idx.0];
 
-		assert!(self.bbs[idx.0].loc.offs < start.offs);
-		assert!(start.offs < self.bbs[idx.0].end.offs);
-		let new = ProtoBB { loc: start, ..self.bbs[idx.0].clone() };
+		assert!(old.loc.offs < new_start.offs);
+		assert!(new_start.offs < old.end.offs);
 
-		// TODO: I'm pretty sure I can find the last instruction before the terminator BEFORE
-		// splitting so that this won't be necessary.
-		self.bbs[idx.0].term_loc = Location::invalid();
-		self.bbs[idx.0].term = BBTerm::FallThru(start);
-		self.bbs[idx.0].end = start;
+		let new = ProtoBB { loc: new_start, ..old.clone() };
+
+		old.term_loc = term_loc;
+		old.term     = BBTerm::FallThru(new_start);
+		old.end      = new_start;
 
 		trace!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				new.loc, new.term_loc, new.end, new.term);
-		self.bbs.push(new);
-		PBBIdx(ret)
+
+		self.push_bb(new)
 	}
 
 	/// Get the BB at the given index.
 	fn get_bb(&self, idx: PBBIdx) -> &ProtoBB {
 		&self.bbs[idx.0]
-	}
-
-	/// Set the terminator location of a BB that was split by `split_bb`.
-	fn set_term_loc(&mut self, idx: PBBIdx, term_loc: Location) {
-		assert!(self.bbs[idx.0].term_loc == Location::invalid());
-		self.bbs[idx.0].term_loc = term_loc;
 	}
 
 	/// Consuming iterator over the BBs (for promotion to a real function).
@@ -111,11 +111,18 @@ impl ProtoFunc {
 /// Things that can be put onto an `Analyzer`'s analysis queue.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum AnalysisItem {
-	/// A function.
-	Func(Location),
-
+	/// An unexplored function.
+	Func1stPass(Location),
+	/// A function that needs to be analyzed more deeply.
+	Func2ndPass(FuncId),
 	/// A jump table. The location points to the jump instruction.
 	JumpTable(Location),
+}
+
+enum ShouldAnalyze {
+	Break,
+	Continue,
+	Analyze,
 }
 
 /// Analyzes code, discovers functions, builds control flow graphs, and defines
@@ -124,7 +131,7 @@ enum AnalysisItem {
 pub struct Analyzer<'prog, D: DisassemblerTrait> {
 	prog:  &'prog mut Program,
 	dis:   D,
-	#[new(value = "VecDeque::new()")]
+	#[new(default)]
 	queue: VecDeque<AnalysisItem>,
 }
 
@@ -135,7 +142,7 @@ where
 {
 	/// Puts a location on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, loc: Location) {
-		self.queue.push_back(AnalysisItem::Func(loc))
+		self.queue.push_back(AnalysisItem::Func1stPass(loc))
 	}
 
 	/// Puts a location on the queue that should be the jump instruction for a jump table.
@@ -149,244 +156,204 @@ where
 		loop {
 			match self.queue.pop_front() {
 				None => break,
-				Some(AnalysisItem::Func(loc))      => self.analyze_func(loc),
-				Some(AnalysisItem::JumpTable(loc)) => self.analyze_jump_table(loc),
+				Some(AnalysisItem::Func1stPass(loc)) => self.func_first_pass(loc),
+				Some(AnalysisItem::Func2ndPass(fid)) => self.func_second_pass(fid),
+				Some(AnalysisItem::JumpTable(loc))   => self.analyze_jump_table(loc),
 			}
 		}
 	}
 
-	fn refind_terminator(&self, func: &mut ProtoFunc, idx: PBBIdx, loc: Location) {
-		let seg = self.prog.mem().segment_from_loc(loc);
-		let span = seg.span_at_loc(loc);
-		let slice = seg.image_slice(span.start .. span.end).into_data();
-		let va = seg.va_from_loc(loc);
-
-		match self.dis.find_last_instr(slice, va) {
-			Ok(Some(inst)) => {
-				let term_loc = self.prog.mem().loc_for_va(inst.va()).unwrap();
-				func.set_term_loc(idx, term_loc);
-			}
-
-			// should not happen, since the split method will panic if you try to
-			// make an empty span.
-			Ok(None) => panic!("trying to find terminator of an empty bb???"),
-
-			// should not happen, if we didn't do an invalid split.
-			Err(e) =>   todo!("what does this mean??? {}", e),
-		}
-	}
-
-	fn analyze_func(&mut self, loc: Location) {
-		trace!("------------------------------------------------------------------------");
-		trace!("- begin function analysis at {}", loc);
-
-		if let Some(bbid) = self.prog.mem().segment_from_loc(loc).span_at_loc(loc).bb() {
+	fn should_analyze_func(&self, loc: Location) -> bool {
+		if let Some(bbid) = self.prog.span_at_loc(loc).bb() {
 			let orig_func_head = self.prog.get_func(bbid.func()).head_id();
 
 			if bbid == orig_func_head {
 				// the beginning of an already-analyzed function.
 				trace!("oh, I've seen this one already. NEVERMIIIND");
-				return;
 			} else {
 				// the middle of an already-analyzed function. TODO: maybe we should
 				// split the function, maybe not. Consider diamond-shaped CFG where we
 				// call a BB in the middle of one path. who owns the BBs at/after
 				// the rejoining point?
 				trace!("middle of an existing function... let's move on");
-				return;
 			}
+			false
+		} else {
+			true
+		}
+	}
+
+	fn should_analyze_bb(&mut self, func: &mut ProtoFunc, start: Location) -> ShouldAnalyze {
+		// let's look at this location to see what's here.
+		// we want a fresh, undefined region of memory.
+
+		match self.prog.span_at_loc(start).kind {
+			SpanKind::Unk         => ShouldAnalyze::Analyze, // yeeeeee that's what we want
+			SpanKind::Code(..)    => ShouldAnalyze::Break,   // fell through into another function.
+			SpanKind::AnaCode(id) => {
+				// oh, we've already analyzed this. but maybe we have some work to do...
+				self.check_split_bb(func, PBBIdx(id), start);
+				ShouldAnalyze::Continue
+			}
+
+			SpanKind::Ana => panic!("span at {} is somehow being analyzed", start),
+			SpanKind::Data => todo!("uh oh. what do we do here? {}", start),
+		}
+	}
+
+	fn last_instr_before(&self, loc: Location) -> DisasResult<I> {
+		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
+		let slice       = seg.image_slice(span.start .. loc).into_data();
+		let va          = seg.va_from_loc(loc);
+		self.dis.find_last_instr(slice, va)
+	}
+
+	fn check_split_bb(&mut self, func: &mut ProtoFunc, id: PBBIdx, start: Location) {
+		let old_start = func.get_bb(id).loc;
+
+		if start != old_start {
+			// ooh, now we have to split the existing bb.
+			// first, let's make sure that `start` points to the beginning of an instruction,
+			// because otherwise we'd be jumping to an invalid location.
+			let term_va = match self.last_instr_before(start) {
+				Ok(inst) => inst.va(),
+				Err(..)  => todo!("have to flag referrer as being invalid somehow"),
+			};
+
+			// now we can split the existing BB...
+			let term_loc = self.prog.loc_from_va(term_va);
+			let new_bb = func.split_bb(id, term_loc, start);
+
+			// ...and update the span map.
+			self.prog.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb.0));
+		}
+	}
+
+	fn resolve_target(&self, target: VA) -> Location {
+		if let Some(l) = self.prog.loc_for_va(target) { l } else {
+			todo!("unresolvable control flow target");
+		}
+	}
+
+	fn func_first_pass(&mut self, loc: Location) {
+		trace!("------------------------------------------------------------------------");
+		trace!("- begin function analysis at {}", loc);
+
+		if !self.should_analyze_func(loc) {
+			return;
 		}
 
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
-		let mut func = ProtoFunc::new();
-		let mut potential_bbs = VecDeque::<Location>::new();
-		potential_bbs.push_back(loc);
+		let mut func           = ProtoFunc::new();
 		let mut new_jumptables = Vec::<Location>::new();
-		let mut new_funcs = Vec::<Location>::new();
+		let mut new_funcs      = Vec::<Location>::new();
+		let mut potential_bbs  = VecDeque::<Location>::new();
+		potential_bbs.push_back(loc);
 
-		while let Some(start) = potential_bbs.pop_front() {
+		'outer: while let Some(start) = potential_bbs.pop_front() {
 			trace!("evaluating potential bb at {}", start);
 
-			// ok. we have a potential BB to analyze.
-			// let's look at this location to see what's here.
-			// we want a fresh, undefined region of memory.
-			let span = self.prog.mem().segment_from_loc(start).span_at_loc(start);
-
-			match span.kind {
-				SpanKind::Unk         => {} // yeeeeee that's what we want
-				SpanKind::Ana         => panic!("span at {} is somehow being analyzed", start),
-				SpanKind::Code(..)    => {
-					// oh, we're at another function. guess we'll fall through into it.
-					// just break out of the loop; it will set the terminator to fall through.
-					break;
-				}
-				SpanKind::Data        => todo!("uh oh. what do we do here? {}", start),
-				SpanKind::AnaCode(id) => {
-					let id = PBBIdx(id);
-
-					let old_start = func.get_bb(id).loc;
-
-					// oh, we've already analyzed this.
-					if start != old_start {
-						// TODO: ensure that `start` actually points to the beginning of an instruction
-
-						// ooh, now we have to split the existing bb.
-						let new_bb = func.split_bb(id, start);
-
-						// then update the span map...
-						self.prog.mem_mut().segment_from_loc_mut(start).split_span(
-							start, SpanKind::AnaCode(new_bb.0));
-
-						// ...and now we have to re-find the terminator for the old one.
-						self.refind_terminator(&mut func, id, old_start);
-					}
-
-					// done all we need here
-					continue;
-				}
+			// ok. should we analyze this?
+			match self.should_analyze_bb(&mut func, start) {
+				ShouldAnalyze::Break    => break 'outer,
+				ShouldAnalyze::Continue => continue 'outer,
+				ShouldAnalyze::Analyze  => {}
 			}
 
-			// mark the span as under analysis.
-			self.prog.mem_mut().segment_from_loc_mut(start).span_begin_analysis(start);
-
-			// ...and refresh span, as the previous line invalidated it.
-			let span = self.prog.mem().segment_from_loc(start).span_at_loc(start);
+			// yes. mark the span as under analysis.
+			self.prog.span_begin_analysis(start);
 
 			// now, we need the actual data.
-			let seg = self.prog.mem().segment_from_loc(start);
-			let slice = seg.image_slice(span.start .. span.end).into_data();
-			let va = seg.va_from_loc(start);
+			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
+			let slice        = seg.image_slice(span.start .. span.end).into_data();
+			let va           = seg.va_from_loc(start);
 
 			// let's start disassembling instructions
-			let mut iter = self.dis.disas_all(slice, va);
 			let mut term_loc = va;
-			let mut end = va;
-			let mut term: Option<BBTerm> = None;
+			let mut end      = va;
+			let mut term     = None;
+			let mut iter     = self.dis.disas_all(slice, va);
 
-			for inst in &mut iter {
+			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
-				let next_addr = inst.va() + inst.size();
 				term_loc = end;
-				end = next_addr;
+				end = inst.next_addr();
+				let target_loc = inst.control_target().map(|t| self.resolve_target(t));
 
-				if !inst.is_control() {
-					// if it's not control, skip it.
-					continue;
-				} else if inst.is_return() {
-					term = Some(BBTerm::Return);
-					break;
-				} else if inst.is_halt() {
-					term = Some(BBTerm::Halt);
-					break;
-				}
-
-				// OK. it's a conditional, a jump, an indirect jump, or a call.
-				// First, let's see if it's an indirect jump, since that doesn't have a
-				// hard-coded target.
-
-				if inst.is_indir_jump() {
-					// oooh. a jumptable to analyze...
-					term = Some(BBTerm::JumpTbl(vec![]));
-					new_jumptables.push(self.prog.mem().loc_for_va(inst.va()).expect("huh?"));
-					break;
-				}
-
-				// not indirect, so let's check its target address.
-				let target = inst.control_target().expect("how jump/call/branch not have target??");
-				let target_loc = self.prog.mem().loc_for_va(target);
-
-				let target_loc = if let Some(l) = target_loc { l } else {
-					todo!("unresolvable control flow target");
-				};
-
-				if inst.is_jump() {
-					// if it's into the same segment, it might be part of this function.
-					// if not, it's probably a tailcall to another function.
-					if seg.contains_va(target) {
-						trace!("pushing potential bb at {}", target_loc);
-						potential_bbs.push_back(target_loc);
+				use InstructionKind::*;
+				match inst.kind() {
+					Invalid => panic!("disas_all gave an invalid instruction"),
+					Other => continue 'instloop,
+					Ret => {
+						// TODO: what about e.g. Z80 where you can have conditional returns?
+						// should that end a BB?
+						term = Some(BBTerm::Return);
 					}
-
-					term = Some(BBTerm::Jump(target_loc));
-					break; // end of this BB.
-				} else if inst.is_conditional() {
-					// if it's into the same segment, it might be part of this function.
-					// if not, it's probably a tailcall to another function.
-					if seg.contains_va(target) {
-						trace!("pushing potential bb at {}", target_loc);
-						potential_bbs.push_back(target_loc);
+					Halt => {
+						term = Some(BBTerm::Halt);
 					}
+					Indir => {
+						// oooh. a jumptable to analyze...
+						new_jumptables.push(self.prog.loc_from_va(inst.va()));
+						term = Some(BBTerm::JumpTbl(vec![]));
+					}
+					Uncond | Cond => {
+						// if it's into the same segment, it might be part of this function.
+						// if not, it's probably a tailcall to another function.
+						let target_loc = target_loc.expect("instruction should have control target");
+						if seg.contains_loc(target_loc) {
+							potential_bbs.push_back(target_loc);
+						}
 
-					let f = if let Some(l) = self.prog.mem().loc_for_va(next_addr) { l } else {
-						todo!("unresolvable control flow target");
-					};
-
-					potential_bbs.push_back(f);
-
-					term = Some(BBTerm::Cond { t: target_loc, f });
-					trace!("pushing potential bb at {}", f);
-					break;
-				} else {
-					assert!(inst.is_call());
-
-					// clearly gotta be another function, so.
-					trace!("func call to {}", target_loc);
-					new_funcs.push(target_loc);
-
+						if inst.is_cond() {
+							let f = self.resolve_target(inst.next_addr());
+							potential_bbs.push_back(f);
+							term = Some(BBTerm::Cond { t: target_loc, f });
+						} else {
+							term = Some(BBTerm::Jump(target_loc));
+						}
+					}
+					Call => {
+						new_funcs.push(target_loc.expect("instruction should have control target"));
+						continue 'instloop;
+					}
 				}
+
+				break 'instloop;
 			}
 
-			if let Some(err) = iter.err() {
-				// matching here so if we add more error kinds, we'll get an inexhaustive match error
-				match err.kind {
-					DisasErrorKind::OutOfBytes { expected, got } => {
-						assert!(end == iter.err_va());
-						term = Some(BBTerm::DeadEnd);
-						trace!("out of bytes (ex {} got {})", expected, got);
-						trace!("dead ended term {} end {}", term_loc, end);
-					}
+			let end_loc = self.prog.loc_from_va(end);
 
-					DisasErrorKind::UnknownInstruction => {
-						assert!(end == iter.err_va());
-						term = Some(BBTerm::DeadEnd);
-						trace!("dead ended term {} end {}", term_loc, end);
-					}
-				}
+			if let Some(..) = iter.err() {
+				assert!(end == iter.err_va());
+				term = Some(BBTerm::DeadEnd);
 			} else if term.is_none() {
 				// we got through the whole slice with no errors, meaning
 				// this is a fallthrough to the next bb.
-				term = Some(BBTerm::FallThru(self.prog.mem().loc_for_va(end).unwrap()));
+				term = Some(BBTerm::FallThru(end_loc));
 			}
 
-			let term = term.unwrap();
-			let term_loc = self.prog.mem().loc_for_va(term_loc).expect("huh?");
-			let end = self.prog.mem().loc_for_va(end).expect("huh?");
-
-			let bb_id = func.new_bb(start, term_loc, term, end);
-
-			self.prog.mem_mut().segment_from_loc_mut(start).span_end_analysis(
-				start, end, SpanKind::AnaCode(bb_id.0));
+			let term_loc = self.prog.loc_from_va(term_loc);
+			let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc);
+			self.prog.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
 		}
-
-		// trace!("{:#?}", func);
 
 		// now, turn the proto func into a real boy!!
-		self.prog.new_func(loc, func.into_iter());
+		let fid = self.prog.new_func(loc, func.into_iter());
 
 		// finally, turn the crank by putting more work on the queue
-		for jt in new_jumptables {
-			self.enqueue_jump_table(jt);
-		}
-
-		for f in new_funcs {
-			// trace!("discovered function at {}", f);
-			self.enqueue_function(f);
-		}
+		for t in new_jumptables { self.enqueue_jump_table(t); }
+		for f in new_funcs      { self.enqueue_function(f); }
+		self.queue.push_back(AnalysisItem::Func2ndPass(fid));
 	}
 
-	fn analyze_jump_table(&mut self, _loc: Location) {
-		trace!("there's a jumptable at {}", _loc);
+	fn func_second_pass(&mut self, fid: FuncId) {
+		trace!("gonna do the second pass {:?}", fid);
+	}
+
+	fn analyze_jump_table(&mut self, loc: Location) {
+		trace!("there's a jumptable at {}", loc);
 		// todo!()
 	}
 }

@@ -5,11 +5,12 @@ use std::collections::{
 	hash_map::Iter as HashIter,
 };
 use std::ops::{ Bound, RangeBounds };
+use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use derive_new::new;
 use delegate::delegate;
 
-use crate::memory::{ Memory, Location, VA, SpanKind };
+use crate::memory::{ Memory, Location, VA, Span, SpanKind, Segment, Image };
 use crate::disasm::NameLookupTrait;
 
 // ------------------------------------------------------------------------------------------------
@@ -43,18 +44,72 @@ pub struct Program {
 	funcs: FuncIndex,
 }
 
+impl Display for Program {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{}", self.mem)
+	}
+}
+
 impl Program {
 	// ---------------------------------------------------------------------------------------------
 	// Memory
 
-	/// Gets the Memory object associated with this Program.
-	pub fn mem(&self) -> &Memory {
-		&self.mem
+	delegate! {
+		to self.mem {
+			/// Adds a new segment.
+			///
+			/// # Panics
+			///
+			/// - if `name` is already the name of an existing segment.
+			/// - if the segment is mapped to a bankable region, but `image` is `None`.
+			pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>);
+			/// Given a region name, get the Segment mapped to it (if any).
+			pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment>;
+			/// Given a VA, get the Segment which contains it (if any).
+			pub fn segment_for_va(&self, va: VA) -> Option<&Segment>;
+			/// Same as above but mutable.
+			pub fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment>;
+			/// Given a segment name, get the Segment named that (if any).
+			pub fn segment_for_name(&self, name: &str) -> Option<&Segment>;
+			/// Same as above but mutable.
+			pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment>;
+			/// Given a location, get the Segment which contains it.
+			pub fn segment_from_loc(&self, loc: Location) -> &Segment;
+			/// Same as above but mutable.
+			pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment;
+			/// Tries to find a unique location for the given VA.
+			/// If there is no mapping, or if the region is bankable, returns None.
+			pub fn loc_for_va(&self, va: VA) -> Option<Location>;
+			/// Same as above, but infallible.
+			pub fn loc_from_va(&self, va: VA) -> Location;
+			/// Formats a number as a hexadecimal number with the appropriate number of digits
+			/// for the size of the address space.
+			pub fn fmt_addr(&self, addr: usize) -> String;
+		}
+	}
+
+	/// Get the span at a given location.
+	pub fn span_at_loc(&self, loc: Location) -> Span {
+		self.segment_from_loc(loc).span_at_loc(loc)
+	}
+
+	/// Get the owning segment and span of a given location.
+	pub fn seg_and_span_at_loc(&self, loc: Location) -> (&Segment, Span) {
+		let seg = self.segment_from_loc(loc);
+		(seg, seg.span_at_loc(loc))
 	}
 
 	/// Same as above, but mutable.
-	pub fn mem_mut(&mut self) -> &mut Memory {
-		&mut self.mem
+	pub fn seg_and_span_at_loc_mut(&mut self, loc: Location) -> (&mut Segment, Span) {
+		let seg = self.segment_from_loc_mut(loc);
+		let span = seg.span_at_loc(loc);
+		(seg, span)
+	}
+	pub fn span_begin_analysis(&mut self, loc: Location) {
+		self.segment_from_loc_mut(loc).span_begin_analysis(loc)
+	}
+	pub fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
+		self.segment_from_loc_mut(loc).span_end_analysis(loc, end, kind)
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -89,7 +144,7 @@ impl Program {
 
 	/// Gets the ID of the function that contains the given location, or None if none does.
 	pub fn func_that_contains(&self, loc: Location) -> Option<FuncId> {
-		Some(self.mem.segment_from_loc(loc).span_at_loc(loc).bb()?.func())
+		Some(self.span_at_loc(loc).bb()?.func())
 	}
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.

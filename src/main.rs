@@ -72,10 +72,9 @@ fn test_nes() -> std::io::Result<()> {
 	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
 
-	let mem = prog.mem();
-	println!("{}", mem);
+	println!("{}", prog);
 
-	let seg = mem.segment_for_name("PRG0").unwrap();
+	let seg = prog.segment_for_name("PRG0").unwrap();
 
 
 /*	for (loc, name) in prog.all_names_by_loc() {
@@ -99,13 +98,13 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!();
 
-	println!("location for 0x0000: {:?}", mem.loc_for_va(VA(0x0000)));
-	println!("location for 0x2000: {:?}", mem.loc_for_va(VA(0x2000)));
-	println!("location for 0x2001: {:?}", mem.loc_for_va(VA(0x2001)));
-	println!("location for 0x2008: {:?}", mem.loc_for_va(VA(0x2008)));
-	println!("location for 0x0400: {:?}", mem.loc_for_va(VA(0x0400)));
-	println!("location for 0x5000: {:?}", mem.loc_for_va(VA(0x5000)));
-	println!("location for 0x8000: {:?}", mem.loc_for_va(VA(0x8000)));
+	println!("location for 0x0000: {:?}", prog.loc_for_va(VA(0x0000)));
+	println!("location for 0x2000: {:?}", prog.loc_for_va(VA(0x2000)));
+	println!("location for 0x2001: {:?}", prog.loc_for_va(VA(0x2001)));
+	println!("location for 0x2008: {:?}", prog.loc_for_va(VA(0x2008)));
+	println!("location for 0x0400: {:?}", prog.loc_for_va(VA(0x0400)));
+	println!("location for 0x5000: {:?}", prog.loc_for_va(VA(0x5000)));
+	println!("location for 0x8000: {:?}", prog.loc_for_va(VA(0x8000)));
 
 	println!();
 

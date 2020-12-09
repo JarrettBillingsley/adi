@@ -11,6 +11,7 @@ use crate::disasm::{
 	PrinterTrait,
 	NameLookupTrait,
 	DisassemblerTrait,
+	InstructionKind,
 };
 use crate::disasm::error::{ DisasError, DisasResult };
 use crate::memory::VA;
@@ -379,15 +380,19 @@ impl InstructionTrait for Instruction {
 	}
 	fn bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
 
-	fn is_control    (&self) -> bool { self.desc.ctrl }
-	fn is_conditional(&self) -> bool { self.desc.addr_mode == AddrMode::REL }
-	fn is_jump       (&self) -> bool { matches!(self.desc.opcode, Opcode::JMP_LAB) }
-	fn is_indir_jump (&self) -> bool { matches!(self.desc.opcode, Opcode::JMP_IND) }
-	fn is_call       (&self) -> bool { matches!(self.desc.opcode, Opcode::JSR_LAB) }
-	fn is_invalid    (&self) -> bool { matches!(self.desc.opcode, Opcode::INVALID) }
-	fn is_halt       (&self) -> bool { false }
-	fn is_return     (&self) -> bool {
-		matches!(self.desc.opcode, Opcode::RTS_IMP | Opcode::RTI_IMP)
+	fn kind(&self) -> InstructionKind {
+		use Opcode::*;
+		use InstructionKind::*;
+
+		match self.desc.opcode {
+			INVALID           => Invalid,
+			JSR_LAB           => Call,
+			RTS_IMP | RTI_IMP => Ret,
+			JMP_LAB           => Uncond,
+			JMP_IND           => Indir,
+			_ if self.desc.addr_mode == AddrMode::REL => Cond,
+			_                 => Other,
+		}
 	}
 
 	fn control_target(&self) -> Option<VA> {

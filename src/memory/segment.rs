@@ -28,12 +28,6 @@ pub struct Location {
 	pub offs: usize,
 }
 
-impl Location {
-	pub const fn invalid() -> Self {
-		Self { seg: SegId(u16::MAX), offs: usize::MAX }
-	}
-}
-
 impl Debug for Location {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{}", self)
@@ -105,6 +99,16 @@ impl Segment {
 	/// Whether this segment and another segment overlap in the virtual address space.
 	pub fn overlaps_va(&self, other: &Segment) -> bool {
 		!(self.vend <= other.vbase || other.vend <= self.vbase)
+	}
+
+	/// Whether this segment contains a given Location.
+	pub fn contains_loc(&self, loc: Location) -> bool {
+		if loc.seg == self.id {
+			assert!(loc.offs < self.size);
+			true
+		} else {
+			false
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------

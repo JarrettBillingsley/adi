@@ -196,6 +196,11 @@ impl Memory {
 		})
 	}
 
+	/// Same as above, but infallible.
+	pub fn loc_from_va(&self, va: VA) -> Location {
+		self.loc_for_va(va).unwrap()
+	}
+
 	/// Formats a number as a hexadecimal number with the appropriate number of digits
 	/// for the size of the address space.
 	pub fn fmt_addr(&self, addr: usize) -> String {
