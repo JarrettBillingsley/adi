@@ -157,7 +157,7 @@ pub enum MetaOp {
 
 impl MetaOp {
 	/// Instruction mnemonics
-	pub fn mnemonic(self, flavor: SyntaxFlavor) -> &'static str {
+	pub fn mnemonic(&self, flavor: SyntaxFlavor) -> &'static str {
 		use MetaOp::*;
 		match flavor {
 			SyntaxFlavor::Old =>
@@ -184,23 +184,44 @@ impl MetaOp {
 			SyntaxFlavor::New =>
 				match self {
 					UNK  => "???",
-					ADC  => "adc a,",   AND  => "and a,",   ASLA => "shl a",    ASL  => "shl",
-					BCC  => "bcc",      BCS  => "bcs",      BEQ  => "beq",      BIT  => "bit",
-					BMI  => "bmi",      BNE  => "bne",      BPL  => "bpl",      BRK  => "brk",
-					BVC  => "bvc",      BVS  => "bvs",      CLC  => "clr c",    CLD  => "clr d",
-					CLI  => "clr i",    CLV  => "clr v",    CMP  => "cmp a,",   CPX  => "cmp x,",
-					CPY  => "cmp y,",   DEC  => "dec",      DEX  => "dec x",    DEY  => "dec y",
-					EOR  => "xor a,",   INC  => "inc",      INX  => "inc x",    INY  => "inc y",
-					JMP  => "jmp",      JSR  => "jsr",      LDA  => "ld  a,",   LDAI => "li  a,",
-					LDX  => "ld  x,",   LDXI => "li  x,",   LDY  => "ld  y,",   LDYI => "li  y,",
-					LSRA => "shr a",    LSR  => "shr",      NOP  => "nop",      ORA  => "or  a,",
-					PHA  => "psh a",    PHP  => "psh p",    PLA  => "pul a",    PLP  => "pul p",
-					ROLA => "rol a",    ROL  => "rol",      RORA => "ror a",    ROR  => "ror",
-					RTI  => "rti",      RTS  => "rts",      SBC  => "sbc a,",   SEC  => "set c",
-					SED  => "set d",    SEI  => "set i",    STA  => "st  a,",   STX  => "st  x,",
-					STY  => "st  y,",   TAX  => "mov x, a", TAY  => "mov y, a", TSX  => "mov x, s",
-					TXA  => "mov a, x", TXS  => "mov s, x", TYA  => "mov a, y",
+					ADC  => "adc", AND  => "and", ASLA => "shl", ASL  => "shl",
+					BCC  => "bcc", BCS  => "bcs", BEQ  => "beq", BIT  => "bit",
+					BMI  => "bmi", BNE  => "bne", BPL  => "bpl", BRK  => "brk",
+					BVC  => "bvc", BVS  => "bvs", CLC  => "clr", CLD  => "clr",
+					CLI  => "clr", CLV  => "clr", CMP  => "cmp", CPX  => "cmp",
+					CPY  => "cmp", DEC  => "dec", DEX  => "dec", DEY  => "dec",
+					EOR  => "xor", INC  => "inc", INX  => "inc", INY  => "inc",
+					JMP  => "jmp", JSR  => "jsr", LDA  => "ld",  LDAI => "li",
+					LDX  => "ld",  LDXI => "li",  LDY  => "ld",  LDYI => "li",
+					LSRA => "shr", LSR  => "shr", NOP  => "nop", ORA  => "or",
+					PHA  => "psh", PHP  => "psh", PLA  => "pul", PLP  => "pul",
+					ROLA => "rol", ROL  => "rol", RORA => "ror", ROR  => "ror",
+					RTI  => "rti", RTS  => "rts", SBC  => "sbc", SEC  => "set",
+					SED  => "set", SEI  => "set", STA  => "st",  STX  => "st",
+					STY  => "st",  TAX  => "mov", TAY  => "mov", TSX  => "mov",
+					TXA  => "mov", TXS  => "mov", TYA  => "mov",
 				}
+		}
+	}
+
+	fn extra_operands(&self, flavor: SyntaxFlavor) -> &'static [&'static str] {
+		if flavor == SyntaxFlavor::Old {
+			return &[];
+		}
+
+		use MetaOp::*;
+
+		match self {
+			ADC  => &["a"], AND  => &["a"], ASLA => &["a"], CLC  => &["c"], CLD  => &["d"],
+			CLI  => &["i"], CLV  => &["v"], CMP  => &["a"], CPX  => &["x"], CPY  => &["y"],
+			DEX  => &["x"], DEY  => &["y"], EOR  => &["a"], INX  => &["x"], INY  => &["y"],
+			LDA  => &["a"], LDAI => &["a"], LDX  => &["x"], LDXI => &["x"], LDY  => &["y"],
+			LDYI => &["y"], LSRA => &["a"], ORA  => &["a"], PHA  => &["a"], PHP  => &["p"],
+			PLA  => &["a"], PLP  => &["p"], ROLA => &["a"], RORA => &["a"], SBC  => &["a"],
+			SEC  => &["c"], SED  => &["d"], SEI  => &["i"], STA  => &["a"], STX  => &["x"],
+			STY  => &["y"], TAX  => &["x", "a"], TAY  => &["y", "a"], TSX  => &["x", "s"],
+			TXA  => &["a", "x"], TXS  => &["s", "x"], TYA  => &["a", "y"],
+			_ => &[],
 		}
 	}
 }
@@ -510,9 +531,25 @@ impl PrinterTrait for Printer {
 	}
 
 	fn fmt_operands(&self, i: &Instruction, l: &dyn NameLookupTrait) -> String {
-		if i.num_ops() == 0 {
-			"".into()
-		} else {
+		use std::fmt::Write;
+
+		let mut ret = String::new();
+
+		match i.desc.meta_op.extra_operands(self.flavor) {
+			[]       => {},
+			[o1]     => {
+				if i.num_ops() == 0 {
+					write!(ret, "{}", o1).unwrap();
+				} else {
+					write!(ret, "{}, ", o1).unwrap();
+				}
+			}
+			// impossible to have more operands in this case (e.g. mov a, x)
+			[o1, o2] => write!(ret, "{}, {}", o1, o2).unwrap(),
+			_        => unreachable!()
+		}
+
+		if i.num_ops() != 0 {
 			let operand = match i.get_op(0) {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::Imm(imm)      => self.fmt_imm(imm),
@@ -525,7 +562,9 @@ impl PrinterTrait for Printer {
 			};
 
 			let template = i.desc.addr_mode.operand_template(self.flavor);
-			template.replace("{}", &operand)
+			ret += &template.replace("{}", &operand);
 		}
+
+		ret
 	}
 }
