@@ -4,6 +4,7 @@
 
 # TODO:
 
+- disasm: give instructions Locations as well as VAs
 - write some FUCKING tests
 - use more traits to overload methods like `x_from_y` and `x_for_y`
 - implied operands in `InstructionTrait`

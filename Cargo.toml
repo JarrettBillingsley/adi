@@ -9,7 +9,7 @@ description = "A RE (reverse engineering) framework aimed at software for retro 
 
 [dependencies]
 better-panic = "0.2.0"
-colored = "1.9.3"
+colored = "2.0.0"
 derive-new = "0.5.8"
 err-derive = "0.2.4"
 generational-arena = "0.2.8"

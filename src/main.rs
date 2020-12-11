@@ -1,8 +1,10 @@
 
 use std::iter::FromIterator;
+use std::fmt::Write;
 
 use better_panic::{ Settings as PanicSettings, Verbosity as PanicVerbosity };
 use simplelog::*;
+use colored::*;
 
 use adi::*;
 
@@ -20,7 +22,7 @@ fn setup_logging() -> Result<(), TermLogError> {
 		.set_target_level(LevelFilter::Off)
 		.set_location_level(LevelFilter::Debug)
 		.build();
-	TermLogger::init(LevelFilter::Trace, log_config, TerminalMode::Mixed)
+	TermLogger::init(LevelFilter::Debug, log_config, TerminalMode::Mixed)
 }
 
 fn setup_panic() {
@@ -158,10 +160,77 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	for (_, func) in prog.all_funcs() {
-		// println!("---------------------------------------------------------------------------");
-		// println!("{:#?}", func);
-		println!("{}", prog.name_of_loc(func.start_loc()));
+	// for (_, func) in prog.all_funcs() {
+	// 	println!("---------------------------------------------------------------------------");
+	// 	println!("{:#?}", func);
+	// }
+
+	let reset_func_id = prog.func_defined_at(reset_loc).unwrap();
+	let reset_func = prog.get_func(reset_func_id);
+
+	println!();
+	println!("---------------------------------------------------------------------------");
+
+	let name = prog.name_of_loc(reset_func.start_loc());
+	println!("{}:", name.truecolor(127, 63, 0));
+
+	let mut bbs = reset_func.all_bbs().collect::<Vec<_>>();
+	bbs.sort_by(|a, b| a.loc.cmp(&b.loc));
+
+	let print = Printer::new(SyntaxFlavor::New);
+
+	for bb in bbs {
+		let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
+		let slice       = seg.image_slice(span.start .. span.end).into_data();
+		let va          = seg.va_from_loc(bb.loc);
+
+		for inst in Disassembler.disas_all(slice, va) {
+			let mut bytes = String::new();
+			let b = inst.bytes();
+
+			match b.len() {
+				1 => write!(bytes, "{:02X}",               b[0]).unwrap(),
+				2 => write!(bytes, "{:02X} {:02X}",        b[0], b[1]).unwrap(),
+				3 => write!(bytes, "{:02X} {:02X} {:02X}", b[0], b[1], b[2]).unwrap(),
+				_ => unreachable!()
+			}
+
+			let addr = prog.fmt_addr(inst.va().0);
+			let mnem = print.fmt_mnemonic(&inst);
+			let ops  = print.fmt_operands(&inst, &prog);
+
+			print!("{:>4}:{}  {:8}  {:3} {:30}",
+				seg.name.yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+
+			if let Some(inrefs) = prog.get_inrefs(prog.loc_from_va(inst.va())) {
+				print!("{}", "; XREF ".green());
+
+				for &r in inrefs {
+					print!(" {}", prog.name_of_loc(r).green());
+				}
+			}
+
+			println!();
+		}
+
+		// match bb.term {
+		// 	/// Hit a dead end (e.g. invalid instruction, or user undefined some code).
+		// 	DeadEnd,
+		// 	/// A halt instruction.
+		// 	Halt,
+		// 	/// A return instruction.
+		// 	Return,
+		// 	/// Execution falls through to the next BB.
+		// 	FallThru(Location),
+		// 	/// Unconditional jump.
+		// 	Jump(Location),
+		// 	/// Conditional branch within a function.
+		// 	Cond { t: Location, f: Location },
+		// 	/// Jump table with any number of destinations.
+		// 	JumpTbl(Vec<Location>),
+		// }
+
+		println!();
 	}
 
 	// prog.mem().segment_for_name("PRG0").unwrap().dump_spans();
