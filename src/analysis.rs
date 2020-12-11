@@ -386,7 +386,7 @@ where
 
 			assert!(!iter.has_err(), "should be impossible");
 
-			for &succ in bb.successors() {
+			for &succ in bb.explicit_successors() {
 				refs.push((bb.term_loc, succ));
 			}
 		}

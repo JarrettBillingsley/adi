@@ -183,6 +183,11 @@ fn test_nes() -> std::io::Result<()> {
 		let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
 		let slice       = seg.image_slice(span.start .. span.end).into_data();
 		let va          = seg.va_from_loc(bb.loc);
+		let mut inrefs  = prog.get_inrefs(bb.loc);
+
+		if let Some(..) = inrefs {
+			println!("{}:", prog.name_of_loc(bb.loc).truecolor(127, 63, 0));
+		}
 
 		for inst in Disassembler.disas_all(slice, va) {
 			let mut bytes = String::new();
@@ -202,12 +207,14 @@ fn test_nes() -> std::io::Result<()> {
 			print!("{:>4}:{}  {:8}  {:3} {:30}",
 				seg.name.yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
-			if let Some(inrefs) = prog.get_inrefs(prog.loc_from_va(inst.va())) {
-				print!("{}", "; XREF ".green());
+			if let Some(ir) = inrefs {
+				print!("{}", "; XREF".green());
 
-				for &r in inrefs {
+				for &r in ir {
 					print!(" {}", prog.name_of_loc(r).green());
 				}
+
+				inrefs = None;
 			}
 
 			println!();

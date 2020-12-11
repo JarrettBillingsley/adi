@@ -115,6 +115,11 @@ impl BasicBlock {
 		self.term.successors()
 	}
 
+	/// An iterator over this block's explicit successors (those written in the terminator).
+	pub fn explicit_successors(&self) -> Successors {
+		self.term.explicit_successors()
+	}
+
 	/// The ID of the function which owns this.
 	pub fn func(&self) -> FuncId {
 		self.id.func()
@@ -158,10 +163,23 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return | Halt => None    .into_iter().chain(&[]),
-			FallThru(id) | Jump(id) => Some(id).into_iter().chain(&[]),
-			Cond { t, f }           => Some(t) .into_iter().chain(slice::from_ref(f)),
-			JumpTbl(ids)            => None    .into_iter().chain(ids),
+			DeadEnd | Return | Halt   => None     .into_iter().chain(&[]),
+			FallThru(loc) | Jump(loc) => Some(loc).into_iter().chain(&[]),
+			Cond { t, f }             => Some(t)  .into_iter().chain(slice::from_ref(f)),
+			JumpTbl(locs)             => None     .into_iter().chain(locs),
+		}
+	}
+
+	/// An iterator over the owning block's *explicit* successors (those which are written
+	/// in the terminating instruction).
+	pub fn explicit_successors(&self) -> Successors {
+		use BBTerm::*;
+
+		match self {
+			DeadEnd | Return | Halt | FallThru(..)   => None     .into_iter().chain(&[]),
+			Jump(loc)                                => Some(loc).into_iter().chain(&[]),
+			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),
+			JumpTbl(locs)                            => None     .into_iter().chain(locs),
 		}
 	}
 }
