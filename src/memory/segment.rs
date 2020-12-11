@@ -165,14 +165,20 @@ impl Segment {
 		self.spans.iter()
 	}
 
-	pub fn span_begin_analysis(&mut self, loc: Location) {
+	pub(crate) fn span_begin_analysis(&mut self, loc: Location) {
 		assert!(loc.seg == self.id);
 		// may not be at the beginning of a span, so have to use define
 		let end = self.spans.span_at(loc.offs).end;
 		self.spans.define(loc.offs, end.offs - loc.offs, SpanKind::Ana);
 	}
 
-	pub fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
+	pub(crate) fn span_cancel_analysis(&mut self, loc: Location) {
+		assert!(loc.seg == self.id);
+		// may not be at the beginning of a span, so have to use define
+		self.spans.undefine(loc.offs);
+	}
+
+	pub(crate) fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
 		assert!(loc.seg == self.id);
 		assert!(self.spans.span_at(loc.offs).kind == SpanKind::Ana);
 		self.spans.undefine(loc.offs);

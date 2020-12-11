@@ -110,6 +110,10 @@ impl Program {
 		self.segment_from_loc_mut(loc).span_begin_analysis(loc)
 	}
 
+	pub(crate) fn span_cancel_analysis(&mut self, loc: Location) {
+		self.segment_from_loc_mut(loc).span_cancel_analysis(loc)
+	}
+
 	pub(crate) fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
 		self.segment_from_loc_mut(loc).span_end_analysis(loc, end, kind)
 	}

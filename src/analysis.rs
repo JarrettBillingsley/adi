@@ -122,12 +122,6 @@ enum AnalysisItem {
 	JumpTable(Location),
 }
 
-enum ShouldAnalyze {
-	Break,
-	Continue,
-	Analyze,
-}
-
 /// Analyzes code, discovers functions, builds control flow graphs, and defines
 /// functions in a program.
 #[derive(new)]
@@ -186,17 +180,17 @@ where
 		}
 	}
 
-	fn should_analyze_bb(&mut self, func: &mut ProtoFunc, start: Location) -> ShouldAnalyze {
+	fn should_analyze_bb(&mut self, func: &mut ProtoFunc, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
 		match self.prog.span_at_loc(start).kind {
-			SpanKind::Unk         => ShouldAnalyze::Analyze, // yeeeeee that's what we want
-			SpanKind::Code(..)    => ShouldAnalyze::Break,   // fell through into another function.
+			SpanKind::Unk         => true, // yeeeeee that's what we want
+			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
 				// oh, we've already analyzed this. but maybe we have some work to do...
 				self.check_split_bb(func, PBBIdx(id), start);
-				ShouldAnalyze::Continue
+				false
 			}
 
 			SpanKind::Ana => panic!("span at {} is somehow being analyzed", start),
@@ -256,10 +250,8 @@ where
 			trace!("evaluating potential bb at {}", start);
 
 			// ok. should we analyze this?
-			match self.should_analyze_bb(&mut func, start) {
-				ShouldAnalyze::Break    => break 'outer,
-				ShouldAnalyze::Continue => continue 'outer,
-				ShouldAnalyze::Analyze  => {}
+			if !self.should_analyze_bb(&mut func, start) {
+				continue 'outer;
 			}
 
 			// yes. mark the span as under analysis.
@@ -323,19 +315,27 @@ where
 
 			let end_loc = self.prog.loc_from_va(end);
 
-			if let Some(..) = iter.err() {
-				assert!(end == iter.err_va());
-				term = Some(BBTerm::DeadEnd);
-			} else if term.is_none() {
-				// we got through the whole slice with no errors, meaning
-				// this is a fallthrough to the next bb.
-				term = Some(BBTerm::FallThru(end_loc));
-			}
+			if start == end_loc {
+				// oop. no good.
+				trace!("{} is NO GOOD", start);
+				self.prog.span_cancel_analysis(start);
+			} else {
+				if let Some(..) = iter.err() {
+					assert!(end == iter.err_va());
+					term = Some(BBTerm::DeadEnd);
+				} else if term.is_none() {
+					// we got through the whole slice with no errors, meaning
+					// this is a fallthrough to the next bb.
+					term = Some(BBTerm::FallThru(end_loc));
+				}
 
-			let term_loc = self.prog.loc_from_va(term_loc);
-			let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc);
-			self.prog.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
+				let term_loc = self.prog.loc_from_va(term_loc);
+				let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc);
+				self.prog.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
+			}
 		}
+
+		assert!(potential_bbs.len() == 0);
 
 		// now, turn the proto func into a real boy!!
 		let fid = self.prog.new_func(loc, func.into_iter());

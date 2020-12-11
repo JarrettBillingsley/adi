@@ -7,6 +7,8 @@ use simplelog::*;
 use colored::*;
 
 use adi::*;
+use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
+use MemoryRegionKind::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging()?;
@@ -34,9 +36,6 @@ fn setup_panic() {
 }
 
 fn test_nes() -> std::io::Result<()> {
-	use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
-	use MemoryRegionKind::*;
-
 	// let's set it up
 	let img = Image::new_from_file("tests/data/smb.prg")?;
 
@@ -145,10 +144,17 @@ fn test_nes() -> std::io::Result<()> {
 
 	// -------------------------------------------
 
-	let reset_va = VA(seg.read_le_u16(prog.loc_from_name("VEC_RESET")) as usize);
+	let vec_reset_loc = prog.loc_from_name("VEC_RESET");
+	let reset_va = VA(seg.read_le_u16(vec_reset_loc) as usize);
 	let reset_loc = seg.loc_from_va(reset_va);
-	let nmi_va = VA(seg.read_le_u16(prog.loc_from_name("VEC_NMI")) as usize);
+	prog.add_ref(vec_reset_loc, reset_loc);
+
+	let seg = prog.segment_for_name("PRG0").unwrap();
+
+	let vec_nmi_loc = prog.loc_from_name("VEC_NMI");
+	let nmi_va = VA(seg.read_le_u16(vec_nmi_loc) as usize);
 	let nmi_loc = seg.loc_from_va(nmi_va);
+	prog.add_ref(vec_nmi_loc, nmi_loc);
 
 	{
 		// huh huh huh
@@ -160,21 +166,28 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	// for (_, func) in prog.all_funcs() {
-	// 	println!("---------------------------------------------------------------------------");
-	// 	println!("{:#?}", func);
-	// }
+	let mut funcs = prog.all_funcs().map(|(_, func)| func).collect::<Vec<_>>();
+	funcs.sort_by(|a, b| a.start_loc().cmp(&b.start_loc()));
 
-	let reset_func_id = prog.func_defined_at(reset_loc).unwrap();
-	let reset_func = prog.get_func(reset_func_id);
+	for func in funcs {
+		show_func(&prog, func);
+	}
 
-	println!();
-	println!("---------------------------------------------------------------------------");
+	// prog.mem().segment_for_name("PRG0").unwrap().dump_spans();
 
-	let name = prog.name_of_loc(reset_func.start_loc());
-	println!("{}:", name.truecolor(127, 63, 0));
+	Ok(())
+}
 
-	let mut bbs = reset_func.all_bbs().collect::<Vec<_>>();
+fn show_func(prog: &Program, func: &Function) {
+	let divider =
+		"; -------------------------------------------------------------------------".green();
+
+	println!("{}", divider);
+
+	let name = prog.name_of_loc(func.start_loc());
+	println!("{}{}", "; Function ".green(), name.green());
+
+	let mut bbs = func.all_bbs().collect::<Vec<_>>();
 	bbs.sort_by(|a, b| a.loc.cmp(&b.loc));
 
 	let print = Printer::new(SyntaxFlavor::New);
@@ -186,7 +199,7 @@ fn test_nes() -> std::io::Result<()> {
 		let mut inrefs  = prog.get_inrefs(bb.loc);
 
 		if let Some(..) = inrefs {
-			println!("{}:", prog.name_of_loc(bb.loc).truecolor(127, 63, 0));
+			println!("{:20}{}:", "", prog.name_of_loc(bb.loc).truecolor(127, 63, 0));
 		}
 
 		for inst in Disassembler.disas_all(slice, va) {
@@ -202,9 +215,9 @@ fn test_nes() -> std::io::Result<()> {
 
 			let addr = prog.fmt_addr(inst.va().0);
 			let mnem = print.fmt_mnemonic(&inst);
-			let ops  = print.fmt_operands(&inst, &prog);
+			let ops  = print.fmt_operands(&inst, prog);
 
-			print!("{:>4}:{}  {:8}  {:3} {:30}",
+			print!("{:>4}:{}  {:8}      {:3} {:30}",
 				seg.name.yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
 			if let Some(ir) = inrefs {
@@ -220,29 +233,45 @@ fn test_nes() -> std::io::Result<()> {
 			println!();
 		}
 
-		// match bb.term {
-		// 	/// Hit a dead end (e.g. invalid instruction, or user undefined some code).
-		// 	DeadEnd,
-		// 	/// A halt instruction.
-		// 	Halt,
-		// 	/// A return instruction.
-		// 	Return,
-		// 	/// Execution falls through to the next BB.
-		// 	FallThru(Location),
-		// 	/// Unconditional jump.
-		// 	Jump(Location),
-		// 	/// Conditional branch within a function.
-		// 	Cond { t: Location, f: Location },
-		// 	/// Jump table with any number of destinations.
-		// 	JumpTbl(Vec<Location>),
-		// }
+		use BBTerm::*;
+		match &bb.term {
+			DeadEnd => println!("{}", "---------- DEAD END ----------".red()),
+			Halt | Return => {
+				let name = prog.name_of_loc(func.start_loc());
+				println!();
+				println!("{}{}", "; End of function ".green(), name.green());
+				println!("{}", divider);
+			}
+			FallThru(loc) => {
+				thinger(prog, bb.loc, *loc, "Fall through", Color::Yellow);
+			}
+			Jump(loc) => {
+				thinger(prog, bb.loc, *loc, "Tailcall", Color::Yellow);
+			}
+			Cond { t, f } => {
+				thinger(prog, bb.loc, *t, "Tailbranch", Color::Yellow);
+				thinger(prog, bb.loc, *f, "Fall through", Color::Yellow);
+			}
+			JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
+		}
 
 		println!();
 	}
+}
 
-	// prog.mem().segment_for_name("PRG0").unwrap().dump_spans();
+fn thinger(prog: &Program, from: Location, to: Location, msg: &str, color: Color){
+	if diff_funcs(prog, from, to) {
+		let dest = prog.name_of_loc(to);
+		let msg = format!("---------- {} to {} ----------", msg, dest);
+		println!("{}", msg.color(color));
+	}
+}
 
-	Ok(())
+fn diff_funcs(prog: &Program, loc1: Location, loc2: Location) -> bool {
+	let func1 = prog.func_that_contains(loc1);
+	let func2 = prog.func_that_contains(loc2);
+
+	func1 != func2
 }
 
 fn setup_nes_labels(prog: &mut Program) {
