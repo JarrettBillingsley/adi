@@ -79,14 +79,16 @@ impl ProtoFunc {
 	fn split_bb(&mut self, idx: PBBIdx, term_loc: Location, new_start: Location) -> PBBIdx {
 		let old = &mut self.bbs[idx.0];
 
-		assert!(old.loc.offs < new_start.offs);
-		assert!(new_start.offs < old.end.offs);
+		assert!(old.loc < new_start);
+		assert!(new_start < old.end);
+		assert!(term_loc < new_start);
 
 		let new = ProtoBB { loc: new_start, ..old.clone() };
 
 		old.term_loc = term_loc;
 		old.term     = BBTerm::FallThru(new_start);
 		old.end      = new_start;
+
 
 		trace!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				new.loc, new.term_loc, new.end, new.term);
@@ -205,7 +207,7 @@ where
 	fn last_instr_before(&self, loc: Location) -> DisasResult<I> {
 		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
 		let slice       = seg.image_slice(span.start .. loc).into_data();
-		let va          = seg.va_from_loc(loc);
+		let va          = seg.va_from_loc(span.start);
 		self.dis.find_last_instr(slice, va)
 	}
 
@@ -306,6 +308,9 @@ where
 						if inst.is_cond() {
 							let f = self.resolve_target(inst.next_addr());
 							potential_bbs.push_back(f);
+
+							// debug!("{:04X} t: {} f: {}", inst.va(), target_loc, f);
+
 							term = Some(BBTerm::Cond { t: target_loc, f });
 						} else {
 							term = Some(BBTerm::Jump(target_loc));
@@ -381,8 +386,8 @@ where
 
 			assert!(!iter.has_err(), "should be impossible");
 
-			for succ in bb.successors() {
-				refs.push((bb.term_loc, *succ));
+			for &succ in bb.successors() {
+				refs.push((bb.term_loc, succ));
 			}
 		}
 
