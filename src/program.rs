@@ -105,10 +105,12 @@ impl Program {
 		let span = seg.span_at_loc(loc);
 		(seg, span)
 	}
-	pub fn span_begin_analysis(&mut self, loc: Location) {
+
+	pub(crate) fn span_begin_analysis(&mut self, loc: Location) {
 		self.segment_from_loc_mut(loc).span_begin_analysis(loc)
 	}
-	pub fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
+
+	pub(crate) fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
 		self.segment_from_loc_mut(loc).span_end_analysis(loc, end, kind)
 	}
 
@@ -274,9 +276,9 @@ impl Program {
 			/// Remove all inrefs to the given location.
 			pub fn remove_all_inrefs(&mut self, dst: Location);
 			/// Get all inrefs to a given location, or None if there aren't any.
-			pub fn get_inrefs(&mut self, dst: Location) -> Option<&RefSet>;
+			pub fn get_inrefs(&self, dst: Location) -> Option<&RefSet>;
 			/// Get all outrefs from a given location, or None if there aren't any.
-			pub fn get_outrefs(&mut self, src: Location) -> Option<&RefSet>;
+			pub fn get_outrefs(&self, src: Location) -> Option<&RefSet>;
 			/// Iterator over all outrefs in the entire map.
 			pub fn all_outrefs(&self) -> BTreeIter<'_, Location, RefSet>;
 		}

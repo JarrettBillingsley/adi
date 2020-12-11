@@ -60,12 +60,12 @@ impl RefMap {
 	}
 
 	/// Get all inrefs to a given location, or None if there aren't any.
-	pub fn get_inrefs(&mut self, dst: Location) -> Option<&RefSet> {
+	pub fn get_inrefs(&self, dst: Location) -> Option<&RefSet> {
 		self.inrefs.get(&dst)
 	}
 
 	/// Get all outrefs from a given location, or None if there aren't any.
-	pub fn get_outrefs(&mut self, src: Location) -> Option<&RefSet> {
+	pub fn get_outrefs(&self, src: Location) -> Option<&RefSet> {
 		self.outrefs.get(&src)
 	}
 
