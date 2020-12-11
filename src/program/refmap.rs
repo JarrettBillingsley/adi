@@ -29,7 +29,7 @@ pub struct RefMap {
 }
 
 impl RefMap {
-	/// Add a reference from `src` to `dst`. Returns that reference object.
+	/// Add a reference from `src` to `dst`.
 	pub fn add(&mut self, src: Location, dst: Location) {
 		self._add_outref(src, dst);
 		self._add_inref(src, dst);
@@ -69,6 +69,7 @@ impl RefMap {
 		self.outrefs.get(&src)
 	}
 
+	/// Iterator over all outrefs in the entire map.
 	pub fn all_outrefs(&self) -> BTreeIter<'_, Location, RefSet> {
 		self.outrefs.iter()
 	}

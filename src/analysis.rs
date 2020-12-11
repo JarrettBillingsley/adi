@@ -11,7 +11,8 @@ use crate::disasm::{
 	DisasResult,
 	DisassemblerTrait,
 	InstructionTrait,
-	InstructionKind
+	InstructionKind,
+	OperandTrait,
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -237,7 +238,7 @@ where
 
 	fn func_first_pass(&mut self, loc: Location) {
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function analysis at {}", loc);
+		trace!("- begin function 1st pass at {}", loc);
 
 		if !self.should_analyze_func(loc) {
 			return;
@@ -246,8 +247,6 @@ where
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
 		let mut func           = ProtoFunc::new();
-		let mut new_jumptables = Vec::<Location>::new();
-		let mut new_funcs      = Vec::<Location>::new();
 		let mut potential_bbs  = VecDeque::<Location>::new();
 		potential_bbs.push_back(loc);
 
@@ -284,7 +283,7 @@ where
 				use InstructionKind::*;
 				match inst.kind() {
 					Invalid => panic!("disas_all gave an invalid instruction"),
-					Other => continue 'instloop,
+					Call | Other => continue 'instloop,
 					Ret => {
 						// TODO: what about e.g. Z80 where you can have conditional returns?
 						// should that end a BB?
@@ -294,8 +293,6 @@ where
 						term = Some(BBTerm::Halt);
 					}
 					Indir => {
-						// oooh. a jumptable to analyze...
-						new_jumptables.push(self.prog.loc_from_va(inst.va()));
 						term = Some(BBTerm::JumpTbl(vec![]));
 					}
 					Uncond | Cond => {
@@ -313,10 +310,6 @@ where
 						} else {
 							term = Some(BBTerm::Jump(target_loc));
 						}
-					}
-					Call => {
-						new_funcs.push(target_loc.expect("instruction should have control target"));
-						continue 'instloop;
 					}
 				}
 
@@ -343,13 +336,60 @@ where
 		let fid = self.prog.new_func(loc, func.into_iter());
 
 		// finally, turn the crank by putting more work on the queue
-		for t in new_jumptables { self.enqueue_jump_table(t); }
-		for f in new_funcs      { self.enqueue_function(f); }
 		self.queue.push_back(AnalysisItem::Func2ndPass(fid));
 	}
 
 	fn func_second_pass(&mut self, fid: FuncId) {
-		trace!("gonna do the second pass {:?}", fid);
+		let func = self.prog.get_func(fid);
+
+		trace!("------------------------------------------------------------------------");
+		trace!("- begin function 2nd pass at {}", func.start_loc());
+
+		let mut jumptables = Vec::new();
+		let mut funcs      = Vec::new();
+		let mut refs       = Vec::new();
+
+		for bb in func.all_bbs() {
+			let start        = bb.loc;
+			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
+			let slice        = seg.image_slice(span.start .. span.end).into_data();
+			let va           = seg.va_from_loc(start);
+			let mut iter     = self.dis.disas_all(slice, va);
+
+			for inst in &mut iter {
+				let src = self.prog.loc_from_va(inst.va());
+
+				for i in 0 .. inst.num_ops() {
+					let op = inst.get_op(i);
+
+					if op.is_mem() {
+						let dst = self.prog.loc_from_va(op.addr());
+						refs.push((src, dst));
+					}
+				}
+
+				use InstructionKind::*;
+				match inst.kind() {
+					Indir => jumptables.push(self.prog.loc_from_va(inst.va())),
+					Call => {
+						let target_loc = self.resolve_target(inst.control_target().unwrap());
+						funcs.push(target_loc);
+					}
+					_ => {}
+				}
+			}
+
+			assert!(!iter.has_err(), "should be impossible");
+
+			for succ in bb.successors() {
+				refs.push((bb.term_loc, *succ));
+			}
+		}
+
+		trace!("adding {} refs, {} jumptables, {} funcs", refs.len(), jumptables.len(), funcs.len());
+		for (src, dst) in refs.into_iter() { self.prog.add_ref(src, dst); }
+		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
+		for f in funcs.into_iter()         { self.enqueue_function(f);    }
 	}
 
 	fn analyze_jump_table(&mut self, loc: Location) {

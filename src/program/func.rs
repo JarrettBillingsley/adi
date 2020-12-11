@@ -62,6 +62,12 @@ impl Function {
 	pub fn start_loc(&self) -> Location {
 		self.bbs[0].loc
 	}
+
+	/// Iterator over this function's basic blocks, starting with the head, but then
+	/// in arbitrary order.
+	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock> {
+		self.bbs.iter()
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

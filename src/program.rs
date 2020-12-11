@@ -259,6 +259,29 @@ impl Program {
 	}
 
 	// ---------------------------------------------------------------------------------------------
+	// References
+
+	delegate! {
+		to self.refs {
+			/// Add a reference from `src` to `dst`.
+			#[call(add)]
+			pub fn add_ref(&mut self, src: Location, dst: Location);
+			/// Remove a reference.
+			#[call(remove)]
+			pub fn remove_ref(&mut self, src: Location, dst: Location);
+			/// Remove all outrefs from the given location.
+			pub fn remove_all_outrefs(&mut self, src: Location);
+			/// Remove all inrefs to the given location.
+			pub fn remove_all_inrefs(&mut self, dst: Location);
+			/// Get all inrefs to a given location, or None if there aren't any.
+			pub fn get_inrefs(&mut self, dst: Location) -> Option<&RefSet>;
+			/// Get all outrefs from a given location, or None if there aren't any.
+			pub fn get_outrefs(&mut self, src: Location) -> Option<&RefSet>;
+			/// Iterator over all outrefs in the entire map.
+			pub fn all_outrefs(&self) -> BTreeIter<'_, Location, RefSet>;
+		}
+	}
+	// ---------------------------------------------------------------------------------------------
 	// Private
 
 	fn generate_name(&self, base: &str, va: VA) -> String {

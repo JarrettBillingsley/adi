@@ -56,7 +56,7 @@ pub trait OperandTrait {
 	/// How, if any way, does this operand access memory?
 	fn access(&self) -> Option<MemAccess>;
 
-	/// If access is Some, get the address it refers to; panics otherwise.
+	/// If `access` is Some (`is_mem` returns true), get the address it refers to; panics otherwise.
 	fn addr(&self) -> VA;
 
 	/// If this is an immediate value, get it as an unsigned number; panics otherwise.
@@ -121,6 +121,9 @@ pub trait InstructionTrait {
 	/// If this is a control instruction, the target address of that control, if it has one.
 	fn control_target(&self) -> Option<VA>;
 
+	// --------------------------------------------------------------------------------------------
+	// Provided methods
+
 	/// Get the virtual address of the instruction after this one.
 	fn next_addr(&self) -> VA {
 		self.va() + self.size()
@@ -159,7 +162,7 @@ pub trait InstructionTrait {
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for disassemblers.
-pub trait DisassemblerTrait {
+pub trait DisassemblerTrait : Sized {
 	/// Associated type of instructions given by this disassembler.
 	type TInstruction: InstructionTrait;
 
@@ -167,8 +170,7 @@ pub trait DisassemblerTrait {
 	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>;
 
 	/// Find the last instruction in `img`. Returns `None` if `img` is empty.
-	fn find_last_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>
-	where Self: Sized{
+	fn find_last_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction> {
 		let mut iter = self.disas_all(img, va);
 		let last = (&mut iter).last();
 
@@ -180,9 +182,7 @@ pub trait DisassemblerTrait {
 	}
 
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
-	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VA)
-		-> DisasAll<'dis, 'img, Self>
-	where Self: Sized {
+	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VA) -> DisasAll<'dis, 'img, Self> {
 		DisasAll::new(self, img, va)
 	}
 }
