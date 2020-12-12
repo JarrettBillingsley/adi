@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use parse_display::Display;
 
-use crate::memory::VA;
+use crate::memory::{ Location, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -106,6 +106,8 @@ pub trait InstructionTrait {
 	/// Associated type of operands returned by `get_op`.
 	type TOperand: OperandTrait;
 
+	/// Get Location.
+	fn loc(&self) -> Location;
 	/// Get virtual address.
 	fn va(&self) -> VA;
 	/// Get size, in bytes.
@@ -123,6 +125,11 @@ pub trait InstructionTrait {
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
+
+	/// Get the Location of the instruction after this one.
+	fn next_loc(&self) -> Location {
+		self.loc() + self.size()
+	}
 
 	/// Get the virtual address of the instruction after this one.
 	fn next_addr(&self) -> VA {
@@ -166,12 +173,12 @@ pub trait DisassemblerTrait : Sized {
 	/// Associated type of instructions given by this disassembler.
 	type TInstruction: InstructionTrait;
 
-	/// Disassemble a single instruction from `img` with the given VA.
-	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction>;
+	/// Disassemble a single instruction from `img` with the given VA and Location.
+	fn disas_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Self::TInstruction>;
 
 	/// Find the last instruction in `img`. Returns `None` if `img` is empty.
-	fn find_last_instr(&self, img: &[u8], va: VA) -> DisasResult<Self::TInstruction> {
-		let mut iter = self.disas_all(img, va);
+	fn find_last_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Self::TInstruction> {
+		let mut iter = self.disas_all(img, va, loc);
 		let last = (&mut iter).last();
 
 		if let Some(err) = iter.err() {
@@ -182,8 +189,9 @@ pub trait DisassemblerTrait : Sized {
 	}
 
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
-	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VA) -> DisasAll<'dis, 'img, Self> {
-		DisasAll::new(self, img, va)
+	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], va: VA, loc: Location)
+	-> DisasAll<'dis, 'img, Self> {
+		DisasAll::new(self, img, va, loc)
 	}
 }
 
@@ -203,14 +211,15 @@ pub struct DisasAll<'dis, 'img, D: DisassemblerTrait> {
 	disas: &'dis D,
 	img:   &'img [u8],
 	va:    VA,
+	loc:   Location,
 	offs:  usize,
 	err:   Option<DisasError>,
 	_inst: PhantomData<<D as DisassemblerTrait>::TInstruction>,
 }
 
 impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
-	fn new(disas: &'dis D, img: &'img [u8], va: VA) -> Self {
-		Self { disas, img, va, offs: 0, err: None, _inst: PhantomData }
+	fn new(disas: &'dis D, img: &'img [u8], va: VA, loc: Location) -> Self {
+		Self { disas, img, va, loc, offs: 0, err: None, _inst: PhantomData }
 	}
 
 	/// If iteration stopped because of an error, returns that error.
@@ -232,6 +241,11 @@ impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
 	pub fn err_va(&self) -> VA {
 		self.va
 	}
+
+	/// The Location where an error occurred, if any.
+	pub fn err_loc(&self) -> Location {
+		self.loc
+	}
 }
 
 impl<'dis, 'img, D: DisassemblerTrait> Iterator for DisasAll<'dis, 'img, D> {
@@ -242,10 +256,11 @@ impl<'dis, 'img, D: DisassemblerTrait> Iterator for DisasAll<'dis, 'img, D> {
 			// don't want to produce an error when successfully disassembling all instructions
 			None
 		} else {
-			match self.disas.disas_instr(&self.img[self.offs ..], self.va) {
+			match self.disas.disas_instr(&self.img[self.offs ..], self.va, self.loc) {
 				Ok(inst) => {
 					let size = inst.size();
 					self.va += size;
+					self.loc += size;
 					self.offs += size;
 					Some(inst)
 				}

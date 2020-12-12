@@ -202,7 +202,7 @@ where
 		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
 		let slice       = seg.image_slice(span.start .. loc).into_data();
 		let va          = seg.va_from_loc(span.start);
-		self.dis.find_last_instr(slice, va)
+		self.dis.find_last_instr(slice, va, span.start)
 	}
 
 	fn check_split_bb(&mut self, func: &mut ProtoFunc, id: PBBIdx, start: Location) {
@@ -212,13 +212,12 @@ where
 			// ooh, now we have to split the existing bb.
 			// first, let's make sure that `start` points to the beginning of an instruction,
 			// because otherwise we'd be jumping to an invalid location.
-			let term_va = match self.last_instr_before(start) {
-				Ok(inst) => inst.va(),
+			let term_loc = match self.last_instr_before(start) {
+				Ok(inst) => inst.loc(),
 				Err(..)  => todo!("have to flag referrer as being invalid somehow"),
 			};
 
 			// now we can split the existing BB...
-			let term_loc = self.prog.loc_from_va(term_va);
 			let new_bb = func.split_bb(id, term_loc, start);
 
 			// ...and update the span map.
@@ -263,15 +262,15 @@ where
 			let va           = seg.va_from_loc(start);
 
 			// let's start disassembling instructions
-			let mut term_loc = va;
-			let mut end      = va;
+			let mut term_loc = start;
+			let mut end_loc  = start;
 			let mut term     = None;
-			let mut iter     = self.dis.disas_all(slice, va);
+			let mut iter     = self.dis.disas_all(slice, va, start);
 
 			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
-				term_loc = end;
-				end = inst.next_addr();
+				term_loc = end_loc;
+				end_loc = inst.next_loc();
 				let target_loc = inst.control_target().map(|t| self.resolve_target(t));
 
 				use InstructionKind::*;
@@ -313,15 +312,13 @@ where
 				break 'instloop;
 			}
 
-			let end_loc = self.prog.loc_from_va(end);
-
 			if start == end_loc {
 				// oop. no good.
 				trace!("{} is NO GOOD", start);
 				self.prog.span_cancel_analysis(start);
 			} else {
 				if let Some(..) = iter.err() {
-					assert!(end == iter.err_va());
+					assert!(end_loc == iter.err_loc());
 					term = Some(BBTerm::DeadEnd);
 				} else if term.is_none() {
 					// we got through the whole slice with no errors, meaning
@@ -329,7 +326,6 @@ where
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let term_loc = self.prog.loc_from_va(term_loc);
 				let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc);
 				self.prog.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
 			}
@@ -359,10 +355,10 @@ where
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
 			let slice        = seg.image_slice(span.start .. span.end).into_data();
 			let va           = seg.va_from_loc(start);
-			let mut iter     = self.dis.disas_all(slice, va);
+			let mut iter     = self.dis.disas_all(slice, va, start);
 
 			for inst in &mut iter {
-				let src = self.prog.loc_from_va(inst.va());
+				let src = inst.loc();
 
 				for i in 0 .. inst.num_ops() {
 					let op = inst.get_op(i);
@@ -375,7 +371,7 @@ where
 
 				use InstructionKind::*;
 				match inst.kind() {
-					Indir => jumptables.push(self.prog.loc_from_va(inst.va())),
+					Indir => jumptables.push(inst.loc()),
 					Call => {
 						let target_loc = self.resolve_target(inst.control_target().unwrap());
 						funcs.push(target_loc);

@@ -158,7 +158,7 @@ fn show_func(prog: &Program, func: &Function) {
 fn show_bb(prog: &Program, bb: &BasicBlock) {
 	let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
 	let slice       = seg.image_slice(span.start .. span.end).into_data();
-	let va          = seg.va_from_loc(bb.loc);
+	let bb_va       = seg.va_from_loc(bb.loc);
 
 	// Inrefs and label
 	if let Some(ir) = prog.get_inrefs(bb.loc) {
@@ -176,7 +176,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 	// Instructions
 	let print = Printer::new(SyntaxFlavor::New);
 
-	for inst in Disassembler.disas_all(slice, va) {
+	for inst in Disassembler.disas_all(slice, bb_va, bb.loc) {
 		let mut bytes = String::new();
 		let b = inst.bytes();
 

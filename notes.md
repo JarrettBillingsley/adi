@@ -4,7 +4,6 @@
 
 # TODO:
 
-- disasm: give instructions Locations as well as VAs
 - write some FUCKING tests
 - memory tests: test config, map, region, segment...
 - use more traits to overload methods like `x_from_y` and `x_for_y`

@@ -3,7 +3,7 @@ use std::error::Error;
 
 use parse_display::Display;
 
-use crate::memory::VA;
+use crate::memory::{ Location, VA };
 
 // ------------------------------------------------------------------------------------------------
 // DisasErrorKind
@@ -31,6 +31,8 @@ pub enum DisasErrorKind {
 pub struct DisasError {
 	/// VA passed to `disas_instr`.
 	pub va:   VA,
+	/// Location passed to `disas_instr`.
+	pub loc:  Location,
 	/// kind of error.
 	pub kind: DisasErrorKind,
 }
@@ -39,13 +41,13 @@ impl Error for DisasError {}
 
 impl DisasError {
 	/// Shorthand constructors.
-	pub fn out_of_bytes(va: VA, expected: usize, got: usize) -> DisasError {
-		DisasError { va, kind: DisasErrorKind::OutOfBytes { expected, got } }
+	pub fn out_of_bytes(va: VA, loc: Location, expected: usize, got: usize) -> DisasError {
+		DisasError { va, loc, kind: DisasErrorKind::OutOfBytes { expected, got } }
 	}
 
 	/// Ditto.
-	pub fn unknown_instruction(va: VA) -> DisasError {
-		DisasError { va, kind: DisasErrorKind::UnknownInstruction }
+	pub fn unknown_instruction(va: VA, loc: Location) -> DisasError {
+		DisasError { va, loc, kind: DisasErrorKind::UnknownInstruction }
 	}
 }
 

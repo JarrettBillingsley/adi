@@ -14,7 +14,7 @@ use crate::disasm::{
 	InstructionKind,
 };
 use crate::disasm::error::{ DisasError, DisasResult };
-use crate::memory::VA;
+use crate::memory::{ Location, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -374,6 +374,7 @@ const MAX_BYTES: usize = 3;
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Instruction {
 	va:    VA,
+	loc:   Location,
 	desc:  InstDesc,
 	size:  usize,
 	op:    Option<Operand>,
@@ -381,18 +382,19 @@ pub struct Instruction {
 }
 
 impl Instruction {
-	fn new(va: VA, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
+	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
 	-> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
-		Self { va, desc, size, op, bytes }
+		Self { va, loc, desc, size, op, bytes }
 	}
 }
 
 impl InstructionTrait for Instruction {
 	type TOperand = Operand;
 
-	fn va(&self) -> VA                 { self.va }
+	fn va(&self) -> VA                    { self.va }
+	fn loc(&self) -> Location             { self.loc }
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
 	fn get_op(&self, i: usize) -> Operand {
@@ -441,30 +443,30 @@ pub struct Disassembler;
 impl DisassemblerTrait for Disassembler {
 	type TInstruction = Instruction;
 
-	fn disas_instr(&self, img: &[u8], va: VA) -> DisasResult<Instruction> {
+	fn disas_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {
-			return Err(DisasError::out_of_bytes(va, 1, 0));
+			return Err(DisasError::out_of_bytes(va, loc, 1, 0));
 		}
 
 		// is the opcode OK?
 		let desc = lookup_desc(img[0]);
 
 		if desc.meta_op == MetaOp::UNK {
-			return Err(DisasError::unknown_instruction(va));
+			return Err(DisasError::unknown_instruction(va, loc));
 		}
 
 		// do we have enough bytes for the operand?
 		let inst_size = desc.addr_mode.op_bytes() + 1;
 
 		if inst_size > img.len() {
-			return Err(DisasError::out_of_bytes(va, inst_size, img.len()));
+			return Err(DisasError::out_of_bytes(va, loc, inst_size, img.len()));
 		}
 
 		// okay cool, let's decode
 		let bytes = &img[0 .. inst_size];
 		let op = decode_operand(desc, va, &img[1 .. inst_size]);
-		Ok(Instruction::new(va, desc, inst_size, op, bytes))
+		Ok(Instruction::new(va, loc, desc, inst_size, op, bytes))
 	}
 }
 
