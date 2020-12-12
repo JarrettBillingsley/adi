@@ -157,7 +157,7 @@ fn show_func(prog: &Program, func: &Function) {
 
 fn show_bb(prog: &Program, bb: &BasicBlock) {
 	let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
-	let slice       = seg.image_slice(span.start .. span.end).into_data();
+	let slice       = seg.image_slice(span).into_data();
 	let bb_va       = seg.va_from_loc(bb.loc);
 
 	// Inrefs and label

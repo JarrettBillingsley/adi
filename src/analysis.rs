@@ -258,7 +258,7 @@ where
 
 			// now, we need the actual data.
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
-			let slice        = seg.image_slice(span.start .. span.end).into_data();
+			let slice        = seg.image_slice(span).into_data();
 			let va           = seg.va_from_loc(start);
 
 			// let's start disassembling instructions
@@ -353,7 +353,7 @@ where
 		for bb in func.all_bbs() {
 			let start        = bb.loc;
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
-			let slice        = seg.image_slice(span.start .. span.end).into_data();
+			let slice        = seg.image_slice(span).into_data();
 			let va           = seg.va_from_loc(start);
 			let mut iter     = self.dis.disas_all(slice, va, start);
 

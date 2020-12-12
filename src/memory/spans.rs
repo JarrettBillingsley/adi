@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::ops::{ Bound, RangeBounds };
 
 use parse_display::Display;
 use derive_new::new;
@@ -56,6 +57,16 @@ impl Span {
 		} else {
 			None
 		}
+	}
+}
+
+impl RangeBounds<Location> for Span {
+	fn start_bound(&self) -> Bound<&Location> {
+		Bound::Included(&self.start)
+	}
+
+	fn end_bound(&self) -> Bound<&Location> {
+		Bound::Excluded(&self.end)
 	}
 }
 
@@ -140,7 +151,6 @@ impl SpanMap {
 	pub fn span_after(&self, offs: usize) -> Option<Span> {
 		assert!(offs < self.end);
 
-		use std::ops::Bound;
 		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next()
 			.map(|s| Span::new(self.seg, s))
 	}
