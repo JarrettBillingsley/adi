@@ -1,5 +1,5 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
-use std::ops::{ Range, RangeBounds, Bound };
+use std::ops::{ Range, RangeBounds, Bound, Add, AddAssign, Sub, SubAssign };
 use std::fmt::{ Debug, };
 
 use derive_new::new;
@@ -31,6 +31,32 @@ pub struct Location {
 impl Debug for Location {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{}", self)
+	}
+}
+
+impl Add<usize> for Location {
+	type Output = Self;
+	fn add(self, other: usize) -> Self {
+		Location { offs: self.offs + other, ..self }
+	}
+}
+
+impl AddAssign<usize> for Location {
+	fn add_assign(&mut self, other: usize) {
+		self.offs += other;
+	}
+}
+
+impl Sub<usize> for Location {
+	type Output = Self;
+	fn sub(self, other: usize) -> Self {
+		Location { offs: self.offs - other, ..self }
+	}
+}
+
+impl SubAssign<usize> for Location {
+	fn sub_assign(&mut self, other: usize) {
+		self.offs -= other;
 	}
 }
 

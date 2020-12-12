@@ -24,16 +24,30 @@ impl Add<usize> for VA {
 	}
 }
 
+impl Add<isize> for VA {
+	type Output = Self;
+	fn add(self, other: isize) -> Self {
+		VA(((self.0 as isize) + other) as usize)
+	}
+}
+
 impl AddAssign<usize> for VA {
 	fn add_assign(&mut self, other: usize) {
 		self.0 += other;
 	}
 }
 
-impl Sub for VA {
+impl Sub<VA> for VA {
 	type Output = usize;
 	fn sub(self, other: Self) -> usize {
 		self.0 - other.0
+	}
+}
+
+impl Sub<usize> for VA {
+	type Output = Self;
+	fn sub(self, other: usize) -> Self {
+		VA(self.0 - other)
 	}
 }
 
