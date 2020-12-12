@@ -10,7 +10,7 @@ use super::{
 	lookup_desc,
 };
 
-use crate::memory::VA;
+use crate::memory::{ SegId, Location, VA };
 use crate::disasm::{ NameLookupTrait, DisasError, DisassemblerTrait, PrinterTrait };
 
 #[test]
@@ -27,9 +27,9 @@ fn mnemonics() {
 	assert_eq!(MetaOp::BRK.mnemonic(SyntaxFlavor::Old),  "brk");
 	assert_eq!(MetaOp::BRK.mnemonic(SyntaxFlavor::New),  "brk");
 	assert_eq!(MetaOp::LDA.mnemonic(SyntaxFlavor::Old),  "lda");
-	assert_eq!(MetaOp::LDA.mnemonic(SyntaxFlavor::New),  "ld  a,");
+	assert_eq!(MetaOp::LDA.mnemonic(SyntaxFlavor::New),  "ld");
 	assert_eq!(MetaOp::LDAI.mnemonic(SyntaxFlavor::Old), "lda");
-	assert_eq!(MetaOp::LDAI.mnemonic(SyntaxFlavor::New), "li  a,");
+	assert_eq!(MetaOp::LDAI.mnemonic(SyntaxFlavor::New), "li");
 	assert_eq!(MetaOp::UNK.mnemonic(SyntaxFlavor::Old),  "???");
 	assert_eq!(MetaOp::UNK.mnemonic(SyntaxFlavor::New),  "???");
 }
@@ -43,16 +43,18 @@ fn mnemonics() {
 } */
 
 fn disas(va: usize, img: &[u8]) -> Instruction {
+	let loc = Location::new(SegId(0), va);
 	let va = VA(va);
-	match Disassembler.disas_instr(img, va) {
+	match Disassembler.disas_instr(img, va, loc) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
 	}
 }
 
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
+	let loc = Location::new(SegId(0), va);
 	let va = VA(va);
-	match Disassembler.disas_instr(img, va) {
+	match Disassembler.disas_instr(img, va, loc) {
 		Ok(inst) => {
 			assert_eq!(inst.va, va);
 			assert_eq!(inst.desc.meta_op, meta_op);
@@ -66,8 +68,9 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 }
 
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
+	let loc = Location::new(SegId(0), va);
 	let va = VA(va);
-	match Disassembler.disas_instr(img, va) {
+	match Disassembler.disas_instr(img, va, loc) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
 		}
@@ -140,7 +143,7 @@ fn disasm_range() {
 	];
 
 	let p = Printer::new(SyntaxFlavor::Old);
-	let mut iter = Disassembler.disas_all(code, VA(0));
+	let mut iter = Disassembler.disas_all(code, VA(0), Location::new(SegId(0), 0));
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
@@ -158,12 +161,14 @@ fn disasm_range() {
 fn disasm_failure() {
 	use Opcode::*;
 
-	check_fail(0, &[],                    DisasError::out_of_bytes(VA(0), 1, 0));
-	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VA(0)));
-	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VA(0)));
-	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VA(0), 2, 1));
-	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VA(0), 3, 1));
-	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VA(0), 3, 2));
+	let loc = Location::new(SegId(0), 0);
+
+	check_fail(0, &[],                    DisasError::out_of_bytes(VA(0), loc, 1, 0));
+	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VA(0), loc));
+	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VA(0), loc));
+	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VA(0), loc, 2, 1));
+	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VA(0), loc, 3, 1));
+	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VA(0), loc, 3, 2));
 }
 
 struct DummyLookup;
@@ -185,18 +190,18 @@ fn printing() {
 
 	let tests: &[(Instruction, &str, &str)] = &[
 		(disas(0, &[BRK_IMP as u8]),             "brk ",            "brk "                  ),
-		(disas(0, &[LDA_IMM as u8, 0xEF]),       "lda #$EF",        "li  a, 0xEF"           ),
+		(disas(0, &[LDA_IMM as u8, 0xEF]),       "lda #$EF",        "li a, 0xEF"           ),
 		(disas(0, &[ADC_ABS as u8, 0x56, 0x34]), "adc $3456",       "adc a, [0x3456]"       ),
-		(disas(0, &[STY_ZPG as u8, 0x33]),       "sty $33",         "st  y, [0x33]"         ),
+		(disas(0, &[STY_ZPG as u8, 0x33]),       "sty $33",         "st y, [0x33]"         ),
 		(disas(0, &[ASL_ZPG as u8, 0x99]),       "asl $99",         "shl [0x99]"            ),
 		(disas(0, &[ROL_ABS as u8, 0xEF, 0xBE]), "rol beefmaster",  "rol [beefmaster]"      ),
 		(disas(0, &[JMP_LAB as u8, 0xFE, 0xFF]), "jmp $FFFE",       "jmp 0xFFFE"            ),
 		(disas(0, &[JMP_IND as u8, 0xFC, 0xFF]), "jmp (VEC_RESET)", "jmp [VEC_RESET]"       ),
 		(disas(3, &[BCC_REL as u8, 10]),         "bcc $000F",       "bcc 0x000F"            ),
 		(disas(8, &[BCC_REL as u8, 0xF2]),       "bcc VEC_RESET",   "bcc VEC_RESET"         ),
-		(disas(0, &[ORA_ZPX as u8, 0x30]),       "ora v_ztable,x",  "or  a, [v_ztable + x]" ),
-		(disas(0, &[LDX_ZPY as u8, 0x40]),       "ldx $40,y",       "ld  x, [0x40 + y]"     ),
-		(disas(0, &[LDY_ABX as u8, 0x50, 0x60]), "ldy $6050,x",     "ld  y, [0x6050 + x]"   ),
+		(disas(0, &[ORA_ZPX as u8, 0x30]),       "ora v_ztable,x",  "or a, [v_ztable + x]" ),
+		(disas(0, &[LDX_ZPY as u8, 0x40]),       "ldx $40,y",       "ld x, [0x40 + y]"     ),
+		(disas(0, &[LDY_ABX as u8, 0x50, 0x60]), "ldy $6050,x",     "ld y, [0x6050 + x]"   ),
 		(disas(0, &[CMP_ABY as u8, 0x30, 0x00]), "cmp v_ztable,y",  "cmp a, [v_ztable + y]" ),
 		(disas(0, &[SBC_IZX as u8, 0x10]),       "sbc ($10,x)",     "sbc a, [[0x10 + x]]"   ),
 		(disas(0, &[EOR_IZY as u8, 0x90]),       "eor ($90),y",     "xor a, [[0x90] + y]"   ),

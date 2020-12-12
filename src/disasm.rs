@@ -48,11 +48,6 @@ pub trait OperandTrait {
 	/// Is this an immediate value (but NOT a memory address)?
 	fn is_imm(&self) -> bool;
 
-	/// Does this operand access memory?
-	fn is_mem(&self) -> bool {
-		self.access().is_some()
-	}
-
 	/// How, if any way, does this operand access memory?
 	fn access(&self) -> Option<MemAccess>;
 
@@ -64,6 +59,14 @@ pub trait OperandTrait {
 
 	/// If this is an immediate value, get it as a signed number; panics otherwise.
 	fn simm(&self) -> i64;
+
+	// --------------------------------------------------------------------------------------------
+	// Provided methods
+
+	/// Does this operand access memory?
+	fn is_mem(&self) -> bool {
+		self.access().is_some()
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -175,6 +178,9 @@ pub trait DisassemblerTrait : Sized {
 
 	/// Disassemble a single instruction from `img` with the given VA and Location.
 	fn disas_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Self::TInstruction>;
+
+	// --------------------------------------------------------------------------------------------
+	// Provided methods
 
 	/// Find the last instruction in `img`. Returns `None` if `img` is empty.
 	fn find_last_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Self::TInstruction> {
@@ -288,6 +294,9 @@ pub trait PrinterTrait {
 
 	/// Give a string representation of an instruction's operands.
 	fn fmt_operands(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String;
+
+	// --------------------------------------------------------------------------------------------
+	// Provided methods
 
 	/// Give a string representation of an instruction.
 	fn fmt_instr(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String {
