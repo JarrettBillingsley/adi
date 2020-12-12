@@ -64,13 +64,13 @@ impl Span {
 pub enum SpanKind {
 	/// Unknown (not yet analyzed)
 	Unk,
-	/// Currently being analyzed
-	Ana,
 	/// Code (that is, a basic block of a function)
 	Code(BBId),
 	/// Data (anything that isn't code)
 	Data,
 
+	/// Currently being analyzed
+	Ana,
 	/// Code that's been analyzed, but not yet put into a real BB.
 	/// The data is just for use by the analysis algorithm.
 	AnaCode(usize),

@@ -68,6 +68,11 @@ impl Function {
 	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock> {
 		self.bbs.iter()
 	}
+
+	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
+		assert!(id.0 == self.id);
+		&self.bbs[id.1]
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

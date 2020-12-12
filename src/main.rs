@@ -77,83 +77,14 @@ fn test_nes() -> std::io::Result<()> {
 
 	let seg = prog.segment_for_name("PRG0").unwrap();
 
-
-/*	for (loc, name) in prog.all_names_by_loc() {
-		println!("{}: {}", loc, name);
-	}
-
-	println!();
-
-	for (loc, name) in prog.names_in_va_range(..VA(0x2004)) {
-		println!("{}: {}", loc, name);
-	}
-
-	println!();
-
-	println!("name for 0x2000: {}", prog.name_of_va(VA(0x2000)));
-	println!("name for 0x2001: {}", prog.name_of_va(VA(0x2001)));
-	println!("name for 0x2008: {}", prog.name_of_va(VA(0x2008)));
-	println!("name for 0x0400: {}", prog.name_of_va(VA(0x0400)));
-	println!("name for 0x5000: {}", prog.name_of_va(VA(0x5000)));
-	println!("name for 0x8000: {}", prog.name_of_va(VA(0x8000)));
-
-	println!();
-
-	println!("location for 0x0000: {:?}", prog.loc_for_va(VA(0x0000)));
-	println!("location for 0x2000: {:?}", prog.loc_for_va(VA(0x2000)));
-	println!("location for 0x2001: {:?}", prog.loc_for_va(VA(0x2001)));
-	println!("location for 0x2008: {:?}", prog.loc_for_va(VA(0x2008)));
-	println!("location for 0x0400: {:?}", prog.loc_for_va(VA(0x0400)));
-	println!("location for 0x5000: {:?}", prog.loc_for_va(VA(0x5000)));
-	println!("location for 0x8000: {:?}", prog.loc_for_va(VA(0x8000)));
-
-	println!();
-
-
-	let prg0 = seg.image_slice_all().into_data();
-
-	// Disassembly/printing!
-	let disas = Disassembler;
-	let print = Printer::new(SyntaxFlavor::New);
-
-	let mut iter = disas.disas_all(&prg0[..10], VA(0x8000));
-
-	for inst in &mut iter {
-		print!("0x{:4X}  ", inst.va());
-		let b = inst.bytes();
-
-		match b.len() {
-			1 => print!("{:02X}      ",         b[0]),
-			2 => print!("{:02X} {:02X}   ",     b[0], b[1]),
-			3 => print!("{:02X} {:02X} {:02X}", b[0], b[1], b[2]),
-			_ => unreachable!()
-		}
-
-		println!("  {}", print.fmt_instr(&inst, &prog));
-	}
-
-	if let Some(err) = iter.err() {
-		println!("{}", err);
-	}
-
-	println!();
-
-	for name in &["VEC_NMI", "VEC_RESET", "VEC_IRQ"] {
-		println!("{:>10}: {:04X}", name, seg.read_le_u16(prog.loc_from_name(name)));
-	}*/
-
-	// -------------------------------------------
-
 	let vec_reset_loc = prog.loc_from_name("VEC_RESET");
-	let reset_va = VA(seg.read_le_u16(vec_reset_loc) as usize);
-	let reset_loc = seg.loc_from_va(reset_va);
+	let vec_nmi_loc   = prog.loc_from_name("VEC_NMI");
+	let reset_va      = VA(seg.read_le_u16(vec_reset_loc) as usize);
+	let nmi_va        = VA(seg.read_le_u16(vec_nmi_loc) as usize);
+	let reset_loc     = seg.loc_from_va(reset_va);
+	let nmi_loc       = seg.loc_from_va(nmi_va);
+
 	prog.add_ref(vec_reset_loc, reset_loc);
-
-	let seg = prog.segment_for_name("PRG0").unwrap();
-
-	let vec_nmi_loc = prog.loc_from_name("VEC_NMI");
-	let nmi_va = VA(seg.read_le_u16(vec_nmi_loc) as usize);
-	let nmi_loc = seg.loc_from_va(nmi_va);
 	prog.add_ref(vec_nmi_loc, nmi_loc);
 
 	{
@@ -166,16 +97,45 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
+	// show_all_funcs(&prog);
+
+	let seg = prog.segment_for_name("PRG0").unwrap();
+
+	let divider = "; -------------------------------------------------------------------------";
+
+	for span in seg.all_spans() {
+		match span.kind {
+			SpanKind::Unk => {
+				let addr = prog.fmt_addr(seg.va_from_loc(span.start).0);
+				let msg = format!("[{} unexplored byte(s)]", span.len());
+
+				println!("{}", divider.green());
+				println!("{:>4}:{} {}", seg.name.yellow(), addr, msg.truecolor(255, 127, 0));
+				println!("{}", divider.green());
+				println!();
+			}
+
+			SpanKind::Code(bbid) => {
+				let func_id = bbid.func();
+				let func = prog.get_func(func_id);
+				let bb = func.get_bb(bbid);
+				show_bb(&prog, bb);
+			}
+
+			_ => {}
+		}
+	}
+
+	Ok(())
+}
+
+fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().map(|(_, func)| func).collect::<Vec<_>>();
 	funcs.sort_by(|a, b| a.start_loc().cmp(&b.start_loc()));
 
 	for func in funcs {
 		show_func(&prog, func);
 	}
-
-	// prog.mem().segment_for_name("PRG0").unwrap().dump_spans();
-
-	Ok(())
 }
 
 fn show_func(prog: &Program, func: &Function) {
@@ -190,73 +150,71 @@ fn show_func(prog: &Program, func: &Function) {
 	let mut bbs = func.all_bbs().collect::<Vec<_>>();
 	bbs.sort_by(|a, b| a.loc.cmp(&b.loc));
 
-	let print = Printer::new(SyntaxFlavor::New);
-
 	for bb in bbs {
-		let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
-		let slice       = seg.image_slice(span.start .. span.end).into_data();
-		let va          = seg.va_from_loc(bb.loc);
-		let mut inrefs  = prog.get_inrefs(bb.loc);
+		show_bb(prog, &bb);
+	}
+}
 
-		if let Some(..) = inrefs {
-			println!("{:20}{}:", "", prog.name_of_loc(bb.loc).truecolor(127, 63, 0));
-		}
+fn show_bb(prog: &Program, bb: &BasicBlock) {
+	let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
+	let slice       = seg.image_slice(span.start .. span.end).into_data();
+	let va          = seg.va_from_loc(bb.loc);
 
-		for inst in Disassembler.disas_all(slice, va) {
-			let mut bytes = String::new();
-			let b = inst.bytes();
+	// Inrefs and label
+	if let Some(ir) = prog.get_inrefs(bb.loc) {
+		print!("{:20}{}", "", ";".green());
 
-			match b.len() {
-				1 => write!(bytes, "{:02X}",               b[0]).unwrap(),
-				2 => write!(bytes, "{:02X} {:02X}",        b[0], b[1]).unwrap(),
-				3 => write!(bytes, "{:02X} {:02X} {:02X}", b[0], b[1], b[2]).unwrap(),
-				_ => unreachable!()
-			}
-
-			let addr = prog.fmt_addr(inst.va().0);
-			let mnem = print.fmt_mnemonic(&inst);
-			let ops  = print.fmt_operands(&inst, prog);
-
-			print!("{:>4}:{}  {:8}      {:3} {:30}",
-				seg.name.yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
-
-			if let Some(ir) = inrefs {
-				print!("{}", "; XREF".green());
-
-				for &r in ir {
-					print!(" {}", prog.name_of_loc(r).green());
-				}
-
-				inrefs = None;
-			}
-
-			println!();
-		}
-
-		use BBTerm::*;
-		match &bb.term {
-			DeadEnd => println!("{}", "---------- DEAD END ----------".red()),
-			Halt | Return => {
-				let name = prog.name_of_loc(func.start_loc());
-				println!();
-				println!("{}{}", "; End of function ".green(), name.green());
-				println!("{}", divider);
-			}
-			FallThru(loc) => {
-				thinger(prog, bb.loc, *loc, "Fall through", Color::Yellow);
-			}
-			Jump(loc) => {
-				thinger(prog, bb.loc, *loc, "Tailcall", Color::Yellow);
-			}
-			Cond { t, f } => {
-				thinger(prog, bb.loc, *t, "Tailbranch", Color::Yellow);
-				thinger(prog, bb.loc, *f, "Fall through", Color::Yellow);
-			}
-			JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
+		for &r in ir {
+			print!(" {}{}", "<-".green(), prog.name_of_loc(r).green());
 		}
 
 		println!();
+
+		println!("{:20}{}:", "", prog.name_of_loc(bb.loc).truecolor(127, 63, 0));
 	}
+
+	// Instructions
+	let print = Printer::new(SyntaxFlavor::New);
+
+	for inst in Disassembler.disas_all(slice, va) {
+		let mut bytes = String::new();
+		let b = inst.bytes();
+
+		match b.len() {
+			1 => write!(bytes, "{:02X}",               b[0]).unwrap(),
+			2 => write!(bytes, "{:02X} {:02X}",        b[0], b[1]).unwrap(),
+			3 => write!(bytes, "{:02X} {:02X} {:02X}", b[0], b[1], b[2]).unwrap(),
+			_ => unreachable!()
+		}
+
+		let addr = prog.fmt_addr(inst.va().0);
+		let mnem = print.fmt_mnemonic(&inst);
+		let ops  = print.fmt_operands(&inst, prog);
+
+		println!("{:>4}:{}  {:8}      {:3} {:30}",
+			seg.name.yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+	}
+
+	// Terminator
+	use BBTerm::*;
+	match &bb.term {
+		DeadEnd => println!("{}", "---------- DEAD END ----------".red().bold()),
+		Halt | Return => {
+		}
+		FallThru(loc) => {
+			thinger(prog, bb.loc, *loc, "Fall through", Color::Yellow);
+		}
+		Jump(loc) => {
+			thinger(prog, bb.loc, *loc, "Tailcall", Color::Yellow);
+		}
+		Cond { t, f } => {
+			thinger(prog, bb.loc, *t, "Tailbranch", Color::Yellow);
+			thinger(prog, bb.loc, *f, "Fall through", Color::Yellow);
+		}
+		JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
+	}
+
+	println!();
 }
 
 fn thinger(prog: &Program, from: Location, to: Location, msg: &str, color: Color){
