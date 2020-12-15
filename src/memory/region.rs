@@ -1,7 +1,7 @@
 use parse_display::Display;
 use derive_new::new;
 
-use crate::memory::VA;
+use crate::memory::{ VA, SegId };
 
 // ------------------------------------------------------------------------------------------------
 // Memory map regions
@@ -18,16 +18,11 @@ pub struct MemoryRegion {
 	pub base: VA,
 	/// Address of first byte *after* this region.
 	pub end:  VA,
-	/// Whether this is provided by the hardware or by a cartridge etc.
-	pub hw:   bool,
 	/// What kind of thing is at these addresses.
 	pub kind: MemoryRegionKind,
-	/// Whether or not this region can be banked (swapped out) by a memory manager.
-	pub bankable: bool,
-
-	/// How big this region is, in bytes.
-	#[new(value = "end - base")]
-	pub size: usize,
+	/// The segment to which this is hardwired, if any.
+	/// If this is `None`, then it's up to the MMU to decide what segment is mapped here.
+	pub seg: Option<SegId>,
 }
 
 #[allow(clippy::len_without_is_empty)]
@@ -38,10 +33,10 @@ impl MemoryRegion {
 	}
 
 	/// gets the size in bytes.
-	pub fn len(&self) -> usize { self.size }
+	pub fn len(&self) -> usize { self.end - self.base }
 
 	/// true this region's kind is bankable.
-	pub fn is_bankable(&self) -> bool { self.bankable }
+	pub fn is_bankable(&self) -> bool { self.seg.is_none() }
 }
 
 /// What you access when you use an address in a region's range.

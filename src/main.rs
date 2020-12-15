@@ -40,17 +40,6 @@ fn test_nes() -> std::io::Result<()> {
 	// let's set it up
 	let img = Image::new_from_file("tests/data/smb.prg")?;
 
-	let map = MemoryMap::new(16, &[
-		// default
-		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  true, Ram,    false),
-		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  true, Mirror, false),
-		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  true, Mmio,   false),
-		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  true, Mirror, false),
-		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  true, Mmio,   false),
-		// ROM-specific
-		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), false, Rom,   false),
-	]);
-
 	let config = MemoryConfig::from_iter(&[
 		// Region, Segment
 		// default
@@ -64,11 +53,23 @@ fn test_nes() -> std::io::Result<()> {
 
 	let mut segs = SegCollection::new();
 	// default
-	segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
-	segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
-	segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
+	let ram_seg  = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
+	let ppu_seg  = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
+	let io_seg   = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
 	// ROM-specific
-	segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
+	let prg0_seg = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
+
+
+	let map = MemoryMap::new(16, &[
+		// default
+		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  Ram,    Some(ram_seg)),
+		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  Mirror, None),
+		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  Mmio,   Some(ppu_seg)),
+		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  Mirror, None),
+		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  Mmio,   Some(io_seg)),
+		// ROM-specific
+		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), Rom,    Some(prg0_seg)),
+	]);
 
 	let mem = Memory::new(Endian::Little, segs, map, config);
 	let mut prog = Program::new(mem);
