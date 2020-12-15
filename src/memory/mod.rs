@@ -144,11 +144,6 @@ impl Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
-	/// Get the memory address space map.
-	#[inline] pub fn map(&self) -> &MemoryMap {
-		&self.mem_map
-	}
-
 	/// Gets endianness.
 	#[inline] pub fn endianness(&self) -> Endian {
 		self.endianness
@@ -157,23 +152,14 @@ impl Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Regions
 
-	/// Given a range of two VAs, do they cross over the boundary between two regions?
-	pub fn range_crosses_regions(&self, start: VA, end: VA) -> bool {
-		assert!(end > start);
-
-		match (self.mem_map.region_for_va(start), self.mem_map.region_for_va(end)) {
-			(Some(s), Some(e)) => !std::ptr::eq(s, e),
-			(None, None)       => false,
-			_                  => true,
-		}
-	}
-
 	delegate! {
 		to self.mem_map {
 			/// Given a virtual address, get the memory region which contains it, if any.
 			pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion>;
 			/// Given a name, gets the memory region with that name, if any.
 			pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion>;
+			/// Given a range of two VAs, do they cross over the boundary between two regions?
+			pub fn range_crosses_regions(&self, start: VA, end: VA) -> bool;
 		}
 	}
 
@@ -182,12 +168,6 @@ impl Memory {
 
 	delegate! {
 		to self.segs {
-			/// Adds a new segment.
-			///
-			/// # Panics
-			///
-			/// - if `name` is already the name of an existing segment.
-			pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>);
 			/// Given a segment name, get the Segment named that (if any).
 			pub fn segment_for_name(&self, name: &str) -> Option<&Segment>;
 			/// Same as above but mutable.
@@ -201,6 +181,16 @@ impl Memory {
 			/// Same as above but mutable.
 			pub fn segment_from_id_mut(&mut self, id: SegId) -> &mut Segment;
 		}
+	}
+
+	/// Adds a new segment.
+	///
+	/// # Panics
+	///
+	/// - if `name` is already the name of an existing segment.
+	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) {
+		self.segs.add_segment(name, vbase, vend, image);
+		// TODO: notify MMU
 	}
 
 	/// Given a VA, get the Segment which contains it (if any).

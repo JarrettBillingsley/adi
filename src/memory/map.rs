@@ -107,4 +107,15 @@ impl MemoryMap {
 		let func = move |&idx| &self.regions[idx];
 		self.addr_map.values().map(func)
 	}
+
+	/// Given a range of two VAs, do they cross over the boundary between two regions?
+	pub fn range_crosses_regions(&self, start: VA, end: VA) -> bool {
+		assert!(end > start);
+
+		match (self.region_for_va(start), self.region_for_va(end)) {
+			(Some(s), Some(e)) => !std::ptr::eq(s, e),
+			(None, None)       => false,
+			_                  => true,
+		}
+	}
 }

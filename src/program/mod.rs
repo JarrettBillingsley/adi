@@ -235,7 +235,7 @@ impl Program {
 		if let Some(loc) = self.mem.loc_for_va(va) {
 			self.name_of_loc(loc)
 		// no mapped segment?? uhhhh....... try region name?
-		} else if let Some(region) = self.mem.map().region_for_va(va) {
+		} else if let Some(region) = self.mem.region_for_va(va) {
 			// name it "REGIONNAME_loc_0C30"
 			self.generate_name(&region.name(), va)
 		} else {
