@@ -9,8 +9,8 @@ use delegate::delegate;
 // ------------------------------------------------------------------------------------------------
 
 mod image;
-mod manager;
 mod map;
+mod mmu;
 mod region;
 mod segment;
 mod spans;
@@ -20,8 +20,8 @@ mod va;
 mod tests;
 
 pub use image::*;
-pub use manager::*;
 pub use map::*;
+pub use mmu::*;
 pub use region::*;
 pub use segment::*;
 pub use spans::*;
