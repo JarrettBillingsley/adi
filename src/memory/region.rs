@@ -7,36 +7,39 @@ use crate::memory::{ VA, SegId };
 // Memory map regions
 // ------------------------------------------------------------------------------------------------
 
-/// Describes part of a CPU's memory map - the name, address range, and so on.
+/// Describes part of a virtual memory map.
 #[derive(Debug, Display, Clone)]
 #[derive(new)]
 #[display("{name} [0x{base:08X} .. 0x{end:08X})")]
 pub struct MemoryRegion {
-	/// Human-readable name.
-	pub name: String,
-	/// Address of first byte.
-	pub base: VA,
-	/// Address of first byte *after* this region.
-	pub end:  VA,
-	/// What kind of thing is at these addresses.
-	pub kind: MemoryRegionKind,
-	/// The segment to which this is hardwired, if any.
-	/// If this is `None`, then it's up to the MMU to decide what segment is mapped here.
-	pub seg: Option<SegId>,
+	name: String,
+	base: VA,
+	end:  VA,
+	kind: MemoryRegionKind,
+	seg: Option<SegId>,
 }
 
 #[allow(clippy::len_without_is_empty)]
 impl MemoryRegion {
-	/// true if these two regions overlap one another.
-	pub fn overlaps(&self, other: &MemoryRegion) -> bool {
+	/// The human-readable name.
+	#[inline] pub fn name(&self) -> &String { &self.name }
+	/// The virtual address of this region's first byte.
+	#[inline] pub fn base(&self) -> VA { self.base }
+	/// The virtual address of first byte *after* this region.
+	#[inline] pub fn end(&self) -> VA { self.end }
+	/// The size in bytes.
+	#[inline] pub fn len(&self) -> usize { self.end - self.base }
+	/// What kind of thing is at these addresses.
+	#[inline] pub fn kind(&self) -> MemoryRegionKind { self.kind }
+	/// The ID of the segment to which this is hardwired, if any.
+	/// If this is `None`, then it's up to the MMU to decide what segment is mapped here.
+	#[inline] pub fn seg(&self) -> Option<SegId> { self.seg }
+	/// True this region is bankable.
+	#[inline] pub fn is_bankable(&self) -> bool { self.seg.is_none() }
+	/// True if `self` and `other` overlap one another.
+	#[inline] pub fn overlaps(&self, other: &MemoryRegion) -> bool {
 		!(self.end <= other.base || other.end <= self.base)
 	}
-
-	/// gets the size in bytes.
-	pub fn len(&self) -> usize { self.end - self.base }
-
-	/// true this region's kind is bankable.
-	pub fn is_bankable(&self) -> bool { self.seg.is_none() }
 }
 
 /// What you access when you use an address in a region's range.

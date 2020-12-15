@@ -65,7 +65,7 @@ fn test_nes() -> std::io::Result<()> {
 
 	println!("{}", prog);
 
-	let seg = prog.segment_for_name("PRG0").unwrap();
+	let seg = prog.segment_from_id(prg0_seg);
 
 	let vec_reset_loc = prog.loc_from_name("VEC_RESET");
 	let vec_nmi_loc   = prog.loc_from_name("VEC_NMI");
@@ -94,13 +94,13 @@ fn test_nes() -> std::io::Result<()> {
 	let divider = "; -------------------------------------------------------------------------";
 
 	for span in seg.all_spans() {
-		match span.kind {
+		match span.kind() {
 			SpanKind::Unk => {
-				let addr = prog.fmt_addr(seg.va_from_loc(span.start).0);
+				let addr = prog.fmt_addr(seg.va_from_loc(span.start()).0);
 				let msg = format!("[{} unexplored byte(s)]", span.len());
 
 				println!("{}", divider.green());
-				println!("{:>4}:{} {}", seg.name.yellow(), addr, msg.truecolor(255, 127, 0));
+				println!("{:>4}:{} {}", seg.name().yellow(), addr, msg.truecolor(255, 127, 0));
 				println!("{}", divider.green());
 				println!();
 			}
@@ -138,7 +138,7 @@ fn show_func(prog: &Program, func: &Function) {
 	println!("{}{}", "; Function ".green(), name.green());
 
 	let mut bbs = func.all_bbs().collect::<Vec<_>>();
-	bbs.sort_by(|a, b| a.loc.cmp(&b.loc));
+	bbs.sort_by(|a, b| a.loc().cmp(&b.loc()));
 
 	for bb in bbs {
 		show_bb(prog, &bb);
@@ -146,12 +146,12 @@ fn show_func(prog: &Program, func: &Function) {
 }
 
 fn show_bb(prog: &Program, bb: &BasicBlock) {
-	let (seg, span) = prog.seg_and_span_at_loc(bb.loc);
+	let (seg, span) = prog.seg_and_span_at_loc(bb.loc());
 	let slice       = seg.image_slice(span).into_data();
-	let bb_va       = seg.va_from_loc(bb.loc);
+	let bb_va       = seg.va_from_loc(bb.loc());
 
 	// Inrefs and label
-	if let Some(ir) = prog.get_inrefs(bb.loc) {
+	if let Some(ir) = prog.get_inrefs(bb.loc()) {
 		print!("{:20}{}", "", ";".green());
 
 		for &r in ir {
@@ -160,13 +160,13 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 
 		println!();
 
-		println!("{:20}{}:", "", prog.name_of_loc(bb.loc).truecolor(127, 63, 0));
+		println!("{:20}{}:", "", prog.name_of_loc(bb.loc()).truecolor(127, 63, 0));
 	}
 
 	// Instructions
 	let print = Printer::new(SyntaxFlavor::New);
 
-	for inst in Disassembler.disas_all(slice, bb_va, bb.loc) {
+	for inst in Disassembler.disas_all(slice, bb_va, bb.loc()) {
 		let mut bytes = String::new();
 		let b = inst.bytes();
 
@@ -182,24 +182,24 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		let ops  = print.fmt_operands(&inst, prog);
 
 		println!("{:>4}:{}  {:8}      {:3} {:30}",
-			seg.name.yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 	}
 
 	// Terminator
 	use BBTerm::*;
-	match &bb.term {
+	match bb.term() {
 		DeadEnd => println!("{}", "---------- DEAD END ----------".red().bold()),
 		Halt | Return => {
 		}
 		FallThru(loc) => {
-			thinger(prog, bb.loc, *loc, "Fall through", Color::Yellow);
+			thinger(prog, bb.loc(), *loc, "Fall through", Color::Yellow);
 		}
 		Jump(loc) => {
-			thinger(prog, bb.loc, *loc, "Tailcall", Color::Yellow);
+			thinger(prog, bb.loc(), *loc, "Tailcall", Color::Yellow);
 		}
 		Cond { t, f } => {
-			thinger(prog, bb.loc, *t, "Tailbranch", Color::Yellow);
-			thinger(prog, bb.loc, *f, "Fall through", Color::Yellow);
+			thinger(prog, bb.loc(), *t, "Tailbranch", Color::Yellow);
+			thinger(prog, bb.loc(), *f, "Fall through", Color::Yellow);
 		}
 		JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
 	}

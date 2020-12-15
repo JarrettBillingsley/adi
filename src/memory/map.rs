@@ -14,18 +14,15 @@ use crate::memory::{ VA, MemoryRegion };
 /// Once created, the memory map cannot change (can't add/remove regions).
 #[derive(Debug)]
 pub struct MemoryMap {
-	/// how many bits an address is.
-	pub bits:   usize,
-	/// how many digits in a formatted address.
-	pub digits: usize,
+	bits:   usize,
+	digits: usize,
+	end:    VA,
 	/// all the memory regions in the memory map, in address order.
 	regions:    Vec<MemoryRegion>,
-	/// the first invalid address, and the size of the virtual address space.
-	pub end:    VA,
 	/// maps from virtual addresses to an index into `regions`.
-	addr_map:   BTreeMap<VA, usize>,  // from VAs to `regions` index
+	addr_map:   BTreeMap<VA, usize>,
 	/// maps from names into `regions`.
-	name_map:   HashMap<String, usize>, // from names to `regions` index
+	name_map:   HashMap<String, usize>,
 }
 
 #[allow(clippy::len_without_is_empty)]
@@ -37,7 +34,7 @@ impl MemoryMap {
 	pub fn new(bits: usize, regions: &[MemoryRegion]) -> Self {
 		// sort them regions
 		let mut regions: Vec<_> = regions.into();
-		regions.sort_by(|a, b| a.base.cmp(&b.base));
+		regions.sort_by(|a, b| a.base().cmp(&b.base()));
 
 		// sanity checks.
 		for i in 0 .. regions.len() {
@@ -48,7 +45,7 @@ impl MemoryMap {
 				panic!("overlapping regions ({} and {})", r, other);
 			}
 
-			if let Some(other) = rest.iter().find(|other| r.name == other.name) {
+			if let Some(other) = rest.iter().find(|other| r.name() == other.name()) {
 				panic!("same name regions ({} and {})", r, other);
 			}
 		}
@@ -58,8 +55,8 @@ impl MemoryMap {
 
 		// fill in the maps.
 		for (i, r) in regions.iter().enumerate() {
-			addr_map.insert(r.base, i);
-			name_map.insert(r.name.clone(), i);
+			addr_map.insert(r.base(), i);
+			name_map.insert(r.name().clone(), i);
 		}
 
 		Self {
@@ -72,8 +69,17 @@ impl MemoryMap {
 		}
 	}
 
+	/// how many bits an address is.
+	#[inline] pub fn bits(&self) -> usize { self.bits }
+
+	/// how many digits in a formatted address.
+	#[inline] pub fn digits(&self) -> usize { self.digits }
+
+	/// the first invalid address, and the size of the virtual address space.
+	#[inline] pub fn end(&self) -> VA { self.end }
+
 	/// The length of the address space.
-	pub fn len(&self) -> usize { self.end.0 }
+	#[inline] pub fn len(&self) -> usize { self.end.0 }
 
 	/// Given a virtual address, get the memory region which contains it, if any.
 	pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion> {
@@ -82,7 +88,7 @@ impl MemoryMap {
 		// find the last entry whose start <= va
 		match self.addr_map.range(..= va).next_back() {
 			// if va < the region's end, we found it
-			Some((_, &idx)) if va < self.regions[idx].end => {
+			Some((_, &idx)) if va < self.regions[idx].end() => {
 				Some(&self.regions[idx])
 			}
 

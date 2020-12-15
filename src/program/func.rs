@@ -101,20 +101,22 @@ impl Debug for BBId {
 #[derive(Debug)]
 #[derive(new)]
 pub struct BasicBlock {
-	/// Its globally-unique id.
-	pub id: BBId,
-
-	/// Its globally-unique location.
-	pub loc: Location,
-
-	/// Where its terminator (last instruction) is located.
-	pub term_loc: Location,
-
-	/// How it ends, and what its successors are.
-	pub term: BBTerm,
+	id:       BBId,
+	loc:      Location,
+	term_loc: Location,
+	term:     BBTerm,
 }
 
 impl BasicBlock {
+	/// Its globally-unique id.
+	pub fn id      (&self) -> BBId     { self.id }
+	/// Its globally-unique location.
+	pub fn loc     (&self) -> Location { self.loc }
+	/// Where its terminator (last instruction) is located.
+	pub fn term_loc(&self) -> Location { self.term_loc }
+	/// How it ends, and what its successors are.
+	pub fn term    (&self) -> &BBTerm  { &self.term }
+
 	/// An iterator over this block's successors.
 	pub fn successors(&self) -> Successors {
 		self.term.successors()

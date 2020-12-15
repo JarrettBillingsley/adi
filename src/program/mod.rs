@@ -10,7 +10,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use derive_new::new;
 use delegate::delegate;
 
-use crate::memory::{ Memory, Location, VA, Span, SpanKind, Segment, Image };
+use crate::memory::{ Memory, Location, VA, SegId, Span, SpanKind, Segment, Image };
 use crate::disasm::INameLookup;
 
 // ------------------------------------------------------------------------------------------------
@@ -63,8 +63,6 @@ impl Program {
 			/// - if `name` is already the name of an existing segment.
 			/// - if the segment is mapped to a bankable region, but `image` is `None`.
 			pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>);
-			/// Given a region name, get the Segment mapped to it (if any).
-			pub fn segment_for_region_name(&self, region_name: &str) -> Option<&Segment>;
 			/// Given a VA, get the Segment which contains it (if any).
 			pub fn segment_for_va(&self, va: VA) -> Option<&Segment>;
 			/// Same as above but mutable.
@@ -77,6 +75,10 @@ impl Program {
 			pub fn segment_from_loc(&self, loc: Location) -> &Segment;
 			/// Same as above but mutable.
 			pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment;
+			/// Given a segment ID, get the Segment which it refers to.
+			pub fn segment_from_id(&self, id: SegId) -> &Segment;
+			/// Same as above but mutable.
+			pub fn segment_from_id_mut(&mut self, id: SegId) -> &mut Segment;
 			/// Tries to find a unique location for the given VA.
 			/// If there is no mapping, or if the region is bankable, returns None.
 			pub fn loc_for_va(&self, va: VA) -> Option<Location>;
@@ -166,7 +168,7 @@ impl Program {
 		for bb in bbs {
 			let bbid = new_func.next_id();
 			let bb = bb.into_bb(bbid);
-			let bb_loc = bb.loc;
+			let bb_loc = bb.loc();
 			new_func.add_bb(bb);
 			seg.redefine_span(bb_loc, SpanKind::Code(bbid));
 		}
@@ -235,7 +237,7 @@ impl Program {
 		// no mapped segment?? uhhhh....... try region name?
 		} else if let Some(region) = self.mem.map().region_for_va(va) {
 			// name it "REGIONNAME_loc_0C30"
-			self.generate_name(&region.name, va)
+			self.generate_name(&region.name(), va)
 		} else {
 			// DUNNO!
 			self.generate_name("UNK", va)
@@ -251,7 +253,7 @@ impl Program {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
 			let va = seg.va_from_loc(loc);
-			let start = seg.span_at_loc(loc).start;
+			let start = seg.span_at_loc(loc).start();
 
 			match self.names.name_for_loc(start) {
 				Some(name) =>
@@ -259,7 +261,7 @@ impl Program {
 					self.generate_name(name, va),
 				None =>
 					// no name, so name it "SEGNAME_loc_0C30"
-					self.generate_name(&seg.name, va),
+					self.generate_name(&seg.name(), va),
 			}
 		}
 	}

@@ -184,7 +184,7 @@ where
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
-		match self.prog.span_at_loc(start).kind {
+		match self.prog.span_at_loc(start).kind() {
 			SpanKind::Unk         => true, // yeeeeee that's what we want
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
@@ -200,9 +200,9 @@ where
 
 	fn last_instr_before(&self, loc: Location) -> DisasResult<I> {
 		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
-		let slice       = seg.image_slice(span.start .. loc).into_data();
-		let va          = seg.va_from_loc(span.start);
-		self.dis.find_last_instr(slice, va, span.start)
+		let slice       = seg.image_slice(span.start() .. loc).into_data();
+		let va          = seg.va_from_loc(span.start());
+		self.dis.find_last_instr(slice, va, span.start())
 	}
 
 	fn check_split_bb(&mut self, func: &mut ProtoFunc, id: PBBIdx, start: Location) {
@@ -351,7 +351,7 @@ where
 		let mut refs       = Vec::new();
 
 		for bb in func.all_bbs() {
-			let start        = bb.loc;
+			let start        = bb.loc();
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
 			let slice        = seg.image_slice(span).into_data();
 			let va           = seg.va_from_loc(start);
@@ -383,7 +383,7 @@ where
 			assert!(!iter.has_err(), "should be impossible");
 
 			for &succ in bb.explicit_successors() {
-				refs.push((bb.term_loc, succ));
+				refs.push((bb.term_loc(), succ));
 			}
 		}
 

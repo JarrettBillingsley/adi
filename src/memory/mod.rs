@@ -145,12 +145,12 @@ impl Memory {
 	// Getters
 
 	/// Get the memory address space map.
-	pub fn map(&self) -> &MemoryMap {
+	#[inline] pub fn map(&self) -> &MemoryMap {
 		&self.mem_map
 	}
 
 	/// Gets endianness.
-	pub fn endianness(&self) -> Endian {
+	#[inline] pub fn endianness(&self) -> Endian {
 		self.endianness
 	}
 
@@ -203,18 +203,6 @@ impl Memory {
 		}
 	}
 
-	/// Given a region name, get the Segment mapped to it (if any).
-	pub fn segment_for_region_name(&self, region_name: &str) -> Option<&Segment> {
-		let seg_id = self.segid_for_name(region_name)?;
-		Some(self.segs.segment_from_id(seg_id))
-	}
-
-	/// Same as above but mutable.
-	pub fn segment_for_region_name_mut(&mut self, region_name: &str) -> Option<&mut Segment> {
-		let seg_id = self.segid_for_name(region_name)?;
-		Some(self.segs.segment_from_id_mut(seg_id))
-	}
-
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VA) -> Option<&Segment> {
 		let seg_id = self.segid_for_va(va)?;
@@ -245,27 +233,28 @@ impl Memory {
 	/// Formats a number as a hexadecimal number with the appropriate number of digits
 	/// for the size of the address space.
 	pub fn fmt_addr(&self, addr: usize) -> String {
-		format!("{:0width$X}", addr, width = self.mem_map.digits)
+		format!("{:0width$X}", addr, width = self.mem_map.digits())
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Private
-
-	fn segid_for_name(&self, region_name: &str) -> Option<SegId> {
-		self.segid_for_region(self.mem_map.region_for_name(region_name)?)
-	}
 
 	fn segid_for_va(&self, va: VA) -> Option<SegId> {
 		self.segid_for_region(self.mem_map.region_for_va(va)?)
 	}
 
 	fn segid_for_region(&self, region: &MemoryRegion) -> Option<SegId> {
-		if region.seg.is_some() {
-			region.seg
+		if region.seg().is_some() {
+			region.seg()
 		} else {
 			// TODO: this is where MMU comes in
 			None
 		}
+	}
+
+	fn segment_for_region(&self, region: &MemoryRegion) -> Option<&Segment> {
+		let seg_id = self.segid_for_region(region)?;
+		Some(self.segs.segment_from_id(seg_id))
 	}
 }
 
@@ -283,7 +272,7 @@ impl Display for Memory {
 		for region in self.mem_map.all_regions() {
 			write!(f, "{:>40}", region.to_string())?;
 
-			match self.segment_for_region_name(&region.name) {
+			match self.segment_for_region(region) {
 				Some(seg) => writeln!(f, " => {}", seg)?,
 				None      => writeln!(f, " (unmapped)")?,
 			}

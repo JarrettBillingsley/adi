@@ -17,17 +17,19 @@ use crate::memory::{ Location, SegId };
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 #[display("{kind:?} [0x{start.offs:08X} .. 0x{end.offs:08X})")]
 pub struct Span {
-	/// address of first byte of span.
-	pub start: Location,
-	/// address of first byte after span.
-	pub end:   Location,
-	/// what kind of span it is.
-	pub kind:  SpanKind,
+	start: Location,
+	end:   Location,
+	kind:  SpanKind,
 }
 
 #[allow(clippy::len_without_is_empty)]
 impl Span {
-	fn new(seg: SegId, (&start, span): (&usize, &SpanInternal)) -> Self {
+	#[cfg(test)]
+	pub fn new(start: Location, end: Location, kind: SpanKind) -> Self {
+		Self { start, end, kind }
+	}
+
+	fn from_internal(seg: SegId, (&start, span): (&usize, &SpanInternal)) -> Self {
 		Self {
 			start: Location::new(seg, start),
 			end:   Location::new(seg, span.end),
@@ -35,23 +37,24 @@ impl Span {
 		}
 	}
 
+	/// address of first byte of span.
+	#[inline] pub fn start(&self) -> Location { self.start }
+	/// address of first byte after span.
+	#[inline] pub fn end  (&self) -> Location { self.end }
+	/// what kind of span it is.
+	#[inline] pub fn kind (&self) -> SpanKind { self.kind }
 	/// The ID of the segment which owns this span.
-	pub fn seg(&self) -> SegId {
-		self.start.seg
-	}
-
+	#[inline] pub fn seg  (&self) -> SegId    { self.start.seg }
 	/// The length of this span.
-	pub fn len(&self) -> usize {
-		self.end.offs - self.start.offs
-	}
+	#[inline] pub fn len  (&self) -> usize    { self.end.offs - self.start.offs }
 
-	/// If this is an unknown span.
+	#[inline] /// If this is an unknown span.
 	pub fn is_unknown(&self) -> bool {
 		self.kind == SpanKind::Unk
 	}
 
 	/// If this is a code span, the ID of the basic block which owns it; None otherwise.
-	pub fn bb(&self) -> Option<BBId> {
+	#[inline] pub fn bb(&self) -> Option<BBId> {
 		if let SpanKind::Code(ret) = self.kind {
 			Some(ret)
 		} else {
@@ -139,7 +142,7 @@ impl SpanMap {
 	/// - if `offs` is after the last address.
 	pub fn span_at(&self, offs: usize) -> Span {
 		assert!(offs < self.end);
-		Span::new(self.seg, self.spans.range(..= offs).next_back().expect("how even"))
+		Span::from_internal(self.seg, self.spans.range(..= offs).next_back().expect("how even"))
 	}
 
 	/// Given an offset into the segment, gets the span which comes after the containing span,
@@ -152,7 +155,7 @@ impl SpanMap {
 		assert!(offs < self.end);
 
 		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next()
-			.map(|s| Span::new(self.seg, s))
+			.map(|s| Span::from_internal(self.seg, s))
 	}
 
 	/// Given an offset into the segment, gets the span which comes before the containing span,
@@ -166,13 +169,13 @@ impl SpanMap {
 
 		let mut iter = self.spans.range(..= offs);
 		iter.next_back();
-		iter.next_back().map(|s| Span::new(self.seg, s))
+		iter.next_back().map(|s| Span::from_internal(self.seg, s))
 	}
 
 	/// Iterator over all spans in the segment, in order.
 	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
 		let seg = self.seg;
-		self.spans.iter().map(move |s| Span::new(seg, s))
+		self.spans.iter().map(move |s| Span::from_internal(seg, s))
 	}
 
 	/// Redefine a span that begins at `start` with a new `kind`. Has no effect
@@ -368,7 +371,7 @@ impl SpanMap {
 	pub fn dump_spans(&self) {
 		println!("-----------------");
 		for tup in self.spans.iter() {
-			println!("{}", Span::new(self.seg, tup));
+			println!("{}", Span::from_internal(self.seg, tup));
 		}
 	}
 }

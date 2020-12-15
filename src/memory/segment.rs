@@ -67,13 +67,13 @@ impl SubAssign<usize> for Location {
 /// A single segment. Can be an image segment (data comes from a ROM image) or a fake
 /// segment (there is no data, e.g. RAM, but it's useful to put spans there).
 pub struct Segment {
-	pub id:    SegId,
-	pub name:  String,
-	pub vbase: VA,
-	pub vend:  VA,
-	pub size:  usize,
+	id:    SegId,
+	name:  String,
+	vbase: VA,
+	vend:  VA,
+	size:  usize,
 	spans: SpanMap,
-	pub image: Option<Image>,
+	image: Option<Image>,
 }
 
 impl Display for Segment {
@@ -112,10 +112,18 @@ impl Segment {
 	// ---------------------------------------------------------------------------------------------
 	// Queries
 
+	/// Unique ID.
+	#[inline] pub fn id   (&self) -> SegId          { self.id }
+	/// Human-readable name.
+	#[inline] pub fn name (&self) -> &String        { &self.name }
+	/// Virtual address of the first byte.
+	#[inline] pub fn vbase(&self) -> VA             { self.vbase }
+	/// Virtual address of first byte *after* this segment.
+	#[inline] pub fn vend (&self) -> VA             { self.vend }
+	/// Image which this is mapped to, if any.
+	#[inline] pub fn image(&self) -> &Option<Image> { &self.image }
 	/// Length in bytes.
-	pub fn len(&self) -> usize {
-		self.size
-	}
+	#[inline] pub fn len(&self) -> usize            { self.size }
 
 	/// Whether this segment contains a given VA.
 	pub fn contains_va(&self, addr: VA) -> bool {
@@ -194,7 +202,7 @@ impl Segment {
 	pub(crate) fn span_begin_analysis(&mut self, loc: Location) {
 		assert!(loc.seg == self.id);
 		// may not be at the beginning of a span, so have to use define
-		let end = self.spans.span_at(loc.offs).end;
+		let end = self.spans.span_at(loc.offs).end();
 		self.spans.define(loc.offs, end.offs - loc.offs, SpanKind::Ana);
 	}
 
@@ -206,7 +214,7 @@ impl Segment {
 
 	pub(crate) fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
 		assert!(loc.seg == self.id);
-		assert!(self.spans.span_at(loc.offs).kind == SpanKind::Ana);
+		assert!(self.spans.span_at(loc.offs).kind() == SpanKind::Ana);
 		self.spans.undefine(loc.offs);
 		self.spans.define(loc.offs, end.offs - loc.offs, kind);
 	}
@@ -217,13 +225,13 @@ impl Segment {
 		assert!(loc.seg == self.id);
 		let existing = self.spans.span_at(loc.offs);
 
-		assert!(existing.start.offs < loc.offs);
-		assert!(loc.offs < existing.end.offs);
+		assert!(existing.start().offs < loc.offs);
+		assert!(loc.offs < existing.end().offs);
 
-		let first_len = loc.offs - existing.start.offs;
-		let second_len = existing.end.offs - loc.offs;
+		let first_len = loc.offs - existing.start().offs;
+		let second_len = existing.end().offs - loc.offs;
 
-		self.spans.truncate(existing.start.offs, first_len);
+		self.spans.truncate(existing.start().offs, first_len);
 		self.spans.define(loc.offs, second_len, kind);
 	}
 
