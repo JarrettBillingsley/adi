@@ -84,6 +84,10 @@ A `Platform` can take an image and give a `Program`. It can also give access to 
 
 - Disassemblers and Printers can take ctor arguments
 	- have to be able to account for that in IArchitecture.
+- Names should be more than just Strings...
+	- Name::Hardware (for MMIO regs, vector locations etc)
+	- Name::AutoGen (not actually in the name table, just used for display)
+	- Name::User (user-given)
 
 hmmmmmmm
 
@@ -96,7 +100,37 @@ and some platforms have REAL MMUs.
 and some platforms have built-in "mappers".
 
 so I don't think the concept of a "Mapper" should even be limited to a Platform.
-instead, there should be `IMemoryManager` which plugs into a `Memory`.
+instead, there should be `IMmu` which plugs into a `Memory`.
 *this* is what would handle the memory configuration and do "real" VA->PA translation.
-this also interacts with analysis; an `IMemoryManager` can have a state (i.e. a `MemoryConfig`) which can change over time. analysis can track the state across instructions.
+this also interacts with analysis; an `IMmu` can have a state (i.e. a `MemoryConfig`) which can change over time. analysis can track the state across instructions.
 
+actually `MemoryMap` is... kinda the right place for this behavior, no?
+some `MemoryRegion`s are static, and some can be swapped out.
+the `IMmu` is responsible for handling this swapping/mapping through `MemoryConfig`s.
+but a string name-name mapping is probably not the uh, best/most efficient way to do that.
+especially if we want to create those things all over the place in analysis.
+
+1. the file type is determined. this decides the `Platform` that will be used.
+2. the `Platform` parses the file, and determines:
+	- what kind of `IMmu` should be used
+		- e.g. the base NES MMU but with a certain mapper installed
+	- what `Segment`s exist
+		- e.g. the base hardware segments for RAM, MMIO etc. and segments for the ROM
+3. the `Platform` can then create the `Memory` object from that info
+4. ...and the `Program` object
+	- which can have some default names defined by the `Platform`
+
+
+1. determine `Platform`
+2. `Platform::program_from_image(Image) -> Program`
+
+
+---
+
+if we move the segments into the MMU (which also knows the endianness), then Memory has nothing to do, and MMU takes over its role. so, that seems dumb.
+
+maybe...... Memory itself should impl IMmu?? nah that seems wrong.
+
+...or does it
+
+Memory really *is* acting like an MMU at the moment.

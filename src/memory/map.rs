@@ -18,7 +18,7 @@ pub struct MemoryMap {
 	pub bits:   usize,
 	/// how many digits in a formatted address.
 	pub digits: usize,
-	/// all the memory regions in the memory map.
+	/// all the memory regions in the memory map, in address order.
 	regions:    Vec<MemoryRegion>,
 	/// the first invalid address, and the size of the virtual address space.
 	pub end:    VA,
@@ -35,6 +35,10 @@ impl MemoryMap {
 	/// the same name, and also builds the `addr_map` and `name_map` maps for quick
 	/// lookups.
 	pub fn new(bits: usize, regions: &[MemoryRegion]) -> Self {
+		// sort them regions
+		let mut regions: Vec<_> = regions.into();
+		regions.sort_by(|a, b| a.base.cmp(&b.base));
+
 		// sanity checks.
 		for i in 0 .. regions.len() {
 			let r = &regions[i];
@@ -60,9 +64,8 @@ impl MemoryMap {
 
 		Self {
 			bits,
-			digits: ((bits + 3) & !3) >> 2,
-			regions: regions.into(),
-
+			digits: ((bits + 3) & !3) >> 2, // round up to next multiple of 4, divide by 4
+			regions,
 			end: VA(2_usize.pow(bits as u32)),
 			addr_map,
 			name_map,

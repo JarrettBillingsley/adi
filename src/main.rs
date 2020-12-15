@@ -42,13 +42,13 @@ fn test_nes() -> std::io::Result<()> {
 
 	let map = MemoryMap::new(16, &[
 		// default
-		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  true, Ram   ),
-		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  true, Mirror),
-		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  true, Mmio  ),
-		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  true, Mirror),
-		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  true, Mmio  ),
+		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  true, Ram,    false),
+		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  true, Mirror, false),
+		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  true, Mmio,   false),
+		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  true, Mirror, false),
+		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  true, Mmio,   false),
 		// ROM-specific
-		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), false, Rom),
+		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), false, Rom,   false),
 	]);
 
 	let config = MemoryConfig::from_iter(&[

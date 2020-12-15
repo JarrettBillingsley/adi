@@ -57,37 +57,3 @@ impl DisasError {
 
 /// Alias for a `Result` with a `DisasError` as its error type.
 pub type DisasResult<T> = Result<T, DisasError>;
-
-// ------------------------------------------------------------------------------------------------
-// PlatformErrorKind
-// ------------------------------------------------------------------------------------------------
-
-#[derive(Debug, Display, PartialEq, Eq, Clone)]
-pub enum PlatformErrorKind {
-	#[display("invalid image: {msg}")]
-	InvalidImage { msg: String },
-}
-
-// ------------------------------------------------------------------------------------------------
-// PlatformError
-// ------------------------------------------------------------------------------------------------
-
-#[derive(Debug, Display, PartialEq, Eq, Clone)]
-#[display("platform error: {kind}")]
-pub struct PlatformError {
-	kind: PlatformErrorKind,
-}
-
-impl Error for PlatformError {}
-
-impl PlatformError {
-	pub fn invalid_image(msg: String) -> Self {
-		Self { kind: PlatformErrorKind::InvalidImage { msg } }
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// PlatformResult
-// ------------------------------------------------------------------------------------------------
-
-pub type PlatformResult<T> = Result<T, PlatformError>;

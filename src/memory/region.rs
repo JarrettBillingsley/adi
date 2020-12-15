@@ -22,6 +22,8 @@ pub struct MemoryRegion {
 	pub hw:   bool,
 	/// What kind of thing is at these addresses.
 	pub kind: MemoryRegionKind,
+	/// Whether or not this region can be banked (swapped out) by a memory manager.
+	pub bankable: bool,
 
 	/// How big this region is, in bytes.
 	#[new(value = "end - base")]
@@ -39,7 +41,7 @@ impl MemoryRegion {
 	pub fn len(&self) -> usize { self.size }
 
 	/// true this region's kind is bankable.
-	pub fn is_bankable(&self) -> bool { self.kind.is_bankable() }
+	pub fn is_bankable(&self) -> bool { self.bankable }
 }
 
 /// What you access when you use an address in a region's range.
@@ -47,26 +49,12 @@ impl MemoryRegion {
 pub enum MemoryRegionKind {
 	/// RAM.
 	Ram,
-	/// Bankable RAM.
-	RamBank,
 	/// ROM.
 	Rom,
-	/// Bankable ROM.
-	RomBank,
 	/// Non-volatile RAM.
 	NvRam,
-	/// Bankable NVRAM.
-	NvRamBank,
 	/// A mirror of the previous region of memory.
 	Mirror,
 	/// Memory-mapped IO ports.
 	Mmio,
-}
-
-impl MemoryRegionKind {
-	/// true if the region of memory is bankable (i.e. its contents can be swapped out).
-	pub fn is_bankable(self) -> bool {
-		use MemoryRegionKind::*;
-		matches!(self, RamBank | RomBank | NvRamBank)
-	}
 }

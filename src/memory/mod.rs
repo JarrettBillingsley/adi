@@ -11,6 +11,7 @@ use delegate::delegate;
 
 mod config;
 mod image;
+mod manager;
 mod map;
 mod region;
 mod segment;
@@ -22,6 +23,7 @@ mod tests;
 
 pub use config::*;
 pub use image::*;
+pub use manager::*;
 pub use map::*;
 pub use region::*;
 pub use segment::*;
