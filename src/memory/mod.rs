@@ -8,7 +8,6 @@ use delegate::delegate;
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-mod config;
 mod image;
 mod manager;
 mod map;
@@ -20,7 +19,6 @@ mod va;
 #[cfg(test)]
 mod tests;
 
-pub use config::*;
 pub use image::*;
 pub use manager::*;
 pub use map::*;
@@ -131,17 +129,16 @@ impl SegCollection {
 // ------------------------------------------------------------------------------------------------
 
 /// This is the data structure on which everything else is built.
-/// Ties together a memory map, memory config, and segments.
+/// Ties together a memory map and a segment collection.
 pub struct Memory {
 	endianness: Endian,
 	segs:       SegCollection,
 	mem_map:    MemoryMap,
-	config:     MemoryConfig,
 }
 
 impl Memory {
-	pub fn new(endianness: Endian, segs: SegCollection, mem_map: MemoryMap, config: MemoryConfig) -> Self {
-		Self { endianness, segs, mem_map, config }
+	pub fn new(endianness: Endian, segs: SegCollection, mem_map: MemoryMap) -> Self {
+		Self { endianness, segs, mem_map }
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -150,11 +147,6 @@ impl Memory {
 	/// Get the memory address space map.
 	pub fn map(&self) -> &MemoryMap {
 		&self.mem_map
-	}
-
-	/// Get the memory configuration.
-	pub fn config(&self) -> &MemoryConfig {
-		&self.config
 	}
 
 	/// Gets endianness.
@@ -188,47 +180,50 @@ impl Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Segments
 
-	/// Adds a new segment.
-	///
-	/// # Panics
-	///
-	/// - if `name` is already the name of an existing segment.
-	/// - if the segment is mapped to a bankable region, but `image` is `None`.
-	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) {
-		let fake = image.is_none();
-		for (region_name, seg_name) in self.config.iter() {
-			if seg_name == name {
-				let region = self.mem_map.region_for_name(&region_name).unwrap();
-				// if it's bankable, it must be real.
-				assert!(!(region.is_bankable() && fake));
-			}
-		}
-
-		self.segs.add_segment(name, vbase, vend, image);
-	}
-
 	/// Given a region name, get the Segment mapped to it (if any).
 	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
-		let seg_name = self.config.segment_for_region(region_name)?;
-		self.segs.segment_for_name(&seg_name)
+		let region = self.mem_map.region_for_name(region_name)?;
+
+		if let Some(seg_id) = region.seg {
+			Some(self.segs.segment_from_id(seg_id))
+		} else {
+			// TODO: this is where MMU comes in
+			None
+		}
 	}
 
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VA) -> Option<&Segment> {
 		let region = self.mem_map.region_for_va(va)?;
-		let name = self.config.segment_for_region(&region.name)?;
-		self.segs.segment_for_name(name)
+
+		if let Some(seg_id) = region.seg {
+			Some(self.segs.segment_from_id(seg_id))
+		} else {
+			// TODO: this is where MMU comes in
+			None
+		}
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment> {
 		let region = self.mem_map.region_for_va(va)?;
-		let name = self.config.segment_for_region(&region.name)?;
-		self.segs.segment_for_name_mut(name)
+
+		if let Some(seg_id) = region.seg {
+			Some(self.segs.segment_from_id_mut(seg_id))
+		} else {
+			// TODO: this is where MMU comes in
+			None
+		}
 	}
 
 	delegate! {
 		to self.segs {
+			/// Adds a new segment.
+			///
+			/// # Panics
+			///
+			/// - if `name` is already the name of an existing segment.
+			pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>);
 			/// Given a segment name, get the Segment named that (if any).
 			pub fn segment_for_name(&self, name: &str) -> Option<&Segment>;
 			/// Same as above but mutable.
@@ -237,6 +232,10 @@ impl Memory {
 			pub fn segment_from_loc(&self, loc: Location) -> &Segment;
 			/// Same as above but mutable.
 			pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment;
+			/// Given a segment ID, get the Segment which it refers to.
+			pub fn segment_from_id(&self, id: SegId) -> &Segment;
+			/// Same as above but mutable.
+			pub fn segment_from_id_mut(&mut self, id: SegId) -> &mut Segment;
 		}
 	}
 

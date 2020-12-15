@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std::iter::FromIterator;
 use std::fmt::Write;
 
 use better_panic::{ Settings as PanicSettings, Verbosity as PanicVerbosity };
@@ -40,17 +39,6 @@ fn test_nes() -> std::io::Result<()> {
 	// let's set it up
 	let img = Image::new_from_file("tests/data/smb.prg")?;
 
-	let config = MemoryConfig::from_iter(&[
-		// Region, Segment
-		// default
-		("RAM",    "RAM"),
-		("PPU",    "PPU"),
-		("IOREG",  "IOREG"),
-	]).derive(&[
-		// ROM-specific
-		("PRGROM", "PRG0"),
-	]);
-
 	let mut segs = SegCollection::new();
 	// default
 	let ram_seg  = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
@@ -71,7 +59,7 @@ fn test_nes() -> std::io::Result<()> {
 		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), Rom,    Some(prg0_seg)),
 	]);
 
-	let mem = Memory::new(Endian::Little, segs, map, config);
+	let mem = Memory::new(Endian::Little, segs, map);
 	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
 

@@ -92,7 +92,8 @@ impl MemoryMap {
 
 	/// Given a name, gets the memory region with that name, if any.
 	pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion> {
-		self.name_map.get(name).map(|&idx| &self.regions[idx])
+		let idx = self.name_map.get(name)?;
+		Some(&self.regions[*idx])
 	}
 
 	/// Iterator over all memory regions.
