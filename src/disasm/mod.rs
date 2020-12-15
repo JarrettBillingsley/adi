@@ -9,13 +9,9 @@ use crate::memory::{ Location, VA };
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
-mod arch;
-mod error;
-mod platform;
+pub mod error;
 
-pub use arch::*;
 pub use error::*;
-pub use platform::*;
 
 // ------------------------------------------------------------------------------------------------
 // MemAccess

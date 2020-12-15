@@ -1,6 +1,6 @@
 
 use crate::memory::{ Image };
-use crate::disasm::{ IArchitecture };
+use crate::arch::{ IArchitecture };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

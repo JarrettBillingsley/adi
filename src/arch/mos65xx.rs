@@ -12,8 +12,8 @@ use crate::disasm::{
 	NameLookupTrait,
 	DisassemblerTrait,
 	InstructionKind,
-	IArchitecture,
 };
+use crate::arch::{ IArchitecture };
 use crate::disasm::error::{ DisasError, DisasResult };
 use crate::memory::{ Endian, Location, VA };
 

@@ -2,8 +2,8 @@ use std::io::{ BufReader, Cursor };
 
 use nes_rom::ines::{ Ines };
 
-use crate::disasm::{ IPlatform };
-use crate::disasm::arch::mos65xx::{ Mos65xxArchitecture };
+use crate::platform::{ IPlatform };
+use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ VA, MemoryRegion, MemoryRegionKind, Image };
 
 pub struct NesPlatform {
