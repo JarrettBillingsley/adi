@@ -62,3 +62,43 @@
 	- like, "bank 4 sometimes appears at A000 and other times at C000"
 	- nothing in the hardware *prevents* this but not likely to happen, since these CPUs don't really support position-independent code.
 	- so is it OK to tie a segment to a particular VA? probably?
+
+---
+
+An `Architecture` describes a CPU architecture, including:
+
+- its endianness
+- its address size
+- its Disassembler, Printer, and Instruction types
+
+A `Platform` describes a system, including:
+
+- its CPU architecture
+- its memory map
+- devices?
+- memory mappers, ROM parsers...
+
+A `Platform` can take an image and give a `Program`. It can also give access to the architecture's disassembler and printer types.
+
+**TODO:**
+
+- Disassemblers and Printers can take ctor arguments
+	- have to be able to account for that in IArchitecture.
+- rename `___Trait` to `I___`
+- move `arch` and `platform` out of `disasm`
+
+hmmmmmmm
+
+so the mappers *come from* the platform, but they *act upon* the memory.
+
+...
+
+what is a mapper, but a miserable--- er simple memory management unit?
+and some platforms have REAL MMUs.
+and some platforms have built-in "mappers".
+
+so I don't think the concept of a "Mapper" should even be limited to a Platform.
+instead, there should be `IMemoryManager` which plugs into a `Memory`.
+*this* is what would handle the memory configuration and do "real" VA->PA translation.
+this also interacts with analysis; an `IMemoryManager` can have a state (i.e. a `MemoryConfig`) which can change over time. analysis can track the state across instructions.
+

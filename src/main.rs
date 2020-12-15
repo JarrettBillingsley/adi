@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 
 use std::iter::FromIterator;
 use std::fmt::Write;

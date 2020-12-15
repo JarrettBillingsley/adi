@@ -117,6 +117,16 @@ impl Image {
 		&self.name
 	}
 
+	/// Gets the image's length in bytes.
+	pub fn len(&self) -> usize {
+		self.data.len()
+	}
+
+	/// Gets a view of the image's data.
+	pub fn data(&self) -> &[u8] {
+		&self.data
+	}
+
 	/// Get the range of the original file from which this was created.
 	pub fn orig_range(&self) -> Range<usize> {
 		self.orig_offs .. self.orig_offs + self.data.len()

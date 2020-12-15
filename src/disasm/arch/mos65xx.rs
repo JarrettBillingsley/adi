@@ -12,9 +12,10 @@ use crate::disasm::{
 	NameLookupTrait,
 	DisassemblerTrait,
 	InstructionKind,
+	IArchitecture,
 };
 use crate::disasm::error::{ DisasError, DisasResult };
-use crate::memory::{ Location, VA };
+use crate::memory::{ Endian, Location, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -569,4 +570,21 @@ impl PrinterTrait for Printer {
 
 		ret
 	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Architecture
+// ------------------------------------------------------------------------------------------------
+
+pub struct Mos65xxArchitecture;
+
+impl IArchitecture for Mos65xxArchitecture {
+	type TInstruction  = Instruction;
+	type TDisassembler = Disassembler;
+	type TPrinter      = Printer;
+
+	fn endianness      (&self) -> Endian       { Endian::Little }
+	fn addr_bits       (&self) -> usize        { 16 }
+	fn new_disassembler(&self) -> Disassembler { Disassembler }
+	fn new_printer     (&self) -> Printer      { Printer::new(SyntaxFlavor::Old) }
 }
