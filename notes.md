@@ -15,6 +15,13 @@
 - `MemoryMap`: iterators for bankable regions, ROM regions, etc?
 - `SpanKind`: like, an array/variable owner type
 - `RefMap`: does this need to be `BTreeMap/Set`? (do we need ordering?)
+- Disassemblers and Printers can take ctor arguments
+	- have to be able to account for that in IArchitecture.
+- Names should be more than just Strings...
+	- Name::Hardware (for MMIO regs, vector locations etc)
+	- Name::AutoGen (not actually in the name table, just used for display)
+	- Name::User (user-given)
+- ditch derive_new, it's not helping a lot
 
 **Idea:** have "special" segment for unresolved locations (know the VA but not the segment). That way we can point to them, but not actually resolve them until later. it'll also make it easier to resolve them since there will be inrefs to them.
 
@@ -80,15 +87,6 @@ A `Platform` describes a system, including:
 
 A `Platform` can take an image and give a `Program`. It can also give access to the architecture's disassembler and printer types.
 
-**TODO:**
-
-- Disassemblers and Printers can take ctor arguments
-	- have to be able to account for that in IArchitecture.
-- Names should be more than just Strings...
-	- Name::Hardware (for MMIO regs, vector locations etc)
-	- Name::AutoGen (not actually in the name table, just used for display)
-	- Name::User (user-given)
-
 hmmmmmmm
 
 so the mappers *come from* the platform, but they *act upon* the memory.
@@ -127,10 +125,10 @@ especially if we want to create those things all over the place in analysis.
 
 ---
 
-if we move the segments into the MMU (which also knows the endianness), then Memory has nothing to do, and MMU takes over its role. so, that seems dumb.
+if we collapse Memory and MemoryMap...
+and give MemoryRegions an Option<SegId> to which they correspond...
+and MemoryRegions with None will instead by looked up by the plugin MMU...
+I think that might work.
 
-maybe...... Memory itself should impl IMmu?? nah that seems wrong.
-
-...or does it
-
-Memory really *is* acting like an MMU at the moment.
+how are the initial segments created (for the built-in hardware regions)? who does that?
+the segment owner... but then how does the MMU know about them?

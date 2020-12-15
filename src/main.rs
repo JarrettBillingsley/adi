@@ -62,15 +62,15 @@ fn test_nes() -> std::io::Result<()> {
 		("PRGROM", "PRG0"),
 	]);
 
-	let mut mem = Memory::new(Endian::Little, map, config);
-
+	let mut segs = SegCollection::new();
 	// default
-	mem.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
-	mem.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
-	mem.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
+	segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
+	segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
+	segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
 	// ROM-specific
-	mem.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
+	segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
 
+	let mem = Memory::new(Endian::Little, segs, map, config);
 	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
 

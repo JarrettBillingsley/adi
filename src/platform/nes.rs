@@ -22,7 +22,7 @@ impl IPlatform for NesPlatform {
 		}
 	}
 
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
+	fn program_from_image(&self, _img: Image) -> PlatformResult<Program> {
 		// let reader = BufReader::new(Cursor::new(img.data()));
 		// let cart = Ines::from_rom(reader)?;
 

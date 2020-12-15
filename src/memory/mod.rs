@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
-use derive_new::new;
 use parse_display::Display;
 use delegate::delegate;
 
@@ -43,28 +42,108 @@ pub enum Endian {
 }
 
 // ------------------------------------------------------------------------------------------------
+// SegCollection
+// ------------------------------------------------------------------------------------------------
+
+pub struct SegCollection {
+	/// The actual segments.
+	segs:         Vec<Segment>,
+	/// Monotonically increasing ID. IDs are never reused
+	next_seg_id:  SegId,
+	/// Maps from segment names to indices into `segs`.
+	seg_name_map: HashMap<String, usize>,
+	/// Maps from segment IDs to indices into `segs`.
+	seg_id_map:   HashMap<SegId, usize>,
+}
+
+impl SegCollection {
+	/// Makes a new empty collection.
+	pub fn new() -> Self {
+		Self {
+			segs: Vec::new(),
+			next_seg_id: SegId(0),
+			seg_name_map: HashMap::new(),
+			seg_id_map: HashMap::new(),
+		}
+	}
+
+	/// Adds a new segment. Returns its id.
+	///
+	/// # Panics
+	///
+	/// - if `name` is already the name of an existing segment.
+	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) -> SegId {
+		let idx = self.segs.len();
+
+		let existing = self.seg_name_map.insert(name.into(), idx);
+		assert!(existing.is_none(), "duplicate segment name {}", name);
+
+		let id = self.next_seg_id;
+		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
+		self.seg_id_map.insert(id, idx);
+
+		self.segs.push(Segment::new(id, name, vbase, vend, image));
+
+		id
+	}
+
+	/// Given a segment name, get the Segment named that (if any).
+	pub fn segment_for_name(&self, name: &str) -> Option<&Segment> {
+		let idx = self.seg_name_map.get(name)?;
+		Some(&self.segs[*idx])
+	}
+
+	/// Same as above but mutable.
+	pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment> {
+		let segs = &mut self.segs;
+		let idx = self.seg_name_map.get_mut(name)?;
+		Some(&mut segs[*idx])
+	}
+
+	/// Given a location, get the Segment which contains it.
+	pub fn segment_from_loc(&self, loc: Location) -> &Segment {
+		&self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
+	}
+
+	/// Same as above but mutable.
+	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
+		&mut self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
+	}
+
+	/// Given a segment ID, get the Segment which it refers to.
+	pub fn segment_from_id(&self, id: SegId) -> &Segment {
+		&self.segs[*self.seg_id_map.get(&id).unwrap()]
+	}
+
+	/// Same as above but mutable.
+	pub fn segment_from_id_mut(&mut self, id: SegId) -> &mut Segment {
+		&mut self.segs[*self.seg_id_map.get(&id).unwrap()]
+	}
+
+	/// Iterator over all segments.
+	pub fn iter(&self) -> impl Iterator<Item = &Segment> {
+		self.segs.iter()
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // Memory
 // ------------------------------------------------------------------------------------------------
 
 /// This is the data structure on which everything else is built.
 /// Ties together a memory map, memory config, and segments.
-#[derive(new)]
 pub struct Memory {
-	endianness:   Endian,
-	mem_map:      MemoryMap,
-	config:       MemoryConfig,
-
-	#[new(default)]
-	segs:         Vec<Segment>,
-	#[new(default)]
-	seg_name_map: HashMap<String, usize>,
-	#[new(value = "SegId(0)")]
-	next_seg_id:  SegId,
-	#[new(default)]
-	seg_id_map:   HashMap<SegId, usize>,
+	endianness: Endian,
+	segs:       SegCollection,
+	mem_map:    MemoryMap,
+	config:     MemoryConfig,
 }
 
 impl Memory {
+	pub fn new(endianness: Endian, segs: SegCollection, mem_map: MemoryMap, config: MemoryConfig) -> Self {
+		Self { endianness, segs, mem_map, config }
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
@@ -116,9 +195,6 @@ impl Memory {
 	/// - if `name` is already the name of an existing segment.
 	/// - if the segment is mapped to a bankable region, but `image` is `None`.
 	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) {
-		let existing = self.seg_name_map.insert(name.into(), self.segs.len());
-		assert!(existing.is_none(), "duplicate segment name {}", name);
-
 		let fake = image.is_none();
 		for (region_name, seg_name) in self.config.iter() {
 			if seg_name == name {
@@ -128,57 +204,40 @@ impl Memory {
 			}
 		}
 
-		let id = self.next_seg_id;
-		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
-		self.seg_id_map.insert(id, self.segs.len());
-		self.segs.push(Segment::new(id, name, vbase, vend, image));
+		self.segs.add_segment(name, vbase, vend, image);
 	}
 
 	/// Given a region name, get the Segment mapped to it (if any).
 	pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment> {
-		self.config.segment_for_region(region_name)
-			.and_then(|seg_name| self.segment_for_name(&seg_name))
+		let seg_name = self.config.segment_for_region(region_name)?;
+		self.segs.segment_for_name(&seg_name)
 	}
 
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VA) -> Option<&Segment> {
-		self.mem_map.region_for_va(va)
-			.and_then(|region| self.config.segment_for_region(&region.name))
-			.and_then(|name|   self.segment_for_name(name))
+		let region = self.mem_map.region_for_va(va)?;
+		let name = self.config.segment_for_region(&region.name)?;
+		self.segs.segment_for_name(name)
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment> {
-		let idx = self.mem_map.region_for_va(va)
-			.and_then(|region| self.config.segment_for_region(&region.name))
-			.and_then(|name|   self.seg_name_map.get(name));
+		let region = self.mem_map.region_for_va(va)?;
+		let name = self.config.segment_for_region(&region.name)?;
+		self.segs.segment_for_name_mut(name)
+	}
 
-		// Rust refuses to let me do a similar thing to above and I can't figure out why.
-		match idx {
-			Some(&idx) => Some(&mut self.segs[idx]),
-			None       => None,
+	delegate! {
+		to self.segs {
+			/// Given a segment name, get the Segment named that (if any).
+			pub fn segment_for_name(&self, name: &str) -> Option<&Segment>;
+			/// Same as above but mutable.
+			pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment>;
+			/// Given a location, get the Segment which contains it.
+			pub fn segment_from_loc(&self, loc: Location) -> &Segment;
+			/// Same as above but mutable.
+			pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment;
 		}
-	}
-
-	/// Given a segment name, get the Segment named that (if any).
-	pub fn segment_for_name(&self, name: &str) -> Option<&Segment> {
-		self.seg_name_map.get(name).map(|&idx| &self.segs[idx])
-	}
-
-	/// Same as above but mutable.
-	pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment> {
-		let segs = &mut self.segs;
-		self.seg_name_map.get_mut(name).map(move |&mut idx| &mut segs[idx])
-	}
-
-	/// Given a location, get the Segment which contains it.
-	pub fn segment_from_loc(&self, loc: Location) -> &Segment {
-		&self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
-	}
-
-	/// Same as above but mutable.
-	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
-		&mut self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -187,15 +246,14 @@ impl Memory {
 	/// Tries to find a unique location for the given VA.
 	/// If there is no mapping, or if the region is bankable, returns None.
 	pub fn loc_for_va(&self, va: VA) -> Option<Location> {
-		self.mem_map.region_for_va(va)
-		.and_then(|region| {
-			if region.is_bankable() {
-				None
-			} else {
-				self.segment_for_region(&region.name)
-				.map(|seg| seg.loc_from_va(va))
-			}
-		})
+		let region = self.mem_map.region_for_va(va)?;
+
+		if region.is_bankable() {
+			None
+		} else {
+			let seg = self.segment_for_region(&region.name)?;
+			Some(seg.loc_from_va(va))
+		}
 	}
 
 	/// Same as above, but infallible.
