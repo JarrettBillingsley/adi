@@ -64,7 +64,7 @@ impl Program {
 			/// - if the segment is mapped to a bankable region, but `image` is `None`.
 			pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>);
 			/// Given a region name, get the Segment mapped to it (if any).
-			pub fn segment_for_region(&self, region_name: &str) -> Option<&Segment>;
+			pub fn segment_for_region_name(&self, region_name: &str) -> Option<&Segment>;
 			/// Given a VA, get the Segment which contains it (if any).
 			pub fn segment_for_va(&self, va: VA) -> Option<&Segment>;
 			/// Same as above but mutable.
