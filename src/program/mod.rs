@@ -11,7 +11,7 @@ use derive_new::new;
 use delegate::delegate;
 
 use crate::memory::{ Memory, Location, VA, Span, SpanKind, Segment, Image };
-use crate::disasm::NameLookupTrait;
+use crate::disasm::INameLookup;
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -295,7 +295,7 @@ impl Program {
 	}
 }
 
-impl NameLookupTrait for Program {
+impl INameLookup for Program {
 	fn lookup(&self, addr: VA) -> Option<String> {
 		Some(self.name_of_va(addr))
 	}

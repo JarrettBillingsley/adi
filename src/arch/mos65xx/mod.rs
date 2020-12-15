@@ -6,11 +6,11 @@ use derive_new::new;
 
 use crate::disasm::{
 	MemAccess,
-	OperandTrait,
-	InstructionTrait,
-	PrinterTrait,
-	NameLookupTrait,
-	DisassemblerTrait,
+	IOperand,
+	IInstruction,
+	IPrinter,
+	INameLookup,
+	IDisassembler,
 	InstructionKind,
 };
 use crate::arch::{ IArchitecture };
@@ -291,7 +291,7 @@ impl Default for Operand {
 	fn default() -> Operand { Operand::Reg(Default::default()) }
 }
 
-impl OperandTrait for Operand {
+impl IOperand for Operand {
 	fn is_reg(&self) -> bool { matches!(self, Operand::Reg(..)) }
 	fn is_imm(&self) -> bool { matches!(self, Operand::Imm(..)) }
 	fn access(&self) -> Option<MemAccess> {
@@ -391,7 +391,7 @@ impl Instruction {
 	}
 }
 
-impl InstructionTrait for Instruction {
+impl IInstruction for Instruction {
 	type TOperand = Operand;
 
 	fn va(&self) -> VA                    { self.va }
@@ -441,7 +441,7 @@ impl InstructionTrait for Instruction {
 /// The 65xx disassembler.
 pub struct Disassembler;
 
-impl DisassemblerTrait for Disassembler {
+impl IDisassembler for Disassembler {
 	type TInstruction = Instruction;
 
 	fn disas_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Instruction> {
@@ -526,14 +526,14 @@ impl Printer {
 	}
 }
 
-impl PrinterTrait for Printer {
+impl IPrinter for Printer {
 	type TInstruction = Instruction;
 
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
 		i.desc.meta_op.mnemonic(self.flavor).into()
 	}
 
-	fn fmt_operands(&self, i: &Instruction, l: &dyn NameLookupTrait) -> String {
+	fn fmt_operands(&self, i: &Instruction, l: &dyn INameLookup) -> String {
 		use std::fmt::Write;
 
 		let mut ret = String::new();

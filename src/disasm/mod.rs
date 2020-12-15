@@ -33,11 +33,11 @@ pub enum MemAccess {
 }
 
 // ------------------------------------------------------------------------------------------------
-// OperandTrait
+// IOperand
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for instruction operands.
-pub trait OperandTrait {
+pub trait IOperand {
 	/// Does this refer to a register?
 	fn is_reg(&self) -> bool;
 
@@ -66,7 +66,7 @@ pub trait OperandTrait {
 }
 
 // ------------------------------------------------------------------------------------------------
-// InstructionTrait
+// IInstruction
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
@@ -101,9 +101,9 @@ impl InstructionKind {
 }
 
 /// Trait for instructions. Used by analysis and such.
-pub trait InstructionTrait {
+pub trait IInstruction {
 	/// Associated type of operands returned by `get_op`.
-	type TOperand: OperandTrait;
+	type TOperand: IOperand;
 
 	/// Get Location.
 	fn loc(&self) -> Location;
@@ -164,13 +164,13 @@ pub trait InstructionTrait {
 }
 
 // ------------------------------------------------------------------------------------------------
-// DisassemblerTrait
+// IDisassembler
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for disassemblers.
-pub trait DisassemblerTrait : Sized {
+pub trait IDisassembler : Sized {
 	/// Associated type of instructions given by this disassembler.
-	type TInstruction: InstructionTrait;
+	type TInstruction: IInstruction;
 
 	/// Disassemble a single instruction from `img` with the given VA and Location.
 	fn disas_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Self::TInstruction>;
@@ -209,17 +209,17 @@ pub trait DisassemblerTrait : Sized {
 ///     // do stuff with err and iter.err_offs()
 /// }
 /// ```
-pub struct DisasAll<'dis, 'img, D: DisassemblerTrait> {
+pub struct DisasAll<'dis, 'img, D: IDisassembler> {
 	disas: &'dis D,
 	img:   &'img [u8],
 	va:    VA,
 	loc:   Location,
 	offs:  usize,
 	err:   Option<DisasError>,
-	_inst: PhantomData<<D as DisassemblerTrait>::TInstruction>,
+	_inst: PhantomData<<D as IDisassembler>::TInstruction>,
 }
 
-impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
+impl<'dis, 'img, D: IDisassembler> DisasAll<'dis, 'img, D> {
 	fn new(disas: &'dis D, img: &'img [u8], va: VA, loc: Location) -> Self {
 		Self { disas, img, va, loc, offs: 0, err: None, _inst: PhantomData }
 	}
@@ -250,8 +250,8 @@ impl<'dis, 'img, D: DisassemblerTrait> DisasAll<'dis, 'img, D> {
 	}
 }
 
-impl<'dis, 'img, D: DisassemblerTrait> Iterator for DisasAll<'dis, 'img, D> {
-	type Item = <D as DisassemblerTrait>::TInstruction;
+impl<'dis, 'img, D: IDisassembler> Iterator for DisasAll<'dis, 'img, D> {
+	type Item = <D as IDisassembler>::TInstruction;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.offs == self.img.len() {
@@ -277,38 +277,38 @@ impl<'dis, 'img, D: DisassemblerTrait> Iterator for DisasAll<'dis, 'img, D> {
 }
 
 // ------------------------------------------------------------------------------------------------
-// PrinterTrait
+// IPrinter
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for instruction printers.
-pub trait PrinterTrait {
+pub trait IPrinter {
 	/// Associated type of instructions that this printer prints.
-	type TInstruction: InstructionTrait;
+	type TInstruction: IInstruction;
 
 	/// Give a string representation of an instruction's mnemonic.
 	fn fmt_mnemonic(&self, i: &Self::TInstruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String;
+	fn fmt_operands(&self, i: &Self::TInstruction, l: &dyn INameLookup) -> String;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Give a string representation of an instruction.
-	fn fmt_instr(&self, i: &Self::TInstruction, l: &dyn NameLookupTrait) -> String {
+	fn fmt_instr(&self, i: &Self::TInstruction, l: &dyn INameLookup) -> String {
 		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, l))
 	}
 }
 
 /// Trait to abstract the process of looking up names of addresses.
-pub trait NameLookupTrait {
+pub trait INameLookup {
 	fn lookup(&self, addr: VA) -> Option<String>;
 }
 
-/// A dummy struct that implements `NameLookupTrait` whose `lookup` method always returns `None`.
+/// A dummy struct that implements `INameLookup` whose `lookup` method always returns `None`.
 pub struct NullLookup;
 
-impl NameLookupTrait for NullLookup {
+impl INameLookup for NullLookup {
 	fn lookup(&self, _addr: VA) -> Option<String> {
 		None
 	}

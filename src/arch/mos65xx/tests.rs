@@ -11,7 +11,7 @@ use super::{
 };
 
 use crate::memory::{ SegId, Location, VA };
-use crate::disasm::{ NameLookupTrait, DisasError, DisassemblerTrait, PrinterTrait };
+use crate::disasm::{ INameLookup, DisasError, IDisassembler, IPrinter };
 
 #[test]
 fn opcode_lookup() {
@@ -173,7 +173,7 @@ fn disasm_failure() {
 
 struct DummyLookup;
 
-impl NameLookupTrait for DummyLookup {
+impl INameLookup for DummyLookup {
 	fn lookup(&self, addr: VA) -> Option<String> {
 		match addr.0 {
 			0x0030 => Some("v_ztable".into()),

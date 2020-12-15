@@ -9,10 +9,10 @@ use crate::program::{ Program, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock 
 use crate::memory::{ Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	DisasResult,
-	DisassemblerTrait,
-	InstructionTrait,
+	IDisassembler,
+	IInstruction,
 	InstructionKind,
-	OperandTrait,
+	IOperand,
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -125,7 +125,7 @@ enum AnalysisItem {
 /// Analyzes code, discovers functions, builds control flow graphs, and defines
 /// functions in a program.
 #[derive(new)]
-pub struct Analyzer<'prog, D: DisassemblerTrait> {
+pub struct Analyzer<'prog, D: IDisassembler> {
 	prog:  &'prog mut Program,
 	dis:   D,
 	#[new(default)]
@@ -134,8 +134,8 @@ pub struct Analyzer<'prog, D: DisassemblerTrait> {
 
 impl<I, D> Analyzer<'_, D>
 where
-	I: InstructionTrait,
-	D: DisassemblerTrait<TInstruction = I>,
+	I: IInstruction,
+	D: IDisassembler<TInstruction = I>,
 {
 	/// Puts a location on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, loc: Location) {

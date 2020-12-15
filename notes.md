@@ -84,7 +84,6 @@ A `Platform` can take an image and give a `Program`. It can also give access to 
 
 - Disassemblers and Printers can take ctor arguments
 	- have to be able to account for that in IArchitecture.
-- rename `___Trait` to `I___`
 
 hmmmmmmm
 
