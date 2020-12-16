@@ -1,16 +1,22 @@
 use std::io::{ BufReader, Cursor };
+use std::error::{ Error };
+use std::fmt::{ Formatter, Result as FmtResult };
 
 use nes_rom::ines::{ Ines };
+use parse_display::Display;
 
 use crate::platform::{ IPlatform, PlatformResult, PlatformError };
-// use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ Memory, Endian, SegCollection, VA, IMmu, IMmuState, Image, SegId };
+use crate::arch::{ IArchitecture };
+use crate::arch::mos65xx::{ Mos65xxArchitecture };
+use crate::memory::{ Memory, SegCollection, VA, IMmu, IMmuState, Image, SegId };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Copy, Clone, Display)]
+#[display("NES/Famicom")]
 pub struct NesPlatform;
 
 impl IPlatform for NesPlatform {
@@ -22,41 +28,51 @@ impl IPlatform for NesPlatform {
 		}
 	}
 
+	#[allow(deprecated)]
 	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
 		let reader = BufReader::new(Cursor::new(img.data()));
 		let cart = match Ines::from_rom(reader) {
 			Ok(cart) => cart,
-			Err(e) => return Err(PlatformError::invalid_image(e.to_string())),
+			// ines::RomError has a buggy Display impl, can't call to_string
+			Err(e) => return Err(PlatformError::invalid_image(e.description().into())),
 		};
 
-		if cart.mapper != 0 {
-			return Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper)));
-		}
-
-		let prg0_img = Image::new(img.name(), &cart.prg_data);
-
-		// 1. create segments
+		// 1. create standard segments
 		let mut segs = SegCollection::new();
+		let ram = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
+		let ppu = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
+		let io  = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
 
-		// default
-		let ram  = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
-		let ppu  = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
-		let io   = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
+		// 2. determine mapper (which creates mapper-specific segments)
+		let mapper = determine_mapper(&img, &mut segs, &cart)?;
 
-		// ROM-specific
-		let prg0 = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(prg0_img));
+		// 3. create Memory
+		let mem = Memory::new(
+			Mos65xxArchitecture.addr_bits(),
+			Mos65xxArchitecture.endianness(),
+			segs,
+			NesMmu { ram, ppu, io, mapper }
+		);
 
-		// 2. create Memory
-		let mapper = Mapper::INes000 { prg0 };
-		let mem = Memory::new(16, Endian::Little, segs, NesMmu { ram, ppu, io, mapper });
+		// 4. create Program
+		let mut prog = Program::new(Box::new(mem), Box::new(*self));
 
-		// 3. create Program
-		let mut prog = Program::new(Box::new(mem));
-
-		// 4. setup default names
+		// 5. setup default names
 		setup_nes_labels(&mut prog);
 
 		Ok(prog)
+	}
+}
+
+fn determine_mapper(img: &Image, segs: &mut SegCollection, cart: &Ines) -> PlatformResult<Mapper> {
+	match cart.mapper {
+		0 => {
+			let prg0_img = Image::new(img.name(), &cart.prg_data);
+			let prg0 = segs.add_segment("PRG0", VA(0x8000), VA(0x10000), Some(prg0_img));
+			Ok(Mapper::INes000 { prg0 })
+		}
+
+		_ => Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper))),
 	}
 }
 
@@ -117,7 +133,8 @@ const NES_STD_NAMES: &[StdName] = &[
 // NesMmu
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
+#[display("")]
 pub struct DummyState;
 
 impl IMmuState for DummyState {}
@@ -130,6 +147,12 @@ pub struct NesMmu {
 	mapper: Mapper,
 }
 
+impl std::fmt::Display for NesMmu {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{}", self.mapper)
+	}
+}
+
 impl IMmu for NesMmu {
 	type TState = DummyState;
 
@@ -139,23 +162,23 @@ impl IMmu for NesMmu {
 
 	fn segid_for_va(&self, state: Self::TState, va: VA) -> Option<SegId> {
 		match va {
-			_ if va <  VA(0x0800) => Some(self.ram),
-			_ if va <  VA(0x2000) => Some(self.ram), // mirror
-			_ if va <  VA(0x2008) => Some(self.ppu),
-			_ if va <  VA(0x4000) => Some(self.ppu), // mirror
-			_ if va <  VA(0x4020) => Some(self.io),
-			_                     => self.mapper.segid_for_va(state, va),
+			_ if va < VA(0x0800) => Some(self.ram),
+			_ if va < VA(0x2000) => Some(self.ram), // mirror
+			_ if va < VA(0x2008) => Some(self.ppu),
+			_ if va < VA(0x4000) => Some(self.ppu), // mirror
+			_ if va < VA(0x4020) => Some(self.io),
+			_                    => self.mapper.segid_for_va(state, va),
 		}
 	}
 
 	fn name_prefix_for_va(&self, state: Self::TState, va: VA) -> String {
 		match va {
-			_ if va <  VA(0x0800) => "RAM".into(),
-			_ if va <  VA(0x2000) => "RAMECHO".into(),
-			_ if va <  VA(0x2008) => "PPU".into(),
-			_ if va <  VA(0x4000) => "PPUECHO".into(),
-			_ if va <  VA(0x4020) => "IOREG".into(),
-			_                     => self.mapper.name_prefix_for_va(state, va),
+			_ if va < VA(0x0800) => "RAM".into(),
+			_ if va < VA(0x2000) => "RAMECHO".into(),
+			_ if va < VA(0x2008) => "PPU".into(),
+			_ if va < VA(0x4000) => "PPUECHO".into(),
+			_ if va < VA(0x4020) => "IOREG".into(),
+			_                    => self.mapper.name_prefix_for_va(state, va),
 		}
 	}
 }
@@ -166,7 +189,17 @@ impl IMmu for NesMmu {
 
 #[derive(Debug)]
 pub enum Mapper {
+	// Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 	INes000 { prg0: SegId },
+}
+
+impl std::fmt::Display for Mapper {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use Mapper::*;
+		match self {
+			INes000 { .. } => write!(f, "<no mapper>"),
+		}
+	}
 }
 
 impl Mapper {

@@ -1,5 +1,6 @@
 
 use std::error::Error;
+use std::fmt::Display;
 
 use parse_display::Display;
 use lazy_static::lazy_static;
@@ -19,7 +20,7 @@ pub use nes::{ NesPlatform };
 // IPlatform
 // ------------------------------------------------------------------------------------------------
 
-pub trait IPlatform: Sync {
+pub trait IPlatform: Display + Sync {
 	fn can_parse(&self, img: &Image) -> bool;
 	fn program_from_image(&self, img: Image) -> PlatformResult<Program>;
 }
@@ -49,7 +50,7 @@ fn platform_for_image(img: &Image) -> Option<&'static Box<dyn IPlatform>> {
 pub fn program_from_image(img: Image) -> PlatformResult<Program> {
 	match platform_for_image(&img) {
 		Some(plat) => plat.program_from_image(img),
-		None       => Err(PlatformError::bad_platform()),
+		None       => Err(PlatformError::unknown_platform()),
 	}
 }
 
@@ -60,7 +61,7 @@ pub fn program_from_image(img: Image) -> PlatformResult<Program> {
 #[derive(Debug, Display, PartialEq, Eq, Clone)]
 pub enum PlatformErrorKind {
 	#[display("could not determine platform automatically")]
-	BadPlatform,
+	UnknownPlatform,
 	#[display("invalid image: {msg}")]
 	InvalidImage { msg: String },
 }
@@ -78,8 +79,8 @@ pub struct PlatformError {
 impl Error for PlatformError {}
 
 impl PlatformError {
-	pub fn bad_platform() -> Self {
-		Self { kind: PlatformErrorKind::BadPlatform }
+	pub fn unknown_platform() -> Self {
+		Self { kind: PlatformErrorKind::UnknownPlatform }
 	}
 
 	pub fn invalid_image(msg: String) -> Self {

@@ -1,5 +1,5 @@
 
-use std::fmt::Debug;
+use std::fmt::{ Debug, Display };
 
 use crate::memory::{ VA, SegId };
 
@@ -8,7 +8,7 @@ use crate::memory::{ VA, SegId };
 /// The "MMU" broadly means "the hardware that decides what physical device a given virtual
 /// address refers to." This can be built into a system (hardwired), or the system might
 /// have registers to do banking, or the cartridges might have hardware to do that.
-pub trait IMmu: Sync + Send + Debug {
+pub trait IMmu: Debug + Display + Sync + Send {
 	/// The type that holds the configuration state.
 	type TState: IMmuState;
 
@@ -24,6 +24,6 @@ pub trait IMmu: Sync + Send + Debug {
 }
 
 /// A particular configuration of the MMU.
-pub trait IMmuState: Sync + Send + Debug {
+pub trait IMmuState: Debug + Display + Sync + Send {
 	// ?
 }

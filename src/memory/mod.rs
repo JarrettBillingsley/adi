@@ -259,6 +259,7 @@ impl<TMmu: IMmu> IMemory for Memory<TMmu> {
 impl<TMmu: IMmu> Display for Memory<TMmu> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.len(), self.endianness)?;
+		writeln!(f, "MMU: {}", self.mmu)?;
 		writeln!(f, "\nSegments:")?;
 
 		for seg in self.segs.iter() {

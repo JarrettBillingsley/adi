@@ -11,6 +11,7 @@ use delegate::delegate;
 
 use crate::memory::{ IMemory, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::INameLookup;
+use crate::platform::{ IPlatform };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -31,6 +32,7 @@ pub use refmap::*;
 /// A Program contains a Memory object and indexes of names, references, functions, and variables.
 pub struct Program {
 	mem:   Box<dyn IMemory>,
+	plat:  Box<dyn IPlatform>,
 	names: NameMap,
 	refs:  RefMap,
 	funcs: FuncIndex,
@@ -38,14 +40,16 @@ pub struct Program {
 
 impl Display for Program {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		writeln!(f, "Platform: {}", self.plat)?;
 		write!(f, "{}", self.mem)
 	}
 }
 
 impl Program {
-	pub fn new(mem: Box<dyn IMemory>) -> Self {
+	pub fn new(mem: Box<dyn IMemory>, plat: Box<dyn IPlatform>) -> Self {
 		Self {
 			mem,
+			plat,
 			names: NameMap::new(),
 			refs:  RefMap::new(),
 			funcs: FuncIndex::new(),
