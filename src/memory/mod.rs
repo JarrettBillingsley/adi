@@ -196,10 +196,6 @@ impl<TMmu: IMmu> Memory<TMmu> {
 			mmu
 		}
 	}
-
-	fn segid_for_va(&self, va: VA) -> Option<SegId> {
-		self.mmu.segid_for_va(self.mmu.initial_state(), va)
-	}
 }
 
 impl<TMmu: IMmu> IMemory for Memory<TMmu> {
@@ -226,21 +222,20 @@ impl<TMmu: IMmu> IMemory for Memory<TMmu> {
 	}
 
 	fn segment_for_va(&self, va: VA) -> Option<&Segment> {
-		let seg_id = self.segid_for_va(va)?;
-		Some(self.segs.segment_from_id(seg_id))
+		let loc = self.loc_for_va(va)?;
+		Some(self.segs.segment_from_loc(loc))
 	}
 
 	fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment> {
-		let seg_id = self.segid_for_va(va)?;
-		Some(self.segs.segment_from_id_mut(seg_id))
+		let loc = self.loc_for_va(va)?;
+		Some(self.segs.segment_from_loc_mut(loc))
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Address translation
 
 	fn loc_for_va(&self, va: VA) -> Option<Location> {
-		let seg = self.segs.segment_from_id(self.segid_for_va(va)?);
-		Some(seg.loc_from_va(va))
+		self.mmu.loc_for_va(self.mmu.initial_state(), va)
 	}
 
 	fn loc_from_va(&self, va: VA) -> Location {

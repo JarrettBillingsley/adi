@@ -8,7 +8,7 @@ use parse_display::Display;
 use crate::platform::{ IPlatform, PlatformResult, PlatformError };
 use crate::arch::{ IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ Memory, SegCollection, VA, IMmu, IMmuState, Image, SegId };
+use crate::memory::{ Memory, SegCollection, VA, IMmu, IMmuState, Image, SegId, Location };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -160,14 +160,14 @@ impl IMmu for NesMmu {
 		DummyState
 	}
 
-	fn segid_for_va(&self, state: Self::TState, va: VA) -> Option<SegId> {
+	fn loc_for_va(&self, state: Self::TState, va: VA) -> Option<Location> {
 		match va {
-			_ if va < VA(0x0800) => Some(self.ram),
-			_ if va < VA(0x2000) => Some(self.ram), // mirror
-			_ if va < VA(0x2008) => Some(self.ppu),
-			_ if va < VA(0x4000) => Some(self.ppu), // mirror
-			_ if va < VA(0x4020) => Some(self.io),
-			_                    => self.mapper.segid_for_va(state, va),
+			_ if va < VA(0x0800) => Some(Location::new(self.ram, va.0)),
+			_ if va < VA(0x2000) => Some(Location::new(self.ram, va.0 % 0x800)), // mirror
+			_ if va < VA(0x2008) => Some(Location::new(self.ppu, va.0 - 0x2000)),
+			_ if va < VA(0x4000) => Some(Location::new(self.ppu, (va.0 - 0x2000) % 0x8)), // mirror
+			_ if va < VA(0x4020) => Some(Location::new(self.io,  va.0 - 0x4000)),
+			_                    => self.mapper.loc_for_va(state, va),
 		}
 	}
 
@@ -203,12 +203,12 @@ impl std::fmt::Display for Mapper {
 }
 
 impl Mapper {
-	fn segid_for_va(&self, _state: DummyState, va: VA) -> Option<SegId> {
+	fn loc_for_va(&self, _state: DummyState, va: VA) -> Option<Location> {
 		use Mapper::*;
 		match self {
 			INes000 { prg0 } => {
 				if va >= VA(0x8000) {
-					Some(*prg0)
+					Some(Location::new(*prg0, va.0 - 0x8000))
 				} else {
 					None
 				}
