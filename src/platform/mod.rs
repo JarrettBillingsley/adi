@@ -5,7 +5,6 @@ use parse_display::Display;
 use lazy_static::lazy_static;
 
 use crate::memory::{ Image };
-// use crate::arch::{ IArchitecture };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -14,7 +13,7 @@ use crate::program::{ Program };
 
 mod nes;
 
-pub use nes::NesPlatform;
+pub use nes::{ NesPlatform };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
@@ -37,7 +36,7 @@ lazy_static! {
 	};
 }
 
-pub fn platform_for_image(img: &Image) -> Option<&Box<dyn IPlatform>> {
+fn platform_for_image(img: &Image) -> Option<&'static Box<dyn IPlatform>> {
 	for plat in ALL_PLATFORMS.iter() {
 		if plat.can_parse(img) {
 			return Some(plat);
@@ -47,12 +46,21 @@ pub fn platform_for_image(img: &Image) -> Option<&Box<dyn IPlatform>> {
 	None
 }
 
+pub fn program_from_image(img: Image) -> PlatformResult<Program> {
+	match platform_for_image(&img) {
+		Some(plat) => plat.program_from_image(img),
+		None       => Err(PlatformError::bad_platform()),
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // PlatformErrorKind
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Display, PartialEq, Eq, Clone)]
 pub enum PlatformErrorKind {
+	#[display("could not determine platform automatically")]
+	BadPlatform,
 	#[display("invalid image: {msg}")]
 	InvalidImage { msg: String },
 }
@@ -70,6 +78,10 @@ pub struct PlatformError {
 impl Error for PlatformError {}
 
 impl PlatformError {
+	pub fn bad_platform() -> Self {
+		Self { kind: PlatformErrorKind::BadPlatform }
+	}
+
 	pub fn invalid_image(msg: String) -> Self {
 		Self { kind: PlatformErrorKind::InvalidImage { msg } }
 	}

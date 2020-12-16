@@ -3,6 +3,7 @@
 *.prg
 *.chr
 *.gb
+*.nes
 tests/data/smb*
 *.sublime-project
 *.sublime-workspace

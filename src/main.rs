@@ -34,75 +34,16 @@ fn setup_panic() {
 	.install();
 }
 
-#[derive(Debug)]
-struct DummyState;
-
-impl IMmuState for DummyState {}
-
-#[derive(Debug)]
-struct Dummy {
-	ram:  SegId,
-	ppu:  SegId,
-	io:   SegId,
-	prg0: SegId,
-}
-
-impl IMmu for Dummy {
-	type TState = DummyState;
-
-	fn initial_state(&self) -> Self::TState {
-		DummyState
-	}
-
-	fn segid_for_va(&self, _state: Self::TState, va: VA) -> Option<SegId> {
-		match va {
-			_ if va <  VA(0x0800) => Some(self.ram),
-			_ if va <  VA(0x2000) => Some(self.ram), // mirror
-			_ if va <  VA(0x2008) => Some(self.ppu),
-			_ if va <  VA(0x4000) => Some(self.ppu), // mirror
-			_ if va <  VA(0x4020) => Some(self.io),
-			_ if va >= VA(0x8000) => Some(self.prg0),
-			_                     => None,
-		}
-	}
-
-	fn name_prefix_for_va(&self, _state: Self::TState, va: VA) -> String {
-		match va {
-			_ if va <  VA(0x0800) => "RAM".into(),
-			_ if va <  VA(0x2000) => "RAMECHO".into(),
-			_ if va <  VA(0x2008) => "PPU".into(),
-			_ if va <  VA(0x4000) => "PPUECHO".into(),
-			_ if va <  VA(0x4020) => "IOREG".into(),
-			_ if va >= VA(0x8000) => "PRG0".into(),
-			_                     => "UNK".into(),
-		}
-	}
-}
-
-fn test_nes() -> std::io::Result<()> {
+fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/smb.prg")?;
-
-	let mut segs = SegCollection::new();
-	// default
-	let ram_seg  = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
-	let ppu_seg  = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
-	let io_seg   = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
-	// ROM-specific
-	let prg0_seg = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
-
-	let mem = Memory::new(16, Endian::Little, segs,
-		Dummy { ram: ram_seg, ppu: ppu_seg, io: io_seg, prg0: prg0_seg });
-
-	let mut prog = Program::new(Box::new(mem));
-	setup_nes_labels(&mut prog);
+	let img = Image::new_from_file("tests/data/SuperMarioBros.nes")?;
+	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
 
-	let seg = prog.segment_from_id(prg0_seg);
-
 	let vec_reset_loc = prog.loc_from_name("VEC_RESET");
 	let vec_nmi_loc   = prog.loc_from_name("VEC_NMI");
+	let seg           = prog.segment_from_loc(vec_reset_loc);
 	let reset_va      = VA(seg.read_le_u16(vec_reset_loc) as usize);
 	let nmi_va        = VA(seg.read_le_u16(vec_nmi_loc) as usize);
 	let reset_loc     = seg.loc_from_va(reset_va);
@@ -255,56 +196,3 @@ fn diff_funcs(prog: &Program, loc1: Location, loc2: Location) -> bool {
 
 	func1 != func2
 }
-
-fn setup_nes_labels(prog: &mut Program) {
-	for StdName(name, addr) in NES_STD_NAMES {
-		prog.add_name_va(name, VA(*addr));
-	}
-}
-
-struct StdName(&'static str, usize);
-
-const NES_STD_NAMES: &[StdName] = &[
-	StdName("PPU_CTRL_REG1",         0x2000),
-	StdName("PPU_CTRL_REG2",         0x2001),
-	StdName("PPU_STATUS",            0x2002),
-	StdName("PPU_SPR_ADDR",          0x2003),
-	StdName("PPU_SPR_DATA",          0x2004),
-	StdName("PPU_SCROLL_REG",        0x2005),
-	StdName("PPU_ADDRESS",           0x2006),
-	StdName("PPU_DATA",              0x2007),
-
-	StdName("SND_PULSE1_CTRL1",      0x4000),
-	StdName("SND_PULSE1_CTRL2",      0x4001),
-	StdName("SND_PULSE1_TIMER",      0x4002),
-	StdName("SND_PULSE1_LENGTH",     0x4003),
-	StdName("SND_PULSE2_CTRL1",      0x4004),
-	StdName("SND_PULSE2_CTRL2",      0x4005),
-	StdName("SND_PULSE2_TIMER",      0x4006),
-	StdName("SND_PULSE2_LENGTH",     0x4007),
-	StdName("SND_TRI_CTRL",          0x4008),
-	StdName("SND_TRI_TIMER",         0x400A),
-	StdName("SND_TRI_LENGTH",        0x400B),
-	StdName("SND_NOISE_CTRL",        0x400c),
-	StdName("SND_NOISE_PERIOD",      0x400e),
-	StdName("SND_NOISE_LENGTH",      0x400f),
-	StdName("SND_DMC_CTRL",          0x4010),
-	StdName("SND_DMC_COUNTER",       0x4011),
-	StdName("SND_DMC_ADDR",          0x4012),
-	StdName("SND_DMC_LEN",           0x4013),
-	StdName("SPR_DMA",               0x4014),
-	StdName("SND_MASTER_CTRL",       0x4015),
-	StdName("JOYPAD_PORT1",          0x4016),
-	StdName("JOYPAD_PORT2",          0x4017),
-	StdName("TESTMODE_PULSE_DAC",    0x4018),
-	StdName("TESTMODE_TRINOISE_DAC", 0x4019),
-	StdName("TESTMODE_DPCM_DAC",     0x401A),
-	StdName("UNUSED_TIMER_LO",       0x401C),
-	StdName("UNUSED_TIMER_MID",      0x401D),
-	StdName("UNUSED_TIMER_HI",       0x401E),
-	StdName("UNUSED_TIMER_CTRL",     0x401F),
-
-	StdName("VEC_NMI",               0xFFFA),
-	StdName("VEC_RESET",             0xFFFC),
-	StdName("VEC_IRQ",               0xFFFE),
-];

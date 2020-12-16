@@ -4,7 +4,7 @@ use nes_rom::ines::{ Ines };
 
 use crate::platform::{ IPlatform, PlatformResult, PlatformError };
 // use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ Image };
+use crate::memory::{ Memory, Endian, SegCollection, VA, IMmu, IMmuState, Image, SegId };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -22,85 +22,177 @@ impl IPlatform for NesPlatform {
 		}
 	}
 
-	fn program_from_image(&self, _img: Image) -> PlatformResult<Program> {
-		// let reader = BufReader::new(Cursor::new(img.data()));
-		// let cart = Ines::from_rom(reader)?;
+	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
+		let reader = BufReader::new(Cursor::new(img.data()));
+		let cart = match Ines::from_rom(reader) {
+			Ok(cart) => cart,
+			Err(e) => return Err(PlatformError::invalid_image(e.to_string())),
+		};
 
-		// 1. determine/create MMU
-		// 2. create segments
-		// 3. create Memory
-		// 4. create Program
-		// 5. setup default names
+		if cart.mapper != 0 {
+			return Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper)));
+		}
 
+		let prg0_img = Image::new(img.name(), &cart.prg_data);
 
-		// /// The base memory map - determined by the system architecture and nothing else.
-		// fn base_memory_map(&self) -> MemoryMap {
-		// 	use MemoryRegionKind::*;
+		// 1. create segments
+		let mut segs = SegCollection::new();
 
-		// 	MemoryMap::new(16, &[
-		// 		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  true, Ram   ),
-		// 		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  true, Mirror),
-		// 		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  true, Mmio  ),
-		// 		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  true, Mirror),
-		// 		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  true, Mmio  ),
-		// 	])
-		// }
+		// default
+		let ram  = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
+		let ppu  = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
+		let io   = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
 
-		// /// The base memory configuration - determined by the system architecture and nothing else.
-		// fn base_memory_config(&self) -> MemoryConfig {
-		// 	MemoryConfig::from_iter(&[
-		// 		// Region, Segment
-		// 		("RAM",    "RAM"),
-		// 		("PPU",    "PPU"),
-		// 		("IOREG",  "IOREG"),
-		// 	])
-		// }
+		// ROM-specific
+		let prg0 = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(prg0_img));
 
-		Err(PlatformError::invalid_image("ono".into()))
+		// 2. create Memory
+		let mapper = Mapper::INes000 { prg0 };
+		let mem = Memory::new(16, Endian::Little, segs, NesMmu { ram, ppu, io, mapper });
+
+		// 3. create Program
+		let mut prog = Program::new(Box::new(mem));
+
+		// 4. setup default names
+		setup_nes_labels(&mut prog);
+
+		Ok(prog)
 	}
 }
+
+fn setup_nes_labels(prog: &mut Program) {
+	for StdName(name, addr) in NES_STD_NAMES {
+		prog.add_name_va(name, VA(*addr));
+	}
+}
+
+struct StdName(&'static str, usize);
+
+const NES_STD_NAMES: &[StdName] = &[
+	StdName("PPU_CTRL_REG1",         0x2000),
+	StdName("PPU_CTRL_REG2",         0x2001),
+	StdName("PPU_STATUS",            0x2002),
+	StdName("PPU_SPR_ADDR",          0x2003),
+	StdName("PPU_SPR_DATA",          0x2004),
+	StdName("PPU_SCROLL_REG",        0x2005),
+	StdName("PPU_ADDRESS",           0x2006),
+	StdName("PPU_DATA",              0x2007),
+
+	StdName("SND_PULSE1_CTRL1",      0x4000),
+	StdName("SND_PULSE1_CTRL2",      0x4001),
+	StdName("SND_PULSE1_TIMER",      0x4002),
+	StdName("SND_PULSE1_LENGTH",     0x4003),
+	StdName("SND_PULSE2_CTRL1",      0x4004),
+	StdName("SND_PULSE2_CTRL2",      0x4005),
+	StdName("SND_PULSE2_TIMER",      0x4006),
+	StdName("SND_PULSE2_LENGTH",     0x4007),
+	StdName("SND_TRI_CTRL",          0x4008),
+	StdName("SND_TRI_TIMER",         0x400A),
+	StdName("SND_TRI_LENGTH",        0x400B),
+	StdName("SND_NOISE_CTRL",        0x400c),
+	StdName("SND_NOISE_PERIOD",      0x400e),
+	StdName("SND_NOISE_LENGTH",      0x400f),
+	StdName("SND_DMC_CTRL",          0x4010),
+	StdName("SND_DMC_COUNTER",       0x4011),
+	StdName("SND_DMC_ADDR",          0x4012),
+	StdName("SND_DMC_LEN",           0x4013),
+	StdName("SPR_DMA",               0x4014),
+	StdName("SND_MASTER_CTRL",       0x4015),
+	StdName("JOYPAD_PORT1",          0x4016),
+	StdName("JOYPAD_PORT2",          0x4017),
+	StdName("TESTMODE_PULSE_DAC",    0x4018),
+	StdName("TESTMODE_TRINOISE_DAC", 0x4019),
+	StdName("TESTMODE_DPCM_DAC",     0x401A),
+	StdName("UNUSED_TIMER_LO",       0x401C),
+	StdName("UNUSED_TIMER_MID",      0x401D),
+	StdName("UNUSED_TIMER_HI",       0x401E),
+	StdName("UNUSED_TIMER_CTRL",     0x401F),
+
+	StdName("VEC_NMI",               0xFFFA),
+	StdName("VEC_RESET",             0xFFFC),
+	StdName("VEC_IRQ",               0xFFFE),
+];
 
 // ------------------------------------------------------------------------------------------------
 // NesMmu
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Debug)]
+pub struct DummyState;
+
+impl IMmuState for DummyState {}
+
+#[derive(Debug)]
 pub struct NesMmu {
+	ram:    SegId,
+	ppu:    SegId,
+	io:     SegId,
 	mapper: Mapper,
 }
 
-impl NesMmu {
-	fn new(mapper: Mapper) -> Self {
-		Self { mapper }
+impl IMmu for NesMmu {
+	type TState = DummyState;
+
+	fn initial_state(&self) -> Self::TState {
+		DummyState
+	}
+
+	fn segid_for_va(&self, state: Self::TState, va: VA) -> Option<SegId> {
+		match va {
+			_ if va <  VA(0x0800) => Some(self.ram),
+			_ if va <  VA(0x2000) => Some(self.ram), // mirror
+			_ if va <  VA(0x2008) => Some(self.ppu),
+			_ if va <  VA(0x4000) => Some(self.ppu), // mirror
+			_ if va <  VA(0x4020) => Some(self.io),
+			_                     => self.mapper.segid_for_va(state, va),
+		}
+	}
+
+	fn name_prefix_for_va(&self, state: Self::TState, va: VA) -> String {
+		match va {
+			_ if va <  VA(0x0800) => "RAM".into(),
+			_ if va <  VA(0x2000) => "RAMECHO".into(),
+			_ if va <  VA(0x2008) => "PPU".into(),
+			_ if va <  VA(0x4000) => "PPUECHO".into(),
+			_ if va <  VA(0x4020) => "IOREG".into(),
+			_                     => self.mapper.name_prefix_for_va(state, va),
+		}
 	}
 }
-
-// impl IMmu for NesMmu {
-// 	type TState = NesMmuState;
-
-// 	fn initial_state(&self) -> Self::TState {
-// 		NesMmuState::default()
-// 	}
-
-// 	fn segid_for_va(&self, state: Self::TState, va: VA) -> Option<SegId> {
-
-// 	}
-
-// 	fn generate_name_for_va(&self, va: VA) -> String;
-// }
 
 // ------------------------------------------------------------------------------------------------
 // Mapper
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Debug)]
 pub enum Mapper {
-	INes000 = 0,
+	INes000 { prg0: SegId },
 }
 
 impl Mapper {
-	fn mem_config(&self) -> Vec<(String, String)> {
+	fn segid_for_va(&self, _state: DummyState, va: VA) -> Option<SegId> {
 		use Mapper::*;
 		match self {
-			INes000 => vec![("PRGROM".into(), "PRG0".into())],
+			INes000 { prg0 } => {
+				if va >= VA(0x8000) {
+					Some(*prg0)
+				} else {
+					None
+				}
+			}
+		}
+	}
+
+	fn name_prefix_for_va(&self, _state: DummyState, va: VA) -> String {
+		use Mapper::*;
+		match self {
+			INes000 { .. } => {
+				if va >= VA(0x8000) {
+					"PRG0".into()
+				} else {
+					"UNK".into()
+				}
+			}
 		}
 	}
 }
