@@ -3,7 +3,7 @@ use std::fmt::{ Debug, Display };
 
 use crate::memory::{ VA, Location };
 
-/// Trait for MMUs (memory management units), which abstract the VA-to-segment mapping.
+/// Trait for MMUs (memory management units), which abstract the VA-to-Location mapping.
 ///
 /// The "MMU" broadly means "the hardware that decides what physical device a given virtual
 /// address refers to." This can be built into a system (hardwired), or the system might
