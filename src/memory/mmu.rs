@@ -27,5 +27,3 @@ pub trait IMmu: Sync + Send + Debug {
 pub trait IMmuState: Sync + Send + Debug {
 	// ?
 }
-
-impl IMmuState for Box<dyn IMmuState> {}

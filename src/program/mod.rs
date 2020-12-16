@@ -7,10 +7,9 @@ use std::collections::{
 use std::ops::{ Bound, RangeBounds };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
-use derive_new::new;
 use delegate::delegate;
 
-use crate::memory::{ Memory, Location, VA, SegId, Span, SpanKind, Segment };
+use crate::memory::{ IMemory, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::INameLookup;
 
 // ------------------------------------------------------------------------------------------------
@@ -30,17 +29,10 @@ pub use refmap::*;
 // ------------------------------------------------------------------------------------------------
 
 /// A Program contains a Memory object and indexes of names, references, functions, and variables.
-#[derive(new)]
 pub struct Program {
-	mem:   Memory,
-
-	#[new(default)]
+	mem:   Box<dyn IMemory>,
 	names: NameMap,
-
-	#[new(default)]
 	refs:  RefMap,
-
-	#[new(default)]
 	funcs: FuncIndex,
 }
 
@@ -51,6 +43,15 @@ impl Display for Program {
 }
 
 impl Program {
+	pub fn new(mem: Box<dyn IMemory>) -> Self {
+		Self {
+			mem,
+			names: NameMap::new(),
+			refs:  RefMap::new(),
+			funcs: FuncIndex::new(),
+		}
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Memory
 

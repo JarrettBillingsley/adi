@@ -48,10 +48,10 @@ struct Dummy {
 }
 
 impl IMmu for Dummy {
-	type TState = Box<dyn IMmuState>;
+	type TState = DummyState;
 
 	fn initial_state(&self) -> Self::TState {
-		Box::new(DummyState)
+		DummyState
 	}
 
 	fn segid_for_va(&self, _state: Self::TState, va: VA) -> Option<SegId> {
@@ -91,10 +91,10 @@ fn test_nes() -> std::io::Result<()> {
 	// ROM-specific
 	let prg0_seg = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
 
-	let map = MemoryMap::new(16, Dummy { ram: ram_seg, ppu: ppu_seg, io: io_seg, prg0: prg0_seg });
+	let mem = Memory::new(16, Endian::Little, segs,
+		Dummy { ram: ram_seg, ppu: ppu_seg, io: io_seg, prg0: prg0_seg });
 
-	let mem = Memory::new(Endian::Little, segs, Box::new(map));
-	let mut prog = Program::new(mem);
+	let mut prog = Program::new(Box::new(mem));
 	setup_nes_labels(&mut prog);
 
 	println!("{}", prog);
