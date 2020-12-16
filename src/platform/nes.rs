@@ -4,7 +4,7 @@ use nes_rom::ines::{ Ines };
 
 use crate::platform::{ IPlatform, PlatformResult, PlatformError };
 // use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ Image, MemoryRegion };
+use crate::memory::{ Image };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -97,16 +97,6 @@ pub enum Mapper {
 }
 
 impl Mapper {
-	fn mem_regions(&self) -> Vec<MemoryRegion> {
-		use Mapper::*;
-		// use MemoryRegionKind::*;
-		match self {
-			INes000 => vec![
-				//MemoryRegion::new("PRGROM".into(), VA(0x8000), VA(0x10000), false, Rom, false)
-			],
-		}
-	}
-
 	fn mem_config(&self) -> Vec<(String, String)> {
 		use Mapper::*;
 		match self {

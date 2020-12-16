@@ -8,7 +8,6 @@ use colored::*;
 
 use adi::*;
 use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
-use MemoryRegionKind::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging()?;
@@ -42,6 +41,9 @@ impl IMmuState for DummyState {}
 
 #[derive(Debug)]
 struct Dummy {
+	ram:  SegId,
+	ppu:  SegId,
+	io:   SegId,
 	prg0: SegId,
 }
 
@@ -52,16 +54,28 @@ impl IMmu for Dummy {
 		Box::new(DummyState)
 	}
 
-	fn segid_for_va(&self, state: Self::TState, va: VA) -> Option<SegId> {
-		if va >= VA(0x8000) {
-			Some(self.prg0)
-		} else {
-			None
+	fn segid_for_va(&self, _state: Self::TState, va: VA) -> Option<SegId> {
+		match va {
+			_ if va <  VA(0x0800) => Some(self.ram),
+			_ if va <  VA(0x2000) => Some(self.ram), // mirror
+			_ if va <  VA(0x2008) => Some(self.ppu),
+			_ if va <  VA(0x4000) => Some(self.ppu), // mirror
+			_ if va <  VA(0x4020) => Some(self.io),
+			_ if va >= VA(0x8000) => Some(self.prg0),
+			_                     => None,
 		}
 	}
 
-	fn name_prefix_for_va(&self, state: Self::TState, va: VA) -> String {
-		"PRG0".into()
+	fn name_prefix_for_va(&self, _state: Self::TState, va: VA) -> String {
+		match va {
+			_ if va <  VA(0x0800) => "RAM".into(),
+			_ if va <  VA(0x2000) => "RAMECHO".into(),
+			_ if va <  VA(0x2008) => "PPU".into(),
+			_ if va <  VA(0x4000) => "PPUECHO".into(),
+			_ if va <  VA(0x4020) => "IOREG".into(),
+			_ if va >= VA(0x8000) => "PRG0".into(),
+			_                     => "UNK".into(),
+		}
 	}
 }
 
@@ -77,14 +91,7 @@ fn test_nes() -> std::io::Result<()> {
 	// ROM-specific
 	let prg0_seg = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
 
-	let map = MemoryMap::new(16, &[
-		// default
-		MemoryRegion::new("RAM",     VA(0x0000), VA(0x0800),  Ram,    Some(ram_seg)),
-		MemoryRegion::new("PPU",     VA(0x2000), VA(0x2008),  Mmio,   Some(ppu_seg)),
-		MemoryRegion::new("IOREG",   VA(0x4000), VA(0x4020),  Mmio,   Some(io_seg)),
-		// ROM-specific
-		//MemoryRegion::new("PRGROM",  VA(0x8000), VA(0x10000), Rom,    Some(prg0_seg)),
-	], Dummy { prg0: prg0_seg });
+	let map = MemoryMap::new(16, Dummy { ram: ram_seg, ppu: ppu_seg, io: io_seg, prg0: prg0_seg });
 
 	let mem = Memory::new(Endian::Little, segs, Box::new(map));
 	let mut prog = Program::new(mem);

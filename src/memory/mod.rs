@@ -11,7 +11,6 @@ use delegate::delegate;
 mod image;
 mod map;
 mod mmu;
-mod region;
 mod segment;
 mod spans;
 mod va;
@@ -22,7 +21,6 @@ mod tests;
 pub use image::*;
 pub use map::*;
 pub use mmu::*;
-pub use region::*;
 pub use segment::*;
 pub use spans::*;
 pub use va::*;
@@ -150,20 +148,6 @@ impl Memory {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Regions
-
-	delegate! {
-		to self.mem_map {
-			/// Given a virtual address, get the memory region which contains it, if any.
-			pub fn region_for_va(&self, va: VA) -> Option<&MemoryRegion>;
-			/// Given a name, gets the memory region with that name, if any.
-			pub fn region_for_name(&self, name: &str) -> Option<&MemoryRegion>;
-			/// Given a range of two VAs, do they cross over the boundary between two regions?
-			pub fn range_crosses_regions(&self, start: VA, end: VA) -> bool;
-		}
-	}
-
-	// ---------------------------------------------------------------------------------------------
 	// Segments
 
 	delegate! {
@@ -210,6 +194,10 @@ impl Memory {
 		self.loc_for_va(va).unwrap()
 	}
 
+	pub fn name_prefix_for_va(&self, va: VA) -> String {
+		self.mem_map.name_prefix_for_va(va)
+	}
+
 	/// Formats a number as a hexadecimal number with the appropriate number of digits
 	/// for the size of the address space.
 	pub fn fmt_addr(&self, addr: usize) -> String {
@@ -224,17 +212,6 @@ impl Display for Memory {
 
 		for seg in self.segs.iter() {
 			writeln!(f, "    {}", seg)?;
-		}
-
-		writeln!(f, "\nMemory map:")?;
-
-		for region in self.mem_map.all_regions() {
-			write!(f, "{:>40}", region.to_string())?;
-
-			// match self.segment_for_region(region) {
-			// 	Some(seg) => writeln!(f, " => {}", seg)?,
-			// 	None      => writeln!(f, " (unmapped)")?,
-			// }
 		}
 
 		Ok(())
