@@ -8,7 +8,7 @@ use parse_display::Display;
 use crate::platform::{ IPlatform, PlatformResult, PlatformError };
 use crate::arch::{ IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ Memory, SegCollection, VA, IMmu, IMmuState, Image, SegId, Location };
+use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -37,21 +37,14 @@ impl IPlatform for NesPlatform {
 			Err(e) => return Err(PlatformError::invalid_image(e.description().into())),
 		};
 
-		// 1. create standard segments
 		let mut segs = SegCollection::new();
-		let ram = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
-		let ppu = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
-		let io  = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
+		let mmu = setup_mmu(&img, &mut segs, &cart)?;
 
-		// 2. determine mapper (which creates mapper-specific segments)
-		let mapper = determine_mapper(&img, &mut segs, &cart)?;
-
-		// 3. create Memory
 		let mem = Memory::new(
 			Mos65xxArchitecture.addr_bits(),
 			Mos65xxArchitecture.endianness(),
 			segs,
-			NesMmu { ram, ppu, io, mapper }
+			mmu
 		);
 
 		// 4. create Program
@@ -64,12 +57,19 @@ impl IPlatform for NesPlatform {
 	}
 }
 
-fn determine_mapper(img: &Image, segs: &mut SegCollection, cart: &Ines) -> PlatformResult<Mapper> {
+fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
+-> PlatformResult<NesMmu<impl IMmu>> {
+	let ram = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
+	let ppu = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
+	let io  = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
+
 	match cart.mapper {
+		// Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
+
 		0 => {
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
 			let prg0 = segs.add_segment("PRG0", VA(0x8000), VA(0x10000), Some(prg0_img));
-			Ok(Mapper::INes000 { prg0 })
+			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom { prg0 } })
 		}
 
 		_ => Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper))),
@@ -133,34 +133,26 @@ const NES_STD_NAMES: &[StdName] = &[
 // NesMmu
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Display)]
-#[display("")]
-pub struct DummyState;
-
-impl IMmuState for DummyState {}
-
 #[derive(Debug)]
-pub struct NesMmu {
+pub struct NesMmu<Mapper: IMmu> {
 	ram:    SegId,
 	ppu:    SegId,
 	io:     SegId,
 	mapper: Mapper,
 }
 
-impl std::fmt::Display for NesMmu {
+impl<Mapper: IMmu> std::fmt::Display for NesMmu<Mapper> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{}", self.mapper)
 	}
 }
 
-impl IMmu for NesMmu {
-	type TState = DummyState;
-
-	fn initial_state(&self) -> Self::TState {
-		DummyState
+impl<Mapper: IMmu> IMmu for NesMmu<Mapper> {
+	fn initial_state(&self) -> MmuState {
+		self.mapper.initial_state()
 	}
 
-	fn loc_for_va(&self, state: Self::TState, va: VA) -> Option<Location> {
+	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
 		match va {
 			_ if va < VA(0x0800) => Some(Location::new(self.ram, va.0)),
 			_ if va < VA(0x2000) => Some(Location::new(self.ram, va.0 % 0x800)), // mirror
@@ -171,7 +163,7 @@ impl IMmu for NesMmu {
 		}
 	}
 
-	fn name_prefix_for_va(&self, state: Self::TState, va: VA) -> String {
+	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
 		match va {
 			_ if va < VA(0x0800) => "RAM".into(),
 			_ if va < VA(0x2000) => "RAMECHO".into(),
@@ -184,47 +176,37 @@ impl IMmu for NesMmu {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Mapper
+// Mappers
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug)]
-pub enum Mapper {
-	// Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
-	INes000 { prg0: SegId },
-}
+mod mappers {
+	use super::*;
 
-impl std::fmt::Display for Mapper {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		use Mapper::*;
-		match self {
-			INes000 { .. } => write!(f, "<no mapper>"),
+	// ---------------------------------------------------------------------------------------------
+	// iNes 0 (NROM, no mapper)
+
+	#[derive(Debug, Display)]
+	#[display("<no mapper>")]
+	pub(crate) struct NRom { pub prg0: SegId }
+
+	impl IMmu for NRom {
+		fn initial_state(&self) -> MmuState {
+			Default::default()
 		}
-	}
-}
 
-impl Mapper {
-	fn loc_for_va(&self, _state: DummyState, va: VA) -> Option<Location> {
-		use Mapper::*;
-		match self {
-			INes000 { prg0 } => {
-				if va >= VA(0x8000) {
-					Some(Location::new(*prg0, va.0 - 0x8000))
-				} else {
-					None
-				}
+		fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
+			if va >= VA(0x8000) {
+				Some(Location::new(self.prg0, va.0 - 0x8000))
+			} else {
+				None
 			}
 		}
-	}
 
-	fn name_prefix_for_va(&self, _state: DummyState, va: VA) -> String {
-		use Mapper::*;
-		match self {
-			INes000 { .. } => {
-				if va >= VA(0x8000) {
-					"PRG0".into()
-				} else {
-					"UNK".into()
-				}
+		fn name_prefix_for_va(&self, _state: MmuState, va: VA) -> String {
+			if va >= VA(0x8000) {
+				"PRG0".into()
+			} else {
+				"UNK".into()
 			}
 		}
 	}
