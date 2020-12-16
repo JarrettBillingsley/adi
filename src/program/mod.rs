@@ -10,7 +10,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use derive_new::new;
 use delegate::delegate;
 
-use crate::memory::{ Memory, Location, VA, SegId, Span, SpanKind, Segment, Image };
+use crate::memory::{ Memory, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::INameLookup;
 
 // ------------------------------------------------------------------------------------------------
@@ -56,13 +56,6 @@ impl Program {
 
 	delegate! {
 		to self.mem {
-			/// Adds a new segment.
-			///
-			/// # Panics
-			///
-			/// - if `name` is already the name of an existing segment.
-			/// - if the segment is mapped to a bankable region, but `image` is `None`.
-			pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>);
 			/// Given a VA, get the Segment which contains it (if any).
 			pub fn segment_for_va(&self, va: VA) -> Option<&Segment>;
 			/// Same as above but mutable.

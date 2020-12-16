@@ -1,5 +1,4 @@
 use parse_display::Display;
-use derive_new::new;
 
 use crate::memory::{ VA, SegId };
 
@@ -9,7 +8,6 @@ use crate::memory::{ VA, SegId };
 
 /// Describes part of a virtual memory map.
 #[derive(Debug, Display, Clone)]
-#[derive(new)]
 #[display("{name} [0x{base:08X} .. 0x{end:08X})")]
 pub struct MemoryRegion {
 	name: String,
@@ -21,6 +19,10 @@ pub struct MemoryRegion {
 
 #[allow(clippy::len_without_is_empty)]
 impl MemoryRegion {
+	pub fn new(name: &str, base: VA, end: VA, kind: MemoryRegionKind, seg: Option<SegId>) -> Self {
+		Self { name: name.into(), base, end, kind, seg }
+	}
+
 	/// The human-readable name.
 	#[inline] pub fn name(&self) -> &String { &self.name }
 	/// The virtual address of this region's first byte.

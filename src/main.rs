@@ -35,6 +35,36 @@ fn setup_panic() {
 	.install();
 }
 
+#[derive(Debug)]
+struct DummyState;
+
+impl IMmuState for DummyState {}
+
+#[derive(Debug)]
+struct Dummy {
+	prg0: SegId,
+}
+
+impl IMmu for Dummy {
+	type TState = Box<dyn IMmuState>;
+
+	fn initial_state(&self) -> Self::TState {
+		Box::new(DummyState)
+	}
+
+	fn segid_for_va(&self, state: Self::TState, va: VA) -> Option<SegId> {
+		if va >= VA(0x8000) {
+			Some(self.prg0)
+		} else {
+			None
+		}
+	}
+
+	fn name_prefix_for_va(&self, state: Self::TState, va: VA) -> String {
+		"PRG0".into()
+	}
+}
+
 fn test_nes() -> std::io::Result<()> {
 	// let's set it up
 	let img = Image::new_from_file("tests/data/smb.prg")?;
@@ -47,19 +77,16 @@ fn test_nes() -> std::io::Result<()> {
 	// ROM-specific
 	let prg0_seg = segs.add_segment("PRG0",  VA(0x8000), VA(0x10000), Some(img));
 
-
 	let map = MemoryMap::new(16, &[
 		// default
-		MemoryRegion::new("RAM".into(),     VA(0x0000), VA(0x0800),  Ram,    Some(ram_seg)),
-		MemoryRegion::new("RAMECHO".into(), VA(0x0800), VA(0x2000),  Mirror, None),
-		MemoryRegion::new("PPU".into(),     VA(0x2000), VA(0x2008),  Mmio,   Some(ppu_seg)),
-		MemoryRegion::new("PPUECHO".into(), VA(0x2008), VA(0x4000),  Mirror, None),
-		MemoryRegion::new("IOREG".into(),   VA(0x4000), VA(0x4020),  Mmio,   Some(io_seg)),
+		MemoryRegion::new("RAM",     VA(0x0000), VA(0x0800),  Ram,    Some(ram_seg)),
+		MemoryRegion::new("PPU",     VA(0x2000), VA(0x2008),  Mmio,   Some(ppu_seg)),
+		MemoryRegion::new("IOREG",   VA(0x4000), VA(0x4020),  Mmio,   Some(io_seg)),
 		// ROM-specific
-		MemoryRegion::new("PRGROM".into(),  VA(0x8000), VA(0x10000), Rom,    Some(prg0_seg)),
-	]);
+		//MemoryRegion::new("PRGROM",  VA(0x8000), VA(0x10000), Rom,    Some(prg0_seg)),
+	], Dummy { prg0: prg0_seg });
 
-	let mem = Memory::new(Endian::Little, segs, map);
+	let mem = Memory::new(Endian::Little, segs, Box::new(map));
 	let mut prog = Program::new(mem);
 	setup_nes_labels(&mut prog);
 

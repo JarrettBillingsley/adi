@@ -133,11 +133,11 @@ impl SegCollection {
 pub struct Memory {
 	endianness: Endian,
 	segs:       SegCollection,
-	mem_map:    MemoryMap,
+	mem_map:    Box<dyn IMemoryMap>,
 }
 
 impl Memory {
-	pub fn new(endianness: Endian, segs: SegCollection, mem_map: MemoryMap) -> Self {
+	pub fn new(endianness: Endian, segs: SegCollection, mem_map: Box<dyn IMemoryMap>) -> Self {
 		Self { endianness, segs, mem_map }
 	}
 
@@ -183,25 +183,15 @@ impl Memory {
 		}
 	}
 
-	/// Adds a new segment.
-	///
-	/// # Panics
-	///
-	/// - if `name` is already the name of an existing segment.
-	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) {
-		self.segs.add_segment(name, vbase, vend, image);
-		// TODO: notify MMU
-	}
-
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, va: VA) -> Option<&Segment> {
-		let seg_id = self.segid_for_va(va)?;
+		let seg_id = self.mem_map.segid_for_va(va)?;
 		Some(self.segs.segment_from_id(seg_id))
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment> {
-		let seg_id = self.segid_for_va(va)?;
+		let seg_id = self.mem_map.segid_for_va(va)?;
 		Some(self.segs.segment_from_id_mut(seg_id))
 	}
 
@@ -211,7 +201,7 @@ impl Memory {
 	/// Tries to find a unique location for the given VA.
 	/// If there is no mapping, or if the region is bankable, returns None.
 	pub fn loc_for_va(&self, va: VA) -> Option<Location> {
-		let seg = self.segs.segment_from_id(self.segid_for_va(va)?);
+		let seg = self.segs.segment_from_id(self.mem_map.segid_for_va(va)?);
 		Some(seg.loc_from_va(va))
 	}
 
@@ -224,27 +214,6 @@ impl Memory {
 	/// for the size of the address space.
 	pub fn fmt_addr(&self, addr: usize) -> String {
 		format!("{:0width$X}", addr, width = self.mem_map.digits())
-	}
-
-	// ---------------------------------------------------------------------------------------------
-	// Private
-
-	fn segid_for_va(&self, va: VA) -> Option<SegId> {
-		self.segid_for_region(self.mem_map.region_for_va(va)?)
-	}
-
-	fn segid_for_region(&self, region: &MemoryRegion) -> Option<SegId> {
-		if region.seg().is_some() {
-			region.seg()
-		} else {
-			// TODO: this is where MMU comes in
-			None
-		}
-	}
-
-	fn segment_for_region(&self, region: &MemoryRegion) -> Option<&Segment> {
-		let seg_id = self.segid_for_region(region)?;
-		Some(self.segs.segment_from_id(seg_id))
 	}
 }
 
@@ -262,10 +231,10 @@ impl Display for Memory {
 		for region in self.mem_map.all_regions() {
 			write!(f, "{:>40}", region.to_string())?;
 
-			match self.segment_for_region(region) {
-				Some(seg) => writeln!(f, " => {}", seg)?,
-				None      => writeln!(f, " (unmapped)")?,
-			}
+			// match self.segment_for_region(region) {
+			// 	Some(seg) => writeln!(f, " => {}", seg)?,
+			// 	None      => writeln!(f, " (unmapped)")?,
+			// }
 		}
 
 		Ok(())
