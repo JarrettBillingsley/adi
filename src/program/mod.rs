@@ -237,13 +237,13 @@ impl Program {
 	/// Gets the name of a given VA if one exists, or generates one if not.
 	pub fn name_of_va(&self, state: MmuState, va: VA) -> String {
 		if let Some(loc) = self.mem.loc_for_va(state, va) {
-			self.name_of_loc(loc)
+			"TODO".into()
 		} else {
 			self.generate_name(&self.mem.name_prefix_for_va(state, va), va)
 		}
 	}
 
-	/// Gets the name of a given Location if one exists, or generates one if not.
+/*	/// Gets the name of a given Location if one exists, or generates one if not.
 	pub fn name_of_loc(&self, loc: Location) -> String {
 		// see if there's already a name here.
 		if let Some(name) = self.names.name_for_loc(loc) {
@@ -263,7 +263,7 @@ impl Program {
 					self.generate_name(&seg.name(), va),
 			}
 		}
-	}
+	}*/
 
 	// ---------------------------------------------------------------------------------------------
 	// References

@@ -15,7 +15,7 @@ use crate::disasm::{
 };
 use crate::arch::{ IArchitecture };
 use crate::disasm::error::{ DisasError, DisasResult };
-use crate::memory::{ Endian, Location, VA };
+use crate::memory::{ MmuState, Endian, Location, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -380,14 +380,15 @@ pub struct Instruction {
 	size:  usize,
 	op:    Option<Operand>,
 	bytes: [u8; MAX_BYTES],
+	state: MmuState,
 }
 
 impl Instruction {
-	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
-	-> Self {
+	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8],
+		state: MmuState) -> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
-		Self { va, loc, desc, size, op, bytes }
+		Self { va, loc, desc, size, op, bytes, state }
 	}
 }
 
@@ -400,7 +401,6 @@ impl IInstruction for Instruction {
 		assert!(i == 0);
 		self.op.as_ref().unwrap()
 	}
-	fn bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
 
 	fn kind(&self) -> InstructionKind {
 		use Opcode::*;
@@ -442,7 +442,8 @@ pub struct Disassembler;
 impl IDisassembler for Disassembler {
 	type TInstruction = Instruction;
 
-	fn disas_instr(&self, img: &[u8], va: VA, loc: Location) -> DisasResult<Instruction> {
+	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
+	-> DisasResult<(Instruction, MmuState)> {
 		// do we have enough bytes?
 		if img.is_empty() {
 			return Err(DisasError::out_of_bytes(va, loc, 1, 0));
@@ -465,7 +466,8 @@ impl IDisassembler for Disassembler {
 		// okay cool, let's decode
 		let bytes = &img[0 .. inst_size];
 		let op = decode_operand(desc, va, &img[1 .. inst_size]);
-		Ok(Instruction::new(va, loc, desc, inst_size, op, bytes))
+		// TODO: change the state!!
+		Ok((Instruction::new(va, loc, desc, inst_size, op, bytes, state), state))
 	}
 }
 
@@ -555,7 +557,7 @@ impl IPrinter for Printer {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::Imm(imm)      => self.fmt_imm(imm),
 				Operand::Mem(addr, ..) => {
-					match l.lookup(VA(addr as usize)) {
+					match l.lookup(i.mmu_state(), VA(addr as usize)) {
 						Some(name) => name,
 						None       => self.fmt_addr(addr, i.desc.addr_mode.is_zero_page()),
 					}

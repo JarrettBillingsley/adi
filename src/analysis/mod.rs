@@ -6,7 +6,7 @@ use derive_new::new;
 use log::*;
 
 use crate::program::{ Program, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
-use crate::memory::{ Location, ImageSliceable, SpanKind, VA };
+use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	DisasResult,
 	IDisassembler,
@@ -197,7 +197,7 @@ where
 		}
 	}
 
-	fn last_instr_before(&self, loc: Location) -> DisasResult<I> {
+	fn last_instr_before(&self, loc: Location) -> DisasResult<(I, MmuState)> {
 		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
 		let slice       = seg.image_slice(span.start() .. loc).into_data();
 		let va          = self.prog.va_from_loc(span.start());
@@ -212,8 +212,8 @@ where
 			// first, let's make sure that `start` points to the beginning of an instruction,
 			// because otherwise we'd be jumping to an invalid location.
 			let term_loc = match self.last_instr_before(start) {
-				Ok(inst) => inst.loc(),
-				Err(..)  => todo!("have to flag referrer as being invalid somehow"),
+				Ok((inst, ..)) => inst.loc(),
+				Err(..)        => todo!("have to flag referrer as being invalid somehow"),
 			};
 
 			// now we can split the existing BB...
@@ -266,7 +266,7 @@ where
 			let mut term     = None;
 			let mut iter     = self.dis.disas_all(slice, va, start);
 
-			'instloop: for inst in &mut iter {
+			'instloop: for (inst, next_state) in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				term_loc = end_loc;
 				end_loc = inst.next_loc();
@@ -356,14 +356,14 @@ where
 			let va           = self.prog.va_from_loc(start);
 			let mut iter     = self.dis.disas_all(slice, va, start);
 
-			for inst in &mut iter {
+			for (inst, next_state) in &mut iter {
 				let src = inst.loc();
 
 				for i in 0 .. inst.num_ops() {
 					let op = inst.get_op(i);
 
 					if op.is_mem() {
-						let dst = self.prog.loc_from_va(op.addr());
+						let dst = self.prog.loc_from_va(inst.mmu_state(), op.addr());
 						refs.push((src, dst));
 					}
 				}

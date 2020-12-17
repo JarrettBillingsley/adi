@@ -94,6 +94,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
+/*
 fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().map(|(_, func)| func).collect::<Vec<_>>();
 	funcs.sort_by(|a, b| a.start_loc().cmp(&b.start_loc()));
@@ -196,3 +197,4 @@ fn diff_funcs(prog: &Program, loc1: Location, loc2: Location) -> bool {
 
 	func1 != func2
 }
+*/
