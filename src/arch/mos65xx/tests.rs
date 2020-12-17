@@ -10,7 +10,7 @@ use super::{
 	lookup_desc,
 };
 
-use crate::memory::{ SegId, Location, VA };
+use crate::memory::{ MmuState, SegId, Location, VA };
 use crate::disasm::{ INameLookup, DisasError, IDisassembler, IPrinter };
 
 #[test]
@@ -45,7 +45,8 @@ fn mnemonics() {
 fn disas(va: usize, img: &[u8]) -> Instruction {
 	let loc = Location::new(SegId(0), va);
 	let va = VA(va);
-	match Disassembler.disas_instr(img, va, loc) {
+	let state = MmuState::default();
+	match Disassembler.disas_instr(img, state, va, loc) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
 	}
@@ -54,7 +55,8 @@ fn disas(va: usize, img: &[u8]) -> Instruction {
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 	let loc = Location::new(SegId(0), va);
 	let va = VA(va);
-	match Disassembler.disas_instr(img, va, loc) {
+	let state = MmuState::default();
+	match Disassembler.disas_instr(img, state, va, loc) {
 		Ok(inst) => {
 			assert_eq!(inst.va, va);
 			assert_eq!(inst.desc.meta_op, meta_op);
@@ -70,7 +72,8 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 	let loc = Location::new(SegId(0), va);
 	let va = VA(va);
-	match Disassembler.disas_instr(img, va, loc) {
+	let state = MmuState::default();
+	match Disassembler.disas_instr(img, state, va, loc) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
 		}
@@ -143,7 +146,8 @@ fn disasm_range() {
 	];
 
 	let p = Printer::new(SyntaxFlavor::Old);
-	let mut iter = Disassembler.disas_all(code, VA(0), Location::new(SegId(0), 0));
+	let state = MmuState::default();
+	let mut iter = Disassembler.disas_all(code, state, VA(0), Location::new(SegId(0), 0));
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
@@ -151,6 +155,8 @@ fn disasm_range() {
 	}
 
 	assert!(!iter.has_err());
+
+	assert_eq!(expected.len(), output.len());
 
 	for (exp, out) in expected.iter().zip(output.iter()) {
 		assert_eq!(exp, out);
@@ -174,7 +180,7 @@ fn disasm_failure() {
 struct DummyLookup;
 
 impl INameLookup for DummyLookup {
-	fn lookup(&self, addr: VA) -> Option<String> {
+	fn lookup(&self, _state: MmuState, addr: VA) -> Option<String> {
 		match addr.0 {
 			0x0030 => Some("v_ztable".into()),
 			0xBEEF => Some("beefmaster".into()),

@@ -394,8 +394,6 @@ impl Instruction {
 }
 
 impl IInstruction for Instruction {
-	type TOperand = Operand;
-
 	fn va(&self) -> VA              { self.va }
 	fn loc(&self) -> Location       { self.loc }
 	fn size(&self) -> usize         { self.size }
@@ -403,7 +401,7 @@ impl IInstruction for Instruction {
 	fn bytes(&self) -> &[u8]        { &self.bytes[..self.size] }
 	fn mmu_state(&self) -> MmuState { self.state }
 	fn mmu_state_after(&self) -> MmuState { self.state_after }
-	fn get_op(&self, i: usize) -> Operand {
+	fn get_op(&self, i: usize) -> &dyn IOperand {
 		assert!(i == 0);
 		self.op.as_ref().unwrap()
 	}
