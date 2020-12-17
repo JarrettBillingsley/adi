@@ -36,7 +36,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/SuperMarioBros.nes")?;
+	let img = Image::new_from_file("tests/data/smb.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -46,8 +46,8 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	let seg           = prog.segment_from_loc(vec_reset_loc);
 	let reset_va      = VA(seg.read_le_u16(vec_reset_loc) as usize);
 	let nmi_va        = VA(seg.read_le_u16(vec_nmi_loc) as usize);
-	let reset_loc     = seg.loc_from_va(reset_va);
-	let nmi_loc       = seg.loc_from_va(nmi_va);
+	let reset_loc     = prog.loc_from_va(reset_va);
+	let nmi_loc       = prog.loc_from_va(nmi_va);
 
 	prog.add_ref(vec_reset_loc, reset_loc);
 	prog.add_ref(vec_nmi_loc, nmi_loc);

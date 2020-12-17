@@ -1,18 +1,23 @@
 
+1   (mmc1)  - dragon warrior
+4   (mmc3)  - mario 3
+2   (uxrom) - mega man 1
+0   (nrom)  - mario 1, duck hunt, 10-yard fight
+3   (cnrom) - arkanoid
+7   (axrom) - battletoads
+206 (mimic) - gauntlet
+11  (color dreams) - exodus (lmao)
+5   (mmc5)  - castlevania 3
+
 `x_from_y` = "infallibly get an x from a y. panic if it doesn't exist."
 `x_for_y`  = "try to get an x corresponding to y, if one exists."
 
 # TODO:
 
 - write some FUCKING tests
-- memory tests: test config, map, region, segment...
-- use more traits to overload methods like `x_from_y` and `x_for_y`
 - implied operands in `InstructionTrait`
 - bankable region mem configs
-- `Memory`: removing/redefining/iterating segments
 - `Program`: `VarIndex`(?)
-- `Platform`
-- `MemoryMap`: iterators for bankable regions, ROM regions, etc?
 - `SpanKind`: like, an array/variable owner type
 - `RefMap`: does this need to be `BTreeMap/Set`? (do we need ordering?)
 - Disassemblers and Printers can take ctor arguments

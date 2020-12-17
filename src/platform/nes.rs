@@ -153,24 +153,22 @@ impl<Mapper: IMmu> IMmu for NesMmu<Mapper> {
 	}
 
 	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
-		match va {
-			_ if va < VA(0x0800) => Some(Location::new(self.ram, va.0)),
-			_ if va < VA(0x2000) => Some(Location::new(self.ram, va.0 % 0x800)), // mirror
-			_ if va < VA(0x2008) => Some(Location::new(self.ppu, va.0 - 0x2000)),
-			_ if va < VA(0x4000) => Some(Location::new(self.ppu, (va.0 - 0x2000) % 0x8)), // mirror
-			_ if va < VA(0x4020) => Some(Location::new(self.io,  va.0 - 0x4000)),
-			_                    => self.mapper.loc_for_va(state, va),
+		match va.0 {
+			0x0000 ..= 0x1FFF => Some(Location::new(self.ram, va.0 & 0x7FF)),
+			0x2000 ..= 0x3FFF => Some(Location::new(self.ppu, va.0 & 0x7)),
+			0x4000 ..= 0x401F => Some(Location::new(self.io,  va.0 & 0x1F)),
+			_                 => self.mapper.loc_for_va(state, va),
 		}
 	}
 
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
-		match va {
-			_ if va < VA(0x0800) => "RAM".into(),
-			_ if va < VA(0x2000) => "RAMECHO".into(),
-			_ if va < VA(0x2008) => "PPU".into(),
-			_ if va < VA(0x4000) => "PPUECHO".into(),
-			_ if va < VA(0x4020) => "IOREG".into(),
-			_                    => self.mapper.name_prefix_for_va(state, va),
+		match va.0 {
+			0x0000 ..= 0x07FF => "RAM".into(),
+			0x0800 ..= 0x1FFF => "RAMECHO".into(),
+			0x2000 ..= 0x2007 => "PPU".into(),
+			0x2008 ..= 0x3FFF => "PPUECHO".into(),
+			0x4000 ..= 0x401F => "IOREG".into(),
+			_                 => self.mapper.name_prefix_for_va(state, va),
 		}
 	}
 }
@@ -195,18 +193,16 @@ mod mappers {
 		}
 
 		fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
-			if va >= VA(0x8000) {
-				Some(Location::new(self.prg0, va.0 - 0x8000))
-			} else {
-				None
+			match va.0 {
+				0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 - 0x8000)),
+				_                 => None,
 			}
 		}
 
 		fn name_prefix_for_va(&self, _state: MmuState, va: VA) -> String {
-			if va >= VA(0x8000) {
-				"PRG0".into()
-			} else {
-				"UNK".into()
+			match va.0 {
+				0x8000 ..= 0xFFFF => "PRG0".into(),
+				_                 => "UNK".into(),
 			}
 		}
 	}
