@@ -71,7 +71,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	for span in seg.all_spans() {
 		match span.kind() {
 			SpanKind::Unk => {
-				let addr = prog.fmt_addr(seg.va_from_loc(span.start()).0);
+				let addr = prog.fmt_addr(prog.va_from_loc(span.start()).0);
 				let msg = format!("[{} unexplored byte(s)]", span.len());
 
 				println!("{}", divider.green());
@@ -123,7 +123,7 @@ fn show_func(prog: &Program, func: &Function) {
 fn show_bb(prog: &Program, bb: &BasicBlock) {
 	let (seg, span) = prog.seg_and_span_at_loc(bb.loc());
 	let slice       = seg.image_slice(span).into_data();
-	let bb_va       = seg.va_from_loc(bb.loc());
+	let bb_va       = prog.va_from_loc(bb.loc());
 
 	// Inrefs and label
 	if let Some(ir) = prog.get_inrefs(bb.loc()) {

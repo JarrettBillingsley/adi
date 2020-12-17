@@ -82,6 +82,10 @@ impl Program {
 			pub fn loc_for_va(&self, va: VA) -> Option<Location>;
 			/// Same as above, but infallible.
 			pub fn loc_from_va(&self, va: VA) -> Location;
+			/// Gets the VA which corresponds to this location, if any.
+			pub fn va_for_loc(&self, loc: Location) -> Option<VA>;
+			/// Same as above, but infallible.
+			pub fn va_from_loc(&self, loc: Location) -> VA;
 			/// Formats a number as a hexadecimal number with the appropriate number of digits
 			/// for the size of the address space.
 			pub fn fmt_addr(&self, addr: usize) -> String;
@@ -245,7 +249,7 @@ impl Program {
 		} else {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
-			let va = seg.va_from_loc(loc);
+			let va = self.va_from_loc(loc);
 			let start = seg.span_at_loc(loc).start();
 
 			match self.names.name_for_loc(start) {

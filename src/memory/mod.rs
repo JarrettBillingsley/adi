@@ -66,7 +66,7 @@ impl SegCollection {
 	/// # Panics
 	///
 	/// - if `name` is already the name of an existing segment.
-	pub fn add_segment(&mut self, name: &str, vbase: VA, vend: VA, image: Option<Image>) -> SegId {
+	pub fn add_segment(&mut self, name: &str, size: usize, image: Option<Image>) -> SegId {
 		let idx = self.segs.len();
 
 		let existing = self.seg_name_map.insert(name.into(), idx);
@@ -76,7 +76,7 @@ impl SegCollection {
 		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
 		self.seg_id_map.insert(id, idx);
 
-		self.segs.push(Segment::new(id, name, vbase, vend, image));
+		self.segs.push(Segment::new(id, name, size, image));
 
 		id
 	}
@@ -164,7 +164,15 @@ pub trait IMemory: Display {
 	/// If there is no mapping, or if the region is bankable, returns None.
 	fn loc_for_va(&self, va: VA) -> Option<Location>;
 	/// Same as above, but infallible.
-	fn loc_from_va(&self, va: VA) -> Location;
+	fn loc_from_va(&self, va: VA) -> Location {
+		self.loc_for_va(va).unwrap()
+	}
+	/// Gets the VA which corresponds to this location, if any.
+	fn va_for_loc(&self, loc: Location) -> Option<VA>;
+	/// Same as above, but infallible.
+	fn va_from_loc(&self, loc: Location) -> VA {
+		self.va_for_loc(loc).unwrap()
+	}
 	/// Formats a number as a hexadecimal number with the appropriate number of digits
 	/// for the size of the address space.
 	fn fmt_addr(&self, addr: usize) -> String;
@@ -235,11 +243,13 @@ impl<TMmu: IMmu> IMemory for Memory<TMmu> {
 	// Address translation
 
 	fn loc_for_va(&self, va: VA) -> Option<Location> {
+		// TODO: real state
 		self.mmu.loc_for_va(self.mmu.initial_state(), va)
 	}
 
-	fn loc_from_va(&self, va: VA) -> Location {
-		self.loc_for_va(va).unwrap()
+	fn va_for_loc(&self, loc: Location) -> Option<VA> {
+		// TODO: real state
+		self.mmu.va_for_loc(self.mmu.initial_state(), loc)
 	}
 
 	fn fmt_addr(&self, addr: usize) -> String {

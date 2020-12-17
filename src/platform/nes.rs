@@ -59,16 +59,16 @@ impl IPlatform for NesPlatform {
 
 fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 -> PlatformResult<NesMmu<impl IMmu>> {
-	let ram = segs.add_segment("RAM",   VA(0x0000), VA(0x0800), None);
-	let ppu = segs.add_segment("PPU",   VA(0x2000), VA(0x2008), None);
-	let io  = segs.add_segment("IOREG", VA(0x4000), VA(0x4020), None);
+	let ram = segs.add_segment("RAM",   0x800, None);
+	let ppu = segs.add_segment("PPU",   0x008, None);
+	let io  = segs.add_segment("IOREG", 0x020, None);
 
 	match cart.mapper {
 		// Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 
 		0 => {
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
-			let prg0 = segs.add_segment("PRG0", VA(0x8000), VA(0x10000), Some(prg0_img));
+			let prg0 = segs.add_segment("PRG0", 0x8000, Some(prg0_img));
 			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom { prg0 } })
 		}
 
@@ -161,6 +161,15 @@ impl<Mapper: IMmu> IMmu for NesMmu<Mapper> {
 		}
 	}
 
+	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
+		match loc.seg {
+			seg if seg == self.ram => Some(VA(loc.offs & 0x7FFF)),
+			seg if seg == self.ppu => Some(VA(0x2000 + (loc.offs & 0x7))),
+			seg if seg == self.io  => Some(VA(0x4000 + (loc.offs & 0x1F))),
+			_                      => self.mapper.va_for_loc(state, loc),
+		}
+	}
+
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
 		match va.0 {
 			0x0000 ..= 0x07FF => "RAM".into(),
@@ -194,8 +203,15 @@ mod mappers {
 
 		fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
 			match va.0 {
-				0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 - 0x8000)),
+				0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 & 0x7FFF)),
 				_                 => None,
+			}
+		}
+
+		fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
+			match loc.seg {
+				seg if seg == self.prg0 => Some(VA(0x8000 + (loc.offs & 0x7FFF))),
+				_                       => None,
 			}
 		}
 
@@ -207,3 +223,7 @@ mod mappers {
 		}
 	}
 }
+
+// TODO: when implementing bankswitching, have to somehow keep track of which banks
+// are mapped into which frames/windows, so that we can detect the case that the same
+// bank is mapped into different windows (which really shouldn't happen I don't think, but)

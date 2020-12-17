@@ -5,7 +5,7 @@ use std::fmt::{ Debug, };
 use derive_new::new;
 use parse_display::Display;
 
-use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind, VA };
+use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind };
 
 // ------------------------------------------------------------------------------------------------
 // SegId
@@ -69,8 +69,6 @@ impl SubAssign<usize> for Location {
 pub struct Segment {
 	id:    SegId,
 	name:  String,
-	vbase: VA,
-	vend:  VA,
 	size:  usize,
 	spans: SpanMap,
 	image: Option<Image>,
@@ -82,11 +80,11 @@ impl Display for Segment {
 			Some(image) => {
 				let orig = image.orig_range();
 
-				write!(f, "{} (image '{}') VA [{:08X}..{:08X}) PA: [{:08X}..{:08X})",
-					self.name, image.name(), self.vbase, self.vend, orig.start, orig.end)
+				write!(f, "{} (image '{}') PA: [{:08X}..{:08X})",
+					self.name, image.name(), orig.start, orig.end)
 			}
 			None =>
-				write!(f, "{} (fake) VA [{:08X}..{:08X})", self.name, self.vbase, self.vend),
+				write!(f, "{} (fake)", self.name),
 		}
 	}
 }
@@ -95,14 +93,10 @@ impl Display for Segment {
 impl Segment {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
-	pub fn new(id: SegId, name: &str, vbase: VA, vend: VA, image: Option<Image>) -> Self {
-		let size = vend - vbase;
-
+	pub fn new(id: SegId, name: &str, size: usize, image: Option<Image>) -> Self {
 		Self {
 			id,
 			name: name.into(),
-			vbase,
-			vend,
 			size,
 			spans: SpanMap::new(id, size),
 			image,
@@ -116,24 +110,10 @@ impl Segment {
 	#[inline] pub fn id   (&self) -> SegId          { self.id }
 	/// Human-readable name.
 	#[inline] pub fn name (&self) -> &String        { &self.name }
-	/// Virtual address of the first byte.
-	#[inline] pub fn vbase(&self) -> VA             { self.vbase }
-	/// Virtual address of first byte *after* this segment.
-	#[inline] pub fn vend (&self) -> VA             { self.vend }
 	/// Image which this is mapped to, if any.
 	#[inline] pub fn image(&self) -> &Option<Image> { &self.image }
 	/// Length in bytes.
 	#[inline] pub fn len(&self) -> usize            { self.size }
-
-	/// Whether this segment contains a given VA.
-	pub fn contains_va(&self, addr: VA) -> bool {
-		self.vbase <= addr && addr < self.vend
-	}
-
-	/// Whether this segment and another segment overlap in the virtual address space.
-	pub fn overlaps_va(&self, other: &Segment) -> bool {
-		!(self.vend <= other.vbase || other.vend <= self.vbase)
-	}
 
 	/// Whether this segment contains a given Location.
 	pub fn contains_loc(&self, loc: Location) -> bool {
@@ -166,32 +146,12 @@ impl Segment {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Conversions between locations and virtual addresses
-
-	/// Given a VA, convert it to a Location. Panics if this segment doesn't contain the VA.
-	pub fn loc_from_va(&self, va: VA) -> Location {
-		assert!(self.contains_va(va));
-		Location { seg: self.id, offs: va - self.vbase }
-	}
-
-	/// Given a Location, get the VA. Panics if the Location doesn't refer to this segment.
-	pub fn va_from_loc(&self, loc: Location) -> VA {
-		assert!(loc.seg == self.id);
-		self.va_from_offset(loc.offs)
-	}
-
-	// ---------------------------------------------------------------------------------------------
 	// Span management (spanagement?)
 
 	/// Get the span which contains the given location.
 	pub fn span_at_loc(&self, loc: Location) -> Span {
 		assert!(loc.seg == self.id);
 		self.spans.span_at(loc.offs)
-	}
-
-	/// Get the span which contains the given VA.
-	pub fn span_at_va(&self, va: VA) -> Span {
-		self.spans.span_at(self.offset_from_va(va))
 	}
 
 	/// Iterator over all spans in this segment, in order.
@@ -253,39 +213,7 @@ impl Segment {
 		self.spans.span_at(offs)
 	}
 
-	// Given a VA, convert it to an offset into this segment.
-	fn offset_from_va(&self, va: VA) -> usize {
-		assert!(self.contains_va(va));
-		va - self.vbase
-	}
-
-	// Given an offset into this segment, get the VA.
-	fn va_from_offset(&self, offs: usize) -> VA {
-		assert!(offs < self.size);
-		self.vbase + offs
-	}
-
-	// Given VA bounds, convert them into offset bounds.
-	fn offset_bounds_from_va_bounds(&self, bounds: impl RangeBounds<VA>)
-	-> impl RangeBounds<usize> {
-		use Bound::*;
-
-		let start = match bounds.start_bound() {
-			Included(&s) => Included(self.offset_from_va(s)),
-			Excluded(&s) => Excluded(self.offset_from_va(s)),
-			Unbounded    => Unbounded,
-		};
-
-		let end = match bounds.end_bound() {
-			Included(&e) => Included(self.offset_from_va(e)),
-			Excluded(&e) => Excluded(self.offset_from_va(e)),
-			Unbounded    => Unbounded,
-		};
-
-		(start, end)
-	}
-
-	// Given VA bounds, convert them into offset bounds.
+	// Given Location bounds, convert them into offset bounds.
 	fn offset_bounds_from_loc_bounds(&self, bounds: impl RangeBounds<Location>)
 	-> impl RangeBounds<usize> {
 		use Bound::*;
@@ -304,33 +232,6 @@ impl Segment {
 
 		(start, end)
 	}
-
-	// Given offset bounds, convert them into VA bounds.
-	fn va_bounds_from_offset_bounds(&self, bounds: impl RangeBounds<usize>)
-	-> impl RangeBounds<VA> {
-		use Bound::*;
-
-		let start = match bounds.start_bound() {
-			Included(&s) => Included(self.va_from_offset(s)),
-			Excluded(&s) => Excluded(self.va_from_offset(s)),
-			Unbounded    => Unbounded,
-		};
-
-		let end = match bounds.end_bound() {
-			Included(&e) => Included(self.va_from_offset(e)),
-			Excluded(&e) => Excluded(self.va_from_offset(e)),
-			Unbounded    => Unbounded,
-		};
-
-		(start, end)
-	}
-}
-
-impl ImageSliceable<VA> for Segment {
-	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<VA>) -> ImageSlice {
-		self.image_slice(self.offset_bounds_from_va_bounds(range))
-	}
 }
 
 impl ImageSliceable<usize> for Segment {
@@ -345,14 +246,6 @@ impl ImageSliceable<Location> for Segment {
 	fn image_slice(&self, range: impl RangeBounds<Location>) -> ImageSlice {
 		self.image_slice(self.offset_bounds_from_loc_bounds(range))
 	}
-}
-
-impl ImageRead<VA> for Segment {
-	fn read_u8    (&self, idx: VA) -> u8  { self.read_u8(self.offset_from_va(idx))     }
-	fn read_le_u16(&self, idx: VA) -> u16 { self.read_le_u16(self.offset_from_va(idx)) }
-	fn read_be_u16(&self, idx: VA) -> u16 { self.read_be_u16(self.offset_from_va(idx)) }
-	fn read_le_u32(&self, idx: VA) -> u32 { self.read_le_u32(self.offset_from_va(idx)) }
-	fn read_be_u32(&self, idx: VA) -> u32 { self.read_be_u32(self.offset_from_va(idx)) }
 }
 
 impl ImageRead<Location> for Segment {

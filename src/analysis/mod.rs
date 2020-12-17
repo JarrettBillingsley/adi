@@ -201,7 +201,7 @@ where
 	fn last_instr_before(&self, loc: Location) -> DisasResult<I> {
 		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
 		let slice       = seg.image_slice(span.start() .. loc).into_data();
-		let va          = seg.va_from_loc(span.start());
+		let va          = self.prog.va_from_loc(span.start());
 		self.dis.find_last_instr(slice, va, span.start())
 	}
 
@@ -259,7 +259,7 @@ where
 			// now, we need the actual data.
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
 			let slice        = seg.image_slice(span).into_data();
-			let va           = seg.va_from_loc(start);
+			let va           = self.prog.va_from_loc(start);
 
 			// let's start disassembling instructions
 			let mut term_loc = start;
@@ -354,7 +354,7 @@ where
 			let start        = bb.loc();
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
 			let slice        = seg.image_slice(span).into_data();
-			let va           = seg.va_from_loc(start);
+			let va           = self.prog.va_from_loc(start);
 			let mut iter     = self.dis.disas_all(slice, va, start);
 
 			for inst in &mut iter {
