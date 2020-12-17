@@ -381,23 +381,29 @@ pub struct Instruction {
 	op:    Option<Operand>,
 	bytes: [u8; MAX_BYTES],
 	state: MmuState,
+	state_after: MmuState,
 }
 
 impl Instruction {
 	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8],
-		state: MmuState) -> Self {
+		state: MmuState, state_after: MmuState) -> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
-		Self { va, loc, desc, size, op, bytes, state }
+		Self { va, loc, desc, size, op, bytes, state, state_after }
 	}
 }
 
 impl IInstruction for Instruction {
-	fn va(&self) -> VA                    { self.va }
-	fn loc(&self) -> Location             { self.loc }
-	fn size(&self) -> usize               { self.size }
-	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
-	fn get_op(&self, i: usize) -> &dyn IOperand {
+	type TOperand = Operand;
+
+	fn va(&self) -> VA              { self.va }
+	fn loc(&self) -> Location       { self.loc }
+	fn size(&self) -> usize         { self.size }
+	fn num_ops(&self) -> usize      { if self.op.is_some() { 1 } else { 0 } }
+	fn bytes(&self) -> &[u8]        { &self.bytes[..self.size] }
+	fn mmu_state(&self) -> MmuState { self.state }
+	fn mmu_state_after(&self) -> MmuState { self.state_after }
+	fn get_op(&self, i: usize) -> Operand {
 		assert!(i == 0);
 		self.op.as_ref().unwrap()
 	}
@@ -443,7 +449,7 @@ impl IDisassembler for Disassembler {
 	type TInstruction = Instruction;
 
 	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
-	-> DisasResult<(Instruction, MmuState)> {
+	-> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {
 			return Err(DisasError::out_of_bytes(va, loc, 1, 0));
@@ -466,8 +472,9 @@ impl IDisassembler for Disassembler {
 		// okay cool, let's decode
 		let bytes = &img[0 .. inst_size];
 		let op = decode_operand(desc, va, &img[1 .. inst_size]);
+
 		// TODO: change the state!!
-		Ok((Instruction::new(va, loc, desc, inst_size, op, bytes, state), state))
+		Ok(Instruction::new(va, loc, desc, inst_size, op, bytes, state, state))
 	}
 }
 
