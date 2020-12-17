@@ -77,8 +77,10 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 }
 
 fn setup_nes_labels(prog: &mut Program) {
+	let state = prog.initial_mmu_state();
+
 	for StdName(name, addr) in NES_STD_NAMES {
-		prog.add_name_va(name, VA(*addr));
+		prog.add_name_va(name, state, VA(*addr));
 	}
 }
 

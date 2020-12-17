@@ -299,14 +299,14 @@ pub trait IPrinter {
 
 /// Trait to abstract the process of looking up names of addresses.
 pub trait INameLookup {
-	fn lookup(&self, addr: VA) -> Option<String>;
+	fn lookup(&self, state: MmuState, addr: VA) -> Option<String>;
 }
 
 /// A dummy struct that implements `INameLookup` whose `lookup` method always returns `None`.
 pub struct NullLookup;
 
 impl INameLookup for NullLookup {
-	fn lookup(&self, _addr: VA) -> Option<String> {
+	fn lookup(&self, _state: MmuState, _addr: VA) -> Option<String> {
 		None
 	}
 }

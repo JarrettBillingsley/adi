@@ -9,7 +9,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 
-use crate::memory::{ IMemory, Location, VA, SegId, Span, SpanKind, Segment };
+use crate::memory::{ IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::INameLookup;
 use crate::platform::{ IPlatform };
 
@@ -61,10 +61,12 @@ impl Program {
 
 	delegate! {
 		to self.mem {
+			/// The initial state of the MMU.
+			pub fn initial_mmu_state(&self) -> MmuState;
 			/// Given a VA, get the Segment which contains it (if any).
-			pub fn segment_for_va(&self, va: VA) -> Option<&Segment>;
+			pub fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment>;
 			/// Same as above but mutable.
-			pub fn segment_for_va_mut(&mut self, va: VA) -> Option<&mut Segment>;
+			pub fn segment_for_va_mut(&mut self, state: MmuState, va: VA) -> Option<&mut Segment>;
 			/// Given a segment name, get the Segment named that (if any).
 			pub fn segment_for_name(&self, name: &str) -> Option<&Segment>;
 			/// Same as above but mutable.
@@ -79,13 +81,13 @@ impl Program {
 			pub fn segment_from_id_mut(&mut self, id: SegId) -> &mut Segment;
 			/// Tries to find a unique location for the given VA.
 			/// If there is no mapping, or if the region is bankable, returns None.
-			pub fn loc_for_va(&self, va: VA) -> Option<Location>;
+			pub fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location>;
 			/// Same as above, but infallible.
-			pub fn loc_from_va(&self, va: VA) -> Location;
+			pub fn loc_from_va(&self, state: MmuState, va: VA) -> Location;
 			/// Gets the VA which corresponds to this location, if any.
-			pub fn va_for_loc(&self, loc: Location) -> Option<VA>;
+			pub fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
 			/// Same as above, but infallible.
-			pub fn va_from_loc(&self, loc: Location) -> VA;
+			pub fn va_from_loc(&self, state: MmuState, loc: Location) -> VA;
 			/// Formats a number as a hexadecimal number with the appropriate number of digits
 			/// for the size of the address space.
 			pub fn fmt_addr(&self, addr: usize) -> String;
@@ -182,8 +184,8 @@ impl Program {
 	// Names
 
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique Location.
-	pub fn add_name_va(&mut self, name: &str, va: VA) {
-		let loc = self.mem.loc_for_va(va).unwrap();
+	pub fn add_name_va(&mut self, name: &str, state: MmuState, va: VA) {
+		let loc = self.mem.loc_for_va(state, va).unwrap();
 		self.add_name(name, loc);
 	}
 
@@ -226,18 +228,18 @@ impl Program {
 	}
 
 	/// All (Location, name) pairs in a given range of VAs, in Location order.
-	pub fn names_in_va_range(&self, range: impl RangeBounds<VA>)
+	pub fn names_in_va_range(&self, state: MmuState, range: impl RangeBounds<VA>)
 	-> BTreeRange<'_, Location, String> {
-		let range = va_range_to_loc_range(range, |va| self.mem.loc_for_va(va).unwrap());
+		let range = va_range_to_loc_range(range, |va| self.mem.loc_for_va(state, va).unwrap());
 		self.names_in_range(range)
 	}
 
 	/// Gets the name of a given VA if one exists, or generates one if not.
-	pub fn name_of_va(&self, va: VA) -> String {
-		if let Some(loc) = self.mem.loc_for_va(va) {
+	pub fn name_of_va(&self, state: MmuState, va: VA) -> String {
+		if let Some(loc) = self.mem.loc_for_va(state, va) {
 			self.name_of_loc(loc)
 		} else {
-			self.generate_name(&self.mem.name_prefix_for_va(va), va)
+			self.generate_name(&self.mem.name_prefix_for_va(state, va), va)
 		}
 	}
 
@@ -295,8 +297,8 @@ impl Program {
 }
 
 impl INameLookup for Program {
-	fn lookup(&self, addr: VA) -> Option<String> {
-		Some(self.name_of_va(addr))
+	fn lookup(&self, state: MmuState, addr: VA) -> Option<String> {
+		Some(self.name_of_va(state, addr))
 	}
 }
 
