@@ -12,7 +12,6 @@ use crate::disasm::{
 	IDisassembler,
 	IInstruction,
 	InstructionKind,
-	IOperand,
 };
 
 // ------------------------------------------------------------------------------------------------

@@ -392,15 +392,13 @@ impl Instruction {
 }
 
 impl IInstruction for Instruction {
-	type TOperand = Operand;
-
 	fn va(&self) -> VA                    { self.va }
 	fn loc(&self) -> Location             { self.loc }
 	fn size(&self) -> usize               { self.size }
 	fn num_ops(&self) -> usize            { if self.op.is_some() { 1 } else { 0 } }
-	fn get_op(&self, i: usize) -> Operand {
+	fn get_op(&self, i: usize) -> &dyn IOperand {
 		assert!(i == 0);
-		self.op.unwrap()
+		self.op.as_ref().unwrap()
 	}
 	fn bytes(&self) -> &[u8]          { &self.bytes[..self.size] }
 
@@ -552,8 +550,8 @@ impl IPrinter for Printer {
 			_        => unreachable!()
 		}
 
-		if i.num_ops() != 0 {
-			let operand = match i.get_op(0) {
+		if i.op.is_some() {
+			let operand = match i.op.unwrap() {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::Imm(imm)      => self.fmt_imm(imm),
 				Operand::Mem(addr, ..) => {

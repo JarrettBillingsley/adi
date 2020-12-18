@@ -102,9 +102,6 @@ impl InstructionKind {
 
 /// Trait for instructions. Used by analysis and such.
 pub trait IInstruction {
-	/// Associated type of operands returned by `get_op`.
-	type TOperand: IOperand;
-
 	/// Get Location.
 	fn loc(&self) -> Location;
 	/// Get virtual address.
@@ -114,7 +111,7 @@ pub trait IInstruction {
 	/// How many operands it has.
 	fn num_ops(&self) -> usize;
 	/// Accessor for operands.
-	fn get_op(&self, i: usize) -> Self::TOperand;
+	fn get_op(&self, i: usize) -> &dyn IOperand;
 	/// Accessor for original bytes.
 	fn bytes(&self) -> &[u8];
 	/// Get kind of instruction.
