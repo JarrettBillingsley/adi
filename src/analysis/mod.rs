@@ -5,7 +5,9 @@ use std::iter::IntoIterator;
 use derive_new::new;
 use log::*;
 
-use crate::program::{ Program, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
+use crate::arch::{ IArchitecture };
+use crate::platform::{ IPlatform };
+use crate::program::{ Program, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
 use crate::memory::{ Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	DisasResult,
@@ -25,21 +27,19 @@ use crate::disasm::{
 /// Most of a BasicBlock, except the ID. Used for initial exploration of a function
 /// when we haven't committed the results to the Program yet.
 #[derive(Debug, Clone)]
-struct ProtoBB {
-	/// Its globally-unique location.
-	loc: Location,
-	/// Where its terminator (last instruction) is located.
+struct ProtoBB<TInstruction: IInstruction> {
+	loc:      Location,
 	term_loc: Location,
-	/// How it ends, and what its successors are.
-	term: BBTerm,
+	term:     BBTerm,
+	insts:    Vec<TInstruction>,
 
 	/// Where it ends (not in a real BB, but more convenient for the analysis)
-	end: Location,
+	end:      Location,
 }
 
-impl IntoBasicBlock for ProtoBB {
-	fn into_bb(self, id: BBId) -> BasicBlock {
-		BasicBlock::new(id, self.loc, self.term_loc, self.term)
+impl<T: IInstruction> IntoBasicBlock<T> for ProtoBB<T> {
+	fn into_bb(self, id: BBId) -> BasicBlock<T> {
+		BasicBlock::new(id, self.loc, self.term_loc, self.term, self.insts)
 	}
 }
 
@@ -50,21 +50,21 @@ struct PBBIdx(usize);
 /// Used for initial exploration, like `ProtoBB`.
 #[derive(Debug)]
 #[derive(new)]
-struct ProtoFunc {
+struct ProtoFunc<TInstruction: IInstruction> {
 	#[new(default)]
-	bbs: Vec<ProtoBB>, // 0 is the head
+	bbs: Vec<ProtoBB<TInstruction>>, // 0 is the head
 }
 
-impl ProtoFunc {
+impl<T: IInstruction> ProtoFunc<T> {
 	/// Adds a new basic block and returns its index.
 	fn new_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm, end: Location) -> PBBIdx {
 		trace!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				loc, term_loc, end, term);
 
-		self.push_bb(ProtoBB { loc, term_loc, term, end })
+		self.push_bb(ProtoBB { loc, term_loc, term, end, insts: Vec::new() })
 	}
 
-	fn push_bb(&mut self, bb: ProtoBB) -> PBBIdx {
+	fn push_bb(&mut self, bb: ProtoBB<T>) -> PBBIdx {
 		let ret = self.bbs.len();
 		self.bbs.push(bb);
 		PBBIdx(ret)
@@ -96,12 +96,12 @@ impl ProtoFunc {
 	}
 
 	/// Get the BB at the given index.
-	fn get_bb(&self, idx: PBBIdx) -> &ProtoBB {
+	fn get_bb(&self, idx: PBBIdx) -> &ProtoBB<T> {
 		&self.bbs[idx.0]
 	}
 
 	/// Consuming iterator over the BBs (for promotion to a real function).
-	fn into_iter(self) -> impl Iterator<Item = impl IntoBasicBlock> {
+	fn into_iter(self) -> impl Iterator<Item = impl IntoBasicBlock<T>> {
 		self.bbs.into_iter()
 	}
 }
@@ -124,18 +124,14 @@ enum AnalysisItem {
 /// Analyzes code, discovers functions, builds control flow graphs, and defines
 /// functions in a program.
 #[derive(new)]
-pub struct Analyzer<'prog, D: IDisassembler> {
-	prog:  &'prog mut Program,
-	dis:   D,
+pub struct Analyzer<'prog, Plat: IPlatform> {
+	prog:  &'prog mut Program<Plat>,
+	dis:   <<Plat as IPlatform>::TArchitecture as IArchitecture>::TDisassembler,
 	#[new(default)]
 	queue: VecDeque<AnalysisItem>,
 }
 
-impl<I, D> Analyzer<'_, D>
-where
-	I: IInstruction,
-	D: IDisassembler<TInstruction = I>,
-{
+impl<Plat: IPlatform> Analyzer<'_, Plat> {
 	/// Puts a location on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, loc: Location) {
 		self.queue.push_back(AnalysisItem::Func1stPass(loc))
@@ -179,7 +175,7 @@ where
 		}
 	}
 
-	fn should_analyze_bb(&mut self, func: &mut ProtoFunc, start: Location) -> bool {
+	fn should_analyze_bb(&mut self, func: &mut ProtoFunc<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
@@ -197,14 +193,14 @@ where
 		}
 	}
 
-	fn last_instr_before(&self, loc: Location) -> DisasResult<I> {
+	fn last_instr_before(&self, loc: Location) -> DisasResult<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction> {
 		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
 		let slice       = seg.image_slice(span.start() .. loc).into_data();
 		let va          = self.prog.va_from_loc(span.start());
 		self.dis.find_last_instr(slice, va, span.start())
 	}
 
-	fn check_split_bb(&mut self, func: &mut ProtoFunc, id: PBBIdx, start: Location) {
+	fn check_split_bb(&mut self, func: &mut ProtoFunc<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>, id: PBBIdx, start: Location) {
 		let old_start = func.get_bb(id).loc;
 
 		if start != old_start {

@@ -40,7 +40,6 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
-
 	let state         = prog.initial_mmu_state();
 	let vec_reset_loc = prog.loc_from_name("VEC_RESET");
 	let vec_nmi_loc   = prog.loc_from_name("VEC_NMI");

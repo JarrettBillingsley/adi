@@ -7,7 +7,8 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 use derive_new::new;
 use generational_arena::{ Arena, Index };
 
-use crate::memory::Location;
+use crate::memory::{ Location };
+use crate::disasm::{ IInstruction };
 
 // ------------------------------------------------------------------------------------------------
 // Function
@@ -27,7 +28,7 @@ impl Debug for FuncId {
 /// A single function.
 #[derive(Debug)]
 #[derive(new)]
-pub struct Function {
+pub struct Function<TInstruction: IInstruction> {
 	/// Its globally-unique identifier.
 	id: FuncId,
 
@@ -38,12 +39,12 @@ pub struct Function {
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
 	/// ordering of the rest of them.
 	#[new(default)]
-	bbs: Vec<BasicBlock>, // [0] is head
+	bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
 }
 
-impl Function {
+impl<I: IInstruction> Function<I> {
 	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
-	pub fn add_bb(&mut self, bb: BasicBlock) {
+	pub fn add_bb(&mut self, bb: BasicBlock<I>) {
 		assert!(bb.id == self.next_id());
 		self.bbs.push(bb);
 	}
@@ -65,11 +66,11 @@ impl Function {
 
 	/// Iterator over this function's basic blocks, starting with the head, but then
 	/// in arbitrary order.
-	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock> {
+	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock<I>> {
 		self.bbs.iter()
 	}
 
-	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
+	pub fn get_bb(&self, id: BBId) -> &BasicBlock<I> {
 		assert!(id.0 == self.id);
 		&self.bbs[id.1]
 	}
@@ -100,14 +101,15 @@ impl Debug for BBId {
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
 #[derive(new)]
-pub struct BasicBlock {
+pub struct BasicBlock<TInstruction: IInstruction> {
 	id:       BBId,
 	loc:      Location,
 	term_loc: Location,
 	term:     BBTerm,
+	insts:    Vec<TInstruction>,
 }
 
-impl BasicBlock {
+impl<T: IInstruction> BasicBlock<T> {
 	/// Its globally-unique id.
 	pub fn id      (&self) -> BBId     { self.id }
 	/// Its globally-unique location.
@@ -116,6 +118,8 @@ impl BasicBlock {
 	pub fn term_loc(&self) -> Location { self.term_loc }
 	/// How it ends, and what its successors are.
 	pub fn term    (&self) -> &BBTerm  { &self.term }
+	/// Its instructions.
+	pub fn insts   (&self) -> &[T]     { &self.insts }
 
 	/// An iterator over this block's successors.
 	pub fn successors(&self) -> Successors {
@@ -134,8 +138,8 @@ impl BasicBlock {
 }
 
 /// Trait used for defining functions in `Program`.
-pub trait IntoBasicBlock {
-	fn into_bb(self, id: BBId) -> BasicBlock;
+pub trait IntoBasicBlock<TInstruction: IInstruction> {
+	fn into_bb(self, id: BBId) -> BasicBlock<TInstruction>;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -199,34 +203,34 @@ impl BBTerm {
 /// through this object.
 #[derive(Default)]
 #[derive(new)]
-pub struct FuncIndex {
+pub struct FuncIndex<TInstruction: IInstruction> {
 	#[new(default)]
-	arena: Arena<Function>,
+	arena: Arena<Function<TInstruction>>,
 }
 
-impl FuncIndex {
+impl<T: IInstruction> FuncIndex<T> {
 	/// Creates a new function and returns its ID.
 	pub fn new_func(&mut self) -> FuncId {
 		FuncId(self.arena.insert_with(|id| Function::new(FuncId(id))))
 	}
 
 	/// Gets the function with the given ID.
-	pub fn get(&self, id: FuncId) -> &Function {
+	pub fn get(&self, id: FuncId) -> &Function<T> {
 		self.arena.get(id.0).expect("stale FuncId")
 	}
 
 	/// Same as above but mutable.
-	pub fn get_mut(&mut self, id: FuncId) -> &mut Function {
+	pub fn get_mut(&mut self, id: FuncId) -> &mut Function<T> {
 		self.arena.get_mut(id.0).expect("stale FuncId")
 	}
 
 	/// Iterator over all functions in the index, in arbitrary order.
-	pub fn iter(&self) -> impl Iterator<Item = (FuncId, &Function)> {
+	pub fn iter(&self) -> impl Iterator<Item = (FuncId, &Function<T>)> {
 		self.arena.iter().map(|(id, f)| (FuncId(id), f))
 	}
 
 	/// Same as above but mutable.
-	pub fn iter_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function)> {
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function<T>)> {
 		self.arena.iter_mut().map(|(id, f)| (FuncId(id), f))
 	}
 }

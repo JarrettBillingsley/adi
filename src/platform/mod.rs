@@ -5,8 +5,11 @@ use std::fmt::Display;
 use parse_display::Display;
 use lazy_static::lazy_static;
 
-use crate::memory::{ Image };
-use crate::program::{ Program };
+use crate::arch::{ IArchitecture };
+use crate::analysis::{ Analyzer };
+use crate::memory::{ Image, IMmu };
+use crate::disasm::{ IInstruction };
+use crate::program::{ IProgram, Program };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -14,15 +17,23 @@ use crate::program::{ Program };
 
 mod nes;
 
-pub use nes::{ NesPlatform };
+pub use nes::{ NesLoader };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
 // ------------------------------------------------------------------------------------------------
 
-pub trait IPlatform: Display + Sync {
+pub trait ILoader: Sync + Send {
 	fn can_parse(&self, img: &Image) -> bool;
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program>;
+	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>>;
+}
+
+pub trait IPlatform: Display + Sized {
+	type TMmu: IMmu;
+	type TArchitecture: IArchitecture;
+
+	fn arch(&self) -> Self::TArchitecture;
+	fn new_analyzer<'prog>(&self, prog: &'prog mut Program<Self>) -> Analyzer<'prog, Self>;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -30,26 +41,26 @@ pub trait IPlatform: Display + Sync {
 // ------------------------------------------------------------------------------------------------
 
 lazy_static! {
-	static ref ALL_PLATFORMS: Vec<Box<dyn IPlatform>> = {
+	static ref ALL_LOADERS: Vec<Box<dyn ILoader>> = {
 		vec![
-			Box::new(NesPlatform)
+			Box::new(NesLoader)
 		]
 	};
 }
 
-fn platform_for_image(img: &Image) -> Option<&'static Box<dyn IPlatform>> {
-	for plat in ALL_PLATFORMS.iter() {
-		if plat.can_parse(img) {
-			return Some(plat);
+fn loader_for_image(img: &Image) -> Option<&'static Box<dyn ILoader>> {
+	for load in ALL_LOADERS.iter() {
+		if load.can_parse(img) {
+			return Some(load);
 		}
 	}
 
 	None
 }
 
-pub fn program_from_image(img: Image) -> PlatformResult<Program> {
-	match platform_for_image(&img) {
-		Some(plat) => plat.program_from_image(img),
+pub fn program_from_image(img: Image) -> PlatformResult<Box<dyn IProgram>> {
+	match loader_for_image(&img) {
+		Some(load) => load.program_from_image(img),
 		None       => Err(PlatformError::unknown_platform()),
 	}
 }

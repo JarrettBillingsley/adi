@@ -443,9 +443,7 @@ impl IInstruction for Instruction {
 /// The 65xx disassembler.
 pub struct Disassembler;
 
-impl IDisassembler for Disassembler {
-	type TInstruction = Instruction;
-
+impl IDisassembler<Instruction> for Disassembler {
 	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
@@ -531,9 +529,7 @@ impl Printer {
 	}
 }
 
-impl IPrinter for Printer {
-	type TInstruction = Instruction;
-
+impl IPrinter<Instruction> for Printer {
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
 		i.desc.meta_op.mnemonic(self.flavor).into()
 	}

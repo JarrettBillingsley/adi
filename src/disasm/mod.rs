@@ -101,7 +101,7 @@ impl InstructionKind {
 }
 
 /// Trait for instructions. Used by analysis and such.
-pub trait IInstruction {
+pub trait IInstruction: Clone {
 	/// Get Location.
 	fn loc(&self) -> Location;
 	/// Get virtual address.
@@ -169,22 +169,19 @@ pub trait IInstruction {
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for disassemblers.
-pub trait IDisassembler : Sized {
-	/// Associated type of instructions given by this disassembler.
-	type TInstruction: IInstruction;
-
+pub trait IDisassembler<TInstruction: IInstruction> : Sized {
 	/// Disassemble a single instruction from `img` with the given VA and Location.
 	/// Returns the disassembled instruction and the new MMU state (which will be in effect
 	/// on the *next* instruction).
 	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
-	-> DisasResult<Self::TInstruction>;
+	-> DisasResult<TInstruction>;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Find the last instruction in `img`. Returns `None` if `img` is empty.
 	fn find_last_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
-	-> DisasResult<Self::TInstruction> {
+	-> DisasResult<TInstruction> {
 		let mut iter = self.disas_all(img, state, va, loc);
 		let last = (&mut iter).last();
 
@@ -197,7 +194,7 @@ pub trait IDisassembler : Sized {
 
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
 	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, loc: Location)
-	-> DisasAll<'dis, 'img, Self> {
+	-> DisasAll<'dis, 'img, TInstruction, Self> {
 		DisasAll::new(self, img, state, va, loc)
 	}
 }
@@ -214,7 +211,7 @@ pub trait IDisassembler : Sized {
 ///     // do stuff with err and iter.err_offs()
 /// }
 /// ```
-pub struct DisasAll<'dis, 'img, D: IDisassembler> {
+pub struct DisasAll<'dis, 'img, I: IInstruction, D: IDisassembler<I>> {
 	disas: &'dis D,
 	img:   &'img [u8],
 	state: MmuState,
@@ -222,10 +219,10 @@ pub struct DisasAll<'dis, 'img, D: IDisassembler> {
 	loc:   Location,
 	offs:  usize,
 	err:   Option<DisasError>,
-	_inst: PhantomData<<D as IDisassembler>::TInstruction>,
+	_inst: PhantomData<I>,
 }
 
-impl<'dis, 'img, D: IDisassembler> DisasAll<'dis, 'img, D> {
+impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> DisasAll<'dis, 'img, I, D> {
 	fn new(disas: &'dis D, img: &'img [u8], state: MmuState, va: VA, loc: Location) -> Self {
 		Self { disas, img, state, va, loc, offs: 0, err: None, _inst: PhantomData }
 	}
@@ -256,8 +253,8 @@ impl<'dis, 'img, D: IDisassembler> DisasAll<'dis, 'img, D> {
 	}
 }
 
-impl<'dis, 'img, D: IDisassembler> Iterator for DisasAll<'dis, 'img, D> {
-	type Item = <D as IDisassembler>::TInstruction;
+impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> Iterator for DisasAll<'dis, 'img, I, D> {
+	type Item = I;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.offs == self.img.len() {
@@ -288,21 +285,18 @@ impl<'dis, 'img, D: IDisassembler> Iterator for DisasAll<'dis, 'img, D> {
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for instruction printers.
-pub trait IPrinter {
-	/// Associated type of instructions that this printer prints.
-	type TInstruction: IInstruction;
-
+pub trait IPrinter<TInstruction: IInstruction> {
 	/// Give a string representation of an instruction's mnemonic.
-	fn fmt_mnemonic(&self, i: &Self::TInstruction) -> String;
+	fn fmt_mnemonic(&self, i: &TInstruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &Self::TInstruction, l: &dyn INameLookup) -> String;
+	fn fmt_operands(&self, i: &TInstruction, l: &dyn INameLookup) -> String;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Give a string representation of an instruction.
-	fn fmt_instr(&self, i: &Self::TInstruction, l: &dyn INameLookup) -> String {
+	fn fmt_instr(&self, i: &TInstruction, l: &dyn INameLookup) -> String {
 		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, l))
 	}
 }

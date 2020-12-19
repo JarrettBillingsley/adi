@@ -1,25 +1,58 @@
+use std::marker::PhantomData;
 use std::io::{ BufReader, Cursor };
 use std::error::{ Error };
-use std::fmt::{ Formatter, Result as FmtResult };
+use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use nes_rom::ines::{ Ines };
 use parse_display::Display;
 
-use crate::platform::{ IPlatform, PlatformResult, PlatformError };
+use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
+use crate::analysis::{ Analyzer };
 use crate::arch::{ IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
-use crate::program::{ Program };
+use crate::program::{ IProgram, Program };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Copy, Clone, Display)]
-#[display("NES/Famicom")]
-pub struct NesPlatform;
+struct NesPlatform<Mapper> {
+	_m: PhantomData<Mapper>
+}
 
-impl IPlatform for NesPlatform {
+impl<Mapper: IMmu> NesPlatform<Mapper> {
+	fn new() -> Self {
+		Self { _m: PhantomData }
+	}
+}
+
+impl<Mapper: IMmu> IPlatform for NesPlatform<Mapper> {
+	type TArchitecture = Mos65xxArchitecture;
+	type TMmu = NesMmu<Mapper>;
+
+	fn arch(&self) -> Self::TArchitecture {
+		Mos65xxArchitecture
+	}
+
+	fn new_analyzer<'prog>(&self, prog: &'prog mut Program<Self>) -> Analyzer<'prog, Self> {
+		Analyzer::new(prog, self.arch().new_disassembler())
+	}
+}
+
+impl<Mapper: IMmu> Display for NesPlatform<Mapper> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "NES/Famicom")
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// NesLoader
+// ------------------------------------------------------------------------------------------------
+
+pub struct NesLoader;
+
+impl ILoader for NesLoader {
 	fn can_parse(&self, img: &Image) -> bool {
 		let reader = BufReader::new(Cursor::new(img.data()));
 		match Ines::from_rom(reader) {
@@ -29,7 +62,7 @@ impl IPlatform for NesPlatform {
 	}
 
 	#[allow(deprecated)]
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
+	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>> {
 		let reader = BufReader::new(Cursor::new(img.data()));
 		let cart = match Ines::from_rom(reader) {
 			Ok(cart) => cart,
@@ -48,12 +81,12 @@ impl IPlatform for NesPlatform {
 		);
 
 		// 4. create Program
-		let mut prog = Program::new(Box::new(mem), Box::new(*self));
+		let mut prog = Program::new(mem, NesPlatform::new());
 
 		// 5. setup default names
 		setup_nes_labels(&mut prog);
 
-		Ok(prog)
+		Ok(Box::new(prog))
 	}
 }
 
@@ -76,7 +109,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 	}
 }
 
-fn setup_nes_labels(prog: &mut Program) {
+fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 	let state = prog.initial_mmu_state();
 
 	for StdName(name, addr) in NES_STD_NAMES {
