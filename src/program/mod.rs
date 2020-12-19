@@ -306,7 +306,7 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 	/// Gets the name of a given VA if one exists, or generates one if not.
 	fn name_of_va(&self, state: MmuState, va: VA) -> String {
 		if let Some(_loc) = self.mem.loc_for_va(state, va) {
-			"TODO".into()
+			"TODO".into() // self.name_of_loc(loc)
 		} else {
 			self.generate_name(&self.mem.name_prefix_for_va(state, va), va)
 		}

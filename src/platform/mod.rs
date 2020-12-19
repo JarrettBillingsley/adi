@@ -8,7 +8,6 @@ use lazy_static::lazy_static;
 use crate::arch::{ IArchitecture };
 use crate::analysis::{ Analyzer };
 use crate::memory::{ Image, IMmu };
-use crate::disasm::{ IInstruction };
 use crate::program::{ IProgram, Program };
 
 // ------------------------------------------------------------------------------------------------

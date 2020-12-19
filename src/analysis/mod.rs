@@ -8,9 +8,8 @@ use log::*;
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ Program, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
-use crate::memory::{ Location, ImageSliceable, SpanKind, VA };
+use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
-	DisasResult,
 	IDisassembler,
 	IInstruction,
 	InstructionKind,
@@ -37,6 +36,25 @@ struct ProtoBB<TInstruction: IInstruction> {
 	end:      Location,
 }
 
+impl<T: IInstruction> ProtoBB<T> {
+	fn last_instr_before(&self, loc: Location) -> Option<&T> {
+		for inst in &self.insts {
+			if inst.loc() < loc {
+				let next = inst.next_loc();
+
+				if next > loc {
+					// uh oh. loc is in the middle of this instruction.
+					return None
+				} else if next == loc {
+					return Some(inst)
+				}
+			}
+		}
+
+		unreachable!("should never be able to get here")
+	}
+}
+
 impl<T: IInstruction> IntoBasicBlock<T> for ProtoBB<T> {
 	fn into_bb(self, id: BBId) -> BasicBlock<T> {
 		BasicBlock::new(id, self.loc, self.term_loc, self.term, self.insts)
@@ -57,11 +75,17 @@ struct ProtoFunc<TInstruction: IInstruction> {
 
 impl<T: IInstruction> ProtoFunc<T> {
 	/// Adds a new basic block and returns its index.
-	fn new_bb(&mut self, loc: Location, term_loc: Location, term: BBTerm, end: Location) -> PBBIdx {
+	fn new_bb(&mut self,
+		loc: Location,
+		term_loc: Location,
+		term: BBTerm,
+		end: Location,
+		insts: Vec<T>)
+	-> PBBIdx {
 		trace!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				loc, term_loc, end, term);
 
-		self.push_bb(ProtoBB { loc, term_loc, term, end, insts: Vec::new() })
+		self.push_bb(ProtoBB { loc, term_loc, term, end, insts })
 	}
 
 	fn push_bb(&mut self, bb: ProtoBB<T>) -> PBBIdx {
@@ -114,7 +138,7 @@ impl<T: IInstruction> ProtoFunc<T> {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum AnalysisItem {
 	/// An unexplored function.
-	Func1stPass(Location),
+	Func1stPass(Location, MmuState),
 	/// A function that needs to be analyzed more deeply.
 	Func2ndPass(FuncId),
 	/// A jump table. The location points to the jump instruction.
@@ -133,8 +157,8 @@ pub struct Analyzer<'prog, Plat: IPlatform> {
 
 impl<Plat: IPlatform> Analyzer<'_, Plat> {
 	/// Puts a location on the queue that should be the start of a function.
-	pub fn enqueue_function(&mut self, loc: Location) {
-		self.queue.push_back(AnalysisItem::Func1stPass(loc))
+	pub fn enqueue_function(&mut self, loc: Location, state: MmuState) {
+		self.queue.push_back(AnalysisItem::Func1stPass(loc, state))
 	}
 
 	/// Puts a location on the queue that should be the jump instruction for a jump table.
@@ -148,9 +172,9 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		loop {
 			match self.queue.pop_front() {
 				None => break,
-				Some(AnalysisItem::Func1stPass(loc)) => self.func_first_pass(loc),
-				Some(AnalysisItem::Func2ndPass(fid)) => self.func_second_pass(fid),
-				Some(AnalysisItem::JumpTable(loc))   => self.analyze_jump_table(loc),
+				Some(AnalysisItem::Func1stPass(loc, state)) => self.func_first_pass(loc, state),
+				Some(AnalysisItem::Func2ndPass(fid))        => self.func_second_pass(fid),
+				Some(AnalysisItem::JumpTable(loc))          => self.analyze_jump_table(loc),
 			}
 		}
 	}
@@ -193,23 +217,16 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		}
 	}
 
-	fn last_instr_before(&self, loc: Location) -> DisasResult<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction> {
-		let (seg, span) = self.prog.seg_and_span_at_loc(loc);
-		let slice       = seg.image_slice(span.start() .. loc).into_data();
-		let va          = self.prog.va_from_loc(span.start());
-		self.dis.find_last_instr(slice, va, span.start())
-	}
-
 	fn check_split_bb(&mut self, func: &mut ProtoFunc<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>, id: PBBIdx, start: Location) {
-		let old_start = func.get_bb(id).loc;
+		let old_bb = func.get_bb(id);
 
-		if start != old_start {
+		if start != old_bb.loc {
 			// ooh, now we have to split the existing bb.
 			// first, let's make sure that `start` points to the beginning of an instruction,
 			// because otherwise we'd be jumping to an invalid location.
-			let term_loc = match self.last_instr_before(start) {
-				Ok(inst) => inst.loc(),
-				Err(..)  => todo!("have to flag referrer as being invalid somehow"),
+			let term_loc = match old_bb.last_instr_before(start) {
+				Some(inst) => inst.loc(),
+				None       => todo!("have to flag referrer as being invalid somehow"),
 			};
 
 			// now we can split the existing BB...
@@ -220,13 +237,13 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		}
 	}
 
-	fn resolve_target(&self, target: VA) -> Location {
-		if let Some(l) = self.prog.loc_for_va(target) { l } else {
+	fn resolve_target(&self, state: MmuState, target: VA) -> Location {
+		if let Some(l) = self.prog.loc_for_va(state, target) { l } else {
 			todo!("unresolvable control flow target");
 		}
 	}
 
-	fn func_first_pass(&mut self, loc: Location) {
+	fn func_first_pass(&mut self, loc: Location, state: MmuState) {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function 1st pass at {}", loc);
 
@@ -254,24 +271,28 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 			// now, we need the actual data.
 			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
 			let slice        = seg.image_slice(span).into_data();
-			let va           = self.prog.va_from_loc(start);
+			let va           = self.prog.va_from_loc(state, start);
 
 			// let's start disassembling instructions
 			let mut term_loc = start;
 			let mut end_loc  = start;
 			let mut term     = None;
-			let mut iter     = self.dis.disas_all(slice, va, start);
+			let mut insts    = Vec::new();
+			let mut iter     = self.dis.disas_all(slice, state, va, start);
 
 			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				term_loc = end_loc;
 				end_loc = inst.next_loc();
-				let target_loc = inst.control_target().map(|t| self.resolve_target(t));
+				let target_loc = inst.control_target().map(|t| self.resolve_target(inst.mmu_state(), t));
 
 				use InstructionKind::*;
 				match inst.kind() {
 					Invalid => panic!("disas_all gave an invalid instruction"),
-					Call | Other => continue 'instloop,
+					Call | Other => {
+						insts.push(inst);
+						continue 'instloop;
+					}
 					Ret => {
 						// TODO: what about e.g. Z80 where you can have conditional returns?
 						// should that end a BB?
@@ -292,7 +313,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 						}
 
 						if inst.is_cond() {
-							let f = self.resolve_target(inst.next_addr());
+							let f = self.resolve_target(inst.mmu_state_after(), inst.next_addr());
 							potential_bbs.push_back(f);
 
 							// debug!("{:04X} t: {} f: {}", inst.va(), target_loc, f);
@@ -304,6 +325,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 					}
 				}
 
+				insts.push(inst);
 				break 'instloop;
 			}
 
@@ -321,7 +343,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc);
+				let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc, insts);
 				self.prog.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
 			}
 		}
@@ -346,13 +368,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		let mut refs       = Vec::new();
 
 		for bb in func.all_bbs() {
-			let start        = bb.loc();
-			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
-			let slice        = seg.image_slice(span).into_data();
-			let va           = self.prog.va_from_loc(start);
-			let mut iter     = self.dis.disas_all(slice, va, start);
-
-			for inst in &mut iter {
+			for inst in bb.insts() {
 				let src = inst.loc();
 
 				for i in 0 .. inst.num_ops() {
@@ -368,14 +384,12 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 				match inst.kind() {
 					Indir => jumptables.push(inst.loc()),
 					Call => {
-						let target_loc = self.resolve_target(inst.control_target().unwrap());
-						funcs.push(target_loc);
+						let target_loc = self.resolve_target(inst.mmu_state(), inst.control_target().unwrap());
+						funcs.push((target_loc, inst.mmu_state_after()));
 					}
 					_ => {}
 				}
 			}
-
-			assert!(!iter.has_err(), "should be impossible");
 
 			for &succ in bb.explicit_successors() {
 				refs.push((bb.term_loc(), succ));
@@ -385,7 +399,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		trace!("adding {} refs, {} jumptables, {} funcs", refs.len(), jumptables.len(), funcs.len());
 		for (src, dst) in refs.into_iter() { self.prog.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
-		for f in funcs.into_iter()         { self.enqueue_function(f);    }
+		for (f, s) in funcs.into_iter()    { self.enqueue_function(f, s); }
 	}
 
 	fn analyze_jump_table(&mut self, loc: Location) {

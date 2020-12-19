@@ -179,19 +179,6 @@ pub trait IDisassembler<TInstruction: IInstruction> : Sized {
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
-	/// Find the last instruction in `img`. Returns `None` if `img` is empty.
-	fn find_last_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
-	-> DisasResult<TInstruction> {
-		let mut iter = self.disas_all(img, state, va, loc);
-		let last = (&mut iter).last();
-
-		if let Some(err) = iter.err() {
-			Err(err)
-		} else {
-			Ok(last.unwrap())
-		}
-	}
-
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
 	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, loc: Location)
 	-> DisasAll<'dis, 'img, TInstruction, Self> {
