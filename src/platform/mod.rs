@@ -16,16 +16,11 @@ use crate::program::{ IProgram, Program };
 
 mod nes;
 
-pub use nes::{ NesLoader };
+use nes::{ NesLoader };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
 // ------------------------------------------------------------------------------------------------
-
-pub trait ILoader: Sync + Send {
-	fn can_parse(&self, img: &Image) -> bool;
-	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>>;
-}
 
 pub trait IPlatform: Display + Sized {
 	type TMmu: IMmu;
@@ -35,9 +30,19 @@ pub trait IPlatform: Display + Sized {
 	fn new_analyzer<'prog>(&self, prog: &'prog mut Program<Self>) -> Analyzer<'prog, Self>;
 }
 
+pub type MmuTypeOf  <Plat> = <Plat as IPlatform>::TMmu;
+pub type ArchTypeOf <Plat> = <Plat as IPlatform>::TArchitecture;
+pub type DisasTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TDisassembler;
+pub type InstTypeOf <Plat> = <ArchTypeOf<Plat> as IArchitecture>::TInstruction;
+
 // ------------------------------------------------------------------------------------------------
-// Functions
+// ILoader
 // ------------------------------------------------------------------------------------------------
+
+pub trait ILoader: Sync + Send {
+	fn can_parse(&self, img: &Image) -> bool;
+	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>>;
+}
 
 lazy_static! {
 	static ref ALL_LOADERS: Vec<Box<dyn ILoader>> = {
@@ -48,9 +53,9 @@ lazy_static! {
 }
 
 fn loader_for_image(img: &Image) -> Option<&'static Box<dyn ILoader>> {
-	for load in ALL_LOADERS.iter() {
-		if load.can_parse(img) {
-			return Some(load);
+	for loader in ALL_LOADERS.iter() {
+		if loader.can_parse(img) {
+			return Some(loader);
 		}
 	}
 
@@ -59,8 +64,8 @@ fn loader_for_image(img: &Image) -> Option<&'static Box<dyn ILoader>> {
 
 pub fn program_from_image(img: Image) -> PlatformResult<Box<dyn IProgram>> {
 	match loader_for_image(&img) {
-		Some(load) => load.program_from_image(img),
-		None       => Err(PlatformError::unknown_platform()),
+		Some(loader) => loader.program_from_image(img),
+		None         => Err(PlatformError::unknown_platform()),
 	}
 }
 

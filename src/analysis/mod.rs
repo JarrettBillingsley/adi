@@ -5,8 +5,7 @@ use std::iter::IntoIterator;
 use derive_new::new;
 use log::*;
 
-use crate::arch::{ IArchitecture };
-use crate::platform::{ IPlatform };
+use crate::platform::{ IPlatform, DisasTypeOf, InstTypeOf };
 use crate::program::{ Program, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
@@ -150,7 +149,7 @@ enum AnalysisItem {
 #[derive(new)]
 pub struct Analyzer<'prog, Plat: IPlatform> {
 	prog:  &'prog mut Program<Plat>,
-	dis:   <<Plat as IPlatform>::TArchitecture as IArchitecture>::TDisassembler,
+	dis:   DisasTypeOf<Plat>,
 	#[new(default)]
 	queue: VecDeque<AnalysisItem>,
 }
@@ -199,7 +198,8 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		}
 	}
 
-	fn should_analyze_bb(&mut self, func: &mut ProtoFunc<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>, start: Location) -> bool {
+	fn should_analyze_bb(
+		&mut self, func: &mut ProtoFunc<InstTypeOf<Plat>>, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
@@ -217,7 +217,8 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		}
 	}
 
-	fn check_split_bb(&mut self, func: &mut ProtoFunc<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>, id: PBBIdx, start: Location) {
+	fn check_split_bb(
+		&mut self, func: &mut ProtoFunc<InstTypeOf<Plat>>, id: PBBIdx, start: Location) {
 		let old_bb = func.get_bb(id);
 
 		if start != old_bb.loc {
@@ -284,7 +285,8 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				term_loc = end_loc;
 				end_loc = inst.next_loc();
-				let target_loc = inst.control_target().map(|t| self.resolve_target(inst.mmu_state(), t));
+				let target_loc = inst.control_target().map(
+					|t| self.resolve_target(inst.mmu_state(), t));
 
 				use InstructionKind::*;
 				match inst.kind() {
@@ -384,7 +386,8 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 				match inst.kind() {
 					Indir => jumptables.push(inst.loc()),
 					Call => {
-						let target_loc = self.resolve_target(inst.mmu_state(), inst.control_target().unwrap());
+						let target_loc = self.resolve_target(inst.mmu_state(),
+							inst.control_target().unwrap());
 						funcs.push((target_loc, inst.mmu_state_after()));
 					}
 					_ => {}

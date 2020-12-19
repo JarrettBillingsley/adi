@@ -12,8 +12,7 @@ use delegate::delegate;
 use crate::memory::{
 	Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::{ INameLookup };
-use crate::platform::{ IPlatform };
-use crate::arch::{ IArchitecture };
+use crate::platform::{ IPlatform, MmuTypeOf, InstTypeOf };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -82,11 +81,11 @@ pub trait IProgram: Display {
 
 /// A Program contains a Memory object and indexes of names, references, functions, and variables.
 pub struct Program<Plat: IPlatform> {
-	mem:   Memory<<Plat as IPlatform>::TMmu>,
+	mem:   Memory<MmuTypeOf<Plat>>,
 	plat:  Plat,
 	names: NameMap,
 	refs:  RefMap,
-	funcs: FuncIndex<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>,
+	funcs: FuncIndex<InstTypeOf<Plat>>,
 }
 
 impl<Plat: IPlatform> Display for Program<Plat> {
@@ -97,7 +96,7 @@ impl<Plat: IPlatform> Display for Program<Plat> {
 }
 
 impl<Plat: IPlatform> Program<Plat> {
-	pub fn new(mem: Memory<<Plat as IPlatform>::TMmu>, plat: Plat) -> Self {
+	pub fn new(mem: Memory<MmuTypeOf<Plat>>, plat: Plat) -> Self {
 		Self {
 			mem,
 			plat,
@@ -111,23 +110,24 @@ impl<Plat: IPlatform> Program<Plat> {
 		to self.funcs {
 			/// Get the function object with the given ID.
 			#[call(get)]
-			pub fn get_func(&self, id: FuncId) -> &Function<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>;
+			pub fn get_func(&self, id: FuncId) -> &Function<InstTypeOf<Plat>>;
 			/// Same as above, but mutable.
 			#[call(get_mut)]
-			pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>;
+			pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function<InstTypeOf<Plat>>;
 			/// Iterator over all functions in the program, in arbitrary order.
 			#[call(iter)]
-			pub fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>)>;
+			pub fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function<InstTypeOf<Plat>>)>;
 			/// Same as above, but mutable.
 			#[call(iter_mut)]
-			pub fn all_funcs_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>)>;
+			pub fn all_funcs_mut(&mut self)
+				-> impl Iterator<Item = (FuncId, &mut Function<InstTypeOf<Plat>>)>;
 		}
 	}
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.
 	/// Returns the new function's globally unique ID.
 	pub(crate) fn new_func(&mut self, loc: Location,
-		bbs: impl Iterator<Item = impl IntoBasicBlock<<<Plat as IPlatform>::TArchitecture as IArchitecture>::TInstruction>>) -> FuncId {
+		bbs: impl Iterator<Item = impl IntoBasicBlock<InstTypeOf<Plat>>>) -> FuncId {
 		assert!(self.func_defined_at(loc).is_none(), "redefining a function at {}", loc);
 
 		let fid = self.funcs.new_func();
