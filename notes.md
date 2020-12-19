@@ -27,6 +27,7 @@
 	- Name::AutoGen (not actually in the name table, just used for display)
 	- Name::User (user-given)
 - ditch derive_new, it's not helping a lot
+- remove extra 65xx meta-ops (lsla etc) since they're done differently now
 
 **Idea:** have "special" segment for unresolved locations (know the VA but not the segment). That way we can point to them, but not actually resolve them until later. it'll also make it easier to resolve them since there will be inrefs to them.
 
@@ -77,63 +78,86 @@
 
 ---
 
-An `Architecture` describes a CPU architecture, including:
+- analysis
+	- ProtoBB
+	- PBBIdx
+	- ProtoFunc
+	- AnalysisItem
+	- Analyzer
+- arch
+	- IArchitecture
+- disasm
+	- MemAccess
+	- IOperand
+	- InstructionKind
+	- IInstruction
+	- IDisassembler
+	- DisasAll
+	- IPrinter
+	- INameLookup
+	- NullLookup
+- memory
+	- Endian
+	- SegCollection
+	- IMemory
+	- Memory
 
-- its endianness
-- its address size
-- its Disassembler, Printer, and Instruction types
+	- image
+		- ImageRead
+		- ImageSlice
+		- ImageSliceable
+		- Image
+	- mmu
+		- IMmu
+		- MmuState
+	- segment
+		- SegId
+		- Location
+		- Segment
+	- spans
+		- Span
+		- SpanKind
+		- SpanMap/SpanInternal
+	- va
+		- VA
+- platform
+	- IPlatform
+	- `program_from_image`
+	- nes
+		- NesPlatform
+- program
+	- Program
 
-A `Platform` describes a system, including:
-
-- its CPU architecture
-- its memory map
-- devices?
-- memory mappers, ROM parsers...
-
-A `Platform` can take an image and give a `Program`. It can also give access to the architecture's disassembler and printer types.
-
-hmmmmmmm
-
-so the mappers *come from* the platform, but they *act upon* the memory.
-
-...
-
-what is a mapper, but a miserable--- er simple memory management unit?
-and some platforms have REAL MMUs.
-and some platforms have built-in "mappers".
-
-so I don't think the concept of a "Mapper" should even be limited to a Platform.
-instead, there should be `IMmu` which plugs into a `Memory`.
-*this* is what would handle the memory configuration and do "real" VA->PA translation.
-this also interacts with analysis; an `IMmu` can have a state (i.e. a `MemoryConfig`) which can change over time. analysis can track the state across instructions.
-
-actually `MemoryMap` is... kinda the right place for this behavior, no?
-some `MemoryRegion`s are static, and some can be swapped out.
-the `IMmu` is responsible for handling this swapping/mapping through `MemoryConfig`s.
-but a string name-name mapping is probably not the uh, best/most efficient way to do that.
-especially if we want to create those things all over the place in analysis.
-
-1. the file type is determined. this decides the `Platform` that will be used.
-2. the `Platform` parses the file, and determines:
-	- what kind of `IMmu` should be used
-		- e.g. the base NES MMU but with a certain mapper installed
-	- what `Segment`s exist
-		- e.g. the base hardware segments for RAM, MMIO etc. and segments for the ROM
-3. the `Platform` can then create the `Memory` object from that info
-4. ...and the `Program` object
-	- which can have some default names defined by the `Platform`
-
-
-1. determine `Platform`
-2. `Platform::program_from_image(Image) -> Program`
-
+	- func
+		- FuncId
+		- Function
+		- BBId
+		- BasicBlock
+		- IntoBasicBlock
+		- BBTerm
+		- FuncIndex
+	- namemap
+		- NameMap
+	- refmap
+		- RefMap
+		- RefSet
 
 ---
 
-if we collapse Memory and MemoryMap...
-and give MemoryRegions an Option<SegId> to which they correspond...
-and MemoryRegions with None will instead by looked up by the plugin MMU...
-I think that might work.
-
-how are the initial segments created (for the built-in hardware regions)? who does that?
-the segment owner... but then how does the MMU know about them?
+- Program
+	- *dyn* **Memory<Mapper>**
+		- SegCollection
+			- Segment
+		- **MMU<Mapper>**
+	- *dyn* **Platform<Inst?>**
+		- **Arch<Inst>?**
+	- NameMap
+	- RefMap
+	- *dyn* **FuncIndex<Inst>**
+		- **Function<Inst>**
+			- **BasicBlock<Inst>**
+				- **Inst**
+	- Analyzer
+		- *dyn* **ProtoFunc<Inst>**
+			- **ProtoBB<Inst>**
+				- **Inst**
