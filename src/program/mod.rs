@@ -10,7 +10,6 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 
-use crate::analysis::{ AnalysisItem };
 use crate::memory::{
 	Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::{ INameLookup };
@@ -20,10 +19,12 @@ use crate::platform::{ IPlatform, MmuTypeOf, InstTypeOf };
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
+mod analysis;
 mod func;
 mod namemap;
 mod refmap;
 
+use analysis::*;
 pub use func::*;
 pub use namemap::*;
 pub use refmap::*;

@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-mod analysis;
 mod arch;
 mod disasm;
 mod memory;
