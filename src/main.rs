@@ -41,17 +41,14 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("{}", prog);
 
+	let state = prog.initial_mmu_state();
+	prog.enqueue_function(state, prog.loc_from_name("VEC_RESET"));
+	prog.enqueue_function(state, prog.loc_from_name("VEC_NMI"));
+	prog.analyze_queue();
+
+	// println!("found {} functions.", prog.all_funcs().count());
+
 /*
-	{
-		// huh huh huh
-		let mut anal = Analyzer::new(&mut prog, Disassembler);
-		anal.enqueue_function(reset_loc);
-		anal.enqueue_function(nmi_loc);
-		anal.analyze_queue();
-	}
-
-	println!("found {} functions.", prog.all_funcs().count());
-
 	// show_all_funcs(&prog);
 
 	let seg = prog.segment_for_name("PRG0").unwrap();

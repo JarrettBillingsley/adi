@@ -2,7 +2,6 @@
 use std::collections::VecDeque;
 use std::iter::IntoIterator;
 
-use derive_new::new;
 use log::*;
 
 use crate::arch::{ IArchitecture };
@@ -67,10 +66,14 @@ struct PBBIdx(usize);
 
 /// Used for initial exploration, like `ProtoBB`.
 #[derive(Debug)]
-#[derive(new)]
 struct ProtoFunc<TInstruction: IInstruction> {
-	#[new(default)]
 	bbs: Vec<ProtoBB<TInstruction>>, // 0 is the head
+}
+
+impl<TInstruction: IInstruction> ProtoFunc<TInstruction> {
+	fn new() -> Self {
+		Self { bbs: Vec::new() }
+	}
 }
 
 impl<T: IInstruction> ProtoFunc<T> {
@@ -136,7 +139,7 @@ impl<T: IInstruction> ProtoFunc<T> {
 
 /// Things that can be put onto an `Analyzer`'s analysis queue.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum AnalysisItem {
+pub(crate) enum AnalysisItem {
 	/// An unexplored function.
 	Func1stPass(Location, MmuState),
 	/// A function that needs to be analyzed more deeply.
@@ -145,42 +148,10 @@ enum AnalysisItem {
 	JumpTable(Location),
 }
 
-/// Analyzes code, discovers functions, builds control flow graphs, and defines
-/// functions in a program.
-#[derive(new)]
-pub struct Analyzer<'prog, Plat: IPlatform> {
-	prog:  &'prog mut Program<Plat>,
-	#[new(default)]
-	queue: VecDeque<AnalysisItem>,
-}
-
-impl<Plat: IPlatform> Analyzer<'_, Plat> {
-	/// Puts a location on the queue that should be the start of a function.
-	pub fn enqueue_function(&mut self, loc: Location, state: MmuState) {
-		self.queue.push_back(AnalysisItem::Func1stPass(loc, state))
-	}
-
-	/// Puts a location on the queue that should be the jump instruction for a jump table.
-	pub fn enqueue_jump_table(&mut self, loc: Location) {
-		self.queue.push_back(AnalysisItem::JumpTable(loc))
-	}
-
-	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
-	/// so this can do a lot of work in a single call.
-	pub fn analyze_queue(&mut self) {
-		loop {
-			match self.queue.pop_front() {
-				None => break,
-				Some(AnalysisItem::Func1stPass(loc, state)) => self.func_first_pass(loc, state),
-				Some(AnalysisItem::Func2ndPass(fid))        => self.func_second_pass(fid),
-				Some(AnalysisItem::JumpTable(loc))          => self.analyze_jump_table(loc),
-			}
-		}
-	}
-
+impl<Plat: IPlatform> Program<Plat> {
 	fn should_analyze_func(&self, loc: Location) -> bool {
-		if let Some(bbid) = self.prog.span_at_loc(loc).bb() {
-			let orig_func_head = self.prog.get_func(bbid.func()).head_id();
+		if let Some(bbid) = self.span_at_loc(loc).bb() {
+			let orig_func_head = self.get_func(bbid.func()).head_id();
 
 			if bbid == orig_func_head {
 				// the beginning of an already-analyzed function.
@@ -203,7 +174,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
-		match self.prog.span_at_loc(start).kind() {
+		match self.span_at_loc(start).kind() {
 			SpanKind::Unk         => true, // yeeeeee that's what we want
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
@@ -234,17 +205,17 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 			let new_bb = func.split_bb(id, term_loc, start);
 
 			// ...and update the span map.
-			self.prog.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb.0));
+			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb.0));
 		}
 	}
 
 	fn resolve_target(&self, state: MmuState, target: VA) -> Location {
-		if let Some(l) = self.prog.loc_for_va(state, target) { l } else {
+		if let Some(l) = self.loc_for_va(state, target) { l } else {
 			todo!("unresolvable control flow target");
 		}
 	}
 
-	fn func_first_pass(&mut self, loc: Location, state: MmuState) {
+	pub(crate) fn func_first_pass(&mut self, loc: Location, state: MmuState) {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function 1st pass at {}", loc);
 
@@ -267,15 +238,15 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 			}
 
 			// yes. mark the span as under analysis.
-			self.prog.span_begin_analysis(start);
+			self.span_begin_analysis(start);
 
 			// now, we need the actual data.
-			let (seg, span)  = self.prog.seg_and_span_at_loc(start);
+			let (seg, span)  = self.seg_and_span_at_loc(start);
 			let slice        = seg.image_slice(span).into_data();
-			let va           = self.prog.va_from_loc(state, start);
+			let va           = self.va_from_loc(state, start);
 
 			// let's start disassembling instructions
-			let dis          = self.prog.plat().arch().new_disassembler();
+			let dis          = self.plat().arch().new_disassembler();
 			let mut term_loc = start;
 			let mut end_loc  = start;
 			let mut term     = None;
@@ -335,7 +306,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 			if start == end_loc {
 				// oop. no good.
 				trace!("{} is NO GOOD", start);
-				self.prog.span_cancel_analysis(start);
+				self.span_cancel_analysis(start);
 			} else {
 				if let Some(..) = iter.err() {
 					assert!(end_loc == iter.err_loc());
@@ -347,21 +318,21 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 				}
 
 				let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc, insts);
-				self.prog.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
+				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
 			}
 		}
 
 		assert!(potential_bbs.len() == 0);
 
 		// now, turn the proto func into a real boy!!
-		let fid = self.prog.new_func(loc, func.into_iter());
+		let fid = self.new_func(loc, func.into_iter());
 
 		// finally, turn the crank by putting more work on the queue
 		self.queue.push_back(AnalysisItem::Func2ndPass(fid));
 	}
 
-	fn func_second_pass(&mut self, fid: FuncId) {
-		let func = self.prog.get_func(fid);
+	pub(crate) fn func_second_pass(&mut self, fid: FuncId) {
+		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function 2nd pass at {}", func.start_loc());
@@ -378,7 +349,7 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 					let op = inst.get_op(i);
 
 					if op.is_mem() {
-						let dst = self.prog.loc_from_va(inst.mmu_state(), op.addr());
+						let dst = self.loc_from_va(inst.mmu_state(), op.addr());
 						refs.push((src, dst));
 					}
 				}
@@ -401,12 +372,12 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 		}
 
 		trace!("adding {} refs, {} jumptables, {} funcs", refs.len(), jumptables.len(), funcs.len());
-		for (src, dst) in refs.into_iter() { self.prog.add_ref(src, dst); }
+		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
-		for (f, s) in funcs.into_iter()    { self.enqueue_function(f, s); }
+		for (f, s) in funcs.into_iter()    { self.enqueue_function(s, f); }
 	}
 
-	fn analyze_jump_table(&mut self, loc: Location) {
+	pub(crate) fn analyze_jump_table(&mut self, loc: Location) {
 		trace!("there's a jumptable at {}", loc);
 		// todo!()
 	}

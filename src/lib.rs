@@ -7,7 +7,6 @@ mod memory;
 mod platform;
 mod program;
 
-pub use analysis::*;
 pub use arch::*;
 pub use disasm::*;
 pub use memory::*;

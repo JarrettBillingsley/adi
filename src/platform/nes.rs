@@ -112,13 +112,13 @@ fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 	}
 
 	for StdName(name, addr) in NES_INT_VECS {
-		prog.add_name_va(name, state, VA(*addr));
+		let src_loc = prog.loc_from_va(state, VA(*addr));
+		let seg     = prog.segment_from_loc(src_loc);
+		let dst_va  = VA(seg.read_le_u16(src_loc) as usize);
+		let dst_loc = prog.loc_from_va(state, dst_va);
 
-		let vec_src_loc = prog.loc_from_va(state, VA(*addr));
-		let seg         = prog.segment_from_loc(vec_src_loc);
-		let vec_dst_va  = VA(seg.read_le_u16(vec_src_loc) as usize);
-		let vec_dst_loc = prog.loc_from_va(state, vec_dst_va);
-		prog.add_ref(vec_src_loc, vec_dst_loc);
+		prog.add_name_va(name, state, dst_va);
+		prog.add_ref(src_loc, dst_loc);
 	}
 }
 
@@ -166,9 +166,9 @@ const NES_STD_NAMES: &[StdName] = &[
 ];
 
 const NES_INT_VECS: &[StdName] = &[
-	StdName("VEC_NMI",               0xFFFA),
-	StdName("VEC_RESET",             0xFFFC),
-	StdName("VEC_IRQ",               0xFFFE),
+	StdName("VEC_NMI",   0xFFFA),
+	StdName("VEC_RESET", 0xFFFC),
+	StdName("VEC_IRQ",   0xFFFE),
 ];
 
 // ------------------------------------------------------------------------------------------------

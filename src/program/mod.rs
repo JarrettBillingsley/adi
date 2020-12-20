@@ -3,12 +3,14 @@ use std::collections::{
 	btree_map::Iter as BTreeIter,
 	btree_map::Range as BTreeRange,
 	hash_map::Iter as HashIter,
+	VecDeque,
 };
 use std::ops::{ Bound, RangeBounds };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 
+use crate::analysis::{ AnalysisItem };
 use crate::memory::{
 	Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::{ INameLookup };
@@ -32,6 +34,9 @@ pub use refmap::*;
 
 /// The public interface to a `Program` object.
 pub trait IProgram: Display {
+	fn enqueue_function(&mut self, state: MmuState, loc: Location);
+	fn enqueue_jump_table(&mut self, loc: Location);
+	fn analyze_queue(&mut self);
 	fn initial_mmu_state(&self) -> MmuState;
 	fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment>;
 	fn segment_for_va_mut(&mut self, state: MmuState, va: VA) -> Option<&mut Segment>;
@@ -86,6 +91,7 @@ pub struct Program<Plat: IPlatform> {
 	names: NameMap,
 	refs:  RefMap,
 	funcs: FuncIndex<InstTypeOf<Plat>>,
+	pub(crate) queue: VecDeque<AnalysisItem>,
 }
 
 impl<Plat: IPlatform> Display for Program<Plat> {
@@ -103,6 +109,7 @@ impl<Plat: IPlatform> Program<Plat> {
 			names: NameMap::new(),
 			refs:  RefMap::new(),
 			funcs: FuncIndex::new(),
+			queue: VecDeque::new(),
 		}
 	}
 
@@ -186,6 +193,32 @@ impl<Plat: IPlatform> Program<Plat> {
 }
 
 impl<Plat: IPlatform> IProgram for Program<Plat> {
+	// ---------------------------------------------------------------------------------------------
+	// Analysis
+
+	/// Puts a location on the queue that should be the start of a function.
+	fn enqueue_function(&mut self, state: MmuState, loc: Location) {
+		self.queue.push_back(AnalysisItem::Func1stPass(loc, state))
+	}
+
+	/// Puts a location on the queue that should be the jump instruction for a jump table.
+	fn enqueue_jump_table(&mut self, loc: Location) {
+		self.queue.push_back(AnalysisItem::JumpTable(loc))
+	}
+
+	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
+	/// so this can do a lot of work in a single call.
+	fn analyze_queue(&mut self) {
+		loop {
+			match self.queue.pop_front() {
+				None => break,
+				Some(AnalysisItem::Func1stPass(loc, state)) => self.func_first_pass(loc, state),
+				Some(AnalysisItem::Func2ndPass(fid))        => self.func_second_pass(fid),
+				Some(AnalysisItem::JumpTable(loc))          => self.analyze_jump_table(loc),
+			}
+		}
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Memory
 
