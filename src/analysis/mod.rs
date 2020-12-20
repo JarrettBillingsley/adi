@@ -5,7 +5,8 @@ use std::iter::IntoIterator;
 use derive_new::new;
 use log::*;
 
-use crate::platform::{ IPlatform, DisasTypeOf, InstTypeOf };
+use crate::arch::{ IArchitecture };
+use crate::platform::{ IPlatform, InstTypeOf };
 use crate::program::{ Program, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
@@ -149,7 +150,6 @@ enum AnalysisItem {
 #[derive(new)]
 pub struct Analyzer<'prog, Plat: IPlatform> {
 	prog:  &'prog mut Program<Plat>,
-	dis:   DisasTypeOf<Plat>,
 	#[new(default)]
 	queue: VecDeque<AnalysisItem>,
 }
@@ -275,11 +275,12 @@ impl<Plat: IPlatform> Analyzer<'_, Plat> {
 			let va           = self.prog.va_from_loc(state, start);
 
 			// let's start disassembling instructions
+			let dis          = self.prog.plat().arch().new_disassembler();
 			let mut term_loc = start;
 			let mut end_loc  = start;
 			let mut term     = None;
 			let mut insts    = Vec::new();
-			let mut iter     = self.dis.disas_all(slice, state, va, start);
+			let mut iter     = dis.disas_all(slice, state, va, start);
 
 			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());

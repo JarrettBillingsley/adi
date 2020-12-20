@@ -7,10 +7,9 @@ use nes_rom::ines::{ Ines };
 use parse_display::Display;
 
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
-use crate::analysis::{ Analyzer };
 use crate::arch::{ IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
+use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
 use crate::program::{ IProgram, Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -33,10 +32,6 @@ impl<Mapper: IMmu> IPlatform for NesPlatform<Mapper> {
 
 	fn arch(&self) -> Self::TArchitecture {
 		Mos65xxArchitecture
-	}
-
-	fn new_analyzer<'prog>(&self, prog: &'prog mut Program<Self>) -> Analyzer<'prog, Self> {
-		Analyzer::new(prog, self.arch().new_disassembler())
 	}
 }
 
@@ -115,6 +110,16 @@ fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 	for StdName(name, addr) in NES_STD_NAMES {
 		prog.add_name_va(name, state, VA(*addr));
 	}
+
+	for StdName(name, addr) in NES_INT_VECS {
+		prog.add_name_va(name, state, VA(*addr));
+
+		let vec_src_loc = prog.loc_from_va(state, VA(*addr));
+		let seg         = prog.segment_from_loc(vec_src_loc);
+		let vec_dst_va  = VA(seg.read_le_u16(vec_src_loc) as usize);
+		let vec_dst_loc = prog.loc_from_va(state, vec_dst_va);
+		prog.add_ref(vec_src_loc, vec_dst_loc);
+	}
 }
 
 struct StdName(&'static str, usize);
@@ -158,7 +163,9 @@ const NES_STD_NAMES: &[StdName] = &[
 	StdName("UNUSED_TIMER_MID",      0x401D),
 	StdName("UNUSED_TIMER_HI",       0x401E),
 	StdName("UNUSED_TIMER_CTRL",     0x401F),
+];
 
+const NES_INT_VECS: &[StdName] = &[
 	StdName("VEC_NMI",               0xFFFA),
 	StdName("VEC_RESET",             0xFFFC),
 	StdName("VEC_IRQ",               0xFFFE),

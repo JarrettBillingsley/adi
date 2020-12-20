@@ -106,6 +106,10 @@ impl<Plat: IPlatform> Program<Plat> {
 		}
 	}
 
+	pub(crate) fn plat(&self) -> &Plat {
+		&self.plat
+	}
+
 	delegate! {
 		to self.funcs {
 			/// Get the function object with the given ID.

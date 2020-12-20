@@ -6,9 +6,8 @@ use parse_display::Display;
 use lazy_static::lazy_static;
 
 use crate::arch::{ IArchitecture };
-use crate::analysis::{ Analyzer };
 use crate::memory::{ Image, IMmu };
-use crate::program::{ IProgram, Program };
+use crate::program::{ IProgram };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -27,7 +26,6 @@ pub trait IPlatform: Display + Sized {
 	type TArchitecture: IArchitecture;
 
 	fn arch(&self) -> Self::TArchitecture;
-	fn new_analyzer<'prog>(&self, prog: &'prog mut Program<Self>) -> Analyzer<'prog, Self>;
 }
 
 pub type MmuTypeOf  <Plat> = <Plat as IPlatform>::TMmu;
