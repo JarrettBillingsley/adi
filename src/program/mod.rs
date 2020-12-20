@@ -76,6 +76,7 @@ pub trait IProgram: Display {
 	// fn names_in_va_range(&self, state: MmuState, range: impl RangeBounds<VA>)
 	// -> BTreeRange<'_, Location, String>;
 	fn name_of_va(&self, state: MmuState, va: VA) -> String;
+	fn name_of_loc(&self, state: MmuState, loc: Location) -> String;
 	fn add_ref(&mut self, src: Location, dst: Location);
 	fn remove_ref(&mut self, src: Location, dst: Location);
 	fn remove_all_outrefs(&mut self, src: Location);
@@ -343,23 +344,22 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 
 	/// Gets the name of a given VA if one exists, or generates one if not.
 	fn name_of_va(&self, state: MmuState, va: VA) -> String {
-		if let Some(_loc) = self.mem.loc_for_va(state, va) {
-			"TODO".into() // self.name_of_loc(loc)
+		if let Some(loc) = self.mem.loc_for_va(state, va) {
+			self.name_of_loc(state, loc)
 		} else {
 			self.generate_name(&self.mem.name_prefix_for_va(state, va), va)
 		}
 	}
 
-	// TODO
-/*	/// Gets the name of a given Location if one exists, or generates one if not.
-	fn name_of_loc(&self, loc: Location) -> String {
+	/// Gets the name of a given Location if one exists, or generates one if not.
+	fn name_of_loc(&self, state: MmuState, loc: Location) -> String {
 		// see if there's already a name here.
 		if let Some(name) = self.names.name_for_loc(loc) {
 			name.into()
 		} else {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
-			let va = self.va_from_loc(loc);
+			let va = self.va_from_loc(state, loc);
 			let start = seg.span_at_loc(loc).start();
 
 			match self.names.name_for_loc(start) {
@@ -371,7 +371,7 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 					self.generate_name(&seg.name(), va),
 			}
 		}
-	}*/
+	}
 
 	// ---------------------------------------------------------------------------------------------
 	// References
