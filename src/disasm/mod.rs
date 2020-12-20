@@ -101,7 +101,7 @@ impl InstructionKind {
 }
 
 /// Trait for instructions. Used by analysis and such.
-pub trait IInstruction: Clone {
+pub trait IInstruction {
 	/// Get Location.
 	fn loc(&self) -> Location;
 	/// Get virtual address.

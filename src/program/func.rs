@@ -157,8 +157,6 @@ impl Debug for FuncId {
 pub struct Function<TInstruction: IInstruction> {
 	/// Its globally-unique identifier.
 	id: FuncId,
-
-	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
 	name: Option<String>,
 
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
@@ -198,9 +196,26 @@ impl<I: IInstruction> Function<I> {
 		self.bbs.iter()
 	}
 
+	/// Get the given basic block.
 	pub fn get_bb(&self, id: BBId) -> &BasicBlock<I> {
 		assert!(id.0 == self.id);
 		&self.bbs[id.1]
+	}
+
+	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
+	pub fn name(&self) -> Option<&String> {
+		self.name.as_ref()
+	}
+
+	/// How many basic blocks this function has.
+	pub fn num_bbs(&self) -> usize {
+		self.bbs.len()
+	}
+
+	/// Get the ID of the `idx`'th basic block.
+	pub fn get_bbid(&self, idx: usize) -> BBId {
+		assert!(idx < self.bbs.len());
+		BBId(self.id, idx)
 	}
 }
 

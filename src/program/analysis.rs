@@ -24,7 +24,7 @@ use crate::disasm::{
 
 /// Most of a BasicBlock, except the ID. Used for initial exploration of a function
 /// when we haven't committed the results to the Program yet.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct ProtoBB<TInstruction: IInstruction> {
 	loc:      Location,
 	term_loc: Location,
@@ -36,8 +36,8 @@ struct ProtoBB<TInstruction: IInstruction> {
 }
 
 impl<T: IInstruction> ProtoBB<T> {
-	fn last_instr_before(&self, loc: Location) -> Option<&T> {
-		for inst in &self.insts {
+	fn last_instr_before(&self, loc: Location) -> Option<usize> {
+		for (i, inst) in self.insts.iter().enumerate() {
 			if inst.loc() < loc {
 				let next = inst.next_loc();
 
@@ -46,7 +46,7 @@ impl<T: IInstruction> ProtoBB<T> {
 				match next.cmp(&loc) {
 					// uh oh. loc is in the middle of this instruction.
 					Greater => return None,
-					Equal   => return Some(inst),
+					Equal   => return Some(i),
 					Less    => {}
 				}
 			}
@@ -99,24 +99,27 @@ impl<T: IInstruction> ProtoFunc<T> {
 		PBBIdx(ret)
 	}
 
-	/// Splits an existing basic block `idx` in two at location `start`. The existing BB
-	/// is shortened, and its terminator is set to fall through to the new one. **Important:
-	/// the existing BB's terminator location is set to an invalid location and must be
-	/// re-found after calling this method.**
-	/// Returns the new BB's index.
-	fn split_bb(&mut self, idx: PBBIdx, term_loc: Location, new_start: Location) -> PBBIdx {
+	fn split_bb(&mut self, idx: PBBIdx, inst_idx: usize, new_start: Location) -> PBBIdx {
 		let old = &mut self.bbs[idx.0];
+		let term_loc = old.insts[inst_idx].loc();
 
 		assert!(old.loc < new_start);
 		assert!(new_start < old.end);
 		assert!(term_loc < new_start);
 
-		let new = ProtoBB { loc: new_start, ..old.clone() };
+		let new_insts = old.insts.split_off(inst_idx + 1);
 
+		let mut new = ProtoBB {
+			loc:      new_start,
+			term_loc: old.term_loc,
+			term:     BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
+			insts:    new_insts,
+			end:      old.end
+		};
+
+		std::mem::swap(&mut old.term, &mut new.term);
 		old.term_loc = term_loc;
-		old.term     = BBTerm::FallThru(new_start);
 		old.end      = new_start;
-
 
 		trace!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
 				new.loc, new.term_loc, new.end, new.term);
@@ -198,13 +201,13 @@ impl<Plat: IPlatform> Program<Plat> {
 			// ooh, now we have to split the existing bb.
 			// first, let's make sure that `start` points to the beginning of an instruction,
 			// because otherwise we'd be jumping to an invalid location.
-			let term_loc = match old_bb.last_instr_before(start) {
-				Some(inst) => inst.loc(),
-				None       => todo!("have to flag referrer as being invalid somehow"),
+			let idx = match old_bb.last_instr_before(start) {
+				Some(idx) => idx,
+				None      => todo!("have to flag referrer as being invalid somehow"),
 			};
 
 			// now we can split the existing BB...
-			let new_bb = func.split_bb(id, term_loc, start);
+			let new_bb = func.split_bb(id, idx, start);
 
 			// ...and update the span map.
 			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb.0));

@@ -10,9 +10,10 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 
+use crate::arch::{ IArchitecture };
 use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
-use crate::disasm::{ INameLookup };
-use crate::platform::{ IPlatform, MmuTypeOf, InstTypeOf };
+use crate::disasm::{ INameLookup, IInstruction, IPrinter };
+use crate::platform::{ IPlatform, MmuTypeOf, InstTypeOf, PrintTypeOf };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -34,9 +35,16 @@ pub use refmap::*;
 
 /// The public interface to a `Program` object.
 pub trait IProgram: Display {
+	// ---------------------------------------------------------------------------------------------
+	// Analysis
+
 	fn enqueue_function(&mut self, state: MmuState, loc: Location);
 	fn enqueue_jump_table(&mut self, loc: Location);
 	fn analyze_queue(&mut self);
+
+	// ---------------------------------------------------------------------------------------------
+	// Memory
+
 	fn initial_mmu_state(&self) -> MmuState;
 	fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment>;
 	fn segment_for_va_mut(&mut self, state: MmuState, va: VA) -> Option<&mut Segment>;
@@ -54,11 +62,34 @@ pub trait IProgram: Display {
 	fn span_at_loc(&self, loc: Location) -> Span;
 	fn seg_and_span_at_loc(&self, loc: Location) -> (&Segment, Span);
 	fn seg_and_span_at_loc_mut(&mut self, loc: Location) -> (&mut Segment, Span);
-	// fn get_func(&self, id: FuncId) -> &Function<I>;
-	// fn get_func_mut(&mut self, id: FuncId) -> &mut Function<I>;
+
+	// ---------------------------------------------------------------------------------------------
+	// Functions
+
 	fn all_funcs(&self) -> Box<dyn Iterator<Item = FuncId> + '_>;
 	fn func_defined_at(&self, loc: Location) -> Option<FuncId>;
 	fn func_that_contains(&self, loc: Location) -> Option<FuncId>;
+	fn func_name(&self, func: FuncId) -> Option<&String>;
+	fn func_head(&self, func: FuncId) -> BBId;
+	fn func_num_bbs(&self, func: FuncId) -> usize;
+	fn func_start_loc(&self, func: FuncId) -> Location;
+	fn func_get_bbid(&self, func: FuncId, idx: usize) -> BBId;
+	fn func_all_bbs(&self, func: FuncId) -> Box<dyn Iterator<Item = BBId> + '_>;
+
+	fn bb_owner(&self, bb: BBId) -> FuncId;
+	fn bb_loc(&self, bb: BBId) -> Location;
+	fn bb_term_loc(&self, bb: BBId) -> Location;
+	fn bb_term(&self, bb: BBId) -> &BBTerm;
+	fn bb_successors(&self, bb: BBId) -> Successors;
+	fn bb_explicit_successors(&self, bb: BBId) -> Successors;
+	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &dyn IInstruction)> + '_>;
+
+	fn inst_fmt_mnemonic(&self, bb: BBId, i: usize) -> String;
+	fn inst_fmt_operands(&self, bb: BBId, i: usize) -> String;
+
+	// ---------------------------------------------------------------------------------------------
+	// Names
+
 	fn add_name_va(&mut self, name: &str, state: MmuState, va: VA);
 	fn add_name(&mut self, name: &str, loc: Location);
 	fn remove_name(&mut self, name: &str);
@@ -69,12 +100,17 @@ pub trait IProgram: Display {
 	fn all_names_by_loc(&self) -> BTreeIter<'_, Location, String>;
 	fn name_from_loc(&self, loc: Location) -> &str;
 	fn loc_from_name(&self, name: &str) -> Location;
+	// TODO: reimplement without RangeBounds
 	// fn names_in_range(&self, range: impl RangeBounds<Location>)
 	// -> BTreeRange<'_, Location, String>;
 	// fn names_in_va_range(&self, state: MmuState, range: impl RangeBounds<VA>)
 	// -> BTreeRange<'_, Location, String>;
 	fn name_of_va(&self, state: MmuState, va: VA) -> String;
-	fn name_of_loc(&self, state: MmuState, loc: Location) -> String;
+	fn name_of_loc(&self, loc: Location) -> String;
+
+	// ---------------------------------------------------------------------------------------------
+	// References
+
 	fn add_ref(&mut self, src: Location, dst: Location);
 	fn remove_ref(&mut self, src: Location, dst: Location);
 	fn remove_all_outrefs(&mut self, src: Location);
@@ -92,6 +128,7 @@ pub struct Program<Plat: IPlatform> {
 	refs:  RefMap,
 	funcs: FuncIndex<InstTypeOf<Plat>>,
 	pub(crate) queue: VecDeque<AnalysisItem>,
+	print: PrintTypeOf<Plat>,
 }
 
 impl<Plat: IPlatform> Display for Program<Plat> {
@@ -105,6 +142,7 @@ impl<Plat: IPlatform> Program<Plat> {
 	pub fn new(mem: Memory<MmuTypeOf<Plat>>, plat: Plat) -> Self {
 		Self {
 			mem,
+			print: plat.arch().new_printer(),
 			plat,
 			names: NameMap::new(),
 			refs:  RefMap::new(),
@@ -271,11 +309,6 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 	// ---------------------------------------------------------------------------------------------
 	// Functions
 
-	// delegate! {
-	// 	to self.funcs {
-	// 	}
-	// }
-
 	/// Iterator over all functions in the program, in arbitrary order.
 	fn all_funcs(&self) -> Box<dyn Iterator<Item = FuncId> + '_> {
 		Box::new(self.funcs.all_funcs().map(|(id, _)| FuncId(id)))
@@ -296,7 +329,72 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 		Some(self.span_at_loc(loc).bb()?.func())
 	}
 
+	fn func_name(&self, func: FuncId) -> Option<&String> {
+		self.funcs.get(func).name()
+	}
 
+	fn func_head(&self, func: FuncId) -> BBId {
+		self.func_get_bbid(func, 0)
+	}
+
+	fn func_num_bbs(&self, func: FuncId) -> usize {
+		self.funcs.get(func).num_bbs()
+	}
+
+	fn func_start_loc(&self, func: FuncId) -> Location {
+		self.funcs.get(func).start_loc()
+	}
+
+	fn func_get_bbid(&self, func: FuncId, idx: usize) -> BBId {
+		self.funcs.get(func).get_bbid(idx)
+	}
+
+	fn func_all_bbs(&self, func: FuncId) -> Box<dyn Iterator<Item = BBId> + '_> {
+		Box::new(self.funcs.get(func).all_bbs().map(|bb| bb.id()))
+	}
+
+	fn bb_owner(&self, bb: BBId) -> FuncId {
+		bb.func()
+	}
+
+	fn bb_loc(&self, bb: BBId) -> Location {
+		self.funcs.get(bb.func()).get_bb(bb).loc()
+	}
+
+	fn bb_term_loc(&self, bb: BBId) -> Location {
+		self.funcs.get(bb.func()).get_bb(bb).term_loc()
+	}
+
+	fn bb_term(&self, bb: BBId) -> &BBTerm {
+		self.funcs.get(bb.func()).get_bb(bb).term()
+	}
+
+	fn bb_successors(&self, bb: BBId) -> Successors {
+		self.funcs.get(bb.func()).get_bb(bb).successors()
+	}
+
+	fn bb_explicit_successors(&self, bb: BBId) -> Successors {
+		self.funcs.get(bb.func()).get_bb(bb).explicit_successors()
+	}
+
+	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &dyn IInstruction)> + '_> {
+		let insts = self.funcs.get(bb.func()).get_bb(bb).insts().iter().enumerate();
+
+		// compiler is very upset if I just do .map(|i| &*i) but being very
+		// explicit about the types makes it happy, so,
+		fn mappy<Plat: IPlatform>((i, inst): (usize, &InstTypeOf<Plat>)) -> (usize, &dyn IInstruction) {
+			(i, &*inst)
+		}
+		Box::new(insts.map(mappy::<Plat>))
+	}
+
+	fn inst_fmt_mnemonic(&self, bb: BBId, i: usize) -> String {
+		self.print.fmt_mnemonic(&self.funcs.get(bb.func()).get_bb(bb).insts()[i])
+	}
+
+	fn inst_fmt_operands(&self, bb: BBId, i: usize) -> String {
+		self.print.fmt_operands(&self.funcs.get(bb.func()).get_bb(bb).insts()[i], self)
+	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Names
@@ -344,21 +442,26 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 	/// Gets the name of a given VA if one exists, or generates one if not.
 	fn name_of_va(&self, state: MmuState, va: VA) -> String {
 		if let Some(loc) = self.mem.loc_for_va(state, va) {
-			self.name_of_loc(state, loc)
+			self.name_of_loc(loc)
 		} else {
 			self.generate_name(&self.mem.name_prefix_for_va(state, va), va)
 		}
 	}
 
 	/// Gets the name of a given Location if one exists, or generates one if not.
-	fn name_of_loc(&self, state: MmuState, loc: Location) -> String {
+	fn name_of_loc(&self, loc: Location) -> String {
 		// see if there's already a name here.
 		if let Some(name) = self.names.name_for_loc(loc) {
 			name.into()
 		} else {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
-			let va = self.va_from_loc(state, loc);
+
+			// TODO: how do we know what state to use to get the VA for a loc?
+			// if we have a Location, then we probably know what VA was used to
+			// access it at least once... right?
+			let va = VA(loc.offs); // self.va_from_loc(state, loc);
+
 			let start = seg.span_at_loc(loc).start();
 
 			match self.names.name_for_loc(start) {
