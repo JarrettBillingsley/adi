@@ -42,7 +42,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/duckhunt.nes")?;
+	let img = Image::new_from_file("tests/data/arkanoid.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -63,7 +63,12 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	for span in seg.all_spans() {
 		match span.kind() {
 			SpanKind::Unk => {
-				let addr = prog.fmt_addr(span.start().offs);
+				// TODO: this is kind of a mess
+				let loc = span.start();
+				let state = prog.mmu_state_at(loc).unwrap_or_else(|| prog.initial_mmu_state());
+				let va = prog.va_from_loc(state, loc);
+				let addr = prog.fmt_addr(va.0);
+
 				let msg = format!("[{} unexplored byte(s)]", span.len());
 
 				println!("{}", divider.green());

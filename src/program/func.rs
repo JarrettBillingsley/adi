@@ -77,6 +77,10 @@ impl<T: IInstruction> BasicBlock<T> {
 	pub fn func(&self) -> FuncId {
 		self.id.func()
 	}
+
+	pub fn inst_at_loc(&self, loc: Location) -> Option<&T> {
+		self.insts.iter().find(|&inst| inst.loc() == loc)
+	}
 }
 
 /// Trait used for defining functions in `Program`.

@@ -46,6 +46,7 @@ pub trait IProgram: Display {
 	// Memory
 
 	fn initial_mmu_state(&self) -> MmuState;
+	fn mmu_state_at(&self, loc: Location) -> Option<MmuState>;
 	fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment>;
 	fn segment_for_va_mut(&mut self, state: MmuState, va: VA) -> Option<&mut Segment>;
 	fn segment_for_name(&self, name: &str) -> Option<&Segment>;
@@ -288,6 +289,18 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 		}
 	}
 
+	fn mmu_state_at(&self, loc: Location) -> Option<MmuState> {
+		let span = self.span_at_loc(loc);
+
+		match span.kind() {
+			SpanKind::Code(bbid) => {
+				let bb = self.funcs.get(bbid.func()).get_bb(bbid);
+				bb.inst_at_loc(loc).map(|inst| inst.mmu_state())
+			}
+			_ => Some(self.initial_mmu_state()), // TODO
+		}
+	}
+
 	/// Get the span at a given location.
 	fn span_at_loc(&self, loc: Location) -> Span {
 		self.segment_from_loc(loc).span_at_loc(loc)
@@ -382,7 +395,8 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 
 		// compiler is very upset if I just do .map(|i| &*i) but being very
 		// explicit about the types makes it happy, so,
-		fn mappy<Plat: IPlatform>((i, inst): (usize, &InstTypeOf<Plat>)) -> (usize, &dyn IInstruction) {
+		fn mappy<Plat: IPlatform>((i, inst): (usize, &InstTypeOf<Plat>))
+		-> (usize, &dyn IInstruction) {
 			(i, &*inst)
 		}
 		Box::new(insts.map(mappy::<Plat>))
@@ -457,10 +471,13 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
 
-			// TODO: how do we know what state to use to get the VA for a loc?
-			// if we have a Location, then we probably know what VA was used to
-			// access it at least once... right?
-			let va = VA(loc.offs); // self.va_from_loc(state, loc);
+			let va = if let Some(state) = self.mmu_state_at(loc) {
+				self.va_from_loc(state, loc)
+			} else {
+				// TODO: if we have a Location, then we probably know what VA was used to
+				// access it at least once... right? should be able to do better than this
+				VA(loc.offs)
+			};
 
 			let start = seg.span_at_loc(loc).start();
 
