@@ -135,7 +135,7 @@ impl BBTerm {
 
 /// Newtype which uniquely identifies a `Function`.
 #[derive(PartialEq, Eq, Copy, Clone)]
-pub struct FuncId(Index);
+pub struct FuncId(pub Index);
 
 impl Debug for FuncId {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
@@ -225,12 +225,7 @@ impl<T: IInstruction> FuncIndex<T> {
 	}
 
 	/// Iterator over all functions in the index, in arbitrary order.
-	pub fn iter(&self) -> impl Iterator<Item = (FuncId, &Function<T>)> {
-		self.arena.iter().map(|(id, f)| (FuncId(id), f))
-	}
-
-	/// Same as above but mutable.
-	pub fn iter_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function<T>)> {
-		self.arena.iter_mut().map(|(id, f)| (FuncId(id), f))
+	pub fn all_funcs(&self) -> impl Iterator<Item = (Index, &Function<T>)> {
+		self.arena.iter()
 	}
 }

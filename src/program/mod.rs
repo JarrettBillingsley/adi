@@ -56,8 +56,7 @@ pub trait IProgram: Display {
 	fn seg_and_span_at_loc_mut(&mut self, loc: Location) -> (&mut Segment, Span);
 	// fn get_func(&self, id: FuncId) -> &Function<I>;
 	// fn get_func_mut(&mut self, id: FuncId) -> &mut Function<I>;
-	// fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function<I>)>;
-	// fn all_funcs_mut(&mut self) -> impl Iterator<Item = (FuncId, &mut Function<I>)>;
+	fn all_funcs(&self) -> Box<dyn Iterator<Item = FuncId> + '_>;
 	fn func_defined_at(&self, loc: Location) -> Option<FuncId>;
 	fn func_that_contains(&self, loc: Location) -> Option<FuncId>;
 	fn add_name_va(&mut self, name: &str, state: MmuState, va: VA);
@@ -126,13 +125,6 @@ impl<Plat: IPlatform> Program<Plat> {
 			/// Same as above, but mutable.
 			#[call(get_mut)]
 			pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function<InstTypeOf<Plat>>;
-			/// Iterator over all functions in the program, in arbitrary order.
-			#[call(iter)]
-			pub fn all_funcs(&self) -> impl Iterator<Item = (FuncId, &Function<InstTypeOf<Plat>>)>;
-			/// Same as above, but mutable.
-			#[call(iter_mut)]
-			pub fn all_funcs_mut(&mut self)
-				-> impl Iterator<Item = (FuncId, &mut Function<InstTypeOf<Plat>>)>;
 		}
 	}
 
@@ -279,7 +271,15 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 	// ---------------------------------------------------------------------------------------------
 	// Functions
 
+	// delegate! {
+	// 	to self.funcs {
+	// 	}
+	// }
 
+	/// Iterator over all functions in the program, in arbitrary order.
+	fn all_funcs(&self) -> Box<dyn Iterator<Item = FuncId> + '_> {
+		Box::new(self.funcs.all_funcs().map(|(id, _)| FuncId(id)))
+	}
 
 	/// Gets the ID of the function which starts at the given location, if one exists.
 	fn func_defined_at(&self, loc: Location) -> Option<FuncId> {

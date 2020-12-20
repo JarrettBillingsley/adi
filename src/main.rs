@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 
-use std::fmt::Write;
+// use std::fmt::Write;
 
 use better_panic::{ Settings as PanicSettings, Verbosity as PanicVerbosity };
 use simplelog::*;
-use colored::*;
+// use colored::*;
 
 use adi::*;
-use mos65xx::{ Disassembler, Printer, SyntaxFlavor };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging()?;
@@ -36,7 +35,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/smb.nes")?;
+	let img = Image::new_from_file("tests/data/10yf.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -46,7 +45,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	prog.enqueue_function(state, prog.loc_from_name("VEC_NMI"));
 	prog.analyze_queue();
 
-	// println!("found {} functions.", prog.all_funcs().count());
+	println!("found {} functions.", prog.all_funcs().count());
 
 /*
 	// show_all_funcs(&prog);

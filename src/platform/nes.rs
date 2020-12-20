@@ -96,8 +96,9 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 
 		0 => {
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
-			let prg0 = segs.add_segment("PRG0", 0x8000, Some(prg0_img));
-			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom { prg0 } })
+			let prg0_len = prg0_img.len();
+			let prg0 = segs.add_segment("PRG0", prg0_len, Some(prg0_img));
+			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom::new(prg0, prg0_len)})
 		}
 
 		_ => Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper))),
@@ -118,6 +119,8 @@ fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 		let dst_loc = prog.loc_from_va(state, dst_va);
 
 		prog.add_name_va(name, state, dst_va);
+
+		// TODO: add a data item for each of these locations
 		prog.add_ref(src_loc, dst_loc);
 	}
 }
@@ -236,7 +239,16 @@ mod mappers {
 
 	#[derive(Debug, Display)]
 	#[display("<no mapper>")]
-	pub(crate) struct NRom { pub prg0: SegId }
+	pub(super) struct NRom {
+		prg0:      SegId,
+		prg0_mask: usize,
+	}
+
+	impl NRom {
+		pub(super) fn new(prg0: SegId, prg0_len: usize) -> Self {
+			Self { prg0, prg0_mask: prg0_len - 1 }
+		}
+	}
 
 	impl IMmu for NRom {
 		fn initial_state(&self) -> MmuState {
@@ -245,14 +257,14 @@ mod mappers {
 
 		fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
 			match va.0 {
-				0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 & 0x7FFF)),
+				0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 & self.prg0_mask)),
 				_                 => None,
 			}
 		}
 
 		fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
 			match loc.seg {
-				seg if seg == self.prg0 => Some(VA(0x8000 + (loc.offs & 0x7FFF))),
+				seg if seg == self.prg0 => Some(VA(0x8000 + (loc.offs & self.prg0_mask))),
 				_                       => None,
 			}
 		}
