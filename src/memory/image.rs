@@ -85,6 +85,7 @@ pub struct Image {
 	orig_offs: usize,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl Image {
 	/// Ctor.
 	pub fn new(name: &str, data: &[u8]) -> Self {

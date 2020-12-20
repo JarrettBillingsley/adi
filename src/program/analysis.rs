@@ -41,11 +41,13 @@ impl<T: IInstruction> ProtoBB<T> {
 			if inst.loc() < loc {
 				let next = inst.next_loc();
 
-				if next > loc {
+				use std::cmp::Ordering::*;
+
+				match next.cmp(&loc) {
 					// uh oh. loc is in the middle of this instruction.
-					return None
-				} else if next == loc {
-					return Some(inst)
+					Greater => return None,
+					Equal   => return Some(inst),
+					Less    => {}
 				}
 			}
 		}
@@ -322,7 +324,7 @@ impl<Plat: IPlatform> Program<Plat> {
 			}
 		}
 
-		assert!(potential_bbs.len() == 0);
+		assert!(potential_bbs.is_empty());
 
 		// now, turn the proto func into a real boy!!
 		let fid = self.new_func(loc, func.into_iter());

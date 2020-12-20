@@ -383,6 +383,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
+	#[allow(clippy::too_many_arguments)]
 	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8],
 		state: MmuState, state_after: MmuState) -> Self {
 		let mut bytes = [0u8; MAX_BYTES];

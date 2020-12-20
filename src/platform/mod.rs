@@ -50,10 +50,10 @@ lazy_static! {
 	};
 }
 
-fn loader_for_image(img: &Image) -> Option<&'static Box<dyn ILoader>> {
+fn loader_for_image(img: &Image) -> Option<&'static dyn ILoader> {
 	for loader in ALL_LOADERS.iter() {
 		if loader.can_parse(img) {
-			return Some(loader);
+			return Some(loader.as_ref());
 		}
 	}
 

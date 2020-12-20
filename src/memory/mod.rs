@@ -50,6 +50,7 @@ pub struct SegCollection {
 	seg_id_map:   HashMap<SegId, usize>,
 }
 
+#[allow(clippy::new_without_default)]
 impl SegCollection {
 	/// Makes a new empty collection.
 	pub fn new() -> Self {
@@ -124,6 +125,7 @@ impl SegCollection {
 // IMemory
 // ------------------------------------------------------------------------------------------------
 
+#[allow(clippy::len_without_is_empty)]
 pub trait IMemory: Display {
 	// ---------------------------------------------------------------------------------------------
 	// Getters
