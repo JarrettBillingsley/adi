@@ -101,6 +101,13 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom::new(prg0, prg0_len)})
 		}
 
+		3 => {
+			let prg0_img = Image::new(img.name(), &cart.prg_data);
+			let prg0_len = prg0_img.len();
+			let prg0 = segs.add_segment("PRG0", prg0_len, Some(prg0_img));
+			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom::new_cnrom(prg0, prg0_len)})
+		}
+
 		_ => Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper))),
 	}
 }
@@ -238,15 +245,20 @@ mod mappers {
 	// iNes 0 (NROM, no mapper)
 
 	#[derive(Debug, Display)]
-	#[display("<no mapper>")]
+	#[display("{name}")]
 	pub(super) struct NRom {
+		name:      &'static str,
 		prg0:      SegId,
 		prg0_mask: usize,
 	}
 
 	impl NRom {
 		pub(super) fn new(prg0: SegId, prg0_len: usize) -> Self {
-			Self { prg0, prg0_mask: prg0_len - 1 }
+			Self { name: "<no mapper>", prg0, prg0_mask: prg0_len - 1 }
+		}
+
+		pub(super) fn new_cnrom(prg0: SegId, prg0_len: usize) -> Self {
+			Self { name: "CNROM", prg0, prg0_mask: prg0_len - 1 }
 		}
 	}
 

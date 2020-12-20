@@ -15,6 +15,16 @@ use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span
 #[derive(Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct SegId(pub u16);
 
+impl SegId {
+	pub fn invalid() -> Self {
+		SegId(u16::MAX)
+	}
+
+	pub fn is_invalid(&self) -> bool {
+		self.0 == u16::MAX
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // Location
 // ------------------------------------------------------------------------------------------------
@@ -26,6 +36,16 @@ pub struct SegId(pub u16);
 pub struct Location {
 	pub seg:  SegId,
 	pub offs: usize,
+}
+
+impl Location {
+	pub fn invalid(offs: usize) -> Self {
+		Self { seg: SegId::invalid(), offs }
+	}
+
+	pub fn is_invalid(&self) -> bool {
+		self.seg.is_invalid()
+	}
 }
 
 impl Debug for Location {

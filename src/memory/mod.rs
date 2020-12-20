@@ -54,7 +54,7 @@ impl SegCollection {
 	/// Makes a new empty collection.
 	pub fn new() -> Self {
 		Self {
-			segs: Vec::new(),
+			segs: vec![Segment::new(SegId::invalid(), "[UNRESOLVED]", usize::MAX, None)],
 			next_seg_id: SegId(0),
 			seg_name_map: HashMap::new(),
 			seg_id_map: HashMap::new(),
@@ -167,7 +167,7 @@ pub trait IMemory: Display {
 	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location>;
 	/// Same as above, but infallible.
 	fn loc_from_va(&self, state: MmuState, va: VA) -> Location {
-		self.loc_for_va(state, va).unwrap()
+		self.loc_for_va(state, va).unwrap_or_else(|| Location::invalid(va.0))
 	}
 	/// Gets the VA which corresponds to this location, if any.
 	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
