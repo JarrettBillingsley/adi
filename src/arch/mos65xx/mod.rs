@@ -2,7 +2,6 @@ use std::default::Default;
 use std::convert::TryInto;
 
 use parse_display::Display;
-use derive_new::new;
 
 use crate::disasm::{
 	MemAccess,
@@ -261,7 +260,6 @@ pub struct InstDesc {
 }
 
 impl InstDesc {
-	// can't use derive_new cause this has to be const!
 	const fn new(
 		opcode:      Opcode,
 		meta_op:     MetaOp,
@@ -504,12 +502,15 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> Option<Operand> {
 
 /// The 65xx instruction printer.
 #[derive(Debug, Copy, Clone)]
-#[derive(new)]
 pub struct Printer {
 	flavor: SyntaxFlavor,
 }
 
 impl Printer {
+	pub fn new(flavor: SyntaxFlavor) -> Self {
+		Self { flavor }
+	}
+
 	fn fmt_imm(self, imm: u8) -> String {
 		match self.flavor {
 			SyntaxFlavor::Old =>

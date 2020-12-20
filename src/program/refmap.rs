@@ -1,6 +1,4 @@
 
-use derive_new::new;
-
 use std::collections::{
 	BTreeMap,
 	BTreeSet,
@@ -20,15 +18,16 @@ pub type RefSet = BTreeSet<Location>;
 /// Every location can have multiple "outrefs" - references *to* other locations and
 /// multiple "inrefs" - references *from* other locations. Looking up these refs is
 #[derive(Default)]
-#[derive(new)]
 pub struct RefMap {
-	#[new(value = "BTreeMap::new()")]
 	inrefs:  BTreeMap<Location, RefSet>,
-	#[new(value = "BTreeMap::new()")]
 	outrefs: BTreeMap<Location, RefSet>,
 }
 
 impl RefMap {
+	pub fn new() -> Self {
+		Self { inrefs: BTreeMap::new(), outrefs: BTreeMap::new() }
+	}
+
 	/// Add a reference from `src` to `dst`.
 	pub fn add(&mut self, src: Location, dst: Location) {
 		self._add_outref(src, dst);

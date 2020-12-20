@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use std::ops::{ Bound, RangeBounds };
 
 use parse_display::Display;
-use derive_new::new;
 
 use crate::program::BBId;
 use crate::memory::{ Location, SegId };
@@ -120,10 +119,15 @@ pub(crate) struct SpanMap {
 // The span map actually uses this type - only the end and kind fields, since the start
 // is the key.
 #[derive(Debug, Copy, Clone)]
-#[derive(new)]
 struct SpanInternal {
 	end:  usize,
 	kind: SpanKind,
+}
+
+impl SpanInternal {
+	fn new(end: usize, kind: SpanKind) -> Self {
+		Self { end, kind }
+	}
 }
 
 impl SpanMap {

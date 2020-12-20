@@ -16,7 +16,6 @@ dependencies = [
  "better-panic",
  "colored",
  "delegate",
- "derive-new",
  "err-derive",
  "generational-arena",
  "lazy_static",
@@ -150,17 +149,6 @@ name = "delegate"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a57ed03a3563e9d6214c1eec5bd3b151fc21fb2052448b97692c8df30d113c8c"
-dependencies = [
- "proc-macro2 1.0.19",
- "quote 1.0.7",
- "syn 1.0.38",
-]
-
-[[package]]
-name = "derive-new"
-version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71f31892cd5c62e414316f2963c5689242c43d8e7bbcaaeca97e5e28c95d91d9"
 dependencies = [
  "proc-macro2 1.0.19",
  "quote 1.0.7",
@@ -417,9 +405,9 @@ dependencies = [
 
 [[package]]
 name = "simplelog"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2736f58087298a448859961d3f4a0850b832e72619d75adc69da7993c2cd3c"
+checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
 dependencies = [
  "chrono",
  "log",

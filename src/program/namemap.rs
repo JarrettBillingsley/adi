@@ -8,8 +8,6 @@ use std::collections::{
 };
 use std::ops::RangeBounds;
 
-use derive_new::new;
-
 use crate::memory::Location;
 
 // TODO: make this parameterizable
@@ -21,15 +19,16 @@ pub const AUTOGEN_NAME_PREFIX: &str = "loc";
 
 /// A bidirectional mapping between names and locations.
 #[derive(Default)]
-#[derive(new)]
 pub struct NameMap {
-	#[new(default)]
 	names_to_locs: HashMap<String, Location>,
-	#[new(default)]
 	locs_to_names: BTreeMap<Location, String>,
 }
 
 impl NameMap {
+	pub fn new() -> Self {
+		Self { names_to_locs: HashMap::new(), locs_to_names: BTreeMap::new() }
+	}
+
 	/// Assigns a name to a given Location.
 	pub fn add(&mut self, name: &str, loc: Location) {
 		self.names_to_locs.insert(name.into(), loc);

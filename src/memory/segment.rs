@@ -2,7 +2,6 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::ops::{ Range, RangeBounds, Bound, Add, AddAssign, Sub, SubAssign };
 use std::fmt::{ Debug, };
 
-use derive_new::new;
 use parse_display::Display;
 
 use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind };
@@ -31,7 +30,6 @@ impl SegId {
 
 /// A unique location consisting of Segment ID and an offset within that Segment.
 #[derive(Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-#[derive(new)]
 #[display("{seg.0:04X}:{offs:08X}")]
 pub struct Location {
 	pub seg:  SegId,
@@ -39,6 +37,10 @@ pub struct Location {
 }
 
 impl Location {
+	pub fn new(seg: SegId, offs: usize) -> Self {
+		Self { seg, offs }
+	}
+
 	pub fn invalid(offs: usize) -> Self {
 		Self { seg: SegId::invalid(), offs }
 	}

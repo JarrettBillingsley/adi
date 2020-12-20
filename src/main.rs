@@ -4,6 +4,7 @@
 
 use better_panic::{ Settings as PanicSettings, Verbosity as PanicVerbosity };
 use simplelog::*;
+use log::*;
 // use colored::*;
 
 use adi::*;
@@ -15,8 +16,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
-fn setup_logging() -> Result<(), TermLogError> {
+fn setup_logging() -> Result<(), SetLoggerError> {
 	let log_config = ConfigBuilder::new()
+		.set_level_color(Level::Info, Color::Green)
+		.set_level_color(Level::Debug, Color::Blue)
+		.set_level_color(Level::Trace, Color::Cyan)
 		.set_time_level(LevelFilter::Off)
 		.set_thread_level(LevelFilter::Off)
 		.set_target_level(LevelFilter::Off)
@@ -48,7 +52,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	println!("found {} functions.", prog.all_funcs().count());
 
 /*
-	// show_all_funcs(&prog);
+	show_all_funcs(&prog);
 
 	let seg = prog.segment_for_name("PRG0").unwrap();
 
@@ -81,7 +85,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /*
-fn show_all_funcs(prog: &Program) {
+fn show_all_funcs(prog: &Box<dyn IProgram>) {
 	let mut funcs = prog.all_funcs().map(|(_, func)| func).collect::<Vec<_>>();
 	funcs.sort_by(|a, b| a.start_loc().cmp(&b.start_loc()));
 

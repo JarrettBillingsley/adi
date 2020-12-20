@@ -4,7 +4,6 @@ use std::option;
 use std::slice;
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
-use derive_new::new;
 use generational_arena::{ Arena, Index };
 
 use crate::memory::{ Location };
@@ -34,7 +33,6 @@ impl Debug for BBId {
 
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
-#[derive(new)]
 pub struct BasicBlock<TInstruction: IInstruction> {
 	id:       BBId,
 	loc:      Location,
@@ -44,6 +42,16 @@ pub struct BasicBlock<TInstruction: IInstruction> {
 }
 
 impl<T: IInstruction> BasicBlock<T> {
+	pub fn new(
+		id:       BBId,
+		loc:      Location,
+		term_loc: Location,
+		term:     BBTerm,
+		insts:    Vec<T>
+	) -> Self {
+		Self { id, loc, term_loc, term, insts }
+	}
+
 	/// Its globally-unique id.
 	pub fn id      (&self) -> BBId     { self.id }
 	/// Its globally-unique location.
@@ -146,22 +154,23 @@ impl Debug for FuncId {
 
 /// A single function.
 #[derive(Debug)]
-#[derive(new)]
 pub struct Function<TInstruction: IInstruction> {
 	/// Its globally-unique identifier.
 	id: FuncId,
 
 	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
-	#[new(value = "None")]
 	name: Option<String>,
 
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
 	/// ordering of the rest of them.
-	#[new(default)]
 	bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
 }
 
 impl<I: IInstruction> Function<I> {
+	pub fn new(id: FuncId) -> Self {
+		Self { id, name: None, bbs: Vec::new() }
+	}
+
 	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
 	pub fn add_bb(&mut self, bb: BasicBlock<I>) {
 		assert!(bb.id == self.next_id());
@@ -202,13 +211,15 @@ impl<I: IInstruction> Function<I> {
 /// An index of all functions in the program. Functions are created, destroyed, and looked up
 /// through this object.
 #[derive(Default)]
-#[derive(new)]
 pub struct FuncIndex<TInstruction: IInstruction> {
-	#[new(default)]
 	arena: Arena<Function<TInstruction>>,
 }
 
 impl<T: IInstruction> FuncIndex<T> {
+	pub fn new() -> Self {
+		Self { arena: Arena::new() }
+	}
+
 	/// Creates a new function and returns its ID.
 	pub fn new_func(&mut self) -> FuncId {
 		FuncId(self.arena.insert_with(|id| Function::new(FuncId(id))))
