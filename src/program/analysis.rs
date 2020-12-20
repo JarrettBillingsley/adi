@@ -269,6 +269,7 @@ impl<Plat: IPlatform> Program<Plat> {
 				match inst.kind() {
 					Invalid => panic!("disas_all gave an invalid instruction"),
 					Call | Other => {
+						// call targets are processed in 2nd pass.
 						insts.push(inst);
 						continue 'instloop;
 					}

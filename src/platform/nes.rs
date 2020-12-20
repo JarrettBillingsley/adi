@@ -253,15 +253,21 @@ mod mappers {
 		name:      &'static str,
 		prg0:      SegId,
 		prg0_mask: usize,
+		prg0_base: usize,
 	}
 
 	impl NRom {
 		pub(super) fn new(prg0: SegId, prg0_len: usize) -> Self {
-			Self { name: "<no mapper>", prg0, prg0_mask: prg0_len - 1 }
+			Self::_new("<no mapper>", prg0, prg0_len)
 		}
 
 		pub(super) fn new_cnrom(prg0: SegId, prg0_len: usize) -> Self {
-			Self { name: "CNROM", prg0, prg0_mask: prg0_len - 1 }
+			Self::_new("CNROM", prg0, prg0_len)
+		}
+
+		fn _new(name: &'static str, prg0: SegId, prg0_len: usize) -> Self {
+			let prg0_base = 0x10000 - prg0_len;
+			Self { name, prg0, prg0_mask: prg0_len - 1, prg0_base }
 		}
 	}
 
@@ -279,7 +285,7 @@ mod mappers {
 
 		fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
 			match loc.seg {
-				seg if seg == self.prg0 => Some(VA(0x8000 + (loc.offs & self.prg0_mask))),
+				seg if seg == self.prg0 => Some(VA(self.prg0_base + (loc.offs & self.prg0_mask))),
 				_                       => None,
 			}
 		}
