@@ -10,8 +10,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 
-use crate::memory::{
-	Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
+use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::disasm::{ INameLookup };
 use crate::platform::{ IPlatform, MmuTypeOf, InstTypeOf };
 

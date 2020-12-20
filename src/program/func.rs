@@ -11,72 +11,6 @@ use crate::memory::{ Location };
 use crate::disasm::{ IInstruction };
 
 // ------------------------------------------------------------------------------------------------
-// Function
-// ------------------------------------------------------------------------------------------------
-
-/// Newtype which uniquely identifies a `Function`.
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub struct FuncId(Index);
-
-impl Debug for FuncId {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		let (index, generation) = self.0.into_raw_parts();
-		write!(f, "FuncId({}, {})", index, generation)
-	}
-}
-
-/// A single function.
-#[derive(Debug)]
-#[derive(new)]
-pub struct Function<TInstruction: IInstruction> {
-	/// Its globally-unique identifier.
-	id: FuncId,
-
-	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
-	#[new(value = "None")]
-	name: Option<String>,
-
-	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
-	/// ordering of the rest of them.
-	#[new(default)]
-	bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
-}
-
-impl<I: IInstruction> Function<I> {
-	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
-	pub fn add_bb(&mut self, bb: BasicBlock<I>) {
-		assert!(bb.id == self.next_id());
-		self.bbs.push(bb);
-	}
-
-	/// The next available basic block ID.
-	pub fn next_id(&self) -> BBId {
-		BBId(self.id, self.bbs.len())
-	}
-
-	/// The basic block ID of the function's head.
-	pub fn head_id(&self) -> BBId {
-		self.bbs[0].id
-	}
-
-	/// Where the function starts.
-	pub fn start_loc(&self) -> Location {
-		self.bbs[0].loc
-	}
-
-	/// Iterator over this function's basic blocks, starting with the head, but then
-	/// in arbitrary order.
-	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock<I>> {
-		self.bbs.iter()
-	}
-
-	pub fn get_bb(&self, id: BBId) -> &BasicBlock<I> {
-		assert!(id.0 == self.id);
-		&self.bbs[id.1]
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
 // BasicBlock
 // ------------------------------------------------------------------------------------------------
 
@@ -192,6 +126,72 @@ impl BBTerm {
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),
 			JumpTbl(locs)                            => None     .into_iter().chain(locs),
 		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Function
+// ------------------------------------------------------------------------------------------------
+
+/// Newtype which uniquely identifies a `Function`.
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub struct FuncId(Index);
+
+impl Debug for FuncId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		let (index, generation) = self.0.into_raw_parts();
+		write!(f, "FuncId({}, {})", index, generation)
+	}
+}
+
+/// A single function.
+#[derive(Debug)]
+#[derive(new)]
+pub struct Function<TInstruction: IInstruction> {
+	/// Its globally-unique identifier.
+	id: FuncId,
+
+	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
+	#[new(value = "None")]
+	name: Option<String>,
+
+	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
+	/// ordering of the rest of them.
+	#[new(default)]
+	bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
+}
+
+impl<I: IInstruction> Function<I> {
+	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
+	pub fn add_bb(&mut self, bb: BasicBlock<I>) {
+		assert!(bb.id == self.next_id());
+		self.bbs.push(bb);
+	}
+
+	/// The next available basic block ID.
+	pub fn next_id(&self) -> BBId {
+		BBId(self.id, self.bbs.len())
+	}
+
+	/// The basic block ID of the function's head.
+	pub fn head_id(&self) -> BBId {
+		self.bbs[0].id
+	}
+
+	/// Where the function starts.
+	pub fn start_loc(&self) -> Location {
+		self.bbs[0].loc
+	}
+
+	/// Iterator over this function's basic blocks, starting with the head, but then
+	/// in arbitrary order.
+	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock<I>> {
+		self.bbs.iter()
+	}
+
+	pub fn get_bb(&self, id: BBId) -> &BasicBlock<I> {
+		assert!(id.0 == self.id);
+		&self.bbs[id.1]
 	}
 }
 
