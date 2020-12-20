@@ -54,9 +54,8 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	show_all_funcs(&prog);
+	//show_all_funcs(&prog);
 
-/*
 	let seg = prog.segment_for_name("PRG0").unwrap();
 
 	let divider = "; -------------------------------------------------------------------------";
@@ -64,7 +63,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	for span in seg.all_spans() {
 		match span.kind() {
 			SpanKind::Unk => {
-				let addr = prog.fmt_addr(prog.va_from_loc(span.start()).0);
+				let addr = prog.fmt_addr(span.start().offs);
 				let msg = format!("[{} unexplored byte(s)]", span.len());
 
 				println!("{}", divider.green());
@@ -74,15 +73,12 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 			}
 
 			SpanKind::Code(bbid) => {
-				let func_id = bbid.func();
-				let func = prog.get_func(func_id);
-				let bb = func.get_bb(bbid);
-				show_bb(&prog, bb);
+				show_bb(&prog, bbid);
 			}
 
 			_ => {}
 		}
-	}*/
+	}
 
 	Ok(())
 }

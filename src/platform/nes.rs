@@ -125,7 +125,10 @@ fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 		let dst_va  = VA(seg.read_le_u16(src_loc) as usize);
 		let dst_loc = prog.loc_from_va(state, dst_va);
 
-		prog.add_name_va(name, state, dst_va);
+		// sometimes two+ vectors can be pointing at the same location.
+		if !prog.has_name_for_loc(dst_loc) {
+			prog.add_name_va(name, state, dst_va);
+		}
 
 		// TODO: add a data item for each of these locations
 		prog.add_ref(src_loc, dst_loc);
@@ -155,9 +158,9 @@ const NES_STD_NAMES: &[StdName] = &[
 	StdName("SND_TRI_CTRL",          0x4008),
 	StdName("SND_TRI_TIMER",         0x400A),
 	StdName("SND_TRI_LENGTH",        0x400B),
-	StdName("SND_NOISE_CTRL",        0x400c),
-	StdName("SND_NOISE_PERIOD",      0x400e),
-	StdName("SND_NOISE_LENGTH",      0x400f),
+	StdName("SND_NOISE_CTRL",        0x400C),
+	StdName("SND_NOISE_PERIOD",      0x400E),
+	StdName("SND_NOISE_LENGTH",      0x400F),
 	StdName("SND_DMC_CTRL",          0x4010),
 	StdName("SND_DMC_COUNTER",       0x4011),
 	StdName("SND_DMC_ADDR",          0x4012),
