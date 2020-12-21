@@ -240,6 +240,13 @@ impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> DisasAll<'dis, 'img, I, D
 	pub fn err_loc(&self) -> Location {
 		self.loc
 	}
+
+	pub fn skip_it(&mut self) {
+		self.va += 1;
+		self.loc += 1;
+		self.offs += 1;
+		self.err = None;
+	}
 }
 
 impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> Iterator for DisasAll<'dis, 'img, I, D> {
