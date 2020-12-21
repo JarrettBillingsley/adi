@@ -13,13 +13,13 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging()?;
+	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	test_nes()?;
 	Ok(())
 }
 
-fn setup_logging() -> Result<(), SetLoggerError> {
+fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
 	let log_config = ConfigBuilder::new()
 		.set_level_color(Level::Info, simplelog::Color::Green)
 		.set_level_color(Level::Debug, simplelog::Color::Blue)
@@ -29,7 +29,7 @@ fn setup_logging() -> Result<(), SetLoggerError> {
 		.set_target_level(LevelFilter::Off)
 		.set_location_level(LevelFilter::Debug)
 		.build();
-	TermLogger::init(LevelFilter::Debug, log_config, TerminalMode::Mixed)
+	TermLogger::init(max_level, log_config, TerminalMode::Mixed)
 }
 
 fn setup_panic() {
@@ -54,8 +54,12 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	//show_all_funcs(&prog);
+	show_all_funcs(&prog);
+	//show_prg0(&prog);
+	Ok(())
+}
 
+fn show_prg0(prog: &Box<dyn IProgram>) {
 	let seg = prog.segment_for_name("PRG0").unwrap();
 
 	let divider = "; -------------------------------------------------------------------------";
@@ -84,8 +88,6 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 			_ => {}
 		}
 	}
-
-	Ok(())
 }
 
 fn show_all_funcs(prog: &Box<dyn IProgram>) {

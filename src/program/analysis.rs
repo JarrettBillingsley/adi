@@ -259,7 +259,7 @@ impl<Plat: IPlatform> Program<Plat> {
 			let mut iter     = dis.disas_all(slice, state, va, start);
 
 			'instloop: for inst in &mut iter {
-				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
+				trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				term_loc = end_loc;
 				end_loc = inst.next_loc();
 				let target_loc = inst.control_target().map(
@@ -330,11 +330,16 @@ impl<Plat: IPlatform> Program<Plat> {
 
 		assert!(potential_bbs.is_empty());
 
-		// now, turn the proto func into a real boy!!
-		let fid = self.new_func(loc, func.into_iter());
+		// empty func can happen if the very first BB was NO GOOD and was canceled.
+		if func.bbs.len() == 0 {
+			trace!("NOPE that's not a good function.");
+		} else {
+			// now, turn the proto func into a real boy!!
+			let fid = self.new_func(loc, func.into_iter());
 
-		// finally, turn the crank by putting more work on the queue
-		self.queue.push_back(AnalysisItem::Func2ndPass(fid));
+			// finally, turn the crank by putting more work on the queue
+			self.queue.push_back(AnalysisItem::Func2ndPass(fid));
+		}
 	}
 
 	pub(crate) fn func_second_pass(&mut self, fid: FuncId) {

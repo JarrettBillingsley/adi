@@ -1,10 +1,10 @@
-use std::marker::PhantomData;
 use std::io::{ BufReader, Cursor };
 use std::error::{ Error };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use nes_rom::ines::{ Ines };
 use parse_display::Display;
+use enum_dispatch::enum_dispatch;
 
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ IArchitecture };
@@ -16,26 +16,22 @@ use crate::program::{ IProgram, Program };
 // NesPlatform
 // ------------------------------------------------------------------------------------------------
 
-struct NesPlatform<Mapper> {
-	_m: PhantomData<Mapper>
+struct NesPlatform;
+
+impl NesPlatform {
+	fn new() -> Self { Self }
 }
 
-impl<Mapper: IMmu> NesPlatform<Mapper> {
-	fn new() -> Self {
-		Self { _m: PhantomData }
-	}
-}
-
-impl<Mapper: IMmu> IPlatform for NesPlatform<Mapper> {
+impl IPlatform for NesPlatform {
 	type TArchitecture = Mos65xxArchitecture;
-	type TMmu = NesMmu<Mapper>;
+	type TMmu = NesMmu;
 
 	fn arch(&self) -> Self::TArchitecture {
 		Mos65xxArchitecture
 	}
 }
 
-impl<Mapper: IMmu> Display for NesPlatform<Mapper> {
+impl Display for NesPlatform {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "NES/Famicom")
 	}
@@ -86,7 +82,7 @@ impl ILoader for NesLoader {
 }
 
 fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
--> PlatformResult<NesMmu<impl IMmu>> {
+-> PlatformResult<NesMmu> {
 	let ram = segs.add_segment("RAM",   0x800, None);
 	let ppu = segs.add_segment("PPU",   0x008, None);
 	let io  = segs.add_segment("IOREG", 0x020, None);
@@ -104,7 +100,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
 			let prg0_len = prg0_img.len();
 			let prg0 = segs.add_segment("PRG0", prg0_len, Some(prg0_img));
-			let ctor = if cart.mapper == 0 { mappers::NRom::new } else { mappers::NRom::new_cnrom };
+			let ctor = if cart.mapper == 0 { NRom::new } else { NRom::new_cnrom };
 			ctor(prg0, prg0_len)
 		}
 
@@ -118,17 +114,17 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			}
 
 			let mut all = Vec::new();
-			let mut iter = cart.prg_data.chunks_exact(0x8000);
+			let mut iter = cart.prg_data.chunks_exact(0x4000);
 
-			for chunk in iter {
+			while let Some(chunk) = iter.next() {
 				let prg_img = Image::new(img.name(), chunk);
-				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x8000, Some(prg_img));
+				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x4000, Some(prg_img));
 				all.push(seg_id);
 			}
 
 			assert_eq!(iter.remainder().len(), 0);
 
-			mappers::UXRom::new(all)
+			UXRom::new(all)
 		}
 
 		_ => return PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper)),
@@ -149,6 +145,8 @@ fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 		let seg     = prog.segment_from_loc(src_loc);
 		let dst_va  = VA(seg.read_le_u16(src_loc) as usize);
 		let dst_loc = prog.loc_from_va(state, dst_va);
+
+		// println!("{}: src_loc: {}, va {}, loc {}", src_loc, name, dst_va, dst_loc);
 
 		// sometimes two+ vectors can be pointing at the same location.
 		if !prog.has_name_for_loc(dst_loc) {
@@ -213,21 +211,45 @@ const NES_INT_VECS: &[StdName] = &[
 // NesMmu
 // ------------------------------------------------------------------------------------------------
 
+#[enum_dispatch]
 #[derive(Debug)]
-pub struct NesMmu<Mapper: IMmu> {
+enum Mapper {
+	NRom,
+	UXRom,
+}
+
+impl Display for Mapper {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		match self {
+			Mapper::NRom(m) => m.fmt(f),
+			Mapper::UXRom(m) => m.fmt(f),
+		}
+	}
+}
+
+#[enum_dispatch(Mapper)]
+trait IMapper {
+	fn initial_state(&self) -> MmuState;
+	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location>;
+	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
+	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
+}
+
+#[derive(Debug)]
+pub struct NesMmu {
 	ram:    SegId,
 	ppu:    SegId,
 	io:     SegId,
 	mapper: Mapper,
 }
 
-impl<Mapper: IMmu> std::fmt::Display for NesMmu<Mapper> {
+impl std::fmt::Display for NesMmu {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{}", self.mapper)
 	}
 }
 
-impl<Mapper: IMmu> IMmu for NesMmu<Mapper> {
+impl IMmu for NesMmu {
 	fn initial_state(&self) -> MmuState {
 		self.mapper.initial_state()
 	}
@@ -266,130 +288,126 @@ impl<Mapper: IMmu> IMmu for NesMmu<Mapper> {
 // Mappers
 // ------------------------------------------------------------------------------------------------
 
-mod mappers {
-	use super::*;
+// ---------------------------------------------------------------------------------------------
+// iNes 0 (NROM, no mapper)
+// iNes 3 (CNROM, no PRG banking)
 
-	// ---------------------------------------------------------------------------------------------
-	// iNes 0 (NROM, no mapper)
-	// iNes 3 (CNROM, no PRG banking)
+#[derive(Debug, Display)]
+#[display("{name}")]
+struct NRom {
+	name:      &'static str,
+	prg0:      SegId,
+	prg0_mask: usize,
+	prg0_base: usize,
+}
 
-	#[derive(Debug, Display)]
-	#[display("{name}")]
-	pub(super) struct NRom {
-		name:      &'static str,
-		prg0:      SegId,
-		prg0_mask: usize,
-		prg0_base: usize,
+impl NRom {
+	fn new(prg0: SegId, prg0_len: usize) -> Mapper {
+		Self::_new("<no mapper>", prg0, prg0_len)
 	}
 
-	impl NRom {
-		pub(super) fn new(prg0: SegId, prg0_len: usize) -> Self {
-			Self::_new("<no mapper>", prg0, prg0_len)
-		}
-
-		pub(super) fn new_cnrom(prg0: SegId, prg0_len: usize) -> Self {
-			Self::_new("CNROM", prg0, prg0_len)
-		}
-
-		fn _new(name: &'static str, prg0: SegId, prg0_len: usize) -> Self {
-			let prg0_base = 0x10000 - prg0_len;
-			Self { name, prg0, prg0_mask: prg0_len - 1, prg0_base }
-		}
+	fn new_cnrom(prg0: SegId, prg0_len: usize) -> Mapper {
+		Self::_new("CNROM", prg0, prg0_len)
 	}
 
-	impl IMmu for NRom {
-		fn initial_state(&self) -> MmuState {
-			Default::default()
-		}
+	fn _new(name: &'static str, prg0: SegId, prg0_len: usize) -> Mapper {
+		let prg0_base = 0x10000 - prg0_len;
+		Self { name, prg0, prg0_mask: prg0_len - 1, prg0_base }.into()
+	}
+}
 
-		fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
-			match va.0 {
-				0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 & self.prg0_mask)),
-				_                 => None,
-			}
-		}
+impl IMapper for NRom {
+	fn initial_state(&self) -> MmuState {
+		Default::default()
+	}
 
-		fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-			match loc.seg {
-				seg if seg == self.prg0 => Some(VA(self.prg0_base + (loc.offs & self.prg0_mask))),
-				_                       => None,
-			}
-		}
-
-		fn name_prefix_for_va(&self, _state: MmuState, va: VA) -> String {
-			match va.0 {
-				0x8000 ..= 0xFFFF => "PRG0".into(),
-				_                 => "UNK".into(),
-			}
+	fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
+		match va.0 {
+			0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 & self.prg0_mask)),
+			_                 => None,
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------------
-	// iNes 2 (UXROM)
-
-	#[derive(Debug, Display)]
-	#[display("UXROM")]
-	pub(super) struct UXRom {
-		all:  Vec<SegId>,
-		last: SegId,
+	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
+		match loc.seg {
+			seg if seg == self.prg0 => Some(VA(self.prg0_base + (loc.offs & self.prg0_mask))),
+			_                       => None,
+		}
 	}
 
-	impl UXRom {
-		pub(super) fn new(all: Vec<SegId>) -> Self {
-			let last = *all.last().unwrap();
-			Self { all, last }
+	fn name_prefix_for_va(&self, _state: MmuState, va: VA) -> String {
+		match va.0 {
+			0x8000 ..= 0xFFFF => "PRG0".into(),
+			_                 => "UNK".into(),
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// iNes 2 (UXROM)
+
+#[derive(Debug, Display)]
+#[display("UXROM")]
+struct UXRom {
+	all:  Vec<SegId>,
+	last: SegId,
+}
+
+impl UXRom {
+	fn new(all: Vec<SegId>) -> Mapper {
+		let last = *all.last().unwrap();
+		Self { all, last }.into()
+	}
+
+	fn seg_idx_for_loc(&self, seg: SegId) -> Option<usize> {
+		// TODO: linear... problem?
+		for (i, &s) in self.all.iter().enumerate() {
+			if s == seg {
+				return Some(i);
+			}
 		}
 
-		fn seg_idx_for_loc(&self, seg: SegId) -> Option<usize> {
-			// TODO: linear... problem?
-			for (i, &s) in self.all.iter().enumerate() {
-				if s == seg {
-					return Some(i);
-				}
-			}
+		None
+	}
 
+	fn contains_seg(&self, seg: SegId) -> bool {
+		self.seg_idx_for_loc(seg).is_some()
+	}
+}
+
+impl IMapper for UXRom {
+	fn initial_state(&self) -> MmuState {
+		Default::default()
+	}
+
+	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+		let offs = va.0 & 0x3FFF;
+
+		match va.0 {
+			0x8000 ..= 0xBFFF => Some(Location::new(self.all[state.to_usize()], offs)),
+			0xC000 ..= 0xFFFF => Some(Location::new(self.last,                  offs)),
+			_                 => None,
+		}
+	}
+
+	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
+		let offs = loc.offs & 0x3FFF;
+
+		// every segment except the last has a virtual base of 0x8000.
+		if loc.seg == self.last {
+			Some(VA(0xC000 + offs))
+		} else if self.contains_seg(loc.seg) {
+			Some(VA(0x8000 + offs))
+		} else {
 			None
 		}
-
-		fn contains_seg(&self, seg: SegId) -> bool {
-			self.seg_idx_for_loc(seg).is_some()
-		}
 	}
 
-	impl IMmu for UXRom {
-		fn initial_state(&self) -> MmuState {
-			Default::default()
-		}
-
-		fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
-			let offs = va.0 & 0x3FFF;
-
-			match va.0 {
-				0x8000 ..= 0xBFFF => Some(Location::new(self.all[state.to_usize()], offs)),
-				0xC000 ..= 0xFFFF => Some(Location::new(self.last,                  offs)),
-				_                 => None,
-			}
-		}
-
-		fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-			let offs = loc.offs & 0x3FFF;
-
-			// every segment except the last has a virtual base of 0x8000.
-			if loc.seg == self.last {
-				Some(VA(0xC000 + offs))
-			} else if self.contains_seg(loc.seg) {
-				Some(VA(0x8000 + offs))
-			} else {
-				None
-			}
-		}
-
-		fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
-			match va.0 {
-				0x8000 ..= 0xBFFF => format!("PRG{}", state.to_usize()),
-				0xC000 ..= 0xFFFF => format!("PRG{}", self.all.len() - 1),
-				_                 => "UNK".into(),
-			}
+	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
+		match va.0 {
+			0x8000 ..= 0xBFFF => format!("PRG{}", state.to_usize()),
+			0xC000 ..= 0xFFFF => format!("PRG{}", self.all.len() - 1),
+			_                 => "UNK".into(),
 		}
 	}
 }

@@ -185,6 +185,8 @@ impl<Plat: IPlatform> Program<Plat> {
 			seg.redefine_span(bb_loc, SpanKind::Code(bbid));
 		}
 
+		assert_ne!(new_func.num_bbs(), 0);
+
 		fid
 	}
 
