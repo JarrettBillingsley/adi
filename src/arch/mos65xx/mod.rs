@@ -546,7 +546,7 @@ impl IPrinter<Instruction> for Printer {
 		i.desc.meta_op.mnemonic(self.flavor).into()
 	}
 
-	fn fmt_operands(&self, i: &Instruction, l: &dyn INameLookup) -> String {
+	fn fmt_operands(&self, i: &Instruction, l: &impl INameLookup) -> String {
 		use std::fmt::Write;
 
 		let mut ret = String::new();

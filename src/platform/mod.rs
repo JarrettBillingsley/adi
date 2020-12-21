@@ -4,6 +4,7 @@ use std::fmt::Display;
 
 use parse_display::Display;
 use lazy_static::lazy_static;
+use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ IArchitecture };
 use crate::memory::{ Image, IMmu };
@@ -38,34 +39,33 @@ pub type PrintTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TPrinter;
 // ILoader
 // ------------------------------------------------------------------------------------------------
 
+#[enum_dispatch(Loader)]
 pub trait ILoader: Sync + Send {
 	fn can_parse(&self, img: &Image) -> bool;
 	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>>;
 }
 
+#[enum_dispatch]
+pub enum Loader {
+	NesLoader
+}
+
 lazy_static! {
-	static ref ALL_LOADERS: Vec<Box<dyn ILoader>> = {
+	static ref ALL_LOADERS: Vec<Loader> = {
 		vec![
-			Box::new(NesLoader)
+			NesLoader.into(),
 		]
 	};
 }
 
-fn loader_for_image(img: &Image) -> Option<&'static dyn ILoader> {
+pub fn program_from_image(img: Image) -> PlatformResult<Box<dyn IProgram>> {
 	for loader in ALL_LOADERS.iter() {
-		if loader.can_parse(img) {
-			return Some(loader.as_ref());
+		if loader.can_parse(&img) {
+			return loader.program_from_image(img);
 		}
 	}
 
-	None
-}
-
-pub fn program_from_image(img: Image) -> PlatformResult<Box<dyn IProgram>> {
-	match loader_for_image(&img) {
-		Some(loader) => loader.program_from_image(img),
-		None         => PlatformError::unknown_platform(),
-	}
+	PlatformError::unknown_platform()
 }
 
 // ------------------------------------------------------------------------------------------------

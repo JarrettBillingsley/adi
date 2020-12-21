@@ -286,13 +286,13 @@ pub trait IPrinter<TInstruction: IInstruction> {
 	fn fmt_mnemonic(&self, i: &TInstruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &TInstruction, l: &dyn INameLookup) -> String;
+	fn fmt_operands(&self, i: &TInstruction, l: &impl INameLookup) -> String;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Give a string representation of an instruction.
-	fn fmt_instr(&self, i: &TInstruction, l: &dyn INameLookup) -> String {
+	fn fmt_instr(&self, i: &TInstruction, l: &impl INameLookup) -> String {
 		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, l))
 	}
 }
