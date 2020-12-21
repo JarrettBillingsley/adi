@@ -122,6 +122,8 @@ pub trait IInstruction {
 	fn mmu_state(&self) -> MmuState;
 	/// Get the state of the MMU *after* this instruction.
 	fn mmu_state_after(&self) -> MmuState;
+	/// Does this instruction write to memory?
+	fn writes_mem(&self) -> bool;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods

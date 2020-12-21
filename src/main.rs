@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Trace)?;
+	setup_logging(LevelFilter::Debug)?;
 	setup_panic();
 	test_nes()?;
 	Ok(())
@@ -150,8 +150,29 @@ fn show_bb(prog: &Box<dyn IProgram>, bb: BBId) {
 		let mnem = prog.inst_fmt_mnemonic(bb, i);
 		let ops  = prog.inst_fmt_operands(bb, i);
 
-		println!("{:>4}:{}  {:8}      {:3} {:30}",
+		print!("{:>4}:{}  {:8}      {:3} {:30}",
 			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+
+		for i in 0 .. inst.num_ops() {
+			let op = inst.get_op(i);
+
+			match op.access() {
+				// writing to memory...
+				Some(MemAccess::Write) | Some(MemAccess::Rmw) => {
+					let va = op.addr();
+					if let Some(loc) = prog.loc_for_va(inst.mmu_state(), va) {
+						// ...into a segment with an image mapping...
+						if !prog.segment_from_loc(loc).is_fake() {
+							// ooooh, that might be a bank switch!
+							print!("{}", "<------------------------- BANK SWITCH??".yellow());
+						}
+					}
+				}
+				_ => {}
+			}
+		}
+
+		println!();
 	}
 
 	// Terminator

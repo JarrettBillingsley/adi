@@ -433,6 +433,16 @@ impl IInstruction for Instruction {
 
 		None
 	}
+
+	fn writes_mem(&self) -> bool {
+		use AddrMode::*;
+		use MetaOp::*;
+
+		match self.desc.addr_mode {
+			IMP | IMM | IND | REL | LAB => false,
+			_ => matches!(self.desc.meta_op, ASL | DEC | INC | LSR | ROL | ROR | STA | STX | STY)
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
