@@ -34,22 +34,16 @@ impl Debug for BBId {
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
 pub struct BasicBlock<TInstruction: IInstruction> {
-	id:       BBId,
-	loc:      Location,
-	term_loc: Location,
-	term:     BBTerm,
-	insts:    Vec<TInstruction>,
+	id:    BBId,
+	loc:   Location,
+	term:  BBTerm,
+	insts: Vec<TInstruction>,
 }
 
 impl<T: IInstruction> BasicBlock<T> {
-	pub fn new(
-		id:       BBId,
-		loc:      Location,
-		term_loc: Location,
-		term:     BBTerm,
-		insts:    Vec<T>
-	) -> Self {
-		Self { id, loc, term_loc, term, insts }
+	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
+		assert_ne!(insts.len(), 0);
+		Self { id, loc, term, insts }
 	}
 
 	/// Its globally-unique id.
@@ -57,7 +51,7 @@ impl<T: IInstruction> BasicBlock<T> {
 	/// Its globally-unique location.
 	pub fn loc     (&self) -> Location { self.loc }
 	/// Where its terminator (last instruction) is located.
-	pub fn term_loc(&self) -> Location { self.term_loc }
+	pub fn term_loc(&self) -> Location { self.insts.last().unwrap().loc() }
 	/// How it ends, and what its successors are.
 	pub fn term    (&self) -> &BBTerm  { &self.term }
 	/// Its instructions.

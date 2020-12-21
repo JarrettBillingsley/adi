@@ -15,10 +15,6 @@ use crate::disasm::{
 };
 
 // ------------------------------------------------------------------------------------------------
-// Sub-modules
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
 // ProtoBB
 // ------------------------------------------------------------------------------------------------
 
@@ -27,7 +23,6 @@ use crate::disasm::{
 #[derive(Debug)]
 struct ProtoBB<TInstruction: IInstruction> {
 	loc:      Location,
-	term_loc: Location,
 	term:     BBTerm,
 	insts:    Vec<TInstruction>,
 
@@ -58,7 +53,7 @@ impl<T: IInstruction> ProtoBB<T> {
 
 impl<T: IInstruction> IntoBasicBlock<T> for ProtoBB<T> {
 	fn into_bb(self, id: BBId) -> BasicBlock<T> {
-		BasicBlock::new(id, self.loc, self.term_loc, self.term, self.insts)
+		BasicBlock::new(id, self.loc, self.term, self.insts)
 	}
 }
 
@@ -82,15 +77,13 @@ impl<T: IInstruction> ProtoFunc<T> {
 	/// Adds a new basic block and returns its index.
 	fn new_bb(&mut self,
 		loc: Location,
-		term_loc: Location,
 		term: BBTerm,
 		end: Location,
 		insts: Vec<T>)
 	-> PBBIdx {
-		trace!("new bb loc: {}, term_loc: {}, end: {}, term: {:?}",
-				loc, term_loc, end, term);
+		trace!("new bb loc: {}, end: {}, term: {:?}", loc, end, term);
 
-		self.push_bb(ProtoBB { loc, term_loc, term, end, insts })
+		self.push_bb(ProtoBB { loc, term, end, insts })
 	}
 
 	fn push_bb(&mut self, bb: ProtoBB<T>) -> PBBIdx {
@@ -111,18 +104,15 @@ impl<T: IInstruction> ProtoFunc<T> {
 
 		let mut new = ProtoBB {
 			loc:      new_start,
-			term_loc: old.term_loc,
 			term:     BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
 			insts:    new_insts,
 			end:      old.end
 		};
 
 		std::mem::swap(&mut old.term, &mut new.term);
-		old.term_loc = term_loc;
-		old.end      = new_start;
+		old.end = new_start;
 
-		trace!("split bb loc: {}, term_loc: {}, end: {}, term: {:?}",
-				new.loc, new.term_loc, new.end, new.term);
+		trace!("split bb loc: {}, end: {}, term: {:?}", new.loc, new.end, new.term);
 
 		self.push_bb(new)
 	}
@@ -215,8 +205,9 @@ impl<Plat: IPlatform> Program<Plat> {
 	}
 
 	fn resolve_target(&self, state: MmuState, target: VA) -> Location {
-		if let Some(l) = self.loc_for_va(state, target) { l } else {
-			todo!("unresolvable control flow target");
+		match self.loc_for_va(state, target) {
+			Some(l) => l,
+			None    => Location::invalid(target.0),
 		}
 	}
 
@@ -252,7 +243,6 @@ impl<Plat: IPlatform> Program<Plat> {
 
 			// let's start disassembling instructions
 			let dis          = self.plat().arch().new_disassembler();
-			let mut term_loc = start;
 			let mut end_loc  = start;
 			let mut term     = None;
 			let mut insts    = Vec::new();
@@ -260,7 +250,6 @@ impl<Plat: IPlatform> Program<Plat> {
 
 			'instloop: for inst in &mut iter {
 				trace!("{:04X} {:?}", inst.va(), inst.bytes());
-				term_loc = end_loc;
 				end_loc = inst.next_loc();
 				let target_loc = inst.control_target().map(
 					|t| self.resolve_target(inst.mmu_state(), t));
@@ -323,7 +312,7 @@ impl<Plat: IPlatform> Program<Plat> {
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let bb_id = func.new_bb(start, term_loc, term.unwrap(), end_loc, insts);
+				let bb_id = func.new_bb(start, term.unwrap(), end_loc, insts);
 				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
 			}
 		}
