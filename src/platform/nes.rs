@@ -87,6 +87,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 	let ppu = segs.add_segment("PPU",   0x008, None);
 	let io  = segs.add_segment("IOREG", 0x020, None);
 
+	// TODO: PRG RAM and RAM banking
 	let mapper = match cart.mapper {
 		// Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 
@@ -145,8 +146,6 @@ fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
 		let seg     = prog.segment_from_loc(src_loc);
 		let dst_va  = VA(seg.read_le_u16(src_loc) as usize);
 		let dst_loc = prog.loc_from_va(state, dst_va);
-
-		// println!("{}: src_loc: {}, va {}, loc {}", src_loc, name, dst_va, dst_loc);
 
 		// sometimes two+ vectors can be pointing at the same location.
 		if !prog.has_name_for_loc(dst_loc) {
