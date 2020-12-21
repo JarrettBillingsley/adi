@@ -589,5 +589,5 @@ impl IArchitecture for Mos65xxArchitecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { Disassembler }
-	fn new_printer     (&self) -> Printer      { Printer::new(SyntaxFlavor::Old) }
+	fn new_printer     (&self) -> Printer      { Printer::new(SyntaxFlavor::New) }
 }

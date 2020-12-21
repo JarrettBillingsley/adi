@@ -8,6 +8,12 @@ use crate::memory::{ VA, Location };
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 pub struct MmuState(u128);
 
+impl MmuState {
+	pub fn to_usize(&self) -> usize {
+		self.0 as usize
+	}
+}
+
 /// Trait for MMUs (memory management units), which abstract the VA-to-Location mapping.
 ///
 /// The "MMU" broadly means "the hardware that decides what physical device a given virtual

@@ -62,7 +62,7 @@ impl ILoader for NesLoader {
 		let cart = match Ines::from_rom(reader) {
 			Ok(cart) => cart,
 			// ines::RomError has a buggy Display impl, can't call to_string
-			Err(e) => return Err(PlatformError::invalid_image(e.description().into())),
+			Err(e) => return PlatformError::invalid_image(e.description().into()),
 		};
 
 		let mut segs = SegCollection::new();
@@ -91,25 +91,50 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 	let ppu = segs.add_segment("PPU",   0x008, None);
 	let io  = segs.add_segment("IOREG", 0x020, None);
 
-	match cart.mapper {
+	let mapper = match cart.mapper {
 		// Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 
-		0 => {
+		0 | 3 => {
+			if (cart.prg_data.len() != 0x4000) && (cart.prg_data.len() != 0x8000) {
+				return PlatformError::invalid_image(
+					format!("PRG ROM length (0x{:X}) must be 8 or 16KB", cart.prg_data.len()))
+			}
+
+			// TODO: this sets "orig_offs" to 0 every time.
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
 			let prg0_len = prg0_img.len();
 			let prg0 = segs.add_segment("PRG0", prg0_len, Some(prg0_img));
-			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom::new(prg0, prg0_len)})
+			let ctor = if cart.mapper == 0 { mappers::NRom::new } else { mappers::NRom::new_cnrom };
+			ctor(prg0, prg0_len)
 		}
 
-		3 => {
-			let prg0_img = Image::new(img.name(), &cart.prg_data);
-			let prg0_len = prg0_img.len();
-			let prg0 = segs.add_segment("PRG0", prg0_len, Some(prg0_img));
-			Ok(NesMmu { ram, ppu, io, mapper: mappers::NRom::new_cnrom(prg0, prg0_len)})
+		2 => {
+			let prg_rom_len = cart.prg_data.len();
+
+			// data must be a multiple of 16KB (0x8000)
+			if (prg_rom_len % 0x8000) != 0 {
+				return PlatformError::invalid_image(
+					format!("PRG ROM length (0x{:X}) not a multiple of 16KB", cart.prg_data.len()))
+			}
+
+			let mut all = Vec::new();
+			let mut iter = cart.prg_data.chunks_exact(0x8000);
+
+			for chunk in iter {
+				let prg_img = Image::new(img.name(), chunk);
+				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x8000, Some(prg_img));
+				all.push(seg_id);
+			}
+
+			assert_eq!(iter.remainder().len(), 0);
+
+			mappers::UXRom::new(all)
 		}
 
-		_ => Err(PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper))),
-	}
+		_ => return PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper)),
+	};
+
+	Ok(NesMmu { ram, ppu, io, mapper })
 }
 
 fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
@@ -246,6 +271,7 @@ mod mappers {
 
 	// ---------------------------------------------------------------------------------------------
 	// iNes 0 (NROM, no mapper)
+	// iNes 3 (CNROM, no PRG banking)
 
 	#[derive(Debug, Display)]
 	#[display("{name}")]
@@ -297,8 +323,73 @@ mod mappers {
 			}
 		}
 	}
-}
 
-// TODO: when implementing bankswitching, have to somehow keep track of which banks
-// are mapped into which frames/windows, so that we can detect the case that the same
-// bank is mapped into different windows (which really shouldn't happen I don't think, but)
+	// ---------------------------------------------------------------------------------------------
+	// iNes 2 (UXROM)
+
+	#[derive(Debug, Display)]
+	#[display("UXROM")]
+	pub(super) struct UXRom {
+		all:  Vec<SegId>,
+		last: SegId,
+	}
+
+	impl UXRom {
+		pub(super) fn new(all: Vec<SegId>) -> Self {
+			let last = *all.last().unwrap();
+			Self { all, last }
+		}
+
+		fn seg_idx_for_loc(&self, seg: SegId) -> Option<usize> {
+			// TODO: linear... problem?
+			for (i, &s) in self.all.iter().enumerate() {
+				if s == seg {
+					return Some(i);
+				}
+			}
+
+			None
+		}
+
+		fn contains_seg(&self, seg: SegId) -> bool {
+			self.seg_idx_for_loc(seg).is_some()
+		}
+	}
+
+	impl IMmu for UXRom {
+		fn initial_state(&self) -> MmuState {
+			Default::default()
+		}
+
+		fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+			let offs = va.0 & 0x3FFF;
+
+			match va.0 {
+				0x8000 ..= 0xBFFF => Some(Location::new(self.all[state.to_usize()], offs)),
+				0xC000 ..= 0xFFFF => Some(Location::new(self.last,                  offs)),
+				_                 => None,
+			}
+		}
+
+		fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
+			let offs = loc.offs & 0x3FFF;
+
+			// every segment except the last has a virtual base of 0x8000.
+			if loc.seg == self.last {
+				Some(VA(0xC000 + offs))
+			} else if self.contains_seg(loc.seg) {
+				Some(VA(0x8000 + offs))
+			} else {
+				None
+			}
+		}
+
+		fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
+			match va.0 {
+				0x8000 ..= 0xBFFF => format!("PRG{}", state.to_usize()),
+				0xC000 ..= 0xFFFF => format!("PRG{}", self.all.len() - 1),
+				_                 => "UNK".into(),
+			}
+		}
+	}
+}

@@ -64,7 +64,7 @@ fn loader_for_image(img: &Image) -> Option<&'static dyn ILoader> {
 pub fn program_from_image(img: Image) -> PlatformResult<Box<dyn IProgram>> {
 	match loader_for_image(&img) {
 		Some(loader) => loader.program_from_image(img),
-		None         => Err(PlatformError::unknown_platform()),
+		None         => PlatformError::unknown_platform(),
 	}
 }
 
@@ -93,12 +93,12 @@ pub struct PlatformError {
 impl Error for PlatformError {}
 
 impl PlatformError {
-	pub fn unknown_platform() -> Self {
-		Self { kind: PlatformErrorKind::UnknownPlatform }
+	pub fn unknown_platform<T>() -> PlatformResult<T> {
+		Err(Self { kind: PlatformErrorKind::UnknownPlatform })
 	}
 
-	pub fn invalid_image(msg: String) -> Self {
-		Self { kind: PlatformErrorKind::InvalidImage { msg } }
+	pub fn invalid_image<T>(msg: String) -> PlatformResult<T> {
+		Err(Self { kind: PlatformErrorKind::InvalidImage { msg } })
 	}
 }
 
