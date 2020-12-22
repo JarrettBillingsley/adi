@@ -8,7 +8,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ IArchitecture };
 use crate::memory::{ Image, IMmu };
-use crate::program::{ IProgram };
+use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -17,6 +17,7 @@ use crate::program::{ IProgram };
 mod nes;
 
 use nes::{ NesLoader };
+pub use nes::{ NesPlatform };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
@@ -42,7 +43,7 @@ pub type PrintTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TPrinter;
 #[enum_dispatch(Loader)]
 pub trait ILoader: Sync + Send {
 	fn can_parse(&self, img: &Image) -> bool;
-	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>>;
+	fn program_from_image(&self, img: Image) -> PlatformResult<Program>;
 }
 
 #[enum_dispatch]
@@ -58,7 +59,7 @@ lazy_static! {
 	};
 }
 
-pub fn program_from_image(img: Image) -> PlatformResult<Box<dyn IProgram>> {
+pub fn program_from_image(img: Image) -> PlatformResult<Program> {
 	for loader in ALL_LOADERS.iter() {
 		if loader.can_parse(&img) {
 			return loader.program_from_image(img);

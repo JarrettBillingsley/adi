@@ -9,6 +9,7 @@ use std::ops::{ Bound, RangeBounds };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
+use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ IArchitecture };
 use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
@@ -33,7 +34,19 @@ pub use refmap::*;
 // Program
 // ------------------------------------------------------------------------------------------------
 
+use crate::platform::{ NesPlatform };
+
+type NesProgram = ProgramImpl<NesPlatform>;
+
+#[enum_dispatch]
+#[derive(parse_display::Display)]
+pub enum Program {
+	#[display("{0}")]
+	NesProgram,
+}
+
 /// The public interface to a `Program` object.
+#[enum_dispatch(Program)]
 pub trait IProgram: Display {
 	// ---------------------------------------------------------------------------------------------
 	// Analysis
@@ -122,7 +135,7 @@ pub trait IProgram: Display {
 }
 
 /// A Program contains a Memory object and indexes of names, references, functions, and variables.
-pub struct Program<Plat: IPlatform> {
+pub struct ProgramImpl<Plat: IPlatform> {
 	mem:   Memory<MmuTypeOf<Plat>>,
 	plat:  Plat,
 	names: NameMap,
@@ -132,14 +145,14 @@ pub struct Program<Plat: IPlatform> {
 	print: PrintTypeOf<Plat>,
 }
 
-impl<Plat: IPlatform> Display for Program<Plat> {
+impl<Plat: IPlatform> Display for ProgramImpl<Plat> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Platform: {}", self.plat)?;
 		write!(f, "{}", self.mem)
 	}
 }
 
-impl<Plat: IPlatform> Program<Plat> {
+impl<Plat: IPlatform> ProgramImpl<Plat> {
 	pub fn new(mem: Memory<MmuTypeOf<Plat>>, plat: Plat) -> Self {
 		Self {
 			mem,
@@ -226,7 +239,7 @@ impl<Plat: IPlatform> Program<Plat> {
 	}
 }
 
-impl<Plat: IPlatform> IProgram for Program<Plat> {
+impl<Plat: IPlatform> IProgram for ProgramImpl<Plat> {
 	// ---------------------------------------------------------------------------------------------
 	// Analysis
 
@@ -519,7 +532,7 @@ impl<Plat: IPlatform> IProgram for Program<Plat> {
 	}
 }
 
-impl<Plat: IPlatform> INameLookup for Program<Plat> {
+impl<Plat: IPlatform> INameLookup for ProgramImpl<Plat> {
 	fn lookup(&self, state: MmuState, addr: VA) -> Option<String> {
 		Some(self.name_of_va(state, addr))
 	}

@@ -59,7 +59,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
-fn show_prg0(prog: &Box<dyn IProgram>) {
+fn show_prg0(prog: &Program) {
 	let seg = prog.segment_for_name("PRG0").unwrap();
 
 	let divider = "; -------------------------------------------------------------------------";
@@ -90,7 +90,7 @@ fn show_prg0(prog: &Box<dyn IProgram>) {
 	}
 }
 
-fn show_all_funcs(prog: &Box<dyn IProgram>) {
+fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
 	funcs.sort_by(|&a, &b| prog.func_start_loc(a).cmp(&prog.func_start_loc(b)));
 
@@ -99,7 +99,7 @@ fn show_all_funcs(prog: &Box<dyn IProgram>) {
 	}
 }
 
-fn show_func(prog: &Box<dyn IProgram>, func: FuncId) {
+fn show_func(prog: &Program, func: FuncId) {
 	let divider =
 		"; -------------------------------------------------------------------------".green();
 
@@ -116,7 +116,7 @@ fn show_func(prog: &Box<dyn IProgram>, func: FuncId) {
 	}
 }
 
-fn show_bb(prog: &Box<dyn IProgram>, bb: BBId) {
+fn show_bb(prog: &Program, bb: BBId) {
 	let bb_loc = prog.bb_loc(bb);
 	let seg = prog.segment_from_loc(bb_loc);
 
@@ -197,7 +197,7 @@ fn show_bb(prog: &Box<dyn IProgram>, bb: BBId) {
 	println!();
 }
 
-fn thinger(prog: &Box<dyn IProgram>, from: Location, to: Location, msg: &str, color: Color){
+fn thinger(prog: &Program, from: Location, to: Location, msg: &str, color: Color){
 	if diff_funcs(prog, from, to) {
 		let dest = prog.name_of_loc(to);
 		let msg = format!("---------- {} to {} ----------", msg, dest);
@@ -205,7 +205,7 @@ fn thinger(prog: &Box<dyn IProgram>, from: Location, to: Location, msg: &str, co
 	}
 }
 
-fn diff_funcs(prog: &Box<dyn IProgram>, loc1: Location, loc2: Location) -> bool {
+fn diff_funcs(prog: &Program, loc1: Location, loc2: Location) -> bool {
 	let func1 = prog.func_that_contains(loc1);
 	let func2 = prog.func_that_contains(loc2);
 

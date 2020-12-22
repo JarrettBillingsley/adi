@@ -10,13 +10,13 @@ use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
-use crate::program::{ IProgram, Program };
+use crate::program::{ IProgram, Program, ProgramImpl };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
 // ------------------------------------------------------------------------------------------------
 
-struct NesPlatform;
+pub struct NesPlatform;
 
 impl NesPlatform {
 	fn new() -> Self { Self }
@@ -53,7 +53,7 @@ impl ILoader for NesLoader {
 	}
 
 	#[allow(deprecated)]
-	fn program_from_image(&self, img: Image) -> PlatformResult<Box<dyn IProgram>> {
+	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
 		let reader = BufReader::new(Cursor::new(img.data()));
 		let cart = match Ines::from_rom(reader) {
 			Ok(cart) => cart,
@@ -72,12 +72,12 @@ impl ILoader for NesLoader {
 		);
 
 		// 4. create Program
-		let mut prog = Program::new(mem, NesPlatform::new());
+		let mut prog = ProgramImpl::new(mem, NesPlatform::new());
 
 		// 5. setup default names
 		setup_nes_labels(&mut prog);
 
-		Ok(Box::new(prog))
+		Ok(prog.into())
 	}
 }
 
@@ -134,7 +134,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 	Ok(NesMmu { ram, ppu, io, mapper })
 }
 
-fn setup_nes_labels<Plat: IPlatform>(prog: &mut Program<Plat>) {
+fn setup_nes_labels(prog: &mut ProgramImpl<NesPlatform>) {
 	let state = prog.initial_mmu_state();
 
 	for StdName(name, addr) in NES_STD_NAMES {

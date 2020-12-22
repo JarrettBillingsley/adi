@@ -6,7 +6,7 @@ use log::*;
 
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform, InstTypeOf };
-use crate::program::{ Program, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
+use crate::program::{ ProgramImpl, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	IDisassembler,
@@ -143,7 +143,7 @@ pub(crate) enum AnalysisItem {
 	JumpTable(Location),
 }
 
-impl<Plat: IPlatform> Program<Plat> {
+impl<Plat: IPlatform> ProgramImpl<Plat> {
 	fn should_analyze_func(&self, loc: Location) -> bool {
 		if let Some(bbid) = self.span_at_loc(loc).bb() {
 			let orig_func_head = self.get_func(bbid.func()).head_id();
