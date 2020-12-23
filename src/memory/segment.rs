@@ -155,6 +155,11 @@ impl Segment {
 		self.image.is_none()
 	}
 
+	/// The opposite of above.
+	pub fn is_real(&self) -> bool {
+		self.image.is_some()
+	}
+
 	/// Gets the range of physical addresses this segment is mapped to.
 	/// Panics if this is a fake segment.
 	pub fn image_range(&self) -> Range<usize> {

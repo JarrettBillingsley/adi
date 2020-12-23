@@ -54,8 +54,11 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	show_all_funcs(&prog);
-	//show_prg0(&prog);
+	let reset = prog.func_defined_at(prog.loc_from_name("VEC_RESET")).unwrap();
+	prog.interp(reset, 100);
+
+	// show_all_funcs(&prog);
+	// show_prg0(&prog);
 	Ok(())
 }
 

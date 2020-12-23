@@ -80,6 +80,7 @@ pub trait IProgram: Display {
 	// ---------------------------------------------------------------------------------------------
 	// Functions
 
+	fn interp(&self, func: FuncId, iters: usize);
 	fn all_funcs(&self) -> Box<dyn Iterator<Item = FuncId> + '_>;
 	fn func_defined_at(&self, loc: Location) -> Option<FuncId>;
 	fn func_that_contains(&self, loc: Location) -> Option<FuncId>;
@@ -336,6 +337,31 @@ impl<Plat: IPlatform> IProgram for ProgramImpl<Plat> {
 
 	// ---------------------------------------------------------------------------------------------
 	// Functions
+
+	fn interp(&self, func: FuncId, iters: usize) {
+		use crate::arch::IInterpreter;
+		let mut interpreter = self.plat.arch().new_interpreter();
+		let func = self.funcs.get(func);
+		let head = func.head_id();
+
+		let mut bb = func.get_bb(head);
+		for _ in 0 .. iters {
+			match interpreter.interpret_bb(&self.mem, bb) {
+				Some(loc) => {
+					if let Some(next_bb) = self.span_at_loc(loc).bb() {
+						bb = self.funcs.get(next_bb.func()).get_bb(next_bb);
+						continue;
+					}
+				}
+
+				None => {}
+			}
+
+			break;
+		}
+
+		println!("done.");
+	}
 
 	/// Iterator over all functions in the program, in arbitrary order.
 	fn all_funcs(&self) -> Box<dyn Iterator<Item = FuncId> + '_> {
