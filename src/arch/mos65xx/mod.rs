@@ -620,8 +620,12 @@ impl InterpRegs {
 
 use crate::memory::{ IMemory, ImageRead };
 pub struct Interpreter {
-	regs: InterpRegs,
-	print: Printer,
+	regs:      InterpRegs,
+	print:     Printer,
+	ret_stack: Vec<Location>,
+	// TODO: external PRG-RAM
+	ram:       Vec<u8>,
+	jmp_dst:   Location,
 }
 
 impl Interpreter {
@@ -634,13 +638,20 @@ impl Interpreter {
 	const C: usize = 0;
 
 	fn new() -> Self {
-		let mut ret = Self { regs: InterpRegs::new(), print: Printer::new(SyntaxFlavor::New) };
+		let mut ret = Self {
+			regs:      InterpRegs::new(),
+			print:     Printer::new(SyntaxFlavor::New),
+			ret_stack: Vec::new(),
+			ram:       vec![0; 0x800],
+			jmp_dst:   Location::invalid(0),
+		};
 		ret.reset();
 		ret
 	}
 
 	fn read_byte(&self, mem: &dyn IMemory, state: MmuState, addr: u16) -> u8 {
 		match addr {
+			0x0000 ..= 0x07FF => self.ram[addr as usize],
 			0x2002 => 0xFF,
 			_ => {
 				if let Some(loc) = mem.loc_for_va(state, VA(addr.into())) {
@@ -656,9 +667,12 @@ impl Interpreter {
 		}
 	}
 
-	fn write_byte(&self, _mem: &dyn IMemory, _state: MmuState, addr: u16, val: u8) {
+	fn write_byte(&mut self, _mem: &dyn IMemory, _state: MmuState, addr: u16, val: u8) {
 		// TODO: *THIS* is where we detect bank changes!!
-		println!("storing {:02X} to {:04X}", val, addr);
+		match addr {
+			0x0000 ..= 0x07FF => self.ram[addr as usize] = val,
+			_ => {}
+		}
 	}
 
 	fn get_addr(&self, mem: &dyn IMemory, i: &Instruction) -> u16 {
@@ -677,7 +691,7 @@ impl Interpreter {
 
 			IND => {
 				let ptr_addr = i.op_addr();
-				let lo = self.read_byte(mem, i.mmu_state(), ptr_addr) as u16;
+				let lo = self.read_byte(mem, state, ptr_addr) as u16;
 
 				let hi = if ptr_addr & 0xFF == 0xFF {
 					// bug!
@@ -720,9 +734,25 @@ impl Interpreter {
 		self.set_flag(Self::N, val & 0x80 == 0x80);
 	}
 
+	fn push(&mut self, mem: &dyn IMemory, state: MmuState, val: u8) {
+		self.write_byte(mem, state, 0x0100 | (self.regs.S as u16), val);
+		self.regs.S = self.regs.S.wrapping_sub(1);
+	}
+
+	fn pop(&mut self, mem: &dyn IMemory, state: MmuState) -> u8 {
+		self.regs.S = self.regs.S.wrapping_add(1);
+		self.read_byte(mem, state, 0x0100 | (self.regs.S as u16))
+	}
+
+	fn pop_n(&mut self, mem: &dyn IMemory, state: MmuState, n: usize) {
+		for _ in 0 .. n {
+			self.pop(mem, state);
+		}
+	}
+
 	fn interpret_inst(&mut self, mem: &dyn IMemory, i: &Instruction) {
 		let state = i.mmu_state();
-		let addr = self.get_addr(mem, i).into();
+		let addr = self.get_addr(mem, i);
 		let inst_display = self.print.fmt_instr(i, &crate::disasm::NullLookup);
 
 		log::info!("[A={:02X} X={:02X} Y={:02X} S={:02X} P={:08b}] {:04X} {}",
@@ -732,14 +762,35 @@ impl Interpreter {
 
 		use MetaOp::*;
 		match i.desc.meta_op {
+			BRK => { todo!() }
+			UNK => { todo!() }
 			NOP => {}
 			// handled by interpret_branch.
 			BCC | BCS | BEQ | BMI | BNE | BPL | BVC | BVS => {}
-			// handled by interpret_bb.
-			JMP | RTI | RTS => {}
+			// handled (partly) by interpret_bb.
+			JMP => {
+				if i.desc.addr_mode == AddrMode::IND {
+					self.jmp_dst = mem.loc_from_va(state, VA(addr as usize));
+				}
+			}
+			RTI => self.pop_n(mem, state, 3),
 
-			BRK => { todo!() }
-			UNK => { todo!() }
+			JSR => {
+				// yes, really, -1
+				let ret = i.next_addr().0 - 1;
+				self.push(mem, state, (ret >> 8) as u8);
+				self.push(mem, state, (ret & 0xFF) as u8);
+			}
+			RTS => {
+				let lo = self.pop(mem, state) as usize;
+				let hi = self.pop(mem, state) as usize;
+				// yes, really, +1
+				self.jmp_dst = mem.loc_from_va(state, VA(((hi << 8) | lo) + 1));
+			}
+			PHA => self.push(mem, state, self.regs.A),
+			PHP => self.push(mem, state, self.regs.P),
+			PLA => { self.regs.A = self.pop(mem, state); self.set_flags_zn(self.regs.A); }
+			PLP => self.regs.P = self.pop(mem, state),
 
 			ADC => {
 				let data = self.read_byte(mem, state, addr);
@@ -789,22 +840,10 @@ impl Interpreter {
 				self.set_flags_zn(val);
 				self.write_byte(mem, state, addr, val);
 			}
-			INX => {
-				self.regs.X = self.regs.X.wrapping_add(1);
-				self.set_flags_zn(self.regs.X);
-			}
-			INY => {
-				self.regs.Y = self.regs.Y.wrapping_add(1);
-				self.set_flags_zn(self.regs.Y);
-			}
-			DEX => {
-				self.regs.X = self.regs.X.wrapping_sub(1);
-				self.set_flags_zn(self.regs.X);
-			}
-			DEY => {
-				self.regs.Y = self.regs.Y.wrapping_sub(1);
-				self.set_flags_zn(self.regs.Y);
-			}
+			INX => { self.regs.X = self.regs.X.wrapping_add(1); self.set_flags_zn(self.regs.X); }
+			INY => { self.regs.Y = self.regs.Y.wrapping_add(1); self.set_flags_zn(self.regs.Y); }
+			DEX => { self.regs.X = self.regs.X.wrapping_sub(1); self.set_flags_zn(self.regs.X); }
+			DEY => { self.regs.Y = self.regs.Y.wrapping_sub(1); self.set_flags_zn(self.regs.Y); }
 
 			AND => {
 				let data = self.read_byte(mem, state, addr);
@@ -884,12 +923,6 @@ impl Interpreter {
 			SED => self.set_flag(Self::D, true),
 			SEI => self.set_flag(Self::I, true),
 
-			JSR => {
-				// TODO: uh, this!
-			}
-			PHA | PHP => self.regs.S = self.regs.S.wrapping_sub(1),
-			PLA | PLP => self.regs.S = self.regs.S.wrapping_add(1),
-
 			LDA | LDAI => {
 				let data = self.read_byte(mem, state, addr);
 				self.regs.A = data;
@@ -905,46 +938,20 @@ impl Interpreter {
 				self.regs.Y = data;
 				self.set_flags_zn(self.regs.Y);
 			}
-			STA => {
-				self.write_byte(mem, state, addr, self.regs.A);
-			}
-			STX => {
-				self.write_byte(mem, state, addr, self.regs.X);
-			}
-			STY => {
-				self.write_byte(mem, state, addr, self.regs.Y);
-			}
 
-			TAX => {
-				self.regs.X = self.regs.A;
-				self.set_flags_zn(self.regs.X);
-			}
-			TAY => {
-				self.regs.Y = self.regs.A;
-				self.set_flags_zn(self.regs.Y);
-			}
-			TSX => {
-				self.regs.X = self.regs.S;
-				self.set_flags_zn(self.regs.X);
-			}
-			TXA => {
-				self.regs.A = self.regs.X;
-				self.set_flags_zn(self.regs.A);
-			}
-			TXS => {
-				self.regs.S = self.regs.X;
-				self.set_flags_zn(self.regs.S);
-			}
-			TYA => {
-				self.regs.A = self.regs.Y;
-				self.set_flags_zn(self.regs.A);
-			}
+			STA => self.write_byte(mem, state, addr, self.regs.A),
+			STX => self.write_byte(mem, state, addr, self.regs.X),
+			STY => self.write_byte(mem, state, addr, self.regs.Y),
+			TAX => { self.regs.X = self.regs.A; self.set_flags_zn(self.regs.X); }
+			TAY => { self.regs.Y = self.regs.A; self.set_flags_zn(self.regs.Y); }
+			TSX => { self.regs.X = self.regs.S; self.set_flags_zn(self.regs.X); }
+			TXA => { self.regs.A = self.regs.X; self.set_flags_zn(self.regs.A); }
+			TXS => { self.regs.S = self.regs.X; self.set_flags_zn(self.regs.S); }
+			TYA => { self.regs.A = self.regs.Y; self.set_flags_zn(self.regs.A); }
 		}
 	}
 
-	fn interpret_branch(&mut self, mem: &dyn IMemory, i: &Instruction) -> bool {
-		self.interpret_inst(mem, i);
-
+	fn should_branch(&mut self, i: &Instruction) -> bool {
 		use MetaOp::*;
 		match i.desc.meta_op {
 			BCC => self.get_flag(Self::C) == 0,
@@ -964,7 +971,10 @@ use crate::program::{ BasicBlock, BBTerm };
 
 impl IInterpreter<Instruction> for Interpreter {
 	fn reset(&mut self) {
-		self.regs.reset()
+		self.regs.reset();
+		self.ret_stack.clear();
+		self.ram.iter_mut().for_each(|x| *x = 0);
+		self.jmp_dst = Location::invalid(0);
 	}
 
 	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock<Instruction>)
@@ -972,33 +982,48 @@ impl IInterpreter<Instruction> for Interpreter {
 		let insts = bb.insts();
 		let last = insts.len() - 1;
 
-		// do all the non-terminator instructions
-		for i in &insts[.. last] {
+		for i in insts {
 			self.interpret_inst(mem, i);
 		}
 
 		use BBTerm::*;
 		// then the terminator
 		match bb.term() {
-			DeadEnd | Halt | Return => {
-				self.interpret_inst(mem, &insts[last]);
-				None
+			DeadEnd | Halt          => None,
+			FallThru(to) | Jump(to) => Some(*to),
+
+			Return => {
+				if let Some(expected) = self.ret_stack.pop()	{
+					if self.jmp_dst == expected {
+						Some(expected)
+					} else {
+						log::warn!("ret addr shenanigans at {:04X} (expected {}, found {})",
+							insts[last].va(), expected, self.jmp_dst);
+						None
+					}
+				} else {
+					None
+				}
 			}
 
-			FallThru(to) | Jump(to) => {
-				self.interpret_inst(mem, &insts[last]);
-				Some(*to)
+			Call { dst, ret } => {
+				self.ret_stack.push(*ret);
+				Some(*dst)
 			}
 
 			Cond { t, f } => {
-				if self.interpret_branch(mem, &insts[last]) {
+				if self.should_branch(&insts[last]) {
 					Some(*t)
 				} else {
 					Some(*f)
 				}
 			}
 
-			JumpTbl(_targets) => todo!("jumptbl unimplemented"),
+			JumpTbl(_targets) => {
+				// TODO: check that jmp_dst is in the targets
+				log::warn!("halfassed jumptable implementation");
+				Some(self.jmp_dst)
+			}
 		}
 	}
 }

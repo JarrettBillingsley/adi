@@ -42,7 +42,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/megaman.nes")?;
+	let img = Image::new_from_file("tests/data/smb.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -54,8 +54,8 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	let reset = prog.func_defined_at(prog.loc_from_name("VEC_RESET")).unwrap();
-	prog.interp(reset, 100);
+	let reset = prog.func_defined_at(prog.loc_from_name("VEC_NMI")).unwrap();
+	prog.interp(reset, 10000);
 
 	// show_all_funcs(&prog);
 	// show_prg0(&prog);
@@ -189,6 +189,9 @@ fn show_bb(prog: &Program, bb: BBId) {
 		}
 		Jump(loc) => {
 			thinger(prog, bb_loc, *loc, "Tailcall", Color::Yellow);
+		}
+		Call { ret, .. } => {
+			thinger(prog, bb_loc, *ret, "Fall through", Color::Yellow);
 		}
 		Cond { t, f } => {
 			thinger(prog, bb_loc, *t, "Tailbranch", Color::Yellow);

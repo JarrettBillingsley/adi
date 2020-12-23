@@ -257,8 +257,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 				use InstructionKind::*;
 				match inst.kind() {
 					Invalid => panic!("disas_all gave an invalid instruction"),
-					Call | Other => {
-						// call targets are processed in 2nd pass.
+					Other => {
 						insts.push(inst);
 						continue 'instloop;
 					}
@@ -273,7 +272,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					Indir => {
 						term = Some(BBTerm::JumpTbl(vec![]));
 					}
-					Uncond | Cond => {
+					Uncond | Cond | Call => {
 						// if it's into the same segment, it might be part of this function.
 						// if not, it's probably a tailcall to another function.
 						let target_loc = target_loc.expect("instruction should have control target");
@@ -281,15 +280,19 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 							potential_bbs.push_back(target_loc);
 						}
 
-						if inst.is_cond() {
-							let f = self.resolve_target(inst.mmu_state_after(), inst.next_addr());
-							potential_bbs.push_back(f);
-
-							// debug!("{:04X} t: {} f: {}", inst.va(), target_loc, f);
-
-							term = Some(BBTerm::Cond { t: target_loc, f });
-						} else {
+						if inst.kind() == Uncond {
 							term = Some(BBTerm::Jump(target_loc));
+						} else {
+							let next = self.resolve_target(inst.mmu_state_after(), inst.next_addr());
+							potential_bbs.push_back(next);
+
+							// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
+
+							if inst.kind() == Cond {
+								term = Some(BBTerm::Cond { t: target_loc, f: next });
+							} else {
+								term = Some(BBTerm::Call { dst: target_loc, ret: next });
+							}
 						}
 					}
 				}

@@ -351,6 +351,8 @@ impl<Plat: IPlatform> IProgram for ProgramImpl<Plat> {
 					if let Some(next_bb) = self.span_at_loc(loc).bb() {
 						bb = self.funcs.get(next_bb.func()).get_bb(next_bb);
 						continue;
+					} else {
+						println!("invalid next location: {}", loc);
 					}
 				}
 

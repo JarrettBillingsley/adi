@@ -99,6 +99,8 @@ pub enum BBTerm {
 	FallThru(Location),
 	/// Unconditional jump.
 	Jump(Location),
+	/// Function call (dst = function called, ret = return location).
+	Call { dst: Location, ret: Location },
 	/// Conditional branch within a function.
 	Cond { t: Location, f: Location },
 	/// Jump table with any number of destinations.
@@ -116,6 +118,7 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt   => None     .into_iter().chain(&[]),
 			FallThru(loc) | Jump(loc) => Some(loc).into_iter().chain(&[]),
+			Call { dst, ret }         => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }             => Some(t)  .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(locs)             => None     .into_iter().chain(locs),
 		}
@@ -129,6 +132,7 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt | FallThru(..)   => None     .into_iter().chain(&[]),
 			Jump(loc)                                => Some(loc).into_iter().chain(&[]),
+			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),
 			JumpTbl(locs)                            => None     .into_iter().chain(locs),
 		}
