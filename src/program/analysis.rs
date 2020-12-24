@@ -283,7 +283,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 						if inst.kind() == Uncond {
 							term = Some(BBTerm::Jump(target_loc));
 						} else {
-							let next = self.resolve_target(inst.mmu_state_after(), inst.next_addr());
+							let next = self.resolve_target(inst.mmu_state_after(), inst.next_va());
 							potential_bbs.push_back(next);
 
 							// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);

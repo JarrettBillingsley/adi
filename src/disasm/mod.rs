@@ -134,7 +134,7 @@ pub trait IInstruction {
 	}
 
 	/// Get the virtual address of the instruction after this one.
-	fn next_addr(&self) -> VA {
+	fn next_va(&self) -> VA {
 		self.va() + self.size()
 	}
 

@@ -777,7 +777,7 @@ impl Interpreter {
 
 			JSR => {
 				// yes, really, -1
-				let ret = i.next_addr().0 - 1;
+				let ret = i.next_va().0 - 1;
 				self.push(mem, state, (ret >> 8) as u8);
 				self.push(mem, state, (ret & 0xFF) as u8);
 			}
