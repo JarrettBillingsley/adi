@@ -272,7 +272,17 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					Indir => {
 						term = Some(BBTerm::JumpTbl(vec![]));
 					}
-					Uncond | Cond | Call => {
+					Call => {
+						let target_loc = target_loc.expect("instruction should have control target");
+
+						let next = self.resolve_target(inst.mmu_state_after(), inst.next_va());
+						potential_bbs.push_back(next);
+
+						// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
+
+						term = Some(BBTerm::Call { dst: target_loc, ret: next });
+					}
+					Uncond | Cond => {
 						// if it's into the same segment, it might be part of this function.
 						// if not, it's probably a tailcall to another function.
 						let target_loc = target_loc.expect("instruction should have control target");
@@ -288,11 +298,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 
 							// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
 
-							if inst.kind() == Cond {
-								term = Some(BBTerm::Cond { t: target_loc, f: next });
-							} else {
-								term = Some(BBTerm::Call { dst: target_loc, ret: next });
-							}
+							term = Some(BBTerm::Cond { t: target_loc, f: next });
 						}
 					}
 				}
