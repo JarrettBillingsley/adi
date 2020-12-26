@@ -593,6 +593,9 @@ impl IPrinter<Instruction> for Printer {
 // Interpreter
 // ------------------------------------------------------------------------------------------------
 
+use crate::memory::{ IMemory, ImageRead };
+use crate::program::{ BasicBlock, BBTerm };
+
 #[allow(non_snake_case)]
 struct InterpRegs {
 	A:  u8,
@@ -605,7 +608,7 @@ struct InterpRegs {
 
 impl InterpRegs {
 	fn new() -> Self {
-		Self { A: 0, X: 0, Y: 0, S: 0, P: 0, PC: 0 }
+		Self { A: 0, X: 0, Y: 0, S: 0xFD, P: 0x24, PC: 0 }
 	}
 
 	fn reset(&mut self) {
@@ -613,12 +616,11 @@ impl InterpRegs {
 		self.X = 0;
 		self.Y = 0;
 		self.S = 0xFD;
-		self.P = 0;
+		self.P = 0x24;
 		self.PC = 0;
 	}
 }
 
-use crate::memory::{ IMemory, ImageRead };
 pub struct Interpreter {
 	regs:      InterpRegs,
 	print:     Printer,
@@ -762,8 +764,8 @@ impl Interpreter {
 
 		use MetaOp::*;
 		match i.desc.meta_op {
-			BRK => { todo!() }
-			UNK => { todo!() }
+			BRK => { todo!("BRK instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
+			UNK => { todo!("unknown instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
 			NOP => {}
 			// handled by interpret_branch.
 			BCC | BCS | BEQ | BMI | BNE | BPL | BVC | BVS => {}
@@ -956,18 +958,16 @@ impl Interpreter {
 		match i.desc.meta_op {
 			BCC => self.get_flag(Self::C) == 0,
 			BCS => self.get_flag(Self::C) == 1,
-			BEQ => self.get_flag(Self::Z) == 1,
-			BMI => self.get_flag(Self::N) == 1,
 			BNE => self.get_flag(Self::Z) == 0,
+			BEQ => self.get_flag(Self::Z) == 1,
 			BPL => self.get_flag(Self::N) == 0,
+			BMI => self.get_flag(Self::N) == 1,
 			BVC => self.get_flag(Self::V) == 0,
-			BVS => self.get_flag(Self::V) == 0,
+			BVS => self.get_flag(Self::V) == 1,
 			_   => unreachable!(),
 		}
 	}
 }
-
-use crate::program::{ BasicBlock, BBTerm };
 
 impl IInterpreter<Instruction> for Interpreter {
 	fn reset(&mut self) {
