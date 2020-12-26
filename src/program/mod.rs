@@ -183,20 +183,18 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.
 	/// Returns the new function's globally unique ID.
-	pub(crate) fn new_func(&mut self, loc: Location,
-		bbs: impl Iterator<Item = BasicBlock<InstTypeOf<Plat>>>) -> FuncId {
+	pub(crate) fn new_func(&mut self, func: Function<InstTypeOf<Plat>>) -> FuncId {
+		let loc = func.start_loc();
 		assert!(self.func_defined_at(loc).is_none(), "redefining a function at {}", loc);
 
-		let fid = self.funcs.new_func();
+		let fid = self.funcs.new_func(func);
 		let new_func = self.funcs.get_mut(fid);
 		let seg = self.mem.segment_from_loc_mut(loc);
 
-		for mut bb in bbs {
-			let bbid = new_func.next_id();
-			bb.mark_complete(bbid);
+		for bb in &mut new_func.bbs {
+			bb.mark_complete(fid);
 			let bb_loc = bb.loc();
-			new_func.add_bb(bb);
-			seg.redefine_span(bb_loc, SpanKind::Code(bbid));
+			seg.redefine_span(bb_loc, SpanKind::Code(bb.id()));
 		}
 
 		assert_ne!(new_func.num_bbs(), 0);

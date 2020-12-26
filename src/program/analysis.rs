@@ -6,87 +6,13 @@ use log::*;
 
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform, InstTypeOf };
-use crate::program::{ ProgramImpl, IProgram, BasicBlock, BBTerm, BBId, FuncId };
+use crate::program::{ ProgramImpl, IProgram, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	IDisassembler,
 	IInstruction,
 	InstructionKind,
 };
-
-// ------------------------------------------------------------------------------------------------
-// ProtoBB
-// ------------------------------------------------------------------------------------------------
-
-/// Newtype wrapper for the index of a `ProtoBB` in a `ProtoFunc`.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-struct PBBIdx(usize);
-
-/// Used for initial exploration, like `ProtoBB`.
-#[derive(Debug)]
-struct ProtoFunc<TInstruction: IInstruction> {
-	bbs: Vec<BasicBlock<TInstruction>>, // 0 is the head
-}
-
-impl<TInstruction: IInstruction> ProtoFunc<TInstruction> {
-	fn new() -> Self {
-		Self { bbs: Vec::new() }
-	}
-}
-
-impl<T: IInstruction> ProtoFunc<T> {
-	/// Adds a new basic block and returns its index.
-	fn new_bb(&mut self,
-		loc: Location,
-		term: BBTerm,
-		insts: Vec<T>)
-	-> PBBIdx {
-		trace!("new bb loc: {}, term: {:?}", loc, term);
-
-		let id = self.bbs.len();
-		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts))
-	}
-
-	fn push_bb(&mut self, bb: BasicBlock<T>) -> PBBIdx {
-		let ret = self.bbs.len();
-		self.bbs.push(bb);
-		PBBIdx(ret)
-	}
-
-	fn split_bb(&mut self, idx: PBBIdx, inst_idx: usize, new_start: Location) -> PBBIdx {
-		let id = self.bbs.len();
-		let old = &mut self.bbs[idx.0];
-		let term_loc = old.insts[inst_idx].loc();
-
-		assert!(old.loc < new_start);
-		assert!(term_loc < new_start);
-
-		let new_insts = old.insts.split_off(inst_idx + 1);
-
-		let mut new = BasicBlock::new_inprogress(
-			id,
-			new_start,
-			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
-			new_insts,
-		);
-
-		std::mem::swap(&mut old.term, &mut new.term);
-
-		trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
-
-		self.push_bb(new)
-	}
-
-	/// Get the BB at the given index.
-	fn get_bb(&self, idx: PBBIdx) -> &BasicBlock<T> {
-		&self.bbs[idx.0]
-	}
-
-	/// Consuming iterator over the BBs (for promotion to a real function).
-	fn into_iter(self) -> impl Iterator<Item = BasicBlock<T>> {
-		self.bbs.into_iter()
-	}
-}
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer
@@ -125,7 +51,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 	}
 
 	fn should_analyze_bb(
-		&mut self, func: &mut ProtoFunc<InstTypeOf<Plat>>, start: Location) -> bool {
+		&mut self, func: &mut Function<InstTypeOf<Plat>>, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
@@ -134,7 +60,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
 				// oh, we've already analyzed this. but maybe we have some work to do...
-				self.check_split_bb(func, PBBIdx(id), start);
+				self.check_split_bb(func, id, start);
 				false
 			}
 
@@ -144,8 +70,8 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 	}
 
 	fn check_split_bb(
-		&mut self, func: &mut ProtoFunc<InstTypeOf<Plat>>, id: PBBIdx, start: Location) {
-		let old_bb = func.get_bb(id);
+		&mut self, func: &mut Function<InstTypeOf<Plat>>, old_idx: usize, start: Location) {
+		let old_bb = func.get_bb_by_idx(old_idx);
 
 		if start != old_bb.loc {
 			// ooh, now we have to split the existing bb.
@@ -157,10 +83,10 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 			};
 
 			// now we can split the existing BB...
-			let new_bb = func.split_bb(id, idx, start);
+			let new_bb = func.split_bb(old_idx, idx, start);
 
 			// ...and update the span map.
-			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb.0));
+			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb));
 		}
 	}
 
@@ -181,7 +107,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
-		let mut func           = ProtoFunc::new();
+		let mut func           = Function::new_inprogress();
 		let mut potential_bbs  = VecDeque::<Location>::new();
 		potential_bbs.push_back(loc);
 
@@ -282,7 +208,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 				}
 
 				let bb_id = func.new_bb(start, term.unwrap(), insts);
-				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
+				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id));
 			}
 		}
 
@@ -293,7 +219,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 			trace!("NOPE that's not a good function.");
 		} else {
 			// now, turn the proto func into a real boy!!
-			let fid = self.new_func(loc, func.into_iter());
+			let fid = self.new_func(func);
 
 			// finally, turn the crank by putting more work on the queue
 			self.queue.push_back(AnalysisItem::Func2ndPass(fid));

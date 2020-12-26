@@ -80,14 +80,16 @@ impl<T: IInstruction> BasicBlock<T> {
 		Self { id: BBIdReal::Complete(id), loc, term, insts }
 	}
 
-	pub fn new_inprogress(id: usize, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
+	pub fn new_inprogress(idx: usize, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
 		assert_ne!(insts.len(), 0);
-		Self { id: BBIdReal::InProgress(id), loc, term, insts }
+		Self { id: BBIdReal::InProgress(idx), loc, term, insts }
 	}
 
-	pub fn mark_complete(&mut self, id: BBId) {
-		assert!(matches!(self.id, BBIdReal::InProgress(..)));
-		self.id = BBIdReal::Complete(id);
+	pub fn mark_complete(&mut self, func: FuncId) {
+		match self.id {
+			BBIdReal::InProgress(idx) => self.id = BBIdReal::Complete(BBId(func, idx)),
+			_ => panic!(),
+		}
 	}
 
 	/// Its globally-unique id.
@@ -137,6 +139,28 @@ impl<T: IInstruction> BasicBlock<T> {
 		}
 
 		unreachable!("should never be able to get here")
+	}
+
+	pub(crate) fn split(&mut self, new_idx: usize, inst_idx: usize, new_start: Location) -> Self {
+		let term_loc = self.insts[inst_idx].loc();
+
+		assert!(self.loc < new_start);
+		assert!(term_loc < new_start);
+
+		let new_insts = self.insts.split_off(inst_idx + 1);
+
+		let mut new = BasicBlock::new_inprogress(
+			new_idx,
+			new_start,
+			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
+			new_insts,
+		);
+
+		std::mem::swap(&mut self.term, &mut new.term);
+
+		log::trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
+
+		new
 	}
 }
 
@@ -212,32 +236,74 @@ impl Debug for FuncId {
 	}
 }
 
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum FuncIdReal {
+	InProgress,
+	Complete(FuncId),
+}
+
+impl FuncIdReal {
+	fn id(&self) -> FuncId {
+		use FuncIdReal::*;
+		match self {
+			InProgress   => panic!("id() called on in-progress function"),
+			Complete(id) => *id,
+		}
+	}
+
+	fn is_in_progress(&self) -> bool {
+		matches!(self, FuncIdReal::InProgress)
+	}
+}
+
+impl Debug for FuncIdReal {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use FuncIdReal::*;
+		match self {
+			InProgress   => write!(f, "(in progress)"),
+			Complete(id) => write!(f, "{:?}", id),
+		}
+	}
+}
+
 /// A single function.
 #[derive(Debug)]
 pub struct Function<TInstruction: IInstruction> {
 	/// Its globally-unique identifier.
-	id: FuncId,
+	id: FuncIdReal,
 	name: Option<String>,
 
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
 	/// ordering of the rest of them.
-	bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
+	pub(crate) bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
 }
 
 impl<I: IInstruction> Function<I> {
-	pub fn new(id: FuncId) -> Self {
-		Self { id, name: None, bbs: Vec::new() }
+	pub fn new_inprogress() -> Self {
+		Self { id: FuncIdReal::InProgress, name: None, bbs: Vec::new() }
 	}
 
-	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
-	pub fn add_bb(&mut self, bb: BasicBlock<I>) {
-		assert!(bb.id.bbid() == self.next_id());
+	pub fn mark_complete(&mut self, id: FuncId) {
+		assert!(matches!(self.id, FuncIdReal::InProgress));
+		self.id = FuncIdReal::Complete(id);
+	}
+
+	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<I>) -> usize {
+		log::trace!("new bb loc: {}, term: {:?}", loc, term);
+		let id = self.bbs.len();
+		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts));
+		id
+	}
+
+	pub(crate) fn split_bb(&mut self, idx: usize, inst_idx: usize, new_start: Location) -> usize {
+		let new_idx = self.bbs.len();
+		let new = self.bbs[idx].split(new_idx, inst_idx, new_start);
+		self.push_bb(new)
+	}
+
+	fn push_bb(&mut self, bb: BasicBlock<I>) -> usize {
 		self.bbs.push(bb);
-	}
-
-	/// The next available basic block ID.
-	pub fn next_id(&self) -> BBId {
-		BBId(self.id, self.bbs.len())
+		self.bbs.len() - 1
 	}
 
 	/// The basic block ID of the function's head.
@@ -258,8 +324,13 @@ impl<I: IInstruction> Function<I> {
 
 	/// Get the given basic block.
 	pub fn get_bb(&self, id: BBId) -> &BasicBlock<I> {
-		assert!(id.0 == self.id);
+		assert!(id.0 == self.id.id());
 		&self.bbs[id.1]
+	}
+
+	pub fn get_bb_by_idx(&self, idx: usize) -> &BasicBlock<I> {
+		assert!(self.id.is_in_progress());
+		&self.bbs[idx]
 	}
 
 	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
@@ -275,7 +346,7 @@ impl<I: IInstruction> Function<I> {
 	/// Get the ID of the `idx`'th basic block.
 	pub fn get_bbid(&self, idx: usize) -> BBId {
 		assert!(idx < self.bbs.len());
-		BBId(self.id, idx)
+		BBId(self.id.id(), idx)
 	}
 }
 
@@ -296,8 +367,11 @@ impl<T: IInstruction> FuncIndex<T> {
 	}
 
 	/// Creates a new function and returns its ID.
-	pub fn new_func(&mut self) -> FuncId {
-		FuncId(self.arena.insert_with(|id| Function::new(FuncId(id))))
+	pub fn new_func(&mut self, mut func: Function<T>) -> FuncId {
+		FuncId(self.arena.insert_with(move |id| {
+			func.mark_complete(FuncId(id));
+			func
+		}))
 	}
 
 	/// Gets the function with the given ID.
