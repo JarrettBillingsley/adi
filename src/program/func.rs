@@ -6,7 +6,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
 
-use crate::memory::{ Location };
+use crate::memory::{ Location, MmuState };
 use crate::disasm::{ IInstruction };
 
 // ------------------------------------------------------------------------------------------------
@@ -72,17 +72,19 @@ pub struct BasicBlock<TInstruction: IInstruction> {
 	pub(crate) loc:   Location,
 	pub(crate) term:  BBTerm,
 	pub(crate) insts: Vec<TInstruction>,
+	state:            MmuState,
 }
 
 impl<T: IInstruction> BasicBlock<T> {
-	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
+	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<T>, state: MmuState) -> Self {
 		assert_ne!(insts.len(), 0);
-		Self { id: BBIdReal::Complete(id), loc, term, insts }
+		Self { id: BBIdReal::Complete(id), loc, term, insts, state }
 	}
 
-	pub fn new_inprogress(idx: usize, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
+	pub fn new_inprogress(idx: usize, loc: Location, term: BBTerm, insts: Vec<T>, state: MmuState)
+	-> Self {
 		assert_ne!(insts.len(), 0);
-		Self { id: BBIdReal::InProgress(idx), loc, term, insts }
+		Self { id: BBIdReal::InProgress(idx), loc, term, insts, state }
 	}
 
 	pub fn mark_complete(&mut self, func: FuncId) {
@@ -102,6 +104,8 @@ impl<T: IInstruction> BasicBlock<T> {
 	pub fn term    (&self) -> &BBTerm  { &self.term }
 	/// Its instructions.
 	pub fn insts   (&self) -> &[T]     { &self.insts }
+	/// The MMU state at the beginning of this BB.
+	pub fn mmu_state(&self) -> MmuState { self.state }
 
 	/// An iterator over this block's successors.
 	pub fn successors(&self) -> Successors {
@@ -154,6 +158,7 @@ impl<T: IInstruction> BasicBlock<T> {
 			new_start,
 			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
 			new_insts,
+			self.mmu_state(),
 		);
 
 		std::mem::swap(&mut self.term, &mut new.term);
@@ -288,10 +293,11 @@ impl<I: IInstruction> Function<I> {
 		self.id = FuncIdReal::Complete(id);
 	}
 
-	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<I>) -> usize {
+	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<I>, state: MmuState)
+	-> usize {
 		log::trace!("new bb loc: {}, term: {:?}", loc, term);
 		let id = self.bbs.len();
-		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts));
+		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts, state));
 		id
 	}
 

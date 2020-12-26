@@ -153,6 +153,8 @@ fn show_bb(prog: &Program, bb: BBId) {
 		print!("{:>4}:{}  {:8}      {:3} {:30}",
 			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
+		let state = prog.bb_mmu_state(bb);
+
 		for i in 0 .. inst.num_ops() {
 			let op = inst.get_op(i);
 
@@ -160,7 +162,7 @@ fn show_bb(prog: &Program, bb: BBId) {
 				// writing to memory...
 				Some(MemAccess::Write) | Some(MemAccess::Rmw) => {
 					let va = op.addr();
-					if let Some(loc) = prog.loc_for_va(inst.mmu_state(), va) {
+					if let Some(loc) = prog.loc_for_va(state, va) {
 						// ...into a segment with an image mapping...
 						if !prog.segment_from_loc(loc).is_fake() {
 							// ooooh, that might be a bank switch!

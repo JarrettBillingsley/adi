@@ -118,10 +118,6 @@ pub trait IInstruction {
 	fn kind(&self) -> InstructionKind;
 	/// If this is a control instruction, the target address of that control, if it has one.
 	fn control_target(&self) -> Option<VA>;
-	/// Get the state of the MMU at this instruction.
-	fn mmu_state(&self) -> MmuState;
-	/// Get the state of the MMU *after* this instruction.
-	fn mmu_state_after(&self) -> MmuState;
 	/// Does this instruction write to memory?
 	fn writes_mem(&self) -> bool;
 
@@ -263,7 +259,6 @@ impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> Iterator for DisasAll<'di
 					self.va += size;
 					self.loc += size;
 					self.offs += size;
-					self.state = inst.mmu_state_after();
 					Some(inst)
 				}
 
@@ -286,14 +281,14 @@ pub trait IPrinter<TInstruction: IInstruction> {
 	fn fmt_mnemonic(&self, i: &TInstruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &TInstruction, l: &impl INameLookup) -> String;
+	fn fmt_operands(&self, i: &TInstruction, state: MmuState, l: &impl INameLookup) -> String;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Give a string representation of an instruction.
-	fn fmt_instr(&self, i: &TInstruction, l: &impl INameLookup) -> String {
-		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, l))
+	fn fmt_instr(&self, i: &TInstruction, state: MmuState, l: &impl INameLookup) -> String {
+		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, state, l))
 	}
 }
 

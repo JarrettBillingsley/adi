@@ -98,6 +98,7 @@ pub trait IProgram: Display {
 	fn bb_successors(&self, bb: BBId) -> Successors;
 	fn bb_explicit_successors(&self, bb: BBId) -> Successors;
 	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &dyn IInstruction)> + '_>;
+	fn bb_mmu_state(&self, bb: BBId) -> MmuState;
 
 	fn inst_fmt_mnemonic(&self, bb: BBId, i: usize) -> String;
 	fn inst_fmt_operands(&self, bb: BBId, i: usize) -> String;
@@ -309,7 +310,7 @@ impl<Plat: IPlatform> IProgram for ProgramImpl<Plat> {
 		match span.kind() {
 			SpanKind::Code(bbid) => {
 				let bb = self.funcs.get(bbid.func()).get_bb(bbid);
-				bb.inst_at_loc(loc).map(|inst| inst.mmu_state())
+				Some(bb.mmu_state())
 			}
 			_ => Some(self.initial_mmu_state()), // TODO
 		}
@@ -443,12 +444,17 @@ impl<Plat: IPlatform> IProgram for ProgramImpl<Plat> {
 		Box::new(insts.map(mappy::<Plat>))
 	}
 
+	fn bb_mmu_state(&self, bb: BBId) -> MmuState {
+		self.funcs.get(bb.func()).get_bb(bb).mmu_state()
+	}
+
 	fn inst_fmt_mnemonic(&self, bb: BBId, i: usize) -> String {
 		self.print.fmt_mnemonic(&self.funcs.get(bb.func()).get_bb(bb).insts()[i])
 	}
 
 	fn inst_fmt_operands(&self, bb: BBId, i: usize) -> String {
-		self.print.fmt_operands(&self.funcs.get(bb.func()).get_bb(bb).insts()[i], self)
+		let bb = self.funcs.get(bb.func()).get_bb(bb);
+		self.print.fmt_operands(&bb.insts()[i], bb.mmu_state(), self)
 	}
 
 	// ---------------------------------------------------------------------------------------------

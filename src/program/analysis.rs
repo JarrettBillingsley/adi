@@ -138,7 +138,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 				trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				end_loc = inst.next_loc();
 				let target_loc = inst.control_target().map(
-					|t| self.resolve_target(inst.mmu_state(), t));
+					|t| self.resolve_target(state, t));
 
 				use InstructionKind::*;
 				match inst.kind() {
@@ -150,6 +150,8 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					Ret => {
 						// TODO: what about e.g. Z80 where you can have conditional returns?
 						// should that end a BB?
+						// well I think it should be like a conditional - yes, end this
+						// BB, but push another BB of the next instruction.
 						term = Some(BBTerm::Return);
 					}
 					Halt => {
@@ -161,7 +163,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					Call => {
 						let target_loc = target_loc.expect("instruction should have control target");
 
-						let next = self.resolve_target(inst.mmu_state_after(), inst.next_va());
+						let next = self.resolve_target(state, inst.next_va());
 						potential_bbs.push_back(next);
 
 						// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
@@ -179,7 +181,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 						if inst.kind() == Uncond {
 							term = Some(BBTerm::Jump(target_loc));
 						} else {
-							let next = self.resolve_target(inst.mmu_state_after(), inst.next_va());
+							let next = self.resolve_target(state, inst.next_va());
 							potential_bbs.push_back(next);
 
 							// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
@@ -189,6 +191,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					}
 				}
 
+				// this is down here for BORROWING REASONS
 				insts.push(inst);
 				break 'instloop;
 			}
@@ -207,7 +210,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let bb_id = func.new_bb(start, term.unwrap(), insts);
+				let bb_id = func.new_bb(start, term.unwrap(), insts, state);
 				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id));
 			}
 		}
@@ -237,6 +240,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 		let mut refs       = Vec::new();
 
 		for bb in func.all_bbs() {
+			let state = bb.mmu_state();
 			for inst in bb.insts() {
 				let src = inst.loc();
 
@@ -244,7 +248,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					let op = inst.get_op(i);
 
 					if op.is_mem() {
-						let dst = self.loc_from_va(inst.mmu_state(), op.addr());
+						let dst = self.loc_from_va(state, op.addr());
 						refs.push((src, dst));
 					}
 				}
@@ -253,9 +257,8 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 				match inst.kind() {
 					Indir => jumptables.push(inst.loc()),
 					Call => {
-						let target_loc = self.resolve_target(inst.mmu_state(),
-							inst.control_target().unwrap());
-						funcs.push((target_loc, inst.mmu_state_after()));
+						let target_loc = self.resolve_target(state, inst.control_target().unwrap());
+						funcs.push((target_loc, state));
 					}
 					_ => {}
 				}

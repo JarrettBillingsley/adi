@@ -93,9 +93,8 @@ impl Interpreter {
 		}
 	}
 
-	fn get_addr(&self, mem: &dyn IMemory, i: &Instruction) -> u16 {
+	fn get_addr(&self, state: MmuState, mem: &dyn IMemory, i: &Instruction) -> u16 {
 		use AddrMode::*;
-		let state = i.mmu_state();
 
 		match i.desc.addr_mode {
 			IMP | REL | LAB => 0, // not used, doesn't matter
@@ -168,10 +167,9 @@ impl Interpreter {
 		}
 	}
 
-	fn interpret_inst(&mut self, mem: &dyn IMemory, i: &Instruction) {
-		let state = i.mmu_state();
-		let addr = self.get_addr(mem, i);
-		let inst_display = self.print.fmt_instr(i, &crate::disasm::NullLookup);
+	fn interpret_inst(&mut self, state: MmuState, mem: &dyn IMemory, i: &Instruction) {
+		let addr = self.get_addr(state, mem, i);
+		let inst_display = self.print.fmt_instr(i, state, &crate::disasm::NullLookup);
 
 		log::info!("[A={:02X} X={:02X} Y={:02X} S={:02X} P={:08b}] {:04X} {}",
 			self.regs.A, self.regs.X, self.regs.Y, self.regs.S,
@@ -397,9 +395,10 @@ impl IInterpreter<Instruction> for Interpreter {
 	-> Option<Location> {
 		let insts = bb.insts();
 		let last = insts.len() - 1;
+		let state = bb.mmu_state();
 
 		for i in insts {
-			self.interpret_inst(mem, i);
+			self.interpret_inst(state, mem, i);
 		}
 
 		use BBTerm::*;

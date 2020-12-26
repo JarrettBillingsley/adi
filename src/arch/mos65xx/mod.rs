@@ -380,17 +380,15 @@ pub struct Instruction {
 	size:  usize,
 	op:    Option<Operand>,
 	bytes: [u8; MAX_BYTES],
-	state: MmuState,
-	state_after: MmuState,
 }
 
 impl Instruction {
 	#[allow(clippy::too_many_arguments)]
-	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8],
-		state: MmuState, state_after: MmuState) -> Self {
+	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
+	-> Self {
 		let mut bytes = [0u8; MAX_BYTES];
 		bytes[..orig.len()].copy_from_slice(orig);
-		Self { va, loc, desc, size, op, bytes, state, state_after }
+		Self { va, loc, desc, size, op, bytes }
 	}
 
 	fn op_addr(&self) -> u16 {
@@ -404,8 +402,6 @@ impl IInstruction for Instruction {
 	fn size(&self) -> usize         { self.size }
 	fn num_ops(&self) -> usize      { if self.op.is_some() { 1 } else { 0 } }
 	fn bytes(&self) -> &[u8]        { &self.bytes[..self.size] }
-	fn mmu_state(&self) -> MmuState { self.state }
-	fn mmu_state_after(&self) -> MmuState { self.state_after }
 	fn get_op(&self, i: usize) -> &dyn IOperand {
 		assert!(i == 0);
 		self.op.as_ref().unwrap()
@@ -459,7 +455,7 @@ impl IInstruction for Instruction {
 pub struct Disassembler;
 
 impl IDisassembler<Instruction> for Disassembler {
-	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
+	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, loc: Location)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {
@@ -484,8 +480,7 @@ impl IDisassembler<Instruction> for Disassembler {
 		let bytes = &img[0 .. inst_size];
 		let op = decode_operand(desc, va, &img[1 .. inst_size]);
 
-		// TODO: change the state!!
-		Ok(Instruction::new(va, loc, desc, inst_size, op, bytes, state, state))
+		Ok(Instruction::new(va, loc, desc, inst_size, op, bytes))
 	}
 }
 
@@ -552,7 +547,7 @@ impl IPrinter<Instruction> for Printer {
 		i.desc.meta_op.mnemonic(self.flavor).into()
 	}
 
-	fn fmt_operands(&self, i: &Instruction, l: &impl INameLookup) -> String {
+	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
 		use std::fmt::Write;
 
 		let mut ret = String::new();
@@ -576,7 +571,7 @@ impl IPrinter<Instruction> for Printer {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::Imm(imm)      => self.fmt_imm(imm),
 				Operand::Mem(addr, ..) => {
-					match l.lookup(i.mmu_state(), VA(addr as usize)) {
+					match l.lookup(state, VA(addr as usize)) {
 						Some(name) => name,
 						None       => self.fmt_addr(addr, i.desc.addr_mode.is_zero_page()),
 					}
