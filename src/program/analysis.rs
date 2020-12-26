@@ -6,7 +6,7 @@ use log::*;
 
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform, InstTypeOf };
-use crate::program::{ ProgramImpl, IProgram, BasicBlock, BBTerm, BBId, FuncId, IntoBasicBlock };
+use crate::program::{ ProgramImpl, IProgram, BasicBlock, BBTerm, BBId, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	IDisassembler,
@@ -18,45 +18,6 @@ use crate::disasm::{
 // ProtoBB
 // ------------------------------------------------------------------------------------------------
 
-/// Most of a BasicBlock, except the ID. Used for initial exploration of a function
-/// when we haven't committed the results to the Program yet.
-#[derive(Debug)]
-struct ProtoBB<TInstruction: IInstruction> {
-	loc:      Location,
-	term:     BBTerm,
-	insts:    Vec<TInstruction>,
-
-	/// Where it ends (not in a real BB, but more convenient for the analysis)
-	end:      Location,
-}
-
-impl<T: IInstruction> ProtoBB<T> {
-	fn last_instr_before(&self, loc: Location) -> Option<usize> {
-		for (i, inst) in self.insts.iter().enumerate() {
-			if inst.loc() < loc {
-				let next = inst.next_loc();
-
-				use std::cmp::Ordering::*;
-
-				match next.cmp(&loc) {
-					// uh oh. loc is in the middle of this instruction.
-					Greater => return None,
-					Equal   => return Some(i),
-					Less    => {}
-				}
-			}
-		}
-
-		unreachable!("should never be able to get here")
-	}
-}
-
-impl<T: IInstruction> IntoBasicBlock<T> for ProtoBB<T> {
-	fn into_bb(self, id: BBId) -> BasicBlock<T> {
-		BasicBlock::new(id, self.loc, self.term, self.insts)
-	}
-}
-
 /// Newtype wrapper for the index of a `ProtoBB` in a `ProtoFunc`.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 struct PBBIdx(usize);
@@ -64,7 +25,7 @@ struct PBBIdx(usize);
 /// Used for initial exploration, like `ProtoBB`.
 #[derive(Debug)]
 struct ProtoFunc<TInstruction: IInstruction> {
-	bbs: Vec<ProtoBB<TInstruction>>, // 0 is the head
+	bbs: Vec<BasicBlock<TInstruction>>, // 0 is the head
 }
 
 impl<TInstruction: IInstruction> ProtoFunc<TInstruction> {
@@ -78,52 +39,51 @@ impl<T: IInstruction> ProtoFunc<T> {
 	fn new_bb(&mut self,
 		loc: Location,
 		term: BBTerm,
-		end: Location,
 		insts: Vec<T>)
 	-> PBBIdx {
-		trace!("new bb loc: {}, end: {}, term: {:?}", loc, end, term);
+		trace!("new bb loc: {}, term: {:?}", loc, term);
 
-		self.push_bb(ProtoBB { loc, term, end, insts })
+		let id = self.bbs.len();
+		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts))
 	}
 
-	fn push_bb(&mut self, bb: ProtoBB<T>) -> PBBIdx {
+	fn push_bb(&mut self, bb: BasicBlock<T>) -> PBBIdx {
 		let ret = self.bbs.len();
 		self.bbs.push(bb);
 		PBBIdx(ret)
 	}
 
 	fn split_bb(&mut self, idx: PBBIdx, inst_idx: usize, new_start: Location) -> PBBIdx {
+		let id = self.bbs.len();
 		let old = &mut self.bbs[idx.0];
 		let term_loc = old.insts[inst_idx].loc();
 
 		assert!(old.loc < new_start);
-		assert!(new_start < old.end);
 		assert!(term_loc < new_start);
 
 		let new_insts = old.insts.split_off(inst_idx + 1);
 
-		let mut new = ProtoBB {
-			loc:      new_start,
-			term:     BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
-			insts:    new_insts,
-			end:      old.end
-		};
+		let mut new = BasicBlock::new_inprogress(
+			id,
+			new_start,
+			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
+			new_insts,
+		);
 
 		std::mem::swap(&mut old.term, &mut new.term);
-		old.end = new_start;
 
-		trace!("split bb loc: {}, end: {}, term: {:?}", new.loc, new.end, new.term);
+		trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
 
 		self.push_bb(new)
 	}
 
 	/// Get the BB at the given index.
-	fn get_bb(&self, idx: PBBIdx) -> &ProtoBB<T> {
+	fn get_bb(&self, idx: PBBIdx) -> &BasicBlock<T> {
 		&self.bbs[idx.0]
 	}
 
 	/// Consuming iterator over the BBs (for promotion to a real function).
-	fn into_iter(self) -> impl Iterator<Item = impl IntoBasicBlock<T>> {
+	fn into_iter(self) -> impl Iterator<Item = BasicBlock<T>> {
 		self.bbs.into_iter()
 	}
 }
@@ -321,7 +281,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let bb_id = func.new_bb(start, term.unwrap(), end_loc, insts);
+				let bb_id = func.new_bb(start, term.unwrap(), insts);
 				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id.0));
 			}
 		}

@@ -10,11 +10,11 @@ use crate::memory::{ Location };
 use crate::disasm::{ IInstruction };
 
 // ------------------------------------------------------------------------------------------------
-// BasicBlock
+// BBId
 // ------------------------------------------------------------------------------------------------
 
-/// Newtype which uniquely identifies a `BasicBlock`. Consists of a `FuncId` and
-/// an index into that function's `bbs` vec.
+/// Uniquely identifies a `BasicBlock`. Consists of a `FuncId` and an index into that function's
+/// `bbs` vec.
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct BBId(FuncId, usize);
 
@@ -31,23 +31,67 @@ impl Debug for BBId {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+// BBIdReal
+// ------------------------------------------------------------------------------------------------
+
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum BBIdReal {
+	InProgress(usize),
+	Complete(BBId),
+}
+
+impl BBIdReal {
+	fn bbid(&self) -> BBId {
+		use BBIdReal::*;
+		match self {
+			InProgress(..) => panic!("bbid() called on in-progress BB"),
+			Complete(bbid) => *bbid,
+		}
+	}
+}
+
+impl Debug for BBIdReal {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use BBIdReal::*;
+		match self {
+			InProgress(idx) => write!(f, "(in progress: {})", idx),
+			Complete(bbid)  => write!(f, "{:?}", bbid),
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// BasicBlock
+// ------------------------------------------------------------------------------------------------
+
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
 pub struct BasicBlock<TInstruction: IInstruction> {
-	id:    BBId,
-	loc:   Location,
-	term:  BBTerm,
-	insts: Vec<TInstruction>,
+	id:               BBIdReal,
+	pub(crate) loc:   Location,
+	pub(crate) term:  BBTerm,
+	pub(crate) insts: Vec<TInstruction>,
 }
 
 impl<T: IInstruction> BasicBlock<T> {
 	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
 		assert_ne!(insts.len(), 0);
-		Self { id, loc, term, insts }
+		Self { id: BBIdReal::Complete(id), loc, term, insts }
+	}
+
+	pub fn new_inprogress(id: usize, loc: Location, term: BBTerm, insts: Vec<T>) -> Self {
+		assert_ne!(insts.len(), 0);
+		Self { id: BBIdReal::InProgress(id), loc, term, insts }
+	}
+
+	pub fn mark_complete(&mut self, id: BBId) {
+		assert!(matches!(self.id, BBIdReal::InProgress(..)));
+		self.id = BBIdReal::Complete(id);
 	}
 
 	/// Its globally-unique id.
-	pub fn id      (&self) -> BBId     { self.id }
+	pub fn id      (&self) -> BBId     { self.id.bbid() }
 	/// Its globally-unique location.
 	pub fn loc     (&self) -> Location { self.loc }
 	/// Where its terminator (last instruction) is located.
@@ -69,17 +113,31 @@ impl<T: IInstruction> BasicBlock<T> {
 
 	/// The ID of the function which owns this.
 	pub fn func(&self) -> FuncId {
-		self.id.func()
+		self.id().func()
 	}
 
 	pub fn inst_at_loc(&self, loc: Location) -> Option<&T> {
 		self.insts.iter().find(|&inst| inst.loc() == loc)
 	}
-}
 
-/// Trait used for defining functions in `Program`.
-pub trait IntoBasicBlock<TInstruction: IInstruction> {
-	fn into_bb(self, id: BBId) -> BasicBlock<TInstruction>;
+	pub(crate) fn last_instr_before(&self, loc: Location) -> Option<usize> {
+		for (i, inst) in self.insts.iter().enumerate() {
+			if inst.loc() < loc {
+				let next = inst.next_loc();
+
+				use std::cmp::Ordering::*;
+
+				match next.cmp(&loc) {
+					// uh oh. loc is in the middle of this instruction.
+					Greater => return None,
+					Equal   => return Some(i),
+					Less    => {}
+				}
+			}
+		}
+
+		unreachable!("should never be able to get here")
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -173,7 +231,7 @@ impl<I: IInstruction> Function<I> {
 
 	/// Add a new `BasicBlock` to this function. Panics if its ID does not match this function's.
 	pub fn add_bb(&mut self, bb: BasicBlock<I>) {
-		assert!(bb.id == self.next_id());
+		assert!(bb.id.bbid() == self.next_id());
 		self.bbs.push(bb);
 	}
 
@@ -184,7 +242,7 @@ impl<I: IInstruction> Function<I> {
 
 	/// The basic block ID of the function's head.
 	pub fn head_id(&self) -> BBId {
-		self.bbs[0].id
+		self.bbs[0].id()
 	}
 
 	/// Where the function starts.
