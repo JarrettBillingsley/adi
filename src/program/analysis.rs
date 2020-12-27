@@ -6,11 +6,8 @@ use log::*;
 
 use crate::arch::{ IDisassembler, IArchitecture };
 use crate::platform::{ IPlatform };
-use crate::program::{ ProgramImpl, IProgram, BBTerm, Function, FuncId };
+use crate::program::{ InstructionKind, ProgramImpl, IProgram, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
-use crate::disasm::{
-	InstructionKind,
-};
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer

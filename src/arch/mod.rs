@@ -1,7 +1,6 @@
 
-use crate::disasm::{ Instruction };
 use crate::memory::{ Endian, IMemory, MmuState, Location, VA };
-use crate::program::{ BasicBlock };
+use crate::program::{ Instruction, BasicBlock };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -154,6 +153,19 @@ impl INameLookup for NullLookup {
 		None
 	}
 }
+
+// ------------------------------------------------------------------------------------------------
+// IInterpreter
+// ------------------------------------------------------------------------------------------------
+
+pub trait IInterpreter: Sized + Sync + Send {
+	fn reset(&mut self);
+
+	// interprets the BB and returns the location of the successor to run, or None if
+	// we hit the end
+	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock) -> Option<Location>;
+}
+
 // ------------------------------------------------------------------------------------------------
 // IArchitecture
 // ------------------------------------------------------------------------------------------------
@@ -176,16 +188,4 @@ pub trait IArchitecture: Sized + Sync + Send {
 	fn new_printer(&self) -> Self::TPrinter;
 	/// Construct a new interpreter.
 	fn new_interpreter(&self) -> Self::TInterpreter;
-}
-
-// ------------------------------------------------------------------------------------------------
-// IInterpreter
-// ------------------------------------------------------------------------------------------------
-
-pub trait IInterpreter: Sized + Sync + Send {
-	fn reset(&mut self);
-
-	// interprets the BB and returns the location of the successor to run, or None if
-	// we hit the end
-	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock) -> Option<Location>;
 }

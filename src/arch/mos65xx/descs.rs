@@ -1,5 +1,5 @@
 
-use crate::disasm::MemAccess;
+use crate::program::{ MemAccess };
 use super::{ InstDesc, Opcode, MetaOp, AddrMode };
 
 // ------------------------------------------------------------------------------------------------

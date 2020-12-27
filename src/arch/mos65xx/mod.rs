@@ -1,14 +1,14 @@
 use std::default::Default;
 use std::convert::TryInto;
 
-use crate::disasm::{
+use crate::program::{
 	MemAccess,
 	Operand,
 	Instruction,
 	InstructionKind,
 };
 use crate::arch::{
-	DisasError, DisasResult, IPrinter, INameLookup, IArchitecture, IDisassembler, IInterpreter,
+	DisasError, DisasResult, IPrinter, INameLookup, IArchitecture, IDisassembler
 };
 use crate::memory::{ MmuState, Endian, Location, VA };
 

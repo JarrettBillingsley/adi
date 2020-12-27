@@ -1,18 +1,16 @@
 use super::{
-	Opcode,
 	MetaOp,
 	SyntaxFlavor,
 	Disassembler,
 	Operand,
-	MemAccess,
+	Opcode,
 	Printer,
-	Instruction,
 	lookup_desc,
 };
 
 use crate::memory::{ MmuState, SegId, Location, VA };
-use crate::disasm::{ DisasError };
-use crate::arch::{ INameLookup, IDisassembler, IPrinter };
+use crate::arch::{ DisasError, INameLookup, IDisassembler, IPrinter };
+use crate::program::{ MemAccess, Instruction };
 
 #[test]
 fn opcode_lookup() {

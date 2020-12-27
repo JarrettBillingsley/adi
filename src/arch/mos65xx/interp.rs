@@ -1,13 +1,15 @@
-use crate::memory::{ IMemory, ImageRead };
-use crate::program::{ BasicBlock, BBTerm };
+use crate::arch::{ IInterpreter, IPrinter };
+use crate::memory::{ IMemory, ImageRead, Location, MmuState, VA };
+use crate::program::{ BasicBlock, BBTerm, Instruction };
 
-use super::*;
+use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Printer, InstDesc, lookup_desc };
 
 // ------------------------------------------------------------------------------------------------
 // InterpRegs
 // ------------------------------------------------------------------------------------------------
 
 #[allow(non_snake_case)]
+#[derive(Default)]
 struct InterpRegs {
 	A:  u8,
 	X:  u8,
@@ -19,7 +21,9 @@ struct InterpRegs {
 
 impl InterpRegs {
 	fn new() -> Self {
-		Self { A: 0, X: 0, Y: 0, S: 0xFD, P: 0x24, PC: 0 }
+		let mut ret: Self = Default::default();
+		ret.reset();
+		ret
 	}
 
 	fn reset(&mut self) {
