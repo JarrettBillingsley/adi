@@ -1,11 +1,9 @@
 use std::default::Default;
 use std::convert::TryInto;
 
-use parse_display::Display;
-
 use crate::disasm::{
 	MemAccess,
-	IOperand,
+	Operand,
 	IInstruction,
 	IPrinter,
 	INameLookup,
@@ -74,10 +72,10 @@ pub enum AddrMode {
 	IND,
 	/// "Indexed Indirect" - double-indirect zero-page X-indexed (1 byte), e.g. `lda ($10,X)`.
 	/// Loads a 2-byte address from `X + offset`, then accesses the byte at that address.
-	IZX, // ($11,X) where $11 is ZPGaddr
+	IZX,
 	/// "Indirect Indexed" - double-indirect zero-page Y-indexed (1 byte), e.g. `lda ($10),Y`.
 	/// Loads a 2-byte address from `offset`, then accesses the byte at `Y + address`.
-	IZY, // ($11),Y where $11 is ZPGaddr
+	IZY,
 
 	/// PC-relative (1 byte), e.g. `bcc whatever`.
 	/// Signed offset added to PC (+2 for size of branch instruction).
@@ -274,56 +272,6 @@ impl InstDesc {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Operand
-// ------------------------------------------------------------------------------------------------
-
-/// Kinds of operands. Explicit operands are always either `Imm` or `Mem`; `Reg` is only
-/// implicit (aka inherent).
-#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
-#[display("{:?}")]
-pub enum Operand {
-	Reg(Reg),
-	Imm(u8),
-	Mem(u16, MemAccess),
-}
-
-impl Default for Operand {
-	fn default() -> Operand { Operand::Reg(Default::default()) }
-}
-
-impl IOperand for Operand {
-	fn is_reg(&self) -> bool { matches!(self, Operand::Reg(..)) }
-	fn is_imm(&self) -> bool { matches!(self, Operand::Imm(..)) }
-	fn access(&self) -> Option<MemAccess> {
-		match self {
-			Operand::Mem(_, a) => Some(*a),
-			_ => None,
-		}
-	}
-
-	fn addr(&self) -> VA {
-		match self {
-			Operand::Mem(a, _) => VA(*a as usize),
-			_ => panic!("not a memory operand"),
-		}
-	}
-
-	fn uimm(&self) -> u64 {
-		match self {
-			Operand::Imm(i) => *i as u64,
-			_ => panic!("not an immediate operand"),
-		}
-	}
-
-	fn simm(&self) -> i64 {
-		match self {
-			Operand::Imm(i) => (*i as i8) as i64,
-			_ => panic!("not an immediate operand"),
-		}
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
 // Operands
 // ------------------------------------------------------------------------------------------------
 
@@ -392,7 +340,7 @@ impl Instruction {
 	}
 
 	fn op_addr(&self) -> u16 {
-		if let Some(Operand::Mem(a, ..)) = self.op { a } else { panic!() }
+		if let Some(Operand::Mem16(a, ..)) = self.op { a } else { panic!() }
 	}
 }
 
@@ -402,7 +350,7 @@ impl IInstruction for Instruction {
 	fn size(&self) -> usize         { self.size }
 	fn num_ops(&self) -> usize      { if self.op.is_some() { 1 } else { 0 } }
 	fn bytes(&self) -> &[u8]        { &self.bytes[..self.size] }
-	fn get_op(&self, i: usize) -> &dyn IOperand {
+	fn get_op(&self, i: usize) -> &Operand {
 		assert!(i == 0);
 		self.op.as_ref().unwrap()
 	}
@@ -425,7 +373,7 @@ impl IInstruction for Instruction {
 	fn control_target(&self) -> Option<VA> {
 		if self.desc.ctrl {
 			if let Some(operand) = self.op {
-				if let Operand::Mem(addr, _) = operand {
+				if let Operand::Mem16(addr, _) = operand {
 					return Some(VA(addr as usize))
 				}
 
@@ -498,10 +446,10 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> Option<Operand> {
 				_ => unreachable!()
 			};
 
-			Some(Operand::Mem(addr, access))
+			Some(Operand::Mem16(addr, access))
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
-			Some(Operand::Imm(img[0]))
+			Some(Operand::UImm8(img[0]))
 		}
 	} else {
 		None
@@ -569,8 +517,8 @@ impl IPrinter<Instruction> for Printer {
 		if i.op.is_some() {
 			let operand = match i.op.unwrap() {
 				Operand::Reg(..)       => unreachable!(),
-				Operand::Imm(imm)      => self.fmt_imm(imm),
-				Operand::Mem(addr, ..) => {
+				Operand::UImm8(imm)    => self.fmt_imm(imm),
+				Operand::Mem16(addr, ..) => {
 					match l.lookup(state, VA(addr as usize)) {
 						Some(name) => name,
 						None       => self.fmt_addr(addr, i.desc.addr_mode.is_zero_page()),

@@ -33,34 +33,64 @@ pub enum MemAccess {
 }
 
 // ------------------------------------------------------------------------------------------------
-// IOperand
+// Operand
 // ------------------------------------------------------------------------------------------------
 
-/// Trait for instruction operands.
-pub trait IOperand {
+/// Instruction operands.
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[display("{:?}")]
+pub enum Operand {
+	/// A register. The interpretation of the number is up to the architecture.
+	Reg(usize),
+
+	/// An unsigned immediate that fits in 8 bits.
+	UImm8(u8),
+
+	/// A 16-bit memory address, along with what kind of access it is.
+	Mem16(u16, MemAccess),
+}
+
+impl Operand {
 	/// Does this refer to a register?
-	fn is_reg(&self) -> bool;
+	pub fn is_reg(&self) -> bool { matches!(self, Operand::Reg(..)) }
 
 	/// Is this an immediate value (but NOT a memory address)?
-	fn is_imm(&self) -> bool;
+	pub fn is_imm(&self) -> bool { matches!(self, Operand::UImm8(..)) }
 
 	/// How, if any way, does this operand access memory?
-	fn access(&self) -> Option<MemAccess>;
+	pub fn access(&self) -> Option<MemAccess> {
+		match self {
+			Operand::Mem16(_, a) => Some(*a),
+			_ => None,
+		}
+	}
 
 	/// If `access` is Some (`is_mem` returns true), get the address it refers to; panics otherwise.
-	fn addr(&self) -> VA;
+	pub fn addr(&self) -> VA {
+		match self {
+			Operand::Mem16(a, _) => VA(*a as usize),
+			_ => panic!("not a memory operand"),
+		}
+	}
 
 	/// If this is an immediate value, get it as an unsigned number; panics otherwise.
-	fn uimm(&self) -> u64;
+	pub fn uimm(&self) -> u64 {
+		match self {
+			Operand::UImm8(i) => *i as u64,
+			_ => panic!("not an immediate operand"),
+		}
+	}
 
 	/// If this is an immediate value, get it as a signed number; panics otherwise.
-	fn simm(&self) -> i64;
-
-	// --------------------------------------------------------------------------------------------
-	// Provided methods
+	pub fn simm(&self) -> i64 {
+		match self {
+			Operand::UImm8(i) => (*i as i8) as i64,
+			_ => panic!("not an immediate operand"),
+		}
+	}
 
 	/// Does this operand access memory?
-	fn is_mem(&self) -> bool {
+	pub fn is_mem(&self) -> bool {
 		self.access().is_some()
 	}
 }
@@ -111,7 +141,7 @@ pub trait IInstruction {
 	/// How many operands it has.
 	fn num_ops(&self) -> usize;
 	/// Accessor for operands.
-	fn get_op(&self, i: usize) -> &dyn IOperand;
+	fn get_op(&self, i: usize) -> &Operand;
 	/// Accessor for original bytes.
 	fn bytes(&self) -> &[u8];
 	/// Get kind of instruction.
