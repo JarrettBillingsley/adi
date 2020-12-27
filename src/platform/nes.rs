@@ -7,10 +7,10 @@ use parse_display::Display;
 use enum_dispatch::enum_dispatch;
 
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
-use crate::arch::{ IArchitecture };
+use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
-use crate::program::{ IProgram, Program, ProgramImpl };
+use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -23,10 +23,8 @@ impl NesPlatform {
 }
 
 impl IPlatform for NesPlatform {
-	type TArchitecture = Mos65xxArchitecture;
-
-	fn arch(&self) -> Self::TArchitecture {
-		Mos65xxArchitecture
+	fn arch(&self) -> Architecture {
+		Mos65xxArchitecture.into()
 	}
 }
 
@@ -71,12 +69,12 @@ impl ILoader for NesLoader {
 		);
 
 		// 4. create Program
-		let mut prog = ProgramImpl::new(mem, NesPlatform::new());
+		let mut prog = Program::new(mem, NesPlatform::new().into());
 
 		// 5. setup default names
 		setup_nes_labels(&mut prog);
 
-		Ok(prog.into())
+		Ok(prog)
 	}
 }
 
@@ -133,7 +131,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 	Ok(NesMmu { ram, ppu, io, mapper })
 }
 
-fn setup_nes_labels(prog: &mut ProgramImpl<NesPlatform>) {
+fn setup_nes_labels(prog: &mut Program) {
 	let state = prog.initial_mmu_state();
 
 	for StdName(name, addr) in NES_STD_NAMES {

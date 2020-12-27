@@ -199,6 +199,14 @@ pub trait IInterpreter: Sized + Sync + Send {
 // IArchitecture
 // ------------------------------------------------------------------------------------------------
 
+use mos65xx::{ Mos65xxArchitecture };
+
+#[enum_dispatch]
+pub enum Architecture {
+	Mos65xxArchitecture,
+}
+
+#[enum_dispatch(Architecture)]
 pub trait IArchitecture: Sized + Sync + Send {
 	/// The system's endianness.
 	fn endianness(&self) -> Endian;

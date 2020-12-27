@@ -6,7 +6,7 @@ use parse_display::Display;
 use lazy_static::lazy_static;
 use enum_dispatch::enum_dispatch;
 
-use crate::arch::{ IArchitecture };
+use crate::arch::{ Architecture };
 use crate::memory::{ Image };
 use crate::program::{ Program };
 
@@ -16,34 +16,41 @@ use crate::program::{ Program };
 
 mod nes;
 
-use nes::{ NesLoader };
-pub use nes::{ NesPlatform, NesMmu };
+pub use nes::{ NesMmu };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
 // ------------------------------------------------------------------------------------------------
 
-pub trait IPlatform: Display + Sized {
-	type TArchitecture: IArchitecture;
+use nes::{ NesPlatform };
 
-	fn arch(&self) -> Self::TArchitecture;
+#[enum_dispatch]
+#[derive(Display)]
+pub enum Platform {
+	#[display("{0}")]
+	NesPlatform
 }
 
-pub type ArchTypeOf <Plat> = <Plat as IPlatform>::TArchitecture;
+#[enum_dispatch(Platform)]
+pub trait IPlatform: Display + Sized {
+	fn arch(&self) -> Architecture;
+}
 
 // ------------------------------------------------------------------------------------------------
 // ILoader
 // ------------------------------------------------------------------------------------------------
 
-#[enum_dispatch(Loader)]
-pub trait ILoader: Sync + Send {
-	fn can_parse(&self, img: &Image) -> bool;
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program>;
-}
+use nes::{ NesLoader };
 
 #[enum_dispatch]
 pub enum Loader {
 	NesLoader
+}
+
+#[enum_dispatch(Loader)]
+pub trait ILoader: Sync + Send {
+	fn can_parse(&self, img: &Image) -> bool;
+	fn program_from_image(&self, img: Image) -> PlatformResult<Program>;
 }
 
 lazy_static! {
