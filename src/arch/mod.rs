@@ -168,6 +168,14 @@ impl INameLookup for NullLookup {
 // IInterpreter
 // ------------------------------------------------------------------------------------------------
 
+use mos65xx::{ Mos65xxInterpreter };
+
+#[enum_dispatch]
+pub enum Interpreter {
+	Mos65xxInterpreter,
+}
+
+#[enum_dispatch(Interpreter)]
 pub trait IInterpreter: Sized + Sync + Send {
 	fn reset(&mut self);
 
@@ -183,8 +191,6 @@ pub trait IInterpreter: Sized + Sync + Send {
 pub trait IArchitecture: Sized + Sync + Send {
 	/// Type for the disassembler.
 	type TDisassembler: IDisassembler;
-	/// Type for the interpreter.
-	type TInterpreter: IInterpreter;
 
 	/// The system's endianness.
 	fn endianness(&self) -> Endian;
@@ -195,5 +201,5 @@ pub trait IArchitecture: Sized + Sync + Send {
 	/// Construct a new printer.
 	fn new_printer(&self) -> Printer;
 	/// Construct a new interpreter.
-	fn new_interpreter(&self) -> Self::TInterpreter;
+	fn new_interpreter(&self) -> Interpreter;
 }

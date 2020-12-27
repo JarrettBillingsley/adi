@@ -4,7 +4,7 @@ use super::{
 	Disassembler,
 	Operand,
 	Opcode,
-	Printer,
+	Mos65xxPrinter,
 	lookup_desc,
 };
 
@@ -144,7 +144,7 @@ fn disasm_range() {
 		"eor ($90),y",
 	];
 
-	let p = Printer::new(SyntaxFlavor::Old);
+	let p = Mos65xxPrinter::new(SyntaxFlavor::Old);
 	let state = MmuState::default();
 	let mut iter = Disassembler.disas_all(code, state, VA(0), Location::new(SegId(0), 0));
 	let mut output = Vec::new();
@@ -212,8 +212,8 @@ fn printing() {
 		(disas(0, &[EOR_IZY as u8, 0x90]),       "eor ($90),y",     "xor a, [[0x90] + y]"   ),
 	];
 
-	let old = Printer::new(SyntaxFlavor::Old);
-	let new = Printer::new(SyntaxFlavor::New);
+	let old = Mos65xxPrinter::new(SyntaxFlavor::Old);
+	let new = Mos65xxPrinter::new(SyntaxFlavor::New);
 	let l = &DummyLookup;
 	let state = MmuState::default();
 

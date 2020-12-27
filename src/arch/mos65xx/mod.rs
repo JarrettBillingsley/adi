@@ -8,7 +8,8 @@ use crate::program::{
 	InstructionKind,
 };
 use crate::arch::{
-	DisasError, DisasResult, Printer, IPrinter, INameLookup, IArchitecture, IDisassembler
+	DisasError, DisasResult,
+	Printer, IPrinter, Interpreter, INameLookup, IArchitecture, IDisassembler
 };
 use crate::memory::{ MmuState, Endian, Location, VA };
 
@@ -23,7 +24,7 @@ mod opcodes;
 mod tests;
 
 use descs::{ lookup_desc };
-use interp::{ Interpreter };
+pub use interp::{ Mos65xxInterpreter };
 use opcodes::{ Opcode };
 
 // ------------------------------------------------------------------------------------------------
@@ -431,11 +432,10 @@ pub struct Mos65xxArchitecture;
 
 impl IArchitecture for Mos65xxArchitecture {
 	type TDisassembler = Disassembler;
-	type TInterpreter  = Interpreter;
 
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { Disassembler }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
-	fn new_interpreter (&self) -> Interpreter  { Interpreter::new() }
+	fn new_interpreter (&self) -> Interpreter  { Mos65xxInterpreter::new().into() }
 }

@@ -40,7 +40,7 @@ impl InterpRegs {
 // Interpreter
 // ------------------------------------------------------------------------------------------------
 
-pub struct Interpreter {
+pub struct Mos65xxInterpreter {
 	regs:      InterpRegs,
 	print:     Mos65xxPrinter,
 	ret_stack: Vec<Location>,
@@ -49,7 +49,7 @@ pub struct Interpreter {
 	jmp_dst:   Location,
 }
 
-impl Interpreter {
+impl Mos65xxInterpreter {
 	const N: usize = 7;
 	const V: usize = 6;
 	const B: usize = 4;
@@ -393,7 +393,7 @@ impl Interpreter {
 	}
 }
 
-impl IInterpreter for Interpreter {
+impl IInterpreter for Mos65xxInterpreter {
 	fn reset(&mut self) {
 		self.regs.reset();
 		self.ret_stack.clear();
