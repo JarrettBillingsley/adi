@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ IArchitecture };
-use crate::memory::{ Image, IMmu };
+use crate::memory::{ Image };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -17,20 +17,18 @@ use crate::program::{ Program };
 mod nes;
 
 use nes::{ NesLoader };
-pub use nes::{ NesPlatform };
+pub use nes::{ NesPlatform, NesMmu };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
 // ------------------------------------------------------------------------------------------------
 
 pub trait IPlatform: Display + Sized {
-	type TMmu: IMmu;
 	type TArchitecture: IArchitecture;
 
 	fn arch(&self) -> Self::TArchitecture;
 }
 
-pub type MmuTypeOf  <Plat> = <Plat as IPlatform>::TMmu;
 pub type ArchTypeOf <Plat> = <Plat as IPlatform>::TArchitecture;
 pub type DisasTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TDisassembler;
 pub type PrintTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TPrinter;

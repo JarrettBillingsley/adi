@@ -13,7 +13,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ INameLookup, IPrinter, IArchitecture };
 use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
-use crate::platform::{ IPlatform, MmuTypeOf, PrintTypeOf };
+use crate::platform::{ IPlatform, PrintTypeOf };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -141,7 +141,7 @@ pub trait IProgram: Display {
 
 /// A Program contains a Memory object and indexes of names, references, functions, and variables.
 pub struct ProgramImpl<Plat: IPlatform> {
-	mem:   Memory<MmuTypeOf<Plat>>,
+	mem:   Memory,
 	plat:  Plat,
 	names: NameMap,
 	refs:  RefMap,
@@ -158,7 +158,7 @@ impl<Plat: IPlatform> Display for ProgramImpl<Plat> {
 }
 
 impl<Plat: IPlatform> ProgramImpl<Plat> {
-	pub fn new(mem: Memory<MmuTypeOf<Plat>>, plat: Plat) -> Self {
+	pub fn new(mem: Memory, plat: Plat) -> Self {
 		Self {
 			mem,
 			print: plat.arch().new_printer(),

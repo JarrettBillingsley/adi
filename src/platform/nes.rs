@@ -24,7 +24,6 @@ impl NesPlatform {
 
 impl IPlatform for NesPlatform {
 	type TArchitecture = Mos65xxArchitecture;
-	type TMmu = NesMmu;
 
 	fn arch(&self) -> Self::TArchitecture {
 		Mos65xxArchitecture
@@ -68,7 +67,7 @@ impl ILoader for NesLoader {
 			Mos65xxArchitecture.addr_bits(),
 			Mos65xxArchitecture.endianness(),
 			segs,
-			mmu
+			mmu.into()
 		);
 
 		// 4. create Program

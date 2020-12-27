@@ -42,7 +42,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/smb.nes")?;
+	let img = Image::new_from_file("tests/data/megaman.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);

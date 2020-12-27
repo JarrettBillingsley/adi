@@ -190,16 +190,16 @@ pub trait IMemory: Display {
 
 /// This is the data structure on which everything else is built.
 /// Ties together a memory map and a segment collection.
-pub struct Memory<TMmu: IMmu> {
+pub struct Memory {
 	bits:       usize,
 	digits:     usize,
 	endianness: Endian,
 	segs:       SegCollection,
-	mmu:        TMmu,
+	mmu:        Mmu,
 }
 
-impl<TMmu: IMmu> Memory<TMmu> {
-	pub fn new(bits: usize, endianness: Endian, segs: SegCollection, mmu: TMmu) -> Self {
+impl Memory {
+	pub fn new(bits: usize, endianness: Endian, segs: SegCollection, mmu: Mmu) -> Self {
 		Self {
 			bits,
 			digits: ((bits + 3) & !3) >> 2, // round up to next multiple of 4, divide by 4
@@ -210,7 +210,7 @@ impl<TMmu: IMmu> Memory<TMmu> {
 	}
 }
 
-impl<TMmu: IMmu> IMemory for Memory<TMmu> {
+impl IMemory for Memory {
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
@@ -264,7 +264,7 @@ impl<TMmu: IMmu> IMemory for Memory<TMmu> {
 	}
 }
 
-impl<TMmu: IMmu> Display for Memory<TMmu> {
+impl Display for Memory {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.len(), self.endianness)?;
 		writeln!(f, "MMU: {}", self.mmu)?;

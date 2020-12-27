@@ -1,7 +1,13 @@
 
 use std::fmt::{ Debug, Display };
 
+use parse_display::Display;
+use enum_dispatch::enum_dispatch;
+
 use crate::memory::{ VA, Location };
+use crate::platform::{
+	NesMmu,
+};
 
 /// Newtype for MMU configuration state. The interpretation of this type is up to each
 /// implementor of `IMmu`.
@@ -14,11 +20,19 @@ impl MmuState {
 	}
 }
 
+#[enum_dispatch]
+#[derive(Debug, Display)]
+pub enum Mmu {
+	#[display("{0}")]
+	NesMmu,
+}
+
 /// Trait for MMUs (memory management units), which abstract the VA-to-Location mapping.
 ///
 /// The "MMU" broadly means "the hardware that decides what physical device a given virtual
 /// address refers to." This can be built into a system (hardwired), or the system might
 /// have registers to do banking, or the cartridges might have hardware to do that.
+#[enum_dispatch(Mmu)]
 pub trait IMmu: Debug + Display + Sync + Send {
 	/// Get the initial configuration state of this MMU.
 	fn initial_state(&self) -> MmuState;
