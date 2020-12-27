@@ -9,7 +9,11 @@ use crate::program::{
 };
 use crate::arch::{
 	DisasError, DisasResult,
-	Printer, IPrinter, Interpreter, INameLookup, IArchitecture, IDisassembler
+	Printer, IPrinter,
+	Disassembler, IDisassembler,
+	Interpreter,
+	INameLookup,
+	IArchitecture,
 };
 use crate::memory::{ MmuState, Endian, Location, VA };
 
@@ -284,9 +288,9 @@ impl InstDesc {
 // ------------------------------------------------------------------------------------------------
 
 /// The 65xx disassembler.
-pub struct Disassembler;
+pub struct Mos65xxDisassembler;
 
-impl IDisassembler for Disassembler {
+impl IDisassembler for Mos65xxDisassembler {
 	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, loc: Location)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
@@ -431,11 +435,9 @@ impl IPrinter for Mos65xxPrinter {
 pub struct Mos65xxArchitecture;
 
 impl IArchitecture for Mos65xxArchitecture {
-	type TDisassembler = Disassembler;
-
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
-	fn new_disassembler(&self) -> Disassembler { Disassembler }
+	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
 	fn new_interpreter (&self) -> Interpreter  { Mos65xxInterpreter::new().into() }
 }

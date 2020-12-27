@@ -30,7 +30,6 @@ pub trait IPlatform: Display + Sized {
 }
 
 pub type ArchTypeOf <Plat> = <Plat as IPlatform>::TArchitecture;
-pub type DisasTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TDisassembler;
 
 // ------------------------------------------------------------------------------------------------
 // ILoader

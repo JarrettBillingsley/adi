@@ -4,7 +4,7 @@ use std::iter::IntoIterator;
 
 use log::*;
 
-use crate::arch::{ IDisassembler, IArchitecture };
+use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ InstructionKind, ProgramImpl, IProgram, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };

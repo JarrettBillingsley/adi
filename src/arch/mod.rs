@@ -17,6 +17,22 @@ pub use error::*;
 // IDisassembler
 // ------------------------------------------------------------------------------------------------
 
+use mos65xx::{ Mos65xxDisassembler };
+
+#[enum_dispatch]
+pub enum Disassembler {
+	Mos65xxDisassembler,
+}
+
+impl Disassembler {
+	/// Iterator over all instructions in a slice, where the first one has the given VA.
+	pub fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, loc: Location)
+	-> DisasAll<'dis, 'img> {
+		DisasAll::new(self, img, state, va, loc)
+	}
+}
+
+#[enum_dispatch(Disassembler)]
 /// Trait for disassemblers.
 pub trait IDisassembler : Sized {
 	/// Disassemble a single instruction from `img` with the given VA and Location.
@@ -27,12 +43,6 @@ pub trait IDisassembler : Sized {
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
-
-	/// Iterator over all instructions in a slice, where the first one has the given VA.
-	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, loc: Location)
-	-> DisasAll<'dis, 'img, Self> {
-		DisasAll::new(self, img, state, va, loc)
-	}
 }
 
 /// Iterator type. Also lets you find out *why* iteration stopped, like:
@@ -47,8 +57,8 @@ pub trait IDisassembler : Sized {
 ///     // do stuff with err and iter.err_offs()
 /// }
 /// ```
-pub struct DisasAll<'dis, 'img, D: IDisassembler> {
-	disas: &'dis D,
+pub struct DisasAll<'dis, 'img> {
+	disas: &'dis Disassembler,
 	img:   &'img [u8],
 	state: MmuState,
 	va:    VA,
@@ -57,8 +67,9 @@ pub struct DisasAll<'dis, 'img, D: IDisassembler> {
 	err:   Option<DisasError>,
 }
 
-impl<'dis, 'img, D: IDisassembler> DisasAll<'dis, 'img, D> {
-	fn new(disas: &'dis D, img: &'img [u8], state: MmuState, va: VA, loc: Location) -> Self {
+impl<'dis, 'img> DisasAll<'dis, 'img> {
+	fn new(disas: &'dis Disassembler, img: &'img [u8], state: MmuState, va: VA, loc: Location)
+	-> Self {
 		Self { disas, img, state, va, loc, offs: 0, err: None }
 	}
 
@@ -95,7 +106,7 @@ impl<'dis, 'img, D: IDisassembler> DisasAll<'dis, 'img, D> {
 	}
 }
 
-impl<'dis, 'img, D: IDisassembler> Iterator for DisasAll<'dis, 'img, D> {
+impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 	type Item = Instruction;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -189,15 +200,12 @@ pub trait IInterpreter: Sized + Sync + Send {
 // ------------------------------------------------------------------------------------------------
 
 pub trait IArchitecture: Sized + Sync + Send {
-	/// Type for the disassembler.
-	type TDisassembler: IDisassembler;
-
 	/// The system's endianness.
 	fn endianness(&self) -> Endian;
 	/// How many bits in an address.
 	fn addr_bits(&self) -> usize;
 	/// Construct a new disassembler.
-	fn new_disassembler(&self) -> Self::TDisassembler;
+	fn new_disassembler(&self) -> Disassembler;
 	/// Construct a new printer.
 	fn new_printer(&self) -> Printer;
 	/// Construct a new interpreter.
