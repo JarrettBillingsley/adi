@@ -1,4 +1,6 @@
 
+use enum_dispatch::enum_dispatch;
+
 use crate::memory::{ Endian, IMemory, MmuState, Location, VA };
 use crate::program::{ Instruction, BasicBlock };
 
@@ -123,7 +125,15 @@ impl<'dis, 'img, D: IDisassembler> Iterator for DisasAll<'dis, 'img, D> {
 // IPrinter
 // ------------------------------------------------------------------------------------------------
 
+use mos65xx::{ Mos65xxPrinter };
+
+#[enum_dispatch]
+pub enum Printer {
+	Mos65xxPrinter,
+}
+
 /// Trait for instruction printers.
+#[enum_dispatch(Printer)]
 pub trait IPrinter {
 	/// Give a string representation of an instruction's mnemonic.
 	fn fmt_mnemonic(&self, i: &Instruction) -> String;
@@ -173,8 +183,6 @@ pub trait IInterpreter: Sized + Sync + Send {
 pub trait IArchitecture: Sized + Sync + Send {
 	/// Type for the disassembler.
 	type TDisassembler: IDisassembler;
-	/// Type for the printer.
-	type TPrinter: IPrinter;
 	/// Type for the interpreter.
 	type TInterpreter: IInterpreter;
 
@@ -185,7 +193,7 @@ pub trait IArchitecture: Sized + Sync + Send {
 	/// Construct a new disassembler.
 	fn new_disassembler(&self) -> Self::TDisassembler;
 	/// Construct a new printer.
-	fn new_printer(&self) -> Self::TPrinter;
+	fn new_printer(&self) -> Printer;
 	/// Construct a new interpreter.
 	fn new_interpreter(&self) -> Self::TInterpreter;
 }

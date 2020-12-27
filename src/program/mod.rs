@@ -11,9 +11,9 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use delegate::delegate;
 use enum_dispatch::enum_dispatch;
 
-use crate::arch::{ INameLookup, IPrinter, IArchitecture };
+use crate::arch::{ INameLookup, IPrinter, Printer, IArchitecture };
 use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
-use crate::platform::{ IPlatform, PrintTypeOf };
+use crate::platform::{ IPlatform };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -147,7 +147,7 @@ pub struct ProgramImpl<Plat: IPlatform> {
 	refs:  RefMap,
 	funcs: FuncIndex,
 	pub(crate) queue: VecDeque<AnalysisItem>,
-	print: PrintTypeOf<Plat>,
+	print: Printer,
 }
 
 impl<Plat: IPlatform> Display for ProgramImpl<Plat> {

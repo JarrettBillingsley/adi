@@ -8,7 +8,7 @@ use crate::program::{
 	InstructionKind,
 };
 use crate::arch::{
-	DisasError, DisasResult, IPrinter, INameLookup, IArchitecture, IDisassembler
+	DisasError, DisasResult, Printer, IPrinter, INameLookup, IArchitecture, IDisassembler
 };
 use crate::memory::{ MmuState, Endian, Location, VA };
 
@@ -344,16 +344,16 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 }
 
 // ------------------------------------------------------------------------------------------------
-// Printer
+// Mos65xxPrinter
 // ------------------------------------------------------------------------------------------------
 
 /// The 65xx instruction printer.
 #[derive(Debug, Copy, Clone)]
-pub struct Printer {
+pub struct Mos65xxPrinter {
 	flavor: SyntaxFlavor,
 }
 
-impl Printer {
+impl Mos65xxPrinter {
 	pub fn new(flavor: SyntaxFlavor) -> Self {
 		Self { flavor }
 	}
@@ -377,7 +377,7 @@ impl Printer {
 	}
 }
 
-impl IPrinter for Printer {
+impl IPrinter for Mos65xxPrinter {
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
 		let desc = lookup_desc(i.bytes[0]);
 		desc.meta_op.mnemonic(self.flavor).into()
@@ -431,12 +431,11 @@ pub struct Mos65xxArchitecture;
 
 impl IArchitecture for Mos65xxArchitecture {
 	type TDisassembler = Disassembler;
-	type TPrinter      = Printer;
 	type TInterpreter  = Interpreter;
 
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { Disassembler }
-	fn new_printer     (&self) -> Printer      { Printer::new(SyntaxFlavor::New) }
+	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
 	fn new_interpreter (&self) -> Interpreter  { Interpreter::new() }
 }

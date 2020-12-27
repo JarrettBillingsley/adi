@@ -2,7 +2,7 @@ use crate::arch::{ IInterpreter, IPrinter };
 use crate::memory::{ IMemory, ImageRead, Location, MmuState, VA };
 use crate::program::{ BasicBlock, BBTerm, Instruction };
 
-use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Printer, InstDesc, lookup_desc };
+use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, lookup_desc };
 
 // ------------------------------------------------------------------------------------------------
 // InterpRegs
@@ -42,7 +42,7 @@ impl InterpRegs {
 
 pub struct Interpreter {
 	regs:      InterpRegs,
-	print:     Printer,
+	print:     Mos65xxPrinter,
 	ret_stack: Vec<Location>,
 	// TODO: external PRG-RAM
 	ram:       Vec<u8>,
@@ -61,7 +61,7 @@ impl Interpreter {
 	pub(super) fn new() -> Self {
 		let mut ret = Self {
 			regs:      InterpRegs::new(),
-			print:     Printer::new(SyntaxFlavor::New),
+			print:     Mos65xxPrinter::new(SyntaxFlavor::New),
 			ret_stack: Vec::new(),
 			ram:       vec![0; 0x800],
 			jmp_dst:   Location::invalid(0),
