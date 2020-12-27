@@ -253,8 +253,6 @@ pub struct InstDesc {
 	meta_op:     MetaOp,
 	/// What addressing mode is used.
 	addr_mode:   AddrMode,
-	/// Is this a control flow instruction?
-	ctrl:        bool,
 	/// Does this access memory, and how?
 	access:      Option<MemAccess>,
 }
@@ -264,10 +262,9 @@ impl InstDesc {
 		opcode:      Opcode,
 		meta_op:     MetaOp,
 		addr_mode:   AddrMode,
-		ctrl:        bool,
 		access:      Option<MemAccess>,
 	) -> Self {
-		Self { opcode, meta_op, addr_mode, ctrl, access, }
+		Self { opcode, meta_op, addr_mode, access, }
 	}
 
 	fn kind(&self) -> InstructionKind {
@@ -337,7 +334,7 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 				_ => unreachable!()
 			};
 
-			let target = if desc.ctrl { Some(VA(addr as usize)) } else { None };
+			let target = if desc.kind().has_control_target() { Some(VA(addr as usize)) } else { None };
 			(Some(Operand::Mem16(addr, access)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));

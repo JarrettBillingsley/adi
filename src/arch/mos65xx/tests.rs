@@ -59,8 +59,8 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 	match Disassembler.disas_instr(img, state, va, loc) {
 		Ok(inst) => {
 			assert_eq!(inst.va, va);
-			assert_eq!(inst.desc.meta_op, meta_op);
-			assert_eq!(inst.op, op);
+			assert_eq!(lookup_desc(inst.bytes()[0]).meta_op, meta_op);
+			assert_eq!(inst.ops.first().copied(), op);
 		}
 
 		Err(e) => {
@@ -92,15 +92,15 @@ fn disasm_success() {
 	use Opcode::*;
 
 	check_disas(0, &[BRK_IMP as u8],               BRK,  None);
-	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(Imm(0xEF)));
-	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(Mem(0x3456, Read)));
-	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(Mem(0x0033, Write)));
-	check_disas(0, &[ASL_ZPG as u8, 0x99],         ASL,  Some(Mem(0x0099, Rmw)));
-	check_disas(0, &[ROL_ABS as u8, 0xAA, 0x99],   ROL,  Some(Mem(0x99AA, Offset)));
-	check_disas(0, &[JMP_LAB as u8, 0xFE, 0xFF],   JMP,  Some(Mem(0xFFFE, Target)));
-	check_disas(0, &[JMP_IND as u8, 0xFE, 0xFF],   JMP,  Some(Mem(0xFFFE, Read)));
-	check_disas(3, &[BCC_REL as u8, 10],           BCC,  Some(Mem(3 + 10 + 2, Target)));
-	check_disas(8, &[BCC_REL as u8, (-5i8) as u8], BCC,  Some(Mem(8 - 5 + 2,  Target)));
+	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(UImm8(0xEF)));
+	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(Mem16(0x3456, Read)));
+	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(Mem16(0x0033, Write)));
+	check_disas(0, &[ASL_ZPG as u8, 0x99],         ASL,  Some(Mem16(0x0099, Rmw)));
+	check_disas(0, &[ROL_ABS as u8, 0xAA, 0x99],   ROL,  Some(Mem16(0x99AA, Offset)));
+	check_disas(0, &[JMP_LAB as u8, 0xFE, 0xFF],   JMP,  Some(Mem16(0xFFFE, Target)));
+	check_disas(0, &[JMP_IND as u8, 0xFE, 0xFF],   JMP,  Some(Mem16(0xFFFE, Read)));
+	check_disas(3, &[BCC_REL as u8, 10],           BCC,  Some(Mem16(3 + 10 + 2, Target)));
+	check_disas(8, &[BCC_REL as u8, (-5i8) as u8], BCC,  Some(Mem16(8 - 5 + 2,  Target)));
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn disasm_range() {
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
-		output.push(p.fmt_instr(&inst, &DummyLookup));
+		output.push(p.fmt_instr(&inst, state, &DummyLookup));
 	}
 
 	assert!(!iter.has_err());
@@ -216,9 +216,10 @@ fn printing() {
 	let old = Printer::new(SyntaxFlavor::Old);
 	let new = Printer::new(SyntaxFlavor::New);
 	let l = &DummyLookup;
+	let state = MmuState::default();
 
 	for (i, o, n) in tests {
-		assert_eq!(old.fmt_instr(&i, l), *o);
-		assert_eq!(new.fmt_instr(&i, l), *n);
+		assert_eq!(old.fmt_instr(&i, state, l), *o);
+		assert_eq!(new.fmt_instr(&i, state, l), *n);
 	}
 }

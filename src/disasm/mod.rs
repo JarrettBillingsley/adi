@@ -95,7 +95,7 @@ impl Operand {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Instruction
+// InstructionKind
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
@@ -137,6 +137,10 @@ impl InstructionKind {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+// InstructionKind
+// ------------------------------------------------------------------------------------------------
+
 const MAX_OPS:   usize = 3; // ? we'll see
 const MAX_BYTES: usize = 3;
 
@@ -165,58 +169,43 @@ impl Instruction {
 	}
 
 	/// Get Location.
-	pub fn loc(&self) -> Location              { self.loc }
+	pub fn loc(&self) -> Location { self.loc }
 	/// Get virtual address.
-	pub fn va(&self) -> VA                     { self.va }
+	pub fn va(&self) -> VA { self.va }
+	/// Get the Location of the instruction after this one.
+	pub fn next_loc(&self) -> Location { self.loc() + self.size() }
+	/// Get the virtual address of the instruction after this one.
+	pub fn next_va(&self) -> VA { self.va() + self.size() }
 	/// Get size, in bytes.
-	pub fn size(&self) -> usize                { self.bytes.len() }
+	pub fn size(&self) -> usize { self.bytes.len() }
+	/// The original bytes that this instruction was decoded from.
+	pub fn bytes(&self) -> &[u8] { &self.bytes }
 	/// How many operands it has.
-	pub fn num_ops(&self) -> usize             { self.ops.len() }
+	pub fn num_ops(&self) -> usize { self.ops.len() }
 	/// Accessor for operands.
 	pub fn get_op(&self, i: usize) -> &Operand { &self.ops[i] }
-	/// Accessor for original bytes.
-	pub fn bytes(&self) -> &[u8]               { &self.bytes }
-	/// Get kind of instruction.
-	pub fn kind(&self) -> InstructionKind      { self.kind }
 	/// If this is a control instruction, the target address of that control, if it has one.
 	pub fn control_target(&self) -> Option<VA> { self.target }
-
-	/// Get the Location of the instruction after this one.
-	pub fn next_loc(&self) -> Location {
-		self.loc() + self.size()
-	}
-
-	/// Get the virtual address of the instruction after this one.
-	pub fn next_va(&self) -> VA {
-		self.va() + self.size()
-	}
-
+	/// What kind of instruction is this?
+	pub fn kind(&self) -> InstructionKind { self.kind }
 	/// Is this a control flow instruction?
 	pub fn is_control(&self) -> bool { self.kind().is_control() }
-
 	/// Is this an invalid instruction?
 	pub fn is_invalid(&self) -> bool { matches!(self.kind(), InstructionKind::Invalid) }
-
 	/// Is this some other kind of instruction?
-	pub fn is_other  (&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
-
+	pub fn is_other(&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
 	/// Is this a function call?
-	pub fn is_call   (&self) -> bool { matches!(self.kind(), InstructionKind::Call) }
-
+	pub fn is_call(&self) -> bool { matches!(self.kind(), InstructionKind::Call) }
 	/// Is this a function return ?
-	pub fn is_ret    (&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
-
+	pub fn is_ret(&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
 	/// Is this a conditional jump/branch?
-	pub fn is_cond   (&self) -> bool { matches!(self.kind(), InstructionKind::Cond) }
-
+	pub fn is_cond(&self) -> bool { matches!(self.kind(), InstructionKind::Cond) }
 	/// Is this an unconditional jump/branch?
-	pub fn is_uncond (&self) -> bool { matches!(self.kind(), InstructionKind::Uncond) }
-
+	pub fn is_uncond(&self) -> bool { matches!(self.kind(), InstructionKind::Uncond) }
 	/// Is this an indirect jump/branch (i.e. through a register)?
-	pub fn is_indir  (&self) -> bool { matches!(self.kind(), InstructionKind::Indir) }
-
+	pub fn is_indir(&self) -> bool { matches!(self.kind(), InstructionKind::Indir) }
 	/// Is this some kind of halt instruction from which there is no recovery?
-	pub fn is_halt   (&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
+	pub fn is_halt(&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
 }
 
 // ------------------------------------------------------------------------------------------------
