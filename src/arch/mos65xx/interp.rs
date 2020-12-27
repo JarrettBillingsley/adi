@@ -1,5 +1,5 @@
 use crate::arch::{ IInterpreter, IPrinter };
-use crate::memory::{ IMemory, ImageRead, Location, MmuState, VA };
+use crate::memory::{ Memory, ImageRead, Location, MmuState, VA };
 use crate::program::{ BasicBlock, BBTerm, Instruction };
 
 use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, lookup_desc };
@@ -71,7 +71,7 @@ impl Mos65xxInterpreter {
 	}
 
 	// TODO: this is a NES memory map but this is the generic 65xx module
-	fn read_byte(&self, mem: &dyn IMemory, state: MmuState, addr: u16) -> u8 {
+	fn read_byte(&self, mem: &Memory, state: MmuState, addr: u16) -> u8 {
 		match addr {
 			0x0000 ..= 0x07FF => self.ram[addr as usize],
 			0x2002 => 0xFF,
@@ -89,7 +89,7 @@ impl Mos65xxInterpreter {
 		}
 	}
 
-	fn write_byte(&mut self, _mem: &dyn IMemory, _state: MmuState, addr: u16, val: u8) {
+	fn write_byte(&mut self, _mem: &Memory, _state: MmuState, addr: u16, val: u8) {
 		// TODO: *THIS* is where we detect bank changes!!
 		match addr {
 			0x0000 ..= 0x07FF => self.ram[addr as usize] = val,
@@ -101,7 +101,7 @@ impl Mos65xxInterpreter {
 		if let Some(Operand::Mem16(a, ..)) = i.ops.first() { *a } else { panic!() }
 	}
 
-	fn get_addr(&self, desc: InstDesc, state: MmuState, mem: &dyn IMemory, i: &Instruction) -> u16 {
+	fn get_addr(&self, desc: InstDesc, state: MmuState, mem: &Memory, i: &Instruction) -> u16 {
 		use AddrMode::*;
 
 		match desc.addr_mode {
@@ -159,23 +159,23 @@ impl Mos65xxInterpreter {
 		self.set_flag(Self::N, val & 0x80 == 0x80);
 	}
 
-	fn push(&mut self, mem: &dyn IMemory, state: MmuState, val: u8) {
+	fn push(&mut self, mem: &Memory, state: MmuState, val: u8) {
 		self.write_byte(mem, state, 0x0100 | (self.regs.S as u16), val);
 		self.regs.S = self.regs.S.wrapping_sub(1);
 	}
 
-	fn pop(&mut self, mem: &dyn IMemory, state: MmuState) -> u8 {
+	fn pop(&mut self, mem: &Memory, state: MmuState) -> u8 {
 		self.regs.S = self.regs.S.wrapping_add(1);
 		self.read_byte(mem, state, 0x0100 | (self.regs.S as u16))
 	}
 
-	fn pop_n(&mut self, mem: &dyn IMemory, state: MmuState, n: usize) {
+	fn pop_n(&mut self, mem: &Memory, state: MmuState, n: usize) {
 		for _ in 0 .. n {
 			self.pop(mem, state);
 		}
 	}
 
-	fn interpret_inst(&mut self, state: MmuState, mem: &dyn IMemory, i: &Instruction) {
+	fn interpret_inst(&mut self, state: MmuState, mem: &Memory, i: &Instruction) {
 		let desc = lookup_desc(i.bytes[0]);
 		let addr = self.get_addr(desc, state, mem, i);
 		let inst_display = self.print.fmt_instr(i, state, &crate::arch::NullLookup);
@@ -401,7 +401,7 @@ impl IInterpreter for Mos65xxInterpreter {
 		self.jmp_dst = Location::invalid(0);
 	}
 
-	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock)
+	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock)
 	-> Option<Location> {
 		let insts = bb.insts();
 		let last = insts.len() - 1;

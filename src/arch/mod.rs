@@ -1,7 +1,7 @@
 
 use enum_dispatch::enum_dispatch;
 
-use crate::memory::{ Endian, IMemory, MmuState, Location, VA };
+use crate::memory::{ Endian, Memory, MmuState, Location, VA };
 use crate::program::{ Instruction, BasicBlock };
 
 // ------------------------------------------------------------------------------------------------
@@ -192,7 +192,7 @@ pub trait IInterpreter: Sized + Sync + Send {
 
 	// interprets the BB and returns the location of the successor to run, or None if
 	// we hit the end
-	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock) -> Option<Location>;
+	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock) -> Option<Location>;
 }
 
 // ------------------------------------------------------------------------------------------------

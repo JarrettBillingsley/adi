@@ -11,7 +11,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use delegate::delegate;
 
 use crate::arch::{ INameLookup, IPrinter, Printer, IArchitecture };
-use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
+use crate::memory::{ Memory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::platform::{ Platform, IPlatform };
 
 // ------------------------------------------------------------------------------------------------
