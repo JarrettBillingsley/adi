@@ -93,21 +93,25 @@ impl Interpreter {
 		}
 	}
 
-	fn get_addr(&self, state: MmuState, mem: &dyn IMemory, i: &Instruction) -> u16 {
+	fn op_addr(&self, i: &Instruction) -> u16 {
+		if let Some(Operand::Mem16(a, ..)) = i.ops.first() { *a } else { panic!() }
+	}
+
+	fn get_addr(&self, desc: InstDesc, state: MmuState, mem: &dyn IMemory, i: &Instruction) -> u16 {
 		use AddrMode::*;
 
-		match i.desc.addr_mode {
+		match desc.addr_mode {
 			IMP | REL | LAB => 0, // not used, doesn't matter
 
 			IMM       => (i.va().0 as u16).wrapping_add(1),
-			ZPG | ABS => i.op_addr(),
-			ZPX       => i.op_addr().wrapping_add(self.regs.X.into()) & 0xFF,
-			ZPY       => i.op_addr().wrapping_add(self.regs.Y.into()) & 0xFF,
-			ABX       => i.op_addr().wrapping_add(self.regs.X.into()),
-			ABY       => i.op_addr().wrapping_add(self.regs.Y.into()),
+			ZPG | ABS => self.op_addr(i),
+			ZPX       => self.op_addr(i).wrapping_add(self.regs.X.into()) & 0xFF,
+			ZPY       => self.op_addr(i).wrapping_add(self.regs.Y.into()) & 0xFF,
+			ABX       => self.op_addr(i).wrapping_add(self.regs.X.into()),
+			ABY       => self.op_addr(i).wrapping_add(self.regs.Y.into()),
 
 			IND => {
-				let ptr_addr = i.op_addr();
+				let ptr_addr = self.op_addr(i);
 				let lo = self.read_byte(mem, state, ptr_addr) as u16;
 
 				let hi = if ptr_addr & 0xFF == 0xFF {
@@ -120,13 +124,13 @@ impl Interpreter {
 				(hi << 8) | lo
 			}
 			IZX => { // [[{} + x]]
-				let ptr_addr = i.op_addr().wrapping_add(self.regs.X.into());
+				let ptr_addr = self.op_addr(i).wrapping_add(self.regs.X.into());
 				let lo = self.read_byte(mem, state, ptr_addr) as u16;
 				let hi = self.read_byte(mem, state, ptr_addr.wrapping_add(1) & 0xFF) as u16;
 				(hi << 8) | lo
 			}
 			IZY => { // [[{}] + y]
-				let ptr_addr = i.op_addr();
+				let ptr_addr = self.op_addr(i);
 				let lo = self.read_byte(mem, state, ptr_addr) as u16;
 				let hi = self.read_byte(mem, state, ptr_addr.wrapping_add(1) & 0xFF) as u16;
 				((hi << 8) | lo).wrapping_add(self.regs.Y.into())
@@ -168,7 +172,8 @@ impl Interpreter {
 	}
 
 	fn interpret_inst(&mut self, state: MmuState, mem: &dyn IMemory, i: &Instruction) {
-		let addr = self.get_addr(state, mem, i);
+		let desc = lookup_desc(i.bytes[0]);
+		let addr = self.get_addr(desc, state, mem, i);
 		let inst_display = self.print.fmt_instr(i, state, &crate::disasm::NullLookup);
 
 		log::info!("[A={:02X} X={:02X} Y={:02X} S={:02X} P={:08b}] {:04X} {}",
@@ -177,7 +182,7 @@ impl Interpreter {
 			i.va(), inst_display);
 
 		use MetaOp::*;
-		match i.desc.meta_op {
+		match desc.meta_op {
 			BRK => { todo!("BRK instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
 			UNK => { todo!("unknown instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
 			NOP => {}
@@ -185,7 +190,7 @@ impl Interpreter {
 			BCC | BCS | BEQ | BMI | BNE | BPL | BVC | BVS => {}
 			// handled (partly) by interpret_bb.
 			JMP => {
-				if i.desc.addr_mode == AddrMode::IND {
+				if desc.addr_mode == AddrMode::IND {
 					self.jmp_dst = mem.loc_from_va(state, VA(addr as usize));
 				}
 			}
@@ -290,7 +295,7 @@ impl Interpreter {
 				let val = data.wrapping_shl(1);
 				self.set_flags_zn(val);
 
-				if i.desc.meta_op == ASL {
+				if desc.meta_op == ASL {
 					self.write_byte(mem, state, addr, val);
 				}
 			}
@@ -300,7 +305,7 @@ impl Interpreter {
 				let val = data.wrapping_shr(1);
 				self.set_flags_zn(val);
 
-				if i.desc.meta_op == LSR {
+				if desc.meta_op == LSR {
 					self.write_byte(mem, state, addr, val);
 				}
 			}
@@ -311,7 +316,7 @@ impl Interpreter {
 				let val = (data << 1) | old_c;
 				self.set_flags_zn(val);
 
-				if i.desc.meta_op == ROL {
+				if desc.meta_op == ROL {
 					self.write_byte(mem, state, addr, val);
 				}
 			}
@@ -326,7 +331,7 @@ impl Interpreter {
 				self.set_flag(Self::C, (data & 1) > 0);
 				self.set_flags_zn(ret);
 
-				if i.desc.meta_op == ROR {
+				if desc.meta_op == ROR {
 					self.write_byte(mem, state, addr, ret);
 				}
 			}
@@ -369,7 +374,8 @@ impl Interpreter {
 
 	fn should_branch(&mut self, i: &Instruction) -> bool {
 		use MetaOp::*;
-		match i.desc.meta_op {
+		let desc = lookup_desc(i.bytes[0]);
+		match desc.meta_op {
 			BCC => self.get_flag(Self::C) == 0,
 			BCS => self.get_flag(Self::C) == 1,
 			BNE => self.get_flag(Self::Z) == 0,
@@ -383,7 +389,7 @@ impl Interpreter {
 	}
 }
 
-impl IInterpreter<Instruction> for Interpreter {
+impl IInterpreter for Interpreter {
 	fn reset(&mut self) {
 		self.regs.reset();
 		self.ret_stack.clear();
@@ -391,7 +397,7 @@ impl IInterpreter<Instruction> for Interpreter {
 		self.jmp_dst = Location::invalid(0);
 	}
 
-	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock<Instruction>)
+	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock)
 	-> Option<Location> {
 		let insts = bb.insts();
 		let last = insts.len() - 1;

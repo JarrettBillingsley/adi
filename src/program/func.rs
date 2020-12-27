@@ -7,7 +7,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 use generational_arena::{ Arena, Index };
 
 use crate::memory::{ Location, MmuState };
-use crate::disasm::{ IInstruction };
+use crate::disasm::{ Instruction };
 
 // ------------------------------------------------------------------------------------------------
 // BBId
@@ -67,22 +67,23 @@ impl Debug for BBIdReal {
 
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
-pub struct BasicBlock<TInstruction: IInstruction> {
+pub struct BasicBlock {
 	id:               BBIdReal,
 	pub(crate) loc:   Location,
 	pub(crate) term:  BBTerm,
-	pub(crate) insts: Vec<TInstruction>,
+	pub(crate) insts: Vec<Instruction>,
 	state:            MmuState,
 }
 
-impl<T: IInstruction> BasicBlock<T> {
-	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<T>, state: MmuState) -> Self {
+impl BasicBlock {
+	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	-> Self {
 		assert_ne!(insts.len(), 0);
 		Self { id: BBIdReal::Complete(id), loc, term, insts, state }
 	}
 
-	pub fn new_inprogress(idx: usize, loc: Location, term: BBTerm, insts: Vec<T>, state: MmuState)
-	-> Self {
+	pub fn new_inprogress(idx: usize, loc: Location, term: BBTerm, insts: Vec<Instruction>,
+	state: MmuState) -> Self {
 		assert_ne!(insts.len(), 0);
 		Self { id: BBIdReal::InProgress(idx), loc, term, insts, state }
 	}
@@ -103,7 +104,7 @@ impl<T: IInstruction> BasicBlock<T> {
 	/// How it ends, and what its successors are.
 	pub fn term    (&self) -> &BBTerm  { &self.term }
 	/// Its instructions.
-	pub fn insts   (&self) -> &[T]     { &self.insts }
+	pub fn insts   (&self) -> &[Instruction] { &self.insts }
 	/// The MMU state at the beginning of this BB.
 	pub fn mmu_state(&self) -> MmuState { self.state }
 
@@ -122,7 +123,7 @@ impl<T: IInstruction> BasicBlock<T> {
 		self.id().func()
 	}
 
-	pub fn inst_at_loc(&self, loc: Location) -> Option<&T> {
+	pub fn inst_at_loc(&self, loc: Location) -> Option<&Instruction> {
 		self.insts.iter().find(|&inst| inst.loc() == loc)
 	}
 
@@ -273,17 +274,17 @@ impl Debug for FuncIdReal {
 
 /// A single function.
 #[derive(Debug)]
-pub struct Function<TInstruction: IInstruction> {
+pub struct Function {
 	/// Its globally-unique identifier.
 	id: FuncIdReal,
 	name: Option<String>,
 
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
 	/// ordering of the rest of them.
-	pub(crate) bbs: Vec<BasicBlock<TInstruction>>, // [0] is head
+	pub(crate) bbs: Vec<BasicBlock>, // [0] is head
 }
 
-impl<I: IInstruction> Function<I> {
+impl Function {
 	pub fn new_inprogress() -> Self {
 		Self { id: FuncIdReal::InProgress, name: None, bbs: Vec::new() }
 	}
@@ -293,8 +294,8 @@ impl<I: IInstruction> Function<I> {
 		self.id = FuncIdReal::Complete(id);
 	}
 
-	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<I>, state: MmuState)
-	-> usize {
+	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>,
+	state: MmuState) -> usize {
 		log::trace!("new bb loc: {}, term: {:?}", loc, term);
 		let id = self.bbs.len();
 		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts, state));
@@ -307,7 +308,7 @@ impl<I: IInstruction> Function<I> {
 		self.push_bb(new)
 	}
 
-	fn push_bb(&mut self, bb: BasicBlock<I>) -> usize {
+	fn push_bb(&mut self, bb: BasicBlock) -> usize {
 		self.bbs.push(bb);
 		self.bbs.len() - 1
 	}
@@ -324,17 +325,17 @@ impl<I: IInstruction> Function<I> {
 
 	/// Iterator over this function's basic blocks, starting with the head, but then
 	/// in arbitrary order.
-	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock<I>> {
+	pub fn all_bbs(&self) -> impl Iterator<Item = &BasicBlock> {
 		self.bbs.iter()
 	}
 
 	/// Get the given basic block.
-	pub fn get_bb(&self, id: BBId) -> &BasicBlock<I> {
+	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
 		assert!(id.0 == self.id.id());
 		&self.bbs[id.1]
 	}
 
-	pub fn get_bb_by_idx(&self, idx: usize) -> &BasicBlock<I> {
+	pub fn get_bb_by_idx(&self, idx: usize) -> &BasicBlock {
 		assert!(self.id.is_in_progress());
 		&self.bbs[idx]
 	}
@@ -363,17 +364,17 @@ impl<I: IInstruction> Function<I> {
 /// An index of all functions in the program. Functions are created, destroyed, and looked up
 /// through this object.
 #[derive(Default)]
-pub struct FuncIndex<TInstruction: IInstruction> {
-	arena: Arena<Function<TInstruction>>,
+pub struct FuncIndex {
+	arena: Arena<Function>,
 }
 
-impl<T: IInstruction> FuncIndex<T> {
+impl FuncIndex {
 	pub fn new() -> Self {
 		Self { arena: Arena::new() }
 	}
 
 	/// Creates a new function and returns its ID.
-	pub fn new_func(&mut self, mut func: Function<T>) -> FuncId {
+	pub fn new_func(&mut self, mut func: Function) -> FuncId {
 		FuncId(self.arena.insert_with(move |id| {
 			func.mark_complete(FuncId(id));
 			func
@@ -381,17 +382,17 @@ impl<T: IInstruction> FuncIndex<T> {
 	}
 
 	/// Gets the function with the given ID.
-	pub fn get(&self, id: FuncId) -> &Function<T> {
+	pub fn get(&self, id: FuncId) -> &Function {
 		self.arena.get(id.0).expect("stale FuncId")
 	}
 
 	/// Same as above but mutable.
-	pub fn get_mut(&mut self, id: FuncId) -> &mut Function<T> {
+	pub fn get_mut(&mut self, id: FuncId) -> &mut Function {
 		self.arena.get_mut(id.0).expect("stale FuncId")
 	}
 
 	/// Iterator over all functions in the index, in arbitrary order.
-	pub fn all_funcs(&self) -> impl Iterator<Item = (Index, &Function<T>)> {
+	pub fn all_funcs(&self) -> impl Iterator<Item = (Index, &Function)> {
 		self.arena.iter()
 	}
 }

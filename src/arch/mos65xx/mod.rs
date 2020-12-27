@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use crate::disasm::{
 	MemAccess,
 	Operand,
-	IInstruction,
+	Instruction,
 	IPrinter,
 	INameLookup,
 	IDisassembler,
@@ -269,128 +269,16 @@ impl InstDesc {
 	) -> Self {
 		Self { opcode, meta_op, addr_mode, ctrl, access, }
 	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// Operands
-// ------------------------------------------------------------------------------------------------
-
-/*
-// Keeping this around if we need it for implicit operands.
-const MAX_OPS: usize = 2; // ? we'll see
-
-/// Tiny container for instruction operands.
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub struct Operands {
-	len: usize,
-	ops: [Operand; MAX_OPS],
-}
-
-impl Debug for Operands {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "Operands{:?}", &self.ops[..self.len])
-	}
-}
-
-impl Operands {
-	fn new() -> Self {
-		Self { len: 0, ops: Default::default() }
-	}
-
-	fn push(&mut self, op: Operand) {
-		assert!(self.len < MAX_OPS);
-		self.ops[self.len] = op;
-		self.len += 1;
-	}
-
-	pub fn len(&self) -> usize {
-		self.len
-	}
-
-	pub fn get(&self, i: usize) -> Operand {
-		assert!(i < self.len);
-		self.ops[i]
-	}
-}*/
-
-// ------------------------------------------------------------------------------------------------
-// Instruction
-// ------------------------------------------------------------------------------------------------
-
-const MAX_BYTES: usize = 3;
-
-/// A 65xx instruction.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct Instruction {
-	va:    VA,
-	loc:   Location,
-	desc:  InstDesc,
-	size:  usize,
-	op:    Option<Operand>,
-	bytes: [u8; MAX_BYTES],
-}
-
-impl Instruction {
-	#[allow(clippy::too_many_arguments)]
-	fn new(va: VA, loc: Location, desc: InstDesc, size: usize, op: Option<Operand>, orig: &[u8])
-	-> Self {
-		let mut bytes = [0u8; MAX_BYTES];
-		bytes[..orig.len()].copy_from_slice(orig);
-		Self { va, loc, desc, size, op, bytes }
-	}
-
-	fn op_addr(&self) -> u16 {
-		if let Some(Operand::Mem16(a, ..)) = self.op { a } else { panic!() }
-	}
-}
-
-impl IInstruction for Instruction {
-	fn va(&self) -> VA              { self.va }
-	fn loc(&self) -> Location       { self.loc }
-	fn size(&self) -> usize         { self.size }
-	fn num_ops(&self) -> usize      { if self.op.is_some() { 1 } else { 0 } }
-	fn bytes(&self) -> &[u8]        { &self.bytes[..self.size] }
-	fn get_op(&self, i: usize) -> &Operand {
-		assert!(i == 0);
-		self.op.as_ref().unwrap()
-	}
 
 	fn kind(&self) -> InstructionKind {
-		use Opcode::*;
-		use InstructionKind::*;
-
-		match self.desc.opcode {
-			INVALID           => Invalid,
-			JSR_LAB           => Call,
-			RTS_IMP | RTI_IMP => Ret,
-			JMP_LAB           => Uncond,
-			JMP_IND           => Indir,
-			_ if self.desc.addr_mode == AddrMode::REL => Cond,
-			_                 => Other,
-		}
-	}
-
-	fn control_target(&self) -> Option<VA> {
-		if self.desc.ctrl {
-			if let Some(operand) = self.op {
-				if let Operand::Mem16(addr, _) = operand {
-					return Some(VA(addr as usize))
-				}
-
-				unreachable!("control instructions can only have memory operands");
-			}
-		}
-
-		None
-	}
-
-	fn writes_mem(&self) -> bool {
-		use AddrMode::*;
-		use MetaOp::*;
-
-		match self.desc.addr_mode {
-			IMP | IMM | IND | REL | LAB => false,
-			_ => matches!(self.desc.meta_op, ASL | DEC | INC | LSR | ROL | ROR | STA | STX | STY)
+		match self.opcode {
+			Opcode::INVALID                      => InstructionKind::Invalid,
+			Opcode::JSR_LAB                      => InstructionKind::Call,
+			Opcode::RTS_IMP | Opcode::RTI_IMP    => InstructionKind::Ret,
+			Opcode::JMP_LAB                      => InstructionKind::Uncond,
+			Opcode::JMP_IND                      => InstructionKind::Indir,
+			_ if self.addr_mode == AddrMode::REL => InstructionKind::Cond,
+			_                                    => InstructionKind::Other,
 		}
 	}
 }
@@ -402,7 +290,7 @@ impl IInstruction for Instruction {
 /// The 65xx disassembler.
 pub struct Disassembler;
 
-impl IDisassembler<Instruction> for Disassembler {
+impl IDisassembler for Disassembler {
 	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, loc: Location)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
@@ -426,13 +314,16 @@ impl IDisassembler<Instruction> for Disassembler {
 
 		// okay cool, let's decode
 		let bytes = &img[0 .. inst_size];
-		let op = decode_operand(desc, va, &img[1 .. inst_size]);
-
-		Ok(Instruction::new(va, loc, desc, inst_size, op, bytes))
+		let (op, target) = decode_operand(desc, va, &img[1 .. inst_size]);
+		let ops = match &op {
+			Some(op) => std::slice::from_ref(op),
+			None     => &[],
+		};
+		Ok(Instruction::new(va, loc, desc.kind(), target, ops, bytes))
 	}
 }
 
-fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> Option<Operand> {
+fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Option<VA>) {
 	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
 		if let Some(access) = desc.access {
@@ -446,13 +337,14 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> Option<Operand> {
 				_ => unreachable!()
 			};
 
-			Some(Operand::Mem16(addr, access))
+			let target = if desc.ctrl { Some(VA(addr as usize)) } else { None };
+			(Some(Operand::Mem16(addr, access)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
-			Some(Operand::UImm8(img[0]))
+			(Some(Operand::UImm8(img[0])), None)
 		}
 	} else {
-		None
+		(None, None)
 	}
 }
 
@@ -490,17 +382,19 @@ impl Printer {
 	}
 }
 
-impl IPrinter<Instruction> for Printer {
+impl IPrinter for Printer {
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
-		i.desc.meta_op.mnemonic(self.flavor).into()
+		let desc = lookup_desc(i.bytes[0]);
+		desc.meta_op.mnemonic(self.flavor).into()
 	}
 
 	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
 		use std::fmt::Write;
 
 		let mut ret = String::new();
+		let desc = lookup_desc(i.bytes[0]);
 
-		match i.desc.meta_op.extra_operands(self.flavor) {
+		match desc.meta_op.extra_operands(self.flavor) {
 			[]       => {},
 			[o1]     => {
 				if i.num_ops() == 0 {
@@ -514,19 +408,19 @@ impl IPrinter<Instruction> for Printer {
 			_        => unreachable!()
 		}
 
-		if i.op.is_some() {
-			let operand = match i.op.unwrap() {
+		if i.ops.len() > 0 {
+			let operand = match i.ops.first().unwrap() {
 				Operand::Reg(..)       => unreachable!(),
-				Operand::UImm8(imm)    => self.fmt_imm(imm),
+				Operand::UImm8(imm)    => self.fmt_imm(*imm),
 				Operand::Mem16(addr, ..) => {
-					match l.lookup(state, VA(addr as usize)) {
+					match l.lookup(state, VA(*addr as usize)) {
 						Some(name) => name,
-						None       => self.fmt_addr(addr, i.desc.addr_mode.is_zero_page()),
+						None       => self.fmt_addr(*addr, desc.addr_mode.is_zero_page()),
 					}
 				}
 			};
 
-			let template = i.desc.addr_mode.operand_template(self.flavor);
+			let template = desc.addr_mode.operand_template(self.flavor);
 			ret += &template.replace("{}", &operand);
 		}
 
@@ -541,7 +435,6 @@ impl IPrinter<Instruction> for Printer {
 pub struct Mos65xxArchitecture;
 
 impl IArchitecture for Mos65xxArchitecture {
-	type TInstruction  = Instruction;
 	type TDisassembler = Disassembler;
 	type TPrinter      = Printer;
 	type TInterpreter  = Interpreter;

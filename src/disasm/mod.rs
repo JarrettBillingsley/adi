@@ -1,7 +1,6 @@
 
-use std::marker::PhantomData;
-
 use parse_display::Display;
+use smallvec::{ SmallVec };
 
 use crate::memory::{ MmuState, Location, VA };
 
@@ -96,7 +95,7 @@ impl Operand {
 }
 
 // ------------------------------------------------------------------------------------------------
-// IInstruction
+// Instruction
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
@@ -121,75 +120,103 @@ pub enum InstructionKind {
 }
 
 impl InstructionKind {
-	fn is_control(&self) -> bool {
+	pub fn is_control(&self) -> bool {
 		use InstructionKind::*;
 		match self {
 			Call | Ret | Cond | Uncond | Indir | Halt  => true,
 			Invalid | Other => false,
 		}
 	}
+
+	pub fn has_control_target(&self) -> bool {
+		use InstructionKind::*;
+		match self {
+			Call | Cond | Uncond | Indir  => true,
+			Ret | Halt | Invalid | Other => false,
+		}
+	}
 }
 
-/// Trait for instructions. Used by analysis and such.
-pub trait IInstruction {
-	/// Get Location.
-	fn loc(&self) -> Location;
-	/// Get virtual address.
-	fn va(&self) -> VA;
-	/// Get size, in bytes.
-	fn size(&self) -> usize;
-	/// How many operands it has.
-	fn num_ops(&self) -> usize;
-	/// Accessor for operands.
-	fn get_op(&self, i: usize) -> &Operand;
-	/// Accessor for original bytes.
-	fn bytes(&self) -> &[u8];
-	/// Get kind of instruction.
-	fn kind(&self) -> InstructionKind;
-	/// If this is a control instruction, the target address of that control, if it has one.
-	fn control_target(&self) -> Option<VA>;
-	/// Does this instruction write to memory?
-	fn writes_mem(&self) -> bool;
+const MAX_OPS:   usize = 3; // ? we'll see
+const MAX_BYTES: usize = 3;
 
-	// --------------------------------------------------------------------------------------------
-	// Provided methods
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Instruction {
+	pub(crate) va:     VA,
+	pub(crate) loc:    Location,
+	pub(crate) kind:   InstructionKind,
+	pub(crate) target: Option<VA>,
+	pub(crate) ops:    SmallVec<[Operand; MAX_OPS]>,
+	pub(crate) bytes:  SmallVec<[u8; MAX_BYTES]>,
+}
+
+impl Instruction {
+	#[allow(clippy::too_many_arguments)]
+	pub(crate) fn new(va: VA, loc: Location, kind: InstructionKind,
+	target: Option<VA>, ops: &[Operand], bytes: &[u8]) -> Self {
+		Self {
+			va,
+			loc,
+			kind,
+			target,
+			ops:   SmallVec::from_slice(ops),
+			bytes: SmallVec::from_slice(bytes)
+		}
+	}
+
+	/// Get Location.
+	pub fn loc(&self) -> Location              { self.loc }
+	/// Get virtual address.
+	pub fn va(&self) -> VA                     { self.va }
+	/// Get size, in bytes.
+	pub fn size(&self) -> usize                { self.bytes.len() }
+	/// How many operands it has.
+	pub fn num_ops(&self) -> usize             { self.ops.len() }
+	/// Accessor for operands.
+	pub fn get_op(&self, i: usize) -> &Operand { &self.ops[i] }
+	/// Accessor for original bytes.
+	pub fn bytes(&self) -> &[u8]               { &self.bytes }
+	/// Get kind of instruction.
+	pub fn kind(&self) -> InstructionKind      { self.kind }
+	/// If this is a control instruction, the target address of that control, if it has one.
+	pub fn control_target(&self) -> Option<VA> { self.target }
 
 	/// Get the Location of the instruction after this one.
-	fn next_loc(&self) -> Location {
+	pub fn next_loc(&self) -> Location {
 		self.loc() + self.size()
 	}
 
 	/// Get the virtual address of the instruction after this one.
-	fn next_va(&self) -> VA {
+	pub fn next_va(&self) -> VA {
 		self.va() + self.size()
 	}
 
 	/// Is this a control flow instruction?
-	fn is_control(&self) -> bool { self.kind().is_control() }
+	pub fn is_control(&self) -> bool { self.kind().is_control() }
 
 	/// Is this an invalid instruction?
-	fn is_invalid(&self) -> bool { matches!(self.kind(), InstructionKind::Invalid) }
+	pub fn is_invalid(&self) -> bool { matches!(self.kind(), InstructionKind::Invalid) }
 
 	/// Is this some other kind of instruction?
-	fn is_other  (&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
+	pub fn is_other  (&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
 
 	/// Is this a function call?
-	fn is_call   (&self) -> bool { matches!(self.kind(), InstructionKind::Call) }
+	pub fn is_call   (&self) -> bool { matches!(self.kind(), InstructionKind::Call) }
 
 	/// Is this a function return ?
-	fn is_ret    (&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
+	pub fn is_ret    (&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
 
 	/// Is this a conditional jump/branch?
-	fn is_cond   (&self) -> bool { matches!(self.kind(), InstructionKind::Cond) }
+	pub fn is_cond   (&self) -> bool { matches!(self.kind(), InstructionKind::Cond) }
 
 	/// Is this an unconditional jump/branch?
-	fn is_uncond (&self) -> bool { matches!(self.kind(), InstructionKind::Uncond) }
+	pub fn is_uncond (&self) -> bool { matches!(self.kind(), InstructionKind::Uncond) }
 
 	/// Is this an indirect jump/branch (i.e. through a register)?
-	fn is_indir  (&self) -> bool { matches!(self.kind(), InstructionKind::Indir) }
+	pub fn is_indir  (&self) -> bool { matches!(self.kind(), InstructionKind::Indir) }
 
 	/// Is this some kind of halt instruction from which there is no recovery?
-	fn is_halt   (&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
+	pub fn is_halt   (&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -197,19 +224,19 @@ pub trait IInstruction {
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for disassemblers.
-pub trait IDisassembler<TInstruction: IInstruction> : Sized {
+pub trait IDisassembler : Sized {
 	/// Disassemble a single instruction from `img` with the given VA and Location.
 	/// Returns the disassembled instruction and the new MMU state (which will be in effect
 	/// on the *next* instruction).
 	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
-	-> DisasResult<TInstruction>;
+	-> DisasResult<Instruction>;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
 	fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, loc: Location)
-	-> DisasAll<'dis, 'img, TInstruction, Self> {
+	-> DisasAll<'dis, 'img, Self> {
 		DisasAll::new(self, img, state, va, loc)
 	}
 }
@@ -226,7 +253,7 @@ pub trait IDisassembler<TInstruction: IInstruction> : Sized {
 ///     // do stuff with err and iter.err_offs()
 /// }
 /// ```
-pub struct DisasAll<'dis, 'img, I: IInstruction, D: IDisassembler<I>> {
+pub struct DisasAll<'dis, 'img, D: IDisassembler> {
 	disas: &'dis D,
 	img:   &'img [u8],
 	state: MmuState,
@@ -234,12 +261,11 @@ pub struct DisasAll<'dis, 'img, I: IInstruction, D: IDisassembler<I>> {
 	loc:   Location,
 	offs:  usize,
 	err:   Option<DisasError>,
-	_inst: PhantomData<I>,
 }
 
-impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> DisasAll<'dis, 'img, I, D> {
+impl<'dis, 'img, D: IDisassembler> DisasAll<'dis, 'img, D> {
 	fn new(disas: &'dis D, img: &'img [u8], state: MmuState, va: VA, loc: Location) -> Self {
-		Self { disas, img, state, va, loc, offs: 0, err: None, _inst: PhantomData }
+		Self { disas, img, state, va, loc, offs: 0, err: None }
 	}
 
 	/// If iteration stopped because of an error, returns that error.
@@ -275,8 +301,8 @@ impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> DisasAll<'dis, 'img, I, D
 	}
 }
 
-impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> Iterator for DisasAll<'dis, 'img, I, D> {
-	type Item = I;
+impl<'dis, 'img, D: IDisassembler> Iterator for DisasAll<'dis, 'img, D> {
+	type Item = Instruction;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.offs == self.img.len() {
@@ -306,18 +332,18 @@ impl<'dis, 'img, I: IInstruction, D: IDisassembler<I>> Iterator for DisasAll<'di
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for instruction printers.
-pub trait IPrinter<TInstruction: IInstruction> {
+pub trait IPrinter {
 	/// Give a string representation of an instruction's mnemonic.
-	fn fmt_mnemonic(&self, i: &TInstruction) -> String;
+	fn fmt_mnemonic(&self, i: &Instruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &TInstruction, state: MmuState, l: &impl INameLookup) -> String;
+	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String;
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
 	/// Give a string representation of an instruction.
-	fn fmt_instr(&self, i: &TInstruction, state: MmuState, l: &impl INameLookup) -> String {
+	fn fmt_instr(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
 		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, state, l))
 	}
 }

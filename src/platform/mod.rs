@@ -33,7 +33,6 @@ pub trait IPlatform: Display + Sized {
 pub type MmuTypeOf  <Plat> = <Plat as IPlatform>::TMmu;
 pub type ArchTypeOf <Plat> = <Plat as IPlatform>::TArchitecture;
 pub type DisasTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TDisassembler;
-pub type InstTypeOf <Plat> = <ArchTypeOf<Plat> as IArchitecture>::TInstruction;
 pub type PrintTypeOf<Plat> = <ArchTypeOf<Plat> as IArchitecture>::TPrinter;
 
 // ------------------------------------------------------------------------------------------------

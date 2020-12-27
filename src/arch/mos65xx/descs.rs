@@ -21,8 +21,8 @@ lazy_static! {
 	};
 }
 
-const OP_INVALID: InstDesc = InstDesc::new(
-	Opcode::INVALID,                MetaOp::UNK, AddrMode::IMP, false, None);
+const OP_INVALID: InstDesc =
+	InstDesc::new(Opcode::INVALID, MetaOp::UNK, AddrMode::IMP, false, None);
 
 const INST_DESCS: &[InstDesc] = &[
 	InstDesc::new(Opcode::BRK_IMP, MetaOp::BRK,  AddrMode::IMP, false, None                   ),

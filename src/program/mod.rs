@@ -13,8 +13,8 @@ use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ IArchitecture };
 use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
-use crate::disasm::{ INameLookup, IInstruction, IPrinter };
-use crate::platform::{ IPlatform, MmuTypeOf, InstTypeOf, PrintTypeOf };
+use crate::disasm::{ INameLookup, Instruction, IPrinter };
+use crate::platform::{ IPlatform, MmuTypeOf, PrintTypeOf };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -97,7 +97,7 @@ pub trait IProgram: Display {
 	fn bb_term(&self, bb: BBId) -> &BBTerm;
 	fn bb_successors(&self, bb: BBId) -> Successors;
 	fn bb_explicit_successors(&self, bb: BBId) -> Successors;
-	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &dyn IInstruction)> + '_>;
+	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &Instruction)> + '_>;
 	fn bb_mmu_state(&self, bb: BBId) -> MmuState;
 
 	fn inst_fmt_mnemonic(&self, bb: BBId, i: usize) -> String;
@@ -142,7 +142,7 @@ pub struct ProgramImpl<Plat: IPlatform> {
 	plat:  Plat,
 	names: NameMap,
 	refs:  RefMap,
-	funcs: FuncIndex<InstTypeOf<Plat>>,
+	funcs: FuncIndex,
 	pub(crate) queue: VecDeque<AnalysisItem>,
 	print: PrintTypeOf<Plat>,
 }
@@ -175,16 +175,16 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 		to self.funcs {
 			/// Get the function object with the given ID.
 			#[call(get)]
-			pub fn get_func(&self, id: FuncId) -> &Function<InstTypeOf<Plat>>;
+			pub fn get_func(&self, id: FuncId) -> &Function;
 			/// Same as above, but mutable.
 			#[call(get_mut)]
-			pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function<InstTypeOf<Plat>>;
+			pub fn get_func_mut(&mut self, id: FuncId) -> &mut Function;
 		}
 	}
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.
 	/// Returns the new function's globally unique ID.
-	pub(crate) fn new_func(&mut self, func: Function<InstTypeOf<Plat>>) -> FuncId {
+	pub(crate) fn new_func(&mut self, func: Function) -> FuncId {
 		let loc = func.start_loc();
 		assert!(self.func_defined_at(loc).is_none(), "redefining a function at {}", loc);
 
@@ -432,16 +432,9 @@ impl<Plat: IPlatform> IProgram for ProgramImpl<Plat> {
 		self.funcs.get(bb.func()).get_bb(bb).explicit_successors()
 	}
 
-	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &dyn IInstruction)> + '_> {
+	fn bb_insts(&self, bb: BBId) -> Box<dyn Iterator<Item = (usize, &Instruction)> + '_> {
 		let insts = self.funcs.get(bb.func()).get_bb(bb).insts().iter().enumerate();
-
-		// compiler is very upset if I just do .map(|i| &*i) but being very
-		// explicit about the types makes it happy, so,
-		fn mappy<Plat: IPlatform>((i, inst): (usize, &InstTypeOf<Plat>))
-		-> (usize, &dyn IInstruction) {
-			(i, &*inst)
-		}
-		Box::new(insts.map(mappy::<Plat>))
+		Box::new(insts)
 	}
 
 	fn bb_mmu_state(&self, bb: BBId) -> MmuState {

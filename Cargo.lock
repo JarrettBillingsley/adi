@@ -24,6 +24,7 @@ dependencies = [
  "nes_rom",
  "parse-display",
  "simplelog",
+ "smallvec",
 ]
 
 [[package]]
@@ -432,6 +433,12 @@ dependencies = [
  "log",
  "termcolor",
 ]
+
+[[package]]
+name = "smallvec"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae524f056d7d770e174287294f562e95044c68e88dec909a00d2094805db9d75"
 
 [[package]]
 name = "syn"

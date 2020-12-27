@@ -5,12 +5,11 @@ use std::iter::IntoIterator;
 use log::*;
 
 use crate::arch::{ IArchitecture };
-use crate::platform::{ IPlatform, InstTypeOf };
+use crate::platform::{ IPlatform };
 use crate::program::{ ProgramImpl, IProgram, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
 	IDisassembler,
-	IInstruction,
 	InstructionKind,
 };
 
@@ -51,7 +50,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 	}
 
 	fn should_analyze_bb(
-		&mut self, func: &mut Function<InstTypeOf<Plat>>, start: Location) -> bool {
+		&mut self, func: &mut Function, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
@@ -70,7 +69,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 	}
 
 	fn check_split_bb(
-		&mut self, func: &mut Function<InstTypeOf<Plat>>, old_idx: usize, start: Location) {
+		&mut self, func: &mut Function, old_idx: usize, start: Location) {
 		let old_bb = func.get_bb_by_idx(old_idx);
 
 		if start != old_bb.loc {
@@ -137,8 +136,7 @@ impl<Plat: IPlatform> ProgramImpl<Plat> {
 			'instloop: for inst in &mut iter {
 				trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				end_loc = inst.next_loc();
-				let target_loc = inst.control_target().map(
-					|t| self.resolve_target(state, t));
+				let target_loc = inst.control_target().map(|t| self.resolve_target(state, t));
 
 				use InstructionKind::*;
 				match inst.kind() {

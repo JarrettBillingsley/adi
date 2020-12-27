@@ -1,6 +1,6 @@
 
 use crate::memory::{ Endian, IMemory };
-use crate::disasm::{ IInstruction, IDisassembler, IPrinter };
+use crate::disasm::{ IDisassembler, IPrinter };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -13,14 +13,12 @@ pub mod mos65xx;
 // ------------------------------------------------------------------------------------------------
 
 pub trait IArchitecture: Sized + Sync + Send {
-	/// Type for one instruction.
-	type TInstruction: IInstruction;
 	/// Type for the disassembler.
-	type TDisassembler: IDisassembler<Self::TInstruction>;
+	type TDisassembler: IDisassembler;
 	/// Type for the printer.
-	type TPrinter: IPrinter<Self::TInstruction>;
+	type TPrinter: IPrinter;
 	/// Type for the interpreter.
-	type TInterpreter: IInterpreter<Self::TInstruction>;
+	type TInterpreter: IInterpreter;
 
 	/// The system's endianness.
 	fn endianness(&self) -> Endian;
@@ -41,10 +39,10 @@ pub trait IArchitecture: Sized + Sync + Send {
 use crate::program::{ BasicBlock };
 use crate::memory::{ Location };
 
-pub trait IInterpreter<I: IInstruction>: Sized + Sync + Send {
+pub trait IInterpreter: Sized + Sync + Send {
 	fn reset(&mut self);
 
 	// interprets the BB and returns the location of the successor to run, or None if
 	// we hit the end
-	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock<I>) -> Option<Location>;
+	fn interpret_bb(&mut self, mem: &dyn IMemory, bb: &BasicBlock) -> Option<Location>;
 }
