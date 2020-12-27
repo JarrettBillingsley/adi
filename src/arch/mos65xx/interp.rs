@@ -174,7 +174,7 @@ impl Interpreter {
 	fn interpret_inst(&mut self, state: MmuState, mem: &dyn IMemory, i: &Instruction) {
 		let desc = lookup_desc(i.bytes[0]);
 		let addr = self.get_addr(desc, state, mem, i);
-		let inst_display = self.print.fmt_instr(i, state, &crate::disasm::NullLookup);
+		let inst_display = self.print.fmt_instr(i, state, &crate::arch::NullLookup);
 
 		log::info!("[A={:02X} X={:02X} Y={:02X} S={:02X} P={:08b}] {:04X} {}",
 			self.regs.A, self.regs.X, self.regs.Y, self.regs.S,

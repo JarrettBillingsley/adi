@@ -11,7 +11,8 @@ use super::{
 };
 
 use crate::memory::{ MmuState, SegId, Location, VA };
-use crate::disasm::{ INameLookup, DisasError, IDisassembler, IPrinter };
+use crate::disasm::{ DisasError };
+use crate::arch::{ INameLookup, IDisassembler, IPrinter };
 
 #[test]
 fn opcode_lookup() {

@@ -5,13 +5,11 @@ use crate::disasm::{
 	MemAccess,
 	Operand,
 	Instruction,
-	IPrinter,
-	INameLookup,
-	IDisassembler,
 	InstructionKind,
 };
-use crate::arch::{ IArchitecture, IInterpreter };
-use crate::disasm::error::{ DisasError, DisasResult };
+use crate::arch::{
+	DisasError, DisasResult, IPrinter, INameLookup, IArchitecture, IDisassembler, IInterpreter,
+};
 use crate::memory::{ MmuState, Endian, Location, VA };
 
 // ------------------------------------------------------------------------------------------------

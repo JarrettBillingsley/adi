@@ -4,12 +4,11 @@ use std::iter::IntoIterator;
 
 use log::*;
 
-use crate::arch::{ IArchitecture };
+use crate::arch::{ IDisassembler, IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ ProgramImpl, IProgram, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
 use crate::disasm::{
-	IDisassembler,
 	InstructionKind,
 };
 

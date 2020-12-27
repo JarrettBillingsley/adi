@@ -11,9 +11,9 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use delegate::delegate;
 use enum_dispatch::enum_dispatch;
 
-use crate::arch::{ IArchitecture };
+use crate::arch::{ INameLookup, IPrinter, IArchitecture };
 use crate::memory::{ Memory, IMemory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
-use crate::disasm::{ INameLookup, Instruction, IPrinter };
+use crate::disasm::{ Instruction,  };
 use crate::platform::{ IPlatform, MmuTypeOf, PrintTypeOf };
 
 // ------------------------------------------------------------------------------------------------
