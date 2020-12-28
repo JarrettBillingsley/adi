@@ -39,6 +39,11 @@ pub enum StateChange {
 	Dynamic,
 }
 
+impl StateChange {
+	pub fn is_none(&self) -> bool { *self == StateChange::None }
+	pub fn is_some(&self) -> bool { !self.is_none() }
+}
+
 /// Trait for MMUs (memory management units), which abstract the VA-to-Location mapping.
 ///
 /// The "MMU" broadly means "the hardware that decides what physical device a given virtual

@@ -153,26 +153,15 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		let mnem = prog.inst_fmt_mnemonic(inst);
 		let ops  = prog.inst_fmt_operands(state, inst);
 
-		print!("{:>4}:{}  {:8}      {:3} {:30}",
+		println!("{:>4}:{}  {:8}      {:3} {:30}",
 			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
-
-		match prog.inst_state_change(state, inst) {
-			StateChange::Static(new_state) => {
-				print!("{} {:?}", "<------------------------- BANK SWITCH??".yellow(), new_state);
-			}
-			StateChange::Dynamic => {
-				print!("{}", "<------------------------- BANK SWITCH??".yellow());
-			}
-			_ => {}
-		}
-
-		println!();
 	}
 
 	// Terminator
 	use BBTerm::*;
 	match bb.term() {
 		DeadEnd => println!("{}", "---------- DEAD END ----------".red().bold()),
+		BankChange(..) => println!("{}", "---------- BANK CHANGE ----------".cyan().bold()),
 		Halt | Return => {
 		}
 		FallThru(loc) => {

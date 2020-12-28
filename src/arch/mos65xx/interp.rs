@@ -415,7 +415,7 @@ impl IInterpreter for Mos65xxInterpreter {
 		// then the terminator
 		match bb.term() {
 			DeadEnd | Halt          => None,
-			FallThru(to) | Jump(to) => Some(*to),
+			FallThru(to) | Jump(to) | BankChange(to) => Some(*to),
 
 			Return => {
 				if let Some(expected) = self.ret_stack.pop()	{

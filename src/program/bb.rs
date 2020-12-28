@@ -191,6 +191,8 @@ pub enum BBTerm {
 	Cond { t: Location, f: Location },
 	/// Jump table with any number of destinations.
 	JumpTbl(Vec<Location>),
+	/// Like FallThru, but perform a bank change as well.
+	BankChange(Location),
 }
 
 /// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
@@ -203,7 +205,8 @@ impl BBTerm {
 
 		match self {
 			DeadEnd | Return | Halt   => None     .into_iter().chain(&[]),
-			FallThru(loc) | Jump(loc) => Some(loc).into_iter().chain(&[]),
+			FallThru(loc) | Jump(loc) |
+			BankChange(loc)           => Some(loc).into_iter().chain(&[]),
 			Call { dst, ret }         => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }             => Some(t)  .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(locs)             => None     .into_iter().chain(locs),
@@ -216,7 +219,8 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return | Halt | FallThru(..)   => None     .into_iter().chain(&[]),
+			DeadEnd | Return | Halt | FallThru(..) |
+			BankChange(..)                           => None     .into_iter().chain(&[]),
 			Jump(loc)                                => Some(loc).into_iter().chain(&[]),
 			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),

@@ -134,6 +134,14 @@ impl Program {
 				end_loc = inst.next_loc();
 				let target_loc = inst.control_target().map(|t| self.resolve_target(state, t));
 
+				if self.mem.inst_state_change(state, &inst).is_some() {
+					term = Some(BBTerm::BankChange(end_loc));
+					let next = self.resolve_target(state, inst.next_va());
+					potential_bbs.push_back(next);
+					insts.push(inst);
+					break 'instloop;
+				}
+
 				use InstructionKind::*;
 				match inst.kind() {
 					Invalid => panic!("disas_all gave an invalid instruction"),
