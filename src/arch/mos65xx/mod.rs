@@ -257,7 +257,7 @@ pub struct InstDesc {
 	/// What addressing mode is used.
 	addr_mode:   AddrMode,
 	/// Does this access memory, and how?
-	access:      Option<MemAccess>,
+	access:      MemAccess,
 }
 
 impl InstDesc {
@@ -265,7 +265,7 @@ impl InstDesc {
 		opcode:      Opcode,
 		meta_op:     MetaOp,
 		addr_mode:   AddrMode,
-		access:      Option<MemAccess>,
+		access:      MemAccess,
 	) -> Self {
 		Self { opcode, meta_op, addr_mode, access, }
 	}
@@ -326,7 +326,7 @@ impl IDisassembler for Mos65xxDisassembler {
 fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Option<VA>) {
 	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
-		if let Some(access) = desc.access {
+		if desc.access != MemAccess::None {
 			let addr = match desc.addr_mode {
 				ZPG | ZPX | ZPY | IZX | IZY => img[0] as u16,
 
@@ -338,7 +338,7 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 			};
 
 			let target = if desc.kind().has_control_target() { Some(VA(addr as usize)) } else { None };
-			(Some(Operand::Mem16(addr, access)), target)
+			(Some(Operand::Mem16(addr, desc.access)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
 			(Some(Operand::UImm8(img[0])), None)

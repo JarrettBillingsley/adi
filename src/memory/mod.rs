@@ -4,6 +4,8 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use parse_display::Display;
 use delegate::delegate;
 
+use crate::program::{ Instruction };
+
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
@@ -158,8 +160,20 @@ impl Memory {
 	pub fn digits(&self) -> usize { self.digits }
 	/// The length of the address space.
 	pub fn len(&self) -> usize { 2_usize.pow(self.bits as u32) }
-	/// The initial state of the MMU.
-	pub fn initial_mmu_state(&self) -> MmuState { self.mmu.initial_state() }
+
+	// ---------------------------------------------------------------------------------------------
+	// MMU
+
+	delegate! {
+		to self.mmu {
+			/// The initial state of the MMU.
+			#[call(initial_state)]
+			pub fn initial_mmu_state(&self) -> MmuState;
+
+			/// How this instruction changes the MMU state.
+			pub fn inst_state_change(&self, state: MmuState, i: &Instruction) -> StateChange;
+		}
+	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Segments

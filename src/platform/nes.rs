@@ -9,8 +9,9 @@ use enum_dispatch::enum_dispatch;
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
-use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, Image, SegId, Location };
-use crate::program::{ Program };
+use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
+	SegId, Location };
+use crate::program::{ Program, Instruction };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -229,6 +230,7 @@ trait IMapper {
 	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location>;
 	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
+	fn state_change(&self, state: MmuState, va: VA) -> StateChange;
 }
 
 #[derive(Debug)]
@@ -277,6 +279,24 @@ impl IMmu for NesMmu {
 			0x4000 ..= 0x401F => "IOREG".into(),
 			_                 => self.mapper.name_prefix_for_va(state, va),
 		}
+	}
+
+	fn inst_state_change(&self, state: MmuState, inst: &Instruction) -> StateChange {
+		for op in inst.ops() {
+			match op.access() {
+				acc if acc.writes_mem() => {
+					let va = op.addr();
+
+					match self.mapper.state_change(state, va) {
+						StateChange::None => {},
+						something => return something,
+					}
+				}
+				_ => {}
+			}
+		}
+
+		StateChange::None
 	}
 }
 
@@ -336,6 +356,10 @@ impl IMapper for NRom {
 			0x8000 ..= 0xFFFF => "PRG0".into(),
 			_                 => "UNK".into(),
 		}
+	}
+
+	fn state_change(&self, _state: MmuState, _va: VA) -> StateChange {
+		StateChange::None
 	}
 }
 
@@ -404,6 +428,13 @@ impl IMapper for UXRom {
 			0x8000 ..= 0xBFFF => format!("PRG{}", state.to_usize()),
 			0xC000 ..= 0xFFFF => format!("PRG{}", self.all.len() - 1),
 			_                 => "UNK".into(),
+		}
+	}
+
+	fn state_change(&self, _state: MmuState, va: VA) -> StateChange {
+		match va.0 {
+			0x8000 ..= 0xFFFF => StateChange::Dynamic,
+			_                 => StateChange::None,
 		}
 	}
 }

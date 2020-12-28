@@ -11,7 +11,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use delegate::delegate;
 
 use crate::arch::{ INameLookup, IPrinter, Printer, IArchitecture };
-use crate::memory::{ Memory, MmuState, Location, VA, SegId, Span, SpanKind, Segment };
+use crate::memory::{ Memory, MmuState, StateChange, Location, VA, SegId, Span, SpanKind, Segment };
 use crate::platform::{ Platform, IPlatform };
 
 // ------------------------------------------------------------------------------------------------
@@ -104,6 +104,8 @@ impl Program {
 		to self.mem {
 			/// The initial state of the MMU.
 			pub fn initial_mmu_state(&self) -> MmuState;
+			/// How this instruction changes the MMU state.
+			pub fn inst_state_change(&self, state: MmuState, i: &Instruction) -> StateChange;
 			/// Given a VA, get the Segment which contains it (if any).
 			pub fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment>;
 			/// Same as above but mutable.

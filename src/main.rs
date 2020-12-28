@@ -135,6 +135,8 @@ fn show_bb(prog: &Program, bb: BBId) {
 
 	// Instructions
 
+	let state = prog.bb_mmu_state(bb);
+
 	for (i, inst) in prog.bb_insts(bb) {
 		let mut bytes = String::new();
 		let b = inst.bytes();
@@ -153,23 +155,14 @@ fn show_bb(prog: &Program, bb: BBId) {
 		print!("{:>4}:{}  {:8}      {:3} {:30}",
 			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
-		let state = prog.bb_mmu_state(bb);
-
-		for i in 0 .. inst.num_ops() {
-			let op = inst.get_op(i);
-
-			// if we are writing...
-			if op.access().is_some() && op.access().unwrap().writes_mem() {
-				let va = op.addr();
-				if let Some(loc) = prog.loc_for_va(state, va) {
-					// ...into a segment with an image mapping...
-					if !prog.segment_from_loc(loc).is_fake() {
-						// ooooh, that might be a bank switch!
-						print!("{}", "<------------------------- BANK SWITCH??".yellow());
-						break;
-					}
-				}
+		match prog.inst_state_change(state, inst) {
+			StateChange::Static(new_state) => {
+				print!("{} {:?}", "<------------------------- BANK SWITCH??".yellow(), new_state);
 			}
+			StateChange::Dynamic => {
+				print!("{}", "<------------------------- BANK SWITCH??".yellow());
+			}
+			_ => {}
 		}
 
 		println!();

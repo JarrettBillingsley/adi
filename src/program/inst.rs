@@ -18,6 +18,8 @@ pub enum AccessKind {
 /// How a memory operand is accessed.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum MemAccess {
+	/// Doesn't access memory.
+	None,
 	/// A load, store, or RMW operation on that address directly.
 	Direct(AccessKind),
 	/// A load, store, or RMW operation using that address as part of an EA calculation.
@@ -76,10 +78,10 @@ impl Operand {
 	pub fn is_imm(&self) -> bool { matches!(self, Operand::UImm8(..)) }
 
 	/// How, if any way, does this operand access memory?
-	pub fn access(&self) -> Option<MemAccess> {
+	pub fn access(&self) -> MemAccess {
 		match self {
-			Operand::Mem16(_, a) => Some(*a),
-			_ => None,
+			Operand::Mem16(_, a) => *a,
+			_                    => MemAccess::None,
 		}
 	}
 
@@ -109,7 +111,7 @@ impl Operand {
 
 	/// Does this operand access memory?
 	pub fn is_mem(&self) -> bool {
-		self.access().is_some()
+		self.access() != MemAccess::None
 	}
 }
 
@@ -203,6 +205,8 @@ impl Instruction {
 	pub fn num_ops(&self) -> usize { self.ops.len() }
 	/// Accessor for operands.
 	pub fn get_op(&self, i: usize) -> &Operand { &self.ops[i] }
+	/// The array of operands.
+	pub fn ops(&self) -> &[Operand] { &self.ops }
 	/// If this is a control instruction, the target address of that control, if it has one.
 	pub fn control_target(&self) -> Option<VA> { self.target }
 	/// What kind of instruction is this?
