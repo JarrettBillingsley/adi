@@ -158,19 +158,17 @@ fn show_bb(prog: &Program, bb: BBId) {
 		for i in 0 .. inst.num_ops() {
 			let op = inst.get_op(i);
 
-			match op.access() {
-				// writing to memory...
-				Some(MemAccess::Write) | Some(MemAccess::Rmw) => {
-					let va = op.addr();
-					if let Some(loc) = prog.loc_for_va(state, va) {
-						// ...into a segment with an image mapping...
-						if !prog.segment_from_loc(loc).is_fake() {
-							// ooooh, that might be a bank switch!
-							print!("{}", "<------------------------- BANK SWITCH??".yellow());
-						}
+			// if we are writing...
+			if op.access().is_some() && op.access().unwrap().writes_mem() {
+				let va = op.addr();
+				if let Some(loc) = prog.loc_for_va(state, va) {
+					// ...into a segment with an image mapping...
+					if !prog.segment_from_loc(loc).is_fake() {
+						// ooooh, that might be a bank switch!
+						print!("{}", "<------------------------- BANK SWITCH??".yellow());
+						break;
 					}
 				}
-				_ => {}
 			}
 		}
 

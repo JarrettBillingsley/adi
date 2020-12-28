@@ -8,19 +8,46 @@ use crate::memory::{ Location, VA };
 // MemAccess
 // ------------------------------------------------------------------------------------------------
 
-/// How a memory operand is accessed by an instruction.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum AccessKind {
+	R,
+	W,
+	RW,
+}
+
+/// How a memory operand is accessed.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum MemAccess {
-	/// A read (load).
-	Read,
-	/// A write (store).
-	Write,
-	/// Read-modify-write (both read and write).
-	Rmw,
-	/// Used as an immediate (e.g. put into a register, or used as the base address in an EA).
+	/// A load, store, or RMW operation on that address directly.
+	Direct(AccessKind),
+	/// A load, store, or RMW operation using that address as part of an EA calculation.
+	Calculated(AccessKind),
+	/// Getting the address without accessing the data at it.
 	Offset,
 	/// Used as the target of a jump or branch.
 	Target,
+}
+
+impl MemAccess {
+	pub fn reads_mem(&self) -> bool {
+		use MemAccess::*;
+		use AccessKind::*;
+
+		match self {
+			Direct(R) | Direct(RW) | Calculated(R) | Calculated(RW) => true,
+			_ => false,
+		}
+	}
+
+	pub fn writes_mem(&self) -> bool {
+		use MemAccess::*;
+		use AccessKind::*;
+
+		match self {
+			Direct(W) | Direct(RW) | Calculated(W) | Calculated(RW) => true,
+			_ => false,
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
