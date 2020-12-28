@@ -92,6 +92,10 @@ impl Function {
 		self.bbs.len() - 1
 	}
 
+	pub fn id(&self) -> FuncId {
+		self.id.id()
+	}
+
 	/// The basic block ID of the function's head.
 	pub fn head_id(&self) -> BBId {
 		self.bbs[0].id()

@@ -87,12 +87,11 @@ impl Program {
 	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
 	/// so this can do a lot of work in a single call.
 	pub fn analyze_queue(&mut self) {
-		loop {
-			match self.queue.pop_front() {
-				None => break,
-				Some(AnalysisItem::Func1stPass(loc, state)) => self.func_first_pass(loc, state),
-				Some(AnalysisItem::Func2ndPass(fid))        => self.func_second_pass(fid),
-				Some(AnalysisItem::JumpTable(loc))          => self.analyze_jump_table(loc),
+		while let Some(item) = self.queue.pop_front() {
+			match item {
+				AnalysisItem::Func1stPass(loc, state) => self.func_first_pass(loc, state),
+				AnalysisItem::Func2ndPass(fid)        => self.func_second_pass(fid),
+				AnalysisItem::JumpTable(loc)          => self.analyze_jump_table(loc),
 			}
 		}
 	}
@@ -209,88 +208,33 @@ impl Program {
 	}
 
 	/// Iterator over all functions in the program, in arbitrary order.
-	pub fn all_funcs(&self) -> impl Iterator<Item = FuncId> + '_ {
-		self.funcs.all_funcs().map(|(id, _)| FuncId(id))
+	pub fn all_funcs(&self) -> impl Iterator<Item = &Function> + '_ {
+		self.funcs.all_funcs().map(|(_, func)| func)
 	}
 
 	/// Gets the ID of the function which starts at the given location, if one exists.
-	pub fn func_defined_at(&self, loc: Location) -> Option<FuncId> {
-		let func_id = self.func_that_contains(loc)?;
-		if self.funcs.get(func_id).start_loc() == loc {
-			Some(func_id)
+	pub fn func_defined_at(&self, loc: Location) -> Option<&Function> {
+		let func = self.func_that_contains(loc)?;
+
+		if func.start_loc() == loc {
+			Some(func)
 		} else {
 			None
 		}
 	}
 
 	/// Gets the ID of the function that contains the given location, or None if none does.
-	pub fn func_that_contains(&self, loc: Location) -> Option<FuncId> {
-		Some(self.span_at_loc(loc).bb()?.func())
+	pub fn func_that_contains(&self, loc: Location) -> Option<&Function> {
+		let func_id = self.span_at_loc(loc).bb()?.func();
+		Some(self.funcs.get(func_id))
 	}
 
-	pub fn func_name(&self, func: FuncId) -> Option<&String> {
-		self.funcs.get(func).name()
+	pub fn inst_fmt_mnemonic(&self, i: &Instruction) -> String {
+		self.print.fmt_mnemonic(i)
 	}
 
-	pub fn func_head(&self, func: FuncId) -> BBId {
-		self.func_get_bbid(func, 0)
-	}
-
-	pub fn func_num_bbs(&self, func: FuncId) -> usize {
-		self.funcs.get(func).num_bbs()
-	}
-
-	pub fn func_start_loc(&self, func: FuncId) -> Location {
-		self.funcs.get(func).start_loc()
-	}
-
-	pub fn func_get_bbid(&self, func: FuncId, idx: usize) -> BBId {
-		self.funcs.get(func).get_bbid(idx)
-	}
-
-	pub fn func_all_bbs(&self, func: FuncId) -> impl Iterator<Item = BBId> + '_ {
-		self.funcs.get(func).all_bbs().map(|bb| bb.id())
-	}
-
-	pub fn bb_owner(&self, bb: BBId) -> FuncId {
-		bb.func()
-	}
-
-	pub fn bb_loc(&self, bb: BBId) -> Location {
-		self.funcs.get(bb.func()).get_bb(bb).loc()
-	}
-
-	pub fn bb_term_loc(&self, bb: BBId) -> Location {
-		self.funcs.get(bb.func()).get_bb(bb).term_loc()
-	}
-
-	pub fn bb_term(&self, bb: BBId) -> &BBTerm {
-		self.funcs.get(bb.func()).get_bb(bb).term()
-	}
-
-	pub fn bb_successors(&self, bb: BBId) -> Successors {
-		self.funcs.get(bb.func()).get_bb(bb).successors()
-	}
-
-	pub fn bb_explicit_successors(&self, bb: BBId) -> Successors {
-		self.funcs.get(bb.func()).get_bb(bb).explicit_successors()
-	}
-
-	pub fn bb_insts(&self, bb: BBId) -> impl Iterator<Item = (usize, &Instruction)> {
-		self.funcs.get(bb.func()).get_bb(bb).insts().iter().enumerate()
-	}
-
-	pub fn bb_mmu_state(&self, bb: BBId) -> MmuState {
-		self.funcs.get(bb.func()).get_bb(bb).mmu_state()
-	}
-
-	pub fn inst_fmt_mnemonic(&self, bb: BBId, i: usize) -> String {
-		self.print.fmt_mnemonic(&self.funcs.get(bb.func()).get_bb(bb).insts()[i])
-	}
-
-	pub fn inst_fmt_operands(&self, bb: BBId, i: usize) -> String {
-		let bb = self.funcs.get(bb.func()).get_bb(bb);
-		self.print.fmt_operands(&bb.insts()[i], bb.mmu_state(), self)
+	pub fn inst_fmt_operands(&self, state: MmuState, i: &Instruction) -> String {
+		self.print.fmt_operands(i, state, self)
 	}
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.

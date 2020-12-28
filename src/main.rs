@@ -82,7 +82,8 @@ fn show_prg0(prog: &Program) {
 			}
 
 			SpanKind::Code(bbid) => {
-				show_bb(&prog, bbid);
+				let bb = prog.get_func(bbid.func()).get_bb(bbid);
+				show_bb(&prog, bb);
 			}
 
 			_ => {}
@@ -92,32 +93,32 @@ fn show_prg0(prog: &Program) {
 
 fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by(|&a, &b| prog.func_start_loc(a).cmp(&prog.func_start_loc(b)));
+	funcs.sort_by(|a, b| a.start_loc().cmp(&b.start_loc()));
 
 	for func in funcs {
 		show_func(prog, func);
 	}
 }
 
-fn show_func(prog: &Program, func: FuncId) {
+fn show_func(prog: &Program, func: &Function) {
 	let divider =
 		"; -------------------------------------------------------------------------".green();
 
 	println!("{}", divider);
 
-	let name = prog.name_of_loc(prog.func_start_loc(func));
+	let name = prog.name_of_loc(func.start_loc());
 	println!("{}{}", "; Function ".green(), name.green());
 
-	let mut bbs = prog.func_all_bbs(func).collect::<Vec<_>>();
-	bbs.sort_by(|&a, &b| prog.bb_loc(a).cmp(&prog.bb_loc(b)));
+	let mut bbs = func.all_bbs().collect::<Vec<_>>();
+	bbs.sort_by(|a, b| a.loc().cmp(&b.loc()));
 
 	for bb in bbs {
 		show_bb(prog, bb);
 	}
 }
 
-fn show_bb(prog: &Program, bb: BBId) {
-	let bb_loc = prog.bb_loc(bb);
+fn show_bb(prog: &Program, bb: &BasicBlock) {
+	let bb_loc = bb.loc();
 	let seg = prog.segment_from_loc(bb_loc);
 
 	// Inrefs and label
@@ -135,9 +136,9 @@ fn show_bb(prog: &Program, bb: BBId) {
 
 	// Instructions
 
-	let state = prog.bb_mmu_state(bb);
+	let state = bb.mmu_state();
 
-	for (i, inst) in prog.bb_insts(bb) {
+	for inst in bb.insts() {
 		let mut bytes = String::new();
 		let b = inst.bytes();
 
@@ -149,8 +150,8 @@ fn show_bb(prog: &Program, bb: BBId) {
 		}
 
 		let addr = prog.fmt_addr(inst.va().0);
-		let mnem = prog.inst_fmt_mnemonic(bb, i);
-		let ops  = prog.inst_fmt_operands(bb, i);
+		let mnem = prog.inst_fmt_mnemonic(inst);
+		let ops  = prog.inst_fmt_operands(state, inst);
 
 		print!("{:>4}:{}  {:8}      {:3} {:30}",
 			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
@@ -170,7 +171,7 @@ fn show_bb(prog: &Program, bb: BBId) {
 
 	// Terminator
 	use BBTerm::*;
-	match prog.bb_term(bb) {
+	match bb.term() {
 		DeadEnd => println!("{}", "---------- DEAD END ----------".red().bold()),
 		Halt | Return => {
 		}
@@ -202,8 +203,8 @@ fn thinger(prog: &Program, from: Location, to: Location, msg: &str, color: Color
 }
 
 fn diff_funcs(prog: &Program, loc1: Location, loc2: Location) -> bool {
-	let func1 = prog.func_that_contains(loc1);
-	let func2 = prog.func_that_contains(loc2);
+	let func1 = prog.func_that_contains(loc1).map(|f| f.id());
+	let func2 = prog.func_that_contains(loc2).map(|f| f.id());
 
 	func1 != func2
 }
