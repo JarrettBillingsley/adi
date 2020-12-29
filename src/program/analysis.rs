@@ -20,11 +20,38 @@ pub(crate) enum AnalysisItem {
 	Func1stPass(Location, MmuState),
 	/// A function that needs to be analyzed more deeply.
 	Func2ndPass(FuncId),
+	FuncBankChange(FuncId),
 	/// A jump table. The location points to the jump instruction.
 	JumpTable(Location),
 }
 
 impl Program {
+	/// Puts a location on the queue that should be the start of a function.
+	pub fn enqueue_function(&mut self, state: MmuState, loc: Location) {
+		self.queue.push_back(AnalysisItem::Func1stPass(loc, state))
+	}
+
+	/// Puts a location on the queue that should be the jump instruction for a jump table.
+	pub fn enqueue_jump_table(&mut self, loc: Location) {
+		self.queue.push_back(AnalysisItem::JumpTable(loc))
+	}
+
+	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
+	/// so this can do a lot of work in a single call.
+	pub fn analyze_queue(&mut self) {
+		while let Some(item) = self.queue.pop_front() {
+			use AnalysisItem::*;
+			match item {
+				Func1stPass(loc, state) => self.func_first_pass(loc, state),
+				Func2ndPass(fid)        => self.func_second_pass(fid),
+				FuncBankChange(fid)     => self.func_bank_change(fid),
+				JumpTable(loc)          => self.analyze_jump_table(loc),
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------
+
 	fn should_analyze_func(&self, loc: Location) -> bool {
 		if let Some(bbid) = self.span_at_loc(loc).bb() {
 			let orig_func_head = self.get_func(bbid.func()).head_id();
@@ -92,6 +119,9 @@ impl Program {
 		}
 	}
 
+	// ---------------------------------------------------------------------------------------------
+	// First pass
+
 	pub(crate) fn func_first_pass(&mut self, loc: Location, state: MmuState) {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function 1st pass at {}", loc);
@@ -130,7 +160,7 @@ impl Program {
 			let mut iter     = dis.disas_all(slice, state, va, start);
 
 			'instloop: for inst in &mut iter {
-				trace!("{:04X} {:?}", inst.va(), inst.bytes());
+				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				end_loc = inst.next_loc();
 				let target_loc = inst.control_target().map(|t| self.resolve_target(state, t));
 
@@ -231,6 +261,9 @@ impl Program {
 		}
 	}
 
+	// ---------------------------------------------------------------------------------------------
+	// Second pass
+
 	pub(crate) fn func_second_pass(&mut self, fid: FuncId) {
 		let func = self.get_func(fid);
 
@@ -240,6 +273,7 @@ impl Program {
 		let mut jumptables = Vec::new();
 		let mut funcs      = Vec::new();
 		let mut refs       = Vec::new();
+		let mut has_bank_change = false;
 
 		for bb in func.all_bbs() {
 			let state = bb.mmu_state();
@@ -269,13 +303,37 @@ impl Program {
 			for &succ in bb.explicit_successors() {
 				refs.push((bb.term_loc(), succ));
 			}
+
+			has_bank_change |= matches!(bb.term(), BBTerm::BankChange(..));
 		}
 
-		trace!("adding {} refs, {} jumptables, {} funcs", refs.len(), jumptables.len(), funcs.len());
 		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
 		for (f, s) in funcs.into_iter()    { self.enqueue_function(s, f); }
+
+		if has_bank_change { self.queue.push_back(AnalysisItem::FuncBankChange(fid)) }
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Function bank change analysis
+
+	pub(crate) fn func_bank_change(&mut self, fid: FuncId) {
+		let func = self.get_func(fid);
+
+		trace!("------------------------------------------------------------------------");
+		trace!("- begin function bank change analysis at {}", func.start_loc());
+
+		// 1. gather all the BBs that change banks.
+		// 2. for each bb, find the chain of predecessors that gets us there.
+		// 3. interpret from the head to that BB thru those predecessors.
+
+		for bb in func.all_bbs() {
+
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Jump table analysis
 
 	pub(crate) fn analyze_jump_table(&mut self, loc: Location) {
 		trace!("there's a jumptable at {}", loc);

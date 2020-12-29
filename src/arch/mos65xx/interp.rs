@@ -1,3 +1,5 @@
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
+
 use crate::arch::{ IInterpreter, IPrinter };
 use crate::memory::{ Memory, ImageRead, Location, MmuState, VA };
 use crate::program::{ BasicBlock, BBTerm, Instruction };
@@ -8,12 +10,69 @@ use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, 
 // InterpRegs
 // ------------------------------------------------------------------------------------------------
 
+use super::Reg;
+
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum ValueKind {
+	Indeterminate,
+	Immediate,
+	Computed,
+	Loaded(Option<VA>), // the address it was loaded from, if known.
+	Argument(usize),    // the "i'th" argument. (65xx uses Reg::* indexes)
+	Return,             // came out of a function
+}
+
+impl Debug for ValueKind {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use ValueKind::*;
+
+		match self {
+			Indeterminate   => write!(f, "???"),
+			Immediate       => write!(f, "IMM"),
+			Computed        => write!(f, "COMPUTED"),
+			Loaded(None)    => write!(f, "LOAD(????)"),
+			Loaded(Some(a)) => write!(f, "LOAD({:04X})", a.0),
+			Argument(i)     => write!(f, "ARG({})", i),
+			Return          => write!(f, "RETURNVAL"),
+		}
+	}
+}
+
+impl Default for ValueKind {
+	fn default() -> Self { ValueKind::Indeterminate }
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Default)]
+pub struct Value<T> {
+	pub val:  T,
+	pub kind: ValueKind,
+}
+
+impl<T: std::fmt::UpperHex> Debug for Value<T> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "({:0width$X}, {:?})", self.val, self.kind,
+			width = core::mem::size_of::<T>() * 2)
+	}
+}
+
+impl<T> Value<T> {
+	pub fn ind (val: T) -> Self                   { Self { val, kind: ValueKind::Indeterminate } }
+	pub fn imm (val: T) -> Self                   { Self { val, kind: ValueKind::Immediate     } }
+	pub fn comp(val: T) -> Self                   { Self { val, kind: ValueKind::Computed      } }
+	pub fn load(val: T, addr: Option<VA>) -> Self { Self { val, kind: ValueKind::Loaded(addr)  } }
+	pub fn arg (val: T, i: usize) -> Self         { Self { val, kind: ValueKind::Argument(i)   } }
+	pub fn ret (val: T) -> Self                   { Self { val, kind: ValueKind::Return        } }
+}
+
+type Vu8 = Value<u8>;
+type Vu16 = Value<u16>;
+
 #[allow(non_snake_case)]
 #[derive(Default)]
 struct InterpRegs {
-	A:  u8,
-	X:  u8,
-	Y:  u8,
+	A:  Vu8,
+	X:  Vu8,
+	Y:  Vu8,
 	S:  u8,
 	P:  u8,
 	PC: u16,
@@ -27,9 +86,9 @@ impl InterpRegs {
 	}
 
 	fn reset(&mut self) {
-		self.A = 0;
-		self.X = 0;
-		self.Y = 0;
+		self.A = Vu8::ind(0);
+		self.X = Vu8::ind(0);
+		self.Y = Vu8::ind(0);
 		self.S = 0xFD;
 		self.P = 0x24;
 		self.PC = 0;
@@ -45,7 +104,7 @@ pub struct Mos65xxInterpreter {
 	print:     Mos65xxPrinter,
 	ret_stack: Vec<Location>,
 	// TODO: external PRG-RAM
-	ram:       Vec<u8>,
+	ram:       Vec<Vu8>,
 	jmp_dst:   Location,
 }
 
@@ -63,7 +122,7 @@ impl Mos65xxInterpreter {
 			regs:      InterpRegs::new(),
 			print:     Mos65xxPrinter::new(SyntaxFlavor::New),
 			ret_stack: Vec::new(),
-			ram:       vec![0; 0x800],
+			ram:       vec![Vu8::ind(0); 0x800],
 			jmp_dst:   Location::invalid(0),
 		};
 		ret.reset();
@@ -71,28 +130,42 @@ impl Mos65xxInterpreter {
 	}
 
 	// TODO: this is a NES memory map but this is the generic 65xx module
-	fn read_byte(&self, mem: &Memory, state: MmuState, addr: u16) -> u8 {
-		match addr {
-			0x0000 ..= 0x07FF => self.ram[addr as usize],
+	fn read_byte(&self, mem: &Memory, state: MmuState, addr: u16) -> Vu8 {
+		let ret = match addr {
+			0x0000 ..= 0x07FF => {
+				let val = self.ram[addr as usize];
+
+				match val.kind {
+					ValueKind::Indeterminate | ValueKind::Loaded(..) => val.val,
+					_ => return val,
+				}
+			}
 			0x2002 => 0xFF,
 			_ => {
 				if let Some(loc) = mem.loc_for_va(state, VA(addr.into())) {
 					let seg = mem.segment_from_loc(loc);
 
 					if seg.is_real() {
-						return seg.read_u8(loc);
+						seg.read_u8(loc)
+					} else {
+						0
 					}
+				} else {
+					0
 				}
-
-				0
 			}
-		}
+		};
+
+		Vu8::load(ret, Some(VA(addr as usize)))
 	}
 
-	fn write_byte(&mut self, _mem: &Memory, _state: MmuState, addr: u16, val: u8) {
+	fn write_byte(&mut self, _mem: &Memory, _state: MmuState, addr: u16, val: Vu8) {
 		// TODO: *THIS* is where we detect bank changes!!
 		match addr {
 			0x0000 ..= 0x07FF => self.ram[addr as usize] = val,
+			0x8000 ..= 0xFFFF => {
+				log::warn!("WOOAAOOHHHHAHH!!!!!!HAO HOAHFOHFOHAOF!!!! {:?}", val);
+			}
 			_ => {}
 		}
 	}
@@ -109,35 +182,35 @@ impl Mos65xxInterpreter {
 
 			IMM       => (i.va().0 as u16).wrapping_add(1),
 			ZPG | ABS => self.op_addr(i),
-			ZPX       => self.op_addr(i).wrapping_add(self.regs.X.into()) & 0xFF,
-			ZPY       => self.op_addr(i).wrapping_add(self.regs.Y.into()) & 0xFF,
-			ABX       => self.op_addr(i).wrapping_add(self.regs.X.into()),
-			ABY       => self.op_addr(i).wrapping_add(self.regs.Y.into()),
+			ZPX       => self.op_addr(i).wrapping_add(self.regs.X.val.into()) & 0xFF,
+			ZPY       => self.op_addr(i).wrapping_add(self.regs.Y.val.into()) & 0xFF,
+			ABX       => self.op_addr(i).wrapping_add(self.regs.X.val.into()),
+			ABY       => self.op_addr(i).wrapping_add(self.regs.Y.val.into()),
 
 			IND => {
 				let ptr_addr = self.op_addr(i);
-				let lo = self.read_byte(mem, state, ptr_addr) as u16;
+				let lo = self.read_byte(mem, state, ptr_addr).val as u16;
 
 				let hi = if ptr_addr & 0xFF == 0xFF {
 					// bug!
-					self.read_byte(mem, state, ptr_addr & 0xFF00) as u16
+					self.read_byte(mem, state, ptr_addr & 0xFF00).val as u16
 				} else {
-					self.read_byte(mem, state, ptr_addr + 1) as u16
+					self.read_byte(mem, state, ptr_addr + 1).val as u16
 				};
 
 				(hi << 8) | lo
 			}
 			IZX => { // [[{} + x]]
-				let ptr_addr = self.op_addr(i).wrapping_add(self.regs.X.into());
-				let lo = self.read_byte(mem, state, ptr_addr) as u16;
-				let hi = self.read_byte(mem, state, ptr_addr.wrapping_add(1) & 0xFF) as u16;
+				let ptr_addr = self.op_addr(i).wrapping_add(self.regs.X.val.into());
+				let lo = self.read_byte(mem, state, ptr_addr).val as u16;
+				let hi = self.read_byte(mem, state, ptr_addr.wrapping_add(1) & 0xFF).val as u16;
 				(hi << 8) | lo
 			}
 			IZY => { // [[{}] + y]
 				let ptr_addr = self.op_addr(i);
-				let lo = self.read_byte(mem, state, ptr_addr) as u16;
-				let hi = self.read_byte(mem, state, ptr_addr.wrapping_add(1) & 0xFF) as u16;
-				((hi << 8) | lo).wrapping_add(self.regs.Y.into())
+				let lo = self.read_byte(mem, state, ptr_addr).val as u16;
+				let hi = self.read_byte(mem, state, ptr_addr.wrapping_add(1) & 0xFF).val as u16;
+				((hi << 8) | lo).wrapping_add(self.regs.Y.val.into())
 			}
 		}
 	}
@@ -159,12 +232,12 @@ impl Mos65xxInterpreter {
 		self.set_flag(Self::N, val & 0x80 == 0x80);
 	}
 
-	fn push(&mut self, mem: &Memory, state: MmuState, val: u8) {
+	fn push(&mut self, mem: &Memory, state: MmuState, val: Vu8) {
 		self.write_byte(mem, state, 0x0100 | (self.regs.S as u16), val);
 		self.regs.S = self.regs.S.wrapping_sub(1);
 	}
 
-	fn pop(&mut self, mem: &Memory, state: MmuState) -> u8 {
+	fn pop(&mut self, mem: &Memory, state: MmuState) -> Vu8 {
 		self.regs.S = self.regs.S.wrapping_add(1);
 		self.read_byte(mem, state, 0x0100 | (self.regs.S as u16))
 	}
@@ -180,10 +253,9 @@ impl Mos65xxInterpreter {
 		let addr = self.get_addr(desc, state, mem, i);
 		let inst_display = self.print.fmt_instr(i, state, &crate::arch::NullLookup);
 
-		log::info!("[A={:02X} X={:02X} Y={:02X} S={:02X} P={:08b}] {:04X} {}",
-			self.regs.A, self.regs.X, self.regs.Y, self.regs.S,
-			self.regs.P,
-			i.va(), inst_display);
+		log::info!("[A={:16} X={:16} Y={:16} S={:02X} P={:08b}] {:04X} {}",
+			format!("{:?}", self.regs.A), format!("{:?}", self.regs.X), format!("{:?}", self.regs.Y),
+			self.regs.S, self.regs.P, i.va(), inst_display);
 
 		use MetaOp::*;
 		match desc.meta_op {
@@ -203,140 +275,182 @@ impl Mos65xxInterpreter {
 			JSR => {
 				// yes, really, -1
 				let ret = i.next_va().0 - 1;
-				self.push(mem, state, (ret >> 8) as u8);
-				self.push(mem, state, (ret & 0xFF) as u8);
+				// TODO: not really indeterminate
+				self.push(mem, state, Vu8::ind((ret >> 8) as u8));
+				self.push(mem, state, Vu8::ind((ret & 0xFF) as u8));
 			}
 			RTS => {
-				let lo = self.pop(mem, state) as usize;
-				let hi = self.pop(mem, state) as usize;
+				let lo = self.pop(mem, state).val as usize;
+				let hi = self.pop(mem, state).val as usize;
 				// yes, really, +1
 				self.jmp_dst = mem.loc_from_va(state, VA(((hi << 8) | lo) + 1));
 			}
 			PHA => self.push(mem, state, self.regs.A),
-			PHP => self.push(mem, state, self.regs.P),
-			PLA => { self.regs.A = self.pop(mem, state); self.set_flags_zn(self.regs.A); }
-			PLP => self.regs.P = self.pop(mem, state),
+			PHP => self.push(mem, state, Vu8::ind(self.regs.P)), // TODO: not really indeterminate
+			PLA => { self.regs.A = self.pop(mem, state); self.set_flags_zn(self.regs.A.val); }
+			PLP => self.regs.P = self.pop(mem, state).val,
 
 			ADC => {
-				let data = self.read_byte(mem, state, addr);
-				let a = self.regs.A;
+				let data = self.read_byte(mem, state, addr).val;
+				let a = self.regs.A.val;
 				let (x1, o1) = data.overflowing_add(a);
 				let (x2, o2) = x1.overflowing_add(self.get_flag(Self::C));
-				self.regs.A = x2;
+				self.regs.A = Vu8::comp(x2);
 				self.set_flag(Self::C, o1 | o2);
-				self.set_flag(Self::V, (a ^ data) & 0x80 == 0 && (a ^ self.regs.A) & 0x80 != 0);
-				self.set_flags_zn(self.regs.A);
+				self.set_flag(Self::V, (a ^ data) & 0x80 == 0 && (a ^ self.regs.A.val) & 0x80 != 0);
+				self.set_flags_zn(self.regs.A.val);
 			}
 			SBC => {
-				let data = self.read_byte(mem, state, addr);
-				let a = self.regs.A;
+				let data = self.read_byte(mem, state, addr).val;
+				let a = self.regs.A.val;
 				let (x1, o1) = a.overflowing_sub(data);
 				let (x2, o2) = x1.overflowing_sub(1 - self.get_flag(Self::C));
-				self.regs.A = x2;
+				self.regs.A = Vu8::comp(x2);
 				self.set_flag(Self::C, !(o1 | o2));
-				self.set_flag(Self::V, (a ^ data) & 0x80 != 0 && (a ^ self.regs.A) & 0x80 != 0);
-				self.set_flags_zn(self.regs.A);
+				self.set_flag(Self::V, (a ^ data) & 0x80 != 0 && (a ^ self.regs.A.val) & 0x80 != 0);
+				self.set_flags_zn(self.regs.A.val);
 			}
 			CMP => {
-				let data = self.read_byte(mem, state, addr);
-				self.set_flags_zn(self.regs.A.wrapping_sub(data));
-				self.set_flag(Self::C, self.regs.A >= data);
+				let data = self.read_byte(mem, state, addr).val;
+				self.set_flags_zn(self.regs.A.val.wrapping_sub(data));
+				self.set_flag(Self::C, self.regs.A.val >= data);
 			}
 			CPX => {
-				let data = self.read_byte(mem, state, addr);
-				self.set_flags_zn(self.regs.X.wrapping_sub(data));
-				self.set_flag(Self::C, self.regs.X >= data);
+				let data = self.read_byte(mem, state, addr).val;
+				self.set_flags_zn(self.regs.X.val.wrapping_sub(data));
+				self.set_flag(Self::C, self.regs.X.val >= data);
 			}
 			CPY => {
-				let data = self.read_byte(mem, state, addr);
-				self.set_flags_zn(self.regs.Y.wrapping_sub(data));
-				self.set_flag(Self::C, self.regs.Y >= data);
+				let data = self.read_byte(mem, state, addr).val;
+				self.set_flags_zn(self.regs.Y.val.wrapping_sub(data));
+				self.set_flag(Self::C, self.regs.Y.val >= data);
 			}
 
 			INC => {
-				let data = self.read_byte(mem, state, addr);
-				let val = data.wrapping_add(1);
-				self.set_flags_zn(val);
+				let data = self.read_byte(mem, state, addr).val;
+				let val = Vu8::comp(data.wrapping_add(1));
+				self.set_flags_zn(val.val);
 				self.write_byte(mem, state, addr, val);
 			}
 			DEC => {
-				let data = self.read_byte(mem, state, addr);
-				let val = data.wrapping_sub(1);
-				self.set_flags_zn(val);
+				let data = self.read_byte(mem, state, addr).val;
+				let val = Vu8::comp(data.wrapping_sub(1));
+				self.set_flags_zn(val.val);
 				self.write_byte(mem, state, addr, val);
 			}
-			INX => { self.regs.X = self.regs.X.wrapping_add(1); self.set_flags_zn(self.regs.X); }
-			INY => { self.regs.Y = self.regs.Y.wrapping_add(1); self.set_flags_zn(self.regs.Y); }
-			DEX => { self.regs.X = self.regs.X.wrapping_sub(1); self.set_flags_zn(self.regs.X); }
-			DEY => { self.regs.Y = self.regs.Y.wrapping_sub(1); self.set_flags_zn(self.regs.Y); }
+			INX => {
+				self.regs.X = Vu8::comp(self.regs.X.val.wrapping_add(1));
+				self.set_flags_zn(self.regs.X.val);
+			}
+			INY => {
+				self.regs.Y = Vu8::comp(self.regs.Y.val.wrapping_add(1));
+				self.set_flags_zn(self.regs.Y.val);
+			}
+			DEX => {
+				self.regs.X = Vu8::comp(self.regs.X.val.wrapping_sub(1));
+				self.set_flags_zn(self.regs.X.val);
+			}
+			DEY => {
+				self.regs.Y = Vu8::comp(self.regs.Y.val.wrapping_sub(1));
+				self.set_flags_zn(self.regs.Y.val);
+			}
 
 			AND => {
-				let data = self.read_byte(mem, state, addr);
-				self.regs.A &= data;
-				self.set_flags_zn(self.regs.A);
+				let data = self.read_byte(mem, state, addr).val;
+				self.regs.A = Vu8::comp(self.regs.A.val & data);
+				self.set_flags_zn(self.regs.A.val);
 			}
 			EOR => {
-				let data = self.read_byte(mem, state, addr);
-				self.regs.A ^= data;
-				self.set_flags_zn(self.regs.A);
+				let data = self.read_byte(mem, state, addr).val;
+				self.regs.A = Vu8::comp(self.regs.A.val ^ data);
+				self.set_flags_zn(self.regs.A.val);
 			}
 			ORA => {
-				let data = self.read_byte(mem, state, addr);
-				self.regs.A |= data;
-				self.set_flags_zn(self.regs.A);
+				let data = self.read_byte(mem, state, addr).val;
+				self.regs.A = Vu8::comp(self.regs.A.val | data);
+				self.set_flags_zn(self.regs.A.val);
 			}
 
 			BIT => {
-				let data = self.read_byte(mem, state, addr);
-				let val = self.regs.A & data;
+				let data = self.read_byte(mem, state, addr).val;
+				let val = self.regs.A.val & data;
 				self.set_flag(Self::Z, val == 0);
 				self.set_flag(Self::N, (data & (1 << 7)) != 0);
 				self.set_flag(Self::V, (data & (1 << 6)) != 0);
 			}
 			ASLA | ASL => {
-				let data = self.read_byte(mem, state, addr);
+				let data = if desc.meta_op == ASL {
+					self.read_byte(mem, state, addr).val
+				} else {
+					self.regs.A.val
+				};
+
 				self.set_flag(Self::C, ((data >> 7) & 1) != 0);
-				let val = data.wrapping_shl(1);
-				self.set_flags_zn(val);
+				let val = Vu8::comp(data.wrapping_shl(1));
+				self.set_flags_zn(val.val);
 
 				if desc.meta_op == ASL {
 					self.write_byte(mem, state, addr, val);
+				} else {
+					self.regs.A = val;
 				}
 			}
 			LSRA | LSR => {
-				let data = self.read_byte(mem, state, addr);
+				let data = if desc.meta_op == LSR {
+					self.read_byte(mem, state, addr).val
+				} else {
+					self.regs.A.val
+				};
+
 				self.set_flag(Self::C, ((data >> 7) & 1) != 0);
-				let val = data.wrapping_shr(1);
-				self.set_flags_zn(val);
+				let val = Vu8::comp(data.wrapping_shr(1));
+				self.set_flags_zn(val.val);
 
 				if desc.meta_op == LSR {
 					self.write_byte(mem, state, addr, val);
+				} else {
+					self.regs.A = val;
 				}
 			}
 			ROLA | ROL => {
-				let data = self.read_byte(mem, state, addr);
+				let data = if desc.meta_op == ROL {
+					self.read_byte(mem, state, addr).val
+				} else {
+					self.regs.A.val
+				};
+
 				let old_c = self.get_flag(Self::C);
 				self.set_flag(Self::C, ((data >> 7) & 1) != 0);
-				let val = (data << 1) | old_c;
-				self.set_flags_zn(val);
+				let val = Vu8::comp((data << 1) | old_c);
+				self.set_flags_zn(val.val);
 
 				if desc.meta_op == ROL {
 					self.write_byte(mem, state, addr, val);
+				} else {
+					self.regs.A = val;
 				}
 			}
 			RORA | ROR => {
-				let data = self.read_byte(mem, state, addr);
-				let mut ret = data.rotate_right(1);
-				if self.get_flag(Self::C) == 1 {
-				    ret |= 1 << 7;
+				let data = if desc.meta_op == ROR {
+					self.read_byte(mem, state, addr).val
 				} else {
-				    ret &= !(1 << 7);
+					self.regs.A.val
+				};
+
+				let mut val = data.rotate_right(1);
+				if self.get_flag(Self::C) == 1 {
+				    val |= 1 << 7;
+				} else {
+				    val &= !(1 << 7);
 				}
+				let val = Vu8::comp(val);
 				self.set_flag(Self::C, (data & 1) > 0);
-				self.set_flags_zn(ret);
+				self.set_flags_zn(val.val);
 
 				if desc.meta_op == ROR {
-					self.write_byte(mem, state, addr, ret);
+					self.write_byte(mem, state, addr, val);
+				} else {
+					self.regs.A = val;
 				}
 			}
 
@@ -350,29 +464,47 @@ impl Mos65xxInterpreter {
 
 			LDA | LDAI => {
 				let data = self.read_byte(mem, state, addr);
-				self.regs.A = data;
-				self.set_flags_zn(self.regs.A);
+
+				if desc.meta_op == LDAI {
+					self.regs.A = Vu8::imm(data.val);
+				} else {
+					self.regs.A = data;
+				}
+
+				self.set_flags_zn(self.regs.A.val);
 			}
 			LDX | LDXI => {
 				let data = self.read_byte(mem, state, addr);
-				self.regs.X = data;
-				self.set_flags_zn(self.regs.X);
+
+				if desc.meta_op == LDXI {
+					self.regs.X = Vu8::imm(data.val);
+				} else {
+					self.regs.X = data;
+				}
+
+				self.set_flags_zn(self.regs.X.val);
 			}
 			LDY | LDYI => {
 				let data = self.read_byte(mem, state, addr);
-				self.regs.Y = data;
-				self.set_flags_zn(self.regs.Y);
+
+				if desc.meta_op == LDYI {
+					self.regs.Y = Vu8::imm(data.val);
+				} else {
+					self.regs.Y = data;
+				}
+
+				self.set_flags_zn(self.regs.Y.val);
 			}
 
 			STA => self.write_byte(mem, state, addr, self.regs.A),
 			STX => self.write_byte(mem, state, addr, self.regs.X),
 			STY => self.write_byte(mem, state, addr, self.regs.Y),
-			TAX => { self.regs.X = self.regs.A; self.set_flags_zn(self.regs.X); }
-			TAY => { self.regs.Y = self.regs.A; self.set_flags_zn(self.regs.Y); }
-			TSX => { self.regs.X = self.regs.S; self.set_flags_zn(self.regs.X); }
-			TXA => { self.regs.A = self.regs.X; self.set_flags_zn(self.regs.A); }
-			TXS => { self.regs.S = self.regs.X; self.set_flags_zn(self.regs.S); }
-			TYA => { self.regs.A = self.regs.Y; self.set_flags_zn(self.regs.A); }
+			TAX => { self.regs.X = self.regs.A; self.set_flags_zn(self.regs.X.val); }
+			TXA => { self.regs.A = self.regs.X; self.set_flags_zn(self.regs.A.val); }
+			TAY => { self.regs.Y = self.regs.A; self.set_flags_zn(self.regs.Y.val); }
+			TYA => { self.regs.A = self.regs.Y; self.set_flags_zn(self.regs.A.val); }
+			TSX => { self.regs.X = Vu8::ind(self.regs.S); self.set_flags_zn(self.regs.X.val); }
+			TXS => { self.regs.S = self.regs.X.val; self.set_flags_zn(self.regs.S); }
 		}
 	}
 
@@ -397,7 +529,7 @@ impl IInterpreter for Mos65xxInterpreter {
 	fn reset(&mut self) {
 		self.regs.reset();
 		self.ret_stack.clear();
-		self.ram.iter_mut().for_each(|x| *x = 0);
+		self.ram.iter_mut().for_each(|x| *x = Vu8::ind(0));
 		self.jmp_dst = Location::invalid(0);
 	}
 
@@ -419,6 +551,10 @@ impl IInterpreter for Mos65xxInterpreter {
 
 			Return => {
 				if let Some(expected) = self.ret_stack.pop()	{
+					self.regs.A.kind = ValueKind::Return;
+					self.regs.X.kind = ValueKind::Return;
+					self.regs.Y.kind = ValueKind::Return;
+
 					if self.jmp_dst == expected {
 						Some(expected)
 					} else {
@@ -432,6 +568,9 @@ impl IInterpreter for Mos65xxInterpreter {
 			}
 
 			Call { dst, ret } => {
+				self.regs.A.kind = ValueKind::Argument(Reg::A as usize);
+				self.regs.X.kind = ValueKind::Argument(Reg::X as usize);
+				self.regs.Y.kind = ValueKind::Argument(Reg::Y as usize);
 				self.ret_stack.push(*ret);
 				Some(*dst)
 			}

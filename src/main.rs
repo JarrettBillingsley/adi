@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Debug)?;
+	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	test_nes()?;
 	Ok(())
@@ -42,7 +42,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/megaman.nes")?;
+	let img = Image::new_from_file("tests/data/smb.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -54,7 +54,10 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	show_all_funcs(&prog);
+	let nmi = prog.func_defined_at(prog.loc_from_name("VEC_NMI")).unwrap();
+	prog.interp(nmi.id(), 10000);
+
+	// show_all_funcs(&prog);
 	// show_prg0(&prog);
 	Ok(())
 }

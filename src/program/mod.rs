@@ -72,31 +72,6 @@ impl Program {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Analysis
-
-	/// Puts a location on the queue that should be the start of a function.
-	pub fn enqueue_function(&mut self, state: MmuState, loc: Location) {
-		self.queue.push_back(AnalysisItem::Func1stPass(loc, state))
-	}
-
-	/// Puts a location on the queue that should be the jump instruction for a jump table.
-	pub fn enqueue_jump_table(&mut self, loc: Location) {
-		self.queue.push_back(AnalysisItem::JumpTable(loc))
-	}
-
-	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
-	/// so this can do a lot of work in a single call.
-	pub fn analyze_queue(&mut self) {
-		while let Some(item) = self.queue.pop_front() {
-			match item {
-				AnalysisItem::Func1stPass(loc, state) => self.func_first_pass(loc, state),
-				AnalysisItem::Func2ndPass(fid)        => self.func_second_pass(fid),
-				AnalysisItem::JumpTable(loc)          => self.analyze_jump_table(loc),
-			}
-		}
-	}
-
-	// ---------------------------------------------------------------------------------------------
 	// Memory
 
 	delegate! {
