@@ -42,7 +42,7 @@ fn setup_panic() {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/smb.nes")?;
+	let img = Image::new_from_file("tests/data/megaman.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -54,15 +54,15 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	let nmi = prog.func_defined_at(prog.loc_from_name("VEC_NMI")).unwrap();
-	let preds = prog.func_bb_predecessors(nmi);
+	// let nmi = prog.func_defined_at(prog.loc_from_name("VEC_NMI")).unwrap();
+	// let preds = prog.func_bb_predecessors(nmi);
 
-	for bb in nmi.all_bbs() {
-		let pred = preds.get(&bb.id()).unwrap()
-			.iter().map(|p| p.idx())
-			.collect::<Vec<_>>();
-		println!("{:2}: {:?}", bb.id().idx(), pred);
-	}
+	// for bb in nmi.all_bbs() {
+	// 	let pred = preds.get(&bb.id()).unwrap()
+	// 		.iter().map(|p| p.idx())
+	// 		.collect::<Vec<_>>();
+	// 	println!("{:2}: {:?}", bb.id().idx(), pred);
+	// }
 
 	// prog.interp(nmi.id(), 10000);
 

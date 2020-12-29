@@ -6,8 +6,8 @@ use log::*;
 
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
-use crate::program::{ InstructionKind, Program, BBTerm, Function, FuncId };
-use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA };
+use crate::program::{ InstructionKind, Program, BasicBlock, BBTerm, Function, FuncId };
+use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange };
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer
@@ -323,10 +323,60 @@ impl Program {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function bank change analysis at {}", func.start_loc());
 
-		// 1. gather all the BBs that change banks.
-		// 2. for each bb, find the chain of predecessors that gets us there.
-		// 3. interpret from the head to that BB thru those predecessors.
+		// 1. make a list of "new states" for each bb.
+		let mut new_states = BBStateChanger::new(func.num_bbs());
+
+		// 2. gather all the BBs that change banks.
+		let changers = func.all_bbs()
+			.filter(|b| matches!(b.term(), BBTerm::BankChange(..)))
+			.collect::<Vec<_>>();
+
+		// 3. for each one, try a few techniques to determine the new state.
+		for bb in changers {
+			log::trace!("checking bb @ {}...", bb.loc());
+
+			let state = bb.mmu_state();
+			let new_state = match self.mem.inst_state_change(state, bb.term_inst()) {
+				StateChange::Static(new_state) => Some(new_state), // well that's easy.
+				StateChange::Dynamic => {
+					// ooh. more complicated.
+
+					log::warn!("dynamic state change unimplemented");
+					// 1. try interpreting just this BB; that might be enough.
+					None
+				}
+
+				StateChange::None => unreachable!(),
+			};
+
+			// 4. now, propagate that state change to the successors.
+			if let Some(new_state) = new_state {
+				log::trace!("  new state: {:?}", new_state);
+				match new_states.propagate(self, bb, new_state) {
+					Ok(()) => {}
+					Err(()) => todo!("oh noooooooo"),
+				}
+			} else {
+				log::trace!("  could not determine bank");
+			}
+		}
+
+		// 5. Finally, apply the changes.
+		if new_states.made_changes() {
+			let func = self.get_func_mut(fid);
+
+			for (bb, new_state) in func.all_bbs_mut().zip(new_states.into_iter()) {
+				if let Some(ns) = new_state {
+					log::trace!("setting state of bb @ {} to {:?}", bb.loc(), ns);
+					bb.set_mmu_state(ns);
+				}
+			}
+		}
 	}
+
+	// fn _interp_bb(&self, bb: &BasicBlock) -> Option<MmuState> {
+
+	// }
 
 	// ---------------------------------------------------------------------------------------------
 	// Jump table analysis
@@ -334,5 +384,75 @@ impl Program {
 	pub(crate) fn analyze_jump_table(&mut self, loc: Location) {
 		trace!("there's a jumptable at {}", loc);
 		// todo!()
+	}
+}
+
+struct BBStateChanger {
+	new_states: Vec<Option<MmuState>>,
+	visited:    Vec<bool>,
+}
+
+impl BBStateChanger {
+	fn new(num_bbs: usize) -> Self {
+		Self {
+			new_states: vec![None;  num_bbs],
+			visited:    vec![false; num_bbs],
+		}
+	}
+
+	fn made_changes(&self) -> bool {
+		self.new_states.iter().any(|s| s.is_some())
+	}
+
+	fn into_iter(self) -> impl Iterator<Item = Option<MmuState>> {
+		self.new_states.into_iter()
+	}
+
+	fn propagate(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
+	-> Result<(), ()> {
+		self.visited.iter_mut().for_each(|v| *v = false);
+		self._propagate_succ(prog, from, new_state)
+	}
+
+	fn _propagate_walk(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
+	-> Result<(), ()> {
+		let idx = from.id().idx();
+
+		if self.visited[idx] {
+			Ok(())
+		} else {
+			self.visited[idx] = true;
+
+			if let Some(ns) = self.new_states[idx] {
+				// uh oh. conflict
+				log::trace!("conflicting states @ {} (changing to both {:?} and {:?})",
+					from.loc(), ns, new_state);
+				Err(())
+			} else {
+				self.new_states[idx] = Some(new_state);
+				self._propagate_succ(prog, from, new_state)
+			}
+		}
+	}
+
+	fn _propagate_succ(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
+	-> Result<(), ()> {
+		let fid = from.id().func();
+
+		for succ in from.successors() {
+			match prog.span_at_loc(*succ).bb() {
+				Some(succ) if succ.func() == fid => {
+					let succ = prog.get_func(fid).get_bb(succ);
+					if let Err(()) = self._propagate_walk(prog, succ, new_state) {
+						return Err(());
+					}
+				}
+				_ => {
+					// TODO: is there anything we need to do here??
+				}
+			}
+		}
+
+		Ok(())
 	}
 }

@@ -90,6 +90,11 @@ impl Function {
 		self.bbs.iter()
 	}
 
+	/// Same as above but mutable.
+	pub fn all_bbs_mut(&mut self) -> impl Iterator<Item = &mut BasicBlock> {
+		self.bbs.iter_mut()
+	}
+
 	/// How many basic blocks this function has.
 	pub fn num_bbs(&self) -> usize {
 		self.bbs.len()

@@ -103,9 +103,11 @@ impl BasicBlock {
 	/// Its globally-unique location.
 	pub fn loc     (&self) -> Location { self.loc }
 	/// Where its terminator (last instruction) is located.
-	pub fn term_loc(&self) -> Location { self.insts.last().unwrap().loc() }
+	pub fn term_loc(&self) -> Location { self.term_inst().loc() }
 	/// How it ends, and what its successors are.
 	pub fn term    (&self) -> &BBTerm  { &self.term }
+	/// The terminating instruction.
+	pub fn term_inst(&self) -> &Instruction { &self.insts.last().unwrap() }
 	/// Its instructions.
 	pub fn insts   (&self) -> &[Instruction] { &self.insts }
 	/// The MMU state at the beginning of this BB.
@@ -170,6 +172,10 @@ impl BasicBlock {
 		log::trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
 
 		new
+	}
+
+	pub(crate) fn set_mmu_state(&mut self, new_state: MmuState) {
+		self.state = new_state;
 	}
 }
 
