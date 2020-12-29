@@ -13,13 +13,18 @@ use crate::program::{ Instruction, FuncId };
 
 /// Uniquely identifies a `BasicBlock`. Consists of a `FuncId` and an index into that function's
 /// `bbs` vec.
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Hash)]
 pub struct BBId(pub(super) FuncId, pub(super) usize);
 
 impl BBId {
 	/// The ID of the function which owns this.
 	pub fn func(&self) -> FuncId {
 		self.0
+	}
+
+	/// The index into the owning function.
+	pub fn idx(&self) -> usize {
+		self.1
 	}
 }
 

@@ -3,11 +3,13 @@ use std::collections::{
 	btree_map::Iter as BTreeIter,
 	btree_map::Range as BTreeRange,
 	hash_map::Iter as HashIter,
+	HashMap,
 	VecDeque,
 };
 use std::ops::{ Bound, RangeBounds };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
+use smallvec::{ SmallVec };
 use delegate::delegate;
 
 use crate::arch::{ INameLookup, IPrinter, Printer, IArchitecture };
@@ -202,6 +204,33 @@ impl Program {
 	pub fn func_that_contains(&self, loc: Location) -> Option<&Function> {
 		let func_id = self.span_at_loc(loc).bb()?.func();
 		Some(self.funcs.get(func_id))
+	}
+
+	/// Calculate the predecessors of all BBs in this function. **This is an expensive
+	/// operation!**
+	pub fn func_bb_predecessors(&self, func: &Function) -> HashMap<BBId, SmallVec<[BBId; 4]>> {
+		let mut ret = func.bbs.iter().map(|bb|
+			(bb.id(), SmallVec::new())
+		).collect::<HashMap<_, _>>();
+
+		let fid = func.id();
+
+		for pred in func.bbs.iter() {
+			for loc in pred.successors() {
+				match self.span_at_loc(*loc).bb() {
+					Some(succ) if succ.func() == fid => {
+						ret.get_mut(&succ)
+							.expect("it's gotta be in there")
+							.push(pred.id());
+					}
+					_ => {
+						// TODO: is there anything we need to do here??
+					}
+				}
+			}
+		}
+
+		ret
 	}
 
 	pub fn inst_fmt_mnemonic(&self, i: &Instruction) -> String {

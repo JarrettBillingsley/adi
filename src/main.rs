@@ -55,7 +55,16 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	println!("found {} functions.", prog.all_funcs().count());
 
 	let nmi = prog.func_defined_at(prog.loc_from_name("VEC_NMI")).unwrap();
-	prog.interp(nmi.id(), 10000);
+	let preds = prog.func_bb_predecessors(nmi);
+
+	for bb in nmi.all_bbs() {
+		let pred = preds.get(&bb.id()).unwrap()
+			.iter().map(|p| p.idx())
+			.collect::<Vec<_>>();
+		println!("{:2}: {:?}", bb.id().idx(), pred);
+	}
+
+	// prog.interp(nmi.id(), 10000);
 
 	// show_all_funcs(&prog);
 	// show_prg0(&prog);

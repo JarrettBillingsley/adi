@@ -11,7 +11,7 @@ use crate::program::{ Instruction, BasicBlock, BBId, BBTerm };
 // ------------------------------------------------------------------------------------------------
 
 /// Newtype which uniquely identifies a `Function`.
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Hash)]
 pub struct FuncId(pub Index);
 
 impl Debug for FuncId {
@@ -64,36 +64,14 @@ pub struct Function {
 }
 
 impl Function {
-	pub fn new_inprogress() -> Self {
-		Self { id: FuncIdReal::InProgress, name: None, bbs: Vec::new() }
-	}
-
-	pub fn mark_complete(&mut self, id: FuncId) {
-		assert!(matches!(self.id, FuncIdReal::InProgress));
-		self.id = FuncIdReal::Complete(id);
-	}
-
-	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>,
-	state: MmuState) -> usize {
-		log::trace!("new bb loc: {}, term: {:?}", loc, term);
-		let id = self.bbs.len();
-		self.push_bb(BasicBlock::new_inprogress(id, loc, term, insts, state));
-		id
-	}
-
-	pub(crate) fn split_bb(&mut self, idx: usize, inst_idx: usize, new_start: Location) -> usize {
-		let new_idx = self.bbs.len();
-		let new = self.bbs[idx].split(new_idx, inst_idx, new_start);
-		self.push_bb(new)
-	}
-
-	fn push_bb(&mut self, bb: BasicBlock) -> usize {
-		self.bbs.push(bb);
-		self.bbs.len() - 1
-	}
-
+	/// Its globally-unique identifier.
 	pub fn id(&self) -> FuncId {
 		self.id.id()
+	}
+
+	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
+	pub fn name(&self) -> Option<&String> {
+		self.name.as_ref()
 	}
 
 	/// The basic block ID of the function's head.
@@ -112,31 +90,61 @@ impl Function {
 		self.bbs.iter()
 	}
 
-	/// Get the given basic block.
-	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
-		assert!(id.0 == self.id.id());
-		&self.bbs[id.1]
-	}
-
-	pub fn get_bb_by_idx(&self, idx: usize) -> &BasicBlock {
-		assert!(self.id.is_in_progress());
-		&self.bbs[idx]
-	}
-
-	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
-	pub fn name(&self) -> Option<&String> {
-		self.name.as_ref()
-	}
-
 	/// How many basic blocks this function has.
 	pub fn num_bbs(&self) -> usize {
 		self.bbs.len()
+	}
+
+	/// Get the `idx`'th basic block.
+	pub fn get_bb_by_idx(&self, idx: usize) -> &BasicBlock {
+		assert!(self.id.is_in_progress());
+		&self.bbs[idx]
 	}
 
 	/// Get the ID of the `idx`'th basic block.
 	pub fn get_bbid(&self, idx: usize) -> BBId {
 		assert!(idx < self.bbs.len());
 		BBId(self.id.id(), idx)
+	}
+
+	/// Get the basic block with the given ID.
+	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
+		assert!(id.0 == self.id.id());
+		&self.bbs[id.1]
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// crate
+
+	pub(crate) fn new_inprogress() -> Self {
+		Self { id: FuncIdReal::InProgress, name: None, bbs: Vec::new() }
+	}
+
+	pub(crate) fn mark_complete(&mut self, id: FuncId) {
+		assert!(matches!(self.id, FuncIdReal::InProgress));
+		self.id = FuncIdReal::Complete(id);
+	}
+
+	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>,
+	state: MmuState) -> usize {
+		log::trace!("new bb loc: {}, term: {:?}", loc, term);
+		let id = self.bbs.len();
+		self._push_bb(BasicBlock::new_inprogress(id, loc, term, insts, state));
+		id
+	}
+
+	pub(crate) fn split_bb(&mut self, idx: usize, inst_idx: usize, new_start: Location) -> usize {
+		let new_idx = self.bbs.len();
+		let new = self.bbs[idx].split(new_idx, inst_idx, new_start);
+		self._push_bb(new)
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// private
+
+	fn _push_bb(&mut self, bb: BasicBlock) -> usize {
+		self.bbs.push(bb);
+		self.bbs.len() - 1
 	}
 }
 

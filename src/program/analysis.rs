@@ -326,10 +326,6 @@ impl Program {
 		// 1. gather all the BBs that change banks.
 		// 2. for each bb, find the chain of predecessors that gets us there.
 		// 3. interpret from the head to that BB thru those predecessors.
-
-		for bb in func.all_bbs() {
-
-		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
