@@ -66,7 +66,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	// prog.interp(nmi.id(), 10000);
 
-	// show_all_funcs(&prog);
+	show_all_funcs(&prog);
 	// show_prg0(&prog);
 	Ok(())
 }

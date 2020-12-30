@@ -117,7 +117,6 @@ impl Mos65xxInterpreter {
 				let new_state = mem.mmu_write(state, VA(addr as usize), val.val as usize);
 
 				if new_state != state {
-					log::warn!("interpreter determined new state: {:?}", new_state);
 					assert!(self.new_state.is_none());
 					self.new_state = Some((new_state, val.kind))
 				} else {

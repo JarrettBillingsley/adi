@@ -121,7 +121,7 @@ impl Program {
 				let bb = self.funcs.get(bbid.func()).get_bb(bbid);
 				Some(bb.mmu_state())
 			}
-			_ => Some(self.initial_mmu_state()), // TODO
+			_ => None,
 		}
 	}
 
@@ -323,16 +323,26 @@ impl Program {
 		// see if there's already a name here.
 		if let Some(name) = self.names.name_for_loc(loc) {
 			name.into()
+		} else if loc.is_invalid() {
+			self.generate_name("UNRESOLVED", VA(loc.offs))
 		} else {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
 
+			// TODO: this feels....... wrong and right at the same time.
+			// if we have a valid Location, then we have already resolved it to a real segment,
+			// meaning that segment has been mapped by the MMU at least once, meaning the MMU
+			// must know at what VA it appears.
 			let va = if let Some(state) = self.mmu_state_at(loc) {
 				self.va_from_loc(state, loc)
+				// but this second condition specifically...
+				// does va_for_loc even *need* the MMU state? none of the MMU impls so far
+				// use it, and because of the "one VA per bank" assumption, a location can
+				// only ever correspond to one VA.
+			} else if let Some(va) = self.va_for_loc(self.initial_mmu_state(), loc) {
+				va
 			} else {
-				// TODO: if we have a Location, then we probably know what VA was used to
-				// access it at least once... right? should be able to do better than this
-				VA(loc.offs)
+				VA(loc.offs) // can this ever happen?
 			};
 
 			let start = seg.span_at_loc(loc).start();

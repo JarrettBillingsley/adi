@@ -106,6 +106,12 @@ impl Function {
 		&self.bbs[idx]
 	}
 
+	/// Same as above but mutable.
+	pub fn get_bb_by_idx_mut(&mut self, idx: usize) -> &mut BasicBlock {
+		assert!(self.id.is_in_progress());
+		&mut self.bbs[idx]
+	}
+
 	/// Get the ID of the `idx`'th basic block.
 	pub fn get_bbid(&self, idx: usize) -> BBId {
 		assert!(idx < self.bbs.len());
@@ -116,6 +122,12 @@ impl Function {
 	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
 		assert!(id.0 == self.id.id());
 		&self.bbs[id.1]
+	}
+
+	/// Same as above but mutable.
+	pub fn get_bb_mut(&mut self, id: BBId) -> &mut BasicBlock {
+		assert!(id.0 == self.id.id());
+		&mut self.bbs[id.1]
 	}
 
 	// ---------------------------------------------------------------------------------------------

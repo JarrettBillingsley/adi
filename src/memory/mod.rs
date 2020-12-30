@@ -56,12 +56,16 @@ pub struct SegCollection {
 impl SegCollection {
 	/// Makes a new empty collection.
 	pub fn new() -> Self {
-		Self {
+		let mut ret = Self {
 			segs: vec![Segment::new(SegId::invalid(), "[UNRESOLVED]", usize::MAX, None)],
 			next_seg_id: SegId(0),
 			seg_name_map: HashMap::new(),
 			seg_id_map: HashMap::new(),
-		}
+		};
+
+		ret.seg_id_map.insert(SegId::invalid(), 0);
+
+		ret
 	}
 
 	/// Adds a new segment. Returns its id.

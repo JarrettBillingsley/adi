@@ -4,10 +4,10 @@ use std::iter::IntoIterator;
 
 use log::*;
 
-use crate::arch::{ IArchitecture, ValueKind };
+use crate::arch::{ IInterpreter, IArchitecture, ValueKind };
 use crate::platform::{ IPlatform };
-use crate::program::{ InstructionKind, Program, BasicBlock, BBTerm, Function, FuncId };
-use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange };
+use crate::program::{ InstructionKind, Program, BBId, BasicBlock, BBTerm, Function, FuncId };
+use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange, SegId };
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer
@@ -20,9 +20,11 @@ pub(crate) enum AnalysisItem {
 	Func1stPass(Location, MmuState),
 	/// A function that needs to be analyzed more deeply.
 	Func2ndPass(FuncId),
-	FuncBankChange(FuncId),
 	/// A jump table. The location points to the jump instruction.
 	JumpTable(Location),
+
+	DetermineStateChange(BBId),
+	ChangeState(BBId, MmuState),
 }
 
 impl Program {
@@ -44,78 +46,11 @@ impl Program {
 			match item {
 				Func1stPass(loc, state) => self.func_first_pass(loc, state),
 				Func2ndPass(fid)        => self.func_second_pass(fid),
-				FuncBankChange(fid)     => self.func_bank_change(fid),
 				JumpTable(loc)          => self.analyze_jump_table(loc),
+
+				DetermineStateChange(bb) => self.determine_state_change(bb),
+				ChangeState(bb, state)   => self.change_state(bb, state),
 			}
-		}
-	}
-
-	// ---------------------------------------------------------------------------------------------
-
-	fn should_analyze_func(&self, loc: Location) -> bool {
-		if let Some(bbid) = self.span_at_loc(loc).bb() {
-			let orig_func_head = self.get_func(bbid.func()).head_id();
-
-			if bbid == orig_func_head {
-				// the beginning of an already-analyzed function.
-				trace!("oh, I've seen this one already. NEVERMIIIND");
-			} else {
-				// the middle of an already-analyzed function. TODO: maybe we should
-				// split the function, maybe not. Consider diamond-shaped CFG where we
-				// call a BB in the middle of one path. who owns the BBs at/after
-				// the rejoining point?
-				trace!("middle of an existing function... let's move on");
-			}
-			false
-		} else {
-			true
-		}
-	}
-
-	fn should_analyze_bb(
-		&mut self, func: &mut Function, start: Location) -> bool {
-		// let's look at this location to see what's here.
-		// we want a fresh, undefined region of memory.
-
-		match self.span_at_loc(start).kind() {
-			SpanKind::Unk         => true, // yeeeeee that's what we want
-			SpanKind::Code(..)    => false,   // fell through into another function.
-			SpanKind::AnaCode(id) => {
-				// oh, we've already analyzed this. but maybe we have some work to do...
-				self.check_split_bb(func, id, start);
-				false
-			}
-
-			SpanKind::Ana => panic!("span at {} is somehow being analyzed", start),
-			SpanKind::Data => todo!("uh oh. what do we do here? {}", start),
-		}
-	}
-
-	fn check_split_bb(
-		&mut self, func: &mut Function, old_idx: usize, start: Location) {
-		let old_bb = func.get_bb_by_idx(old_idx);
-
-		if start != old_bb.loc {
-			// ooh, now we have to split the existing bb.
-			// first, let's make sure that `start` points to the beginning of an instruction,
-			// because otherwise we'd be jumping to an invalid location.
-			let idx = match old_bb.last_instr_before(start) {
-				Some(idx) => idx,
-				None      => todo!("have to flag referrer as being invalid somehow"),
-			};
-
-			// now we can split the existing BB...
-			let new_bb = func.split_bb(old_idx, idx, start);
-
-			// ...and update the span map.
-			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb));
-		}
-	}
-
-	fn resolve_target(&self, state: MmuState, target: VA) -> Location {
-		match self.loc_for_va(state, target) {
-			Some(l) => l,
-			None    => Location::invalid(target.0),
 		}
 	}
 
@@ -126,7 +61,7 @@ impl Program {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function 1st pass at {}", loc);
 
-		if !self.should_analyze_func(loc) {
+		if !self._should_analyze_func(loc) {
 			return;
 		}
 
@@ -140,7 +75,7 @@ impl Program {
 			trace!("evaluating potential bb at {}", start);
 
 			// ok. should we analyze this?
-			if !self.should_analyze_bb(&mut func, start) {
+			if !self._should_analyze_bb(&mut func, start) {
 				continue 'outer;
 			}
 
@@ -162,12 +97,10 @@ impl Program {
 			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				end_loc = inst.next_loc();
-				let target_loc = inst.control_target().map(|t| self.resolve_target(state, t));
 
 				if self.mem.inst_state_change(state, &inst).is_some() {
 					term = Some(BBTerm::BankChange(end_loc));
-					let next = self.resolve_target(state, inst.next_va());
-					potential_bbs.push_back(next);
+					potential_bbs.push_back(inst.next_loc());
 					insts.push(inst);
 					break 'instloop;
 				}
@@ -193,9 +126,10 @@ impl Program {
 						term = Some(BBTerm::JumpTbl(vec![]));
 					}
 					Call => {
-						let target_loc = target_loc.expect("instruction should have control target");
+						let target_va = inst.control_target().expect("should have control target");
+						let target_loc = self._va_to_loc_in_same_seg(seg.id(), state, target_va);
 
-						let next = self.resolve_target(state, inst.next_va());
+						let next = inst.next_loc();
 						potential_bbs.push_back(next);
 
 						// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
@@ -203,9 +137,11 @@ impl Program {
 						term = Some(BBTerm::Call { dst: target_loc, ret: next });
 					}
 					Uncond | Cond => {
+						let target_va = inst.control_target().expect("should have control target");
+						let target_loc = self._va_to_loc_in_same_seg(seg.id(), state, target_va);
+
 						// if it's into the same segment, it might be part of this function.
 						// if not, it's probably a tailcall to another function.
-						let target_loc = target_loc.expect("instruction should have control target");
 						if seg.contains_loc(target_loc) {
 							potential_bbs.push_back(target_loc);
 						}
@@ -213,7 +149,7 @@ impl Program {
 						if inst.kind() == Uncond {
 							term = Some(BBTerm::Jump(target_loc));
 						} else {
-							let next = self.resolve_target(state, inst.next_va());
+							let next = inst.next_loc();
 							potential_bbs.push_back(next);
 
 							// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
@@ -273,7 +209,7 @@ impl Program {
 		let mut jumptables = Vec::new();
 		let mut funcs      = Vec::new();
 		let mut refs       = Vec::new();
-		let mut has_bank_change = false;
+		let mut changes    = Vec::new();
 
 		for bb in func.all_bbs() {
 			let state = bb.mmu_state();
@@ -293,7 +229,7 @@ impl Program {
 				match inst.kind() {
 					Indir => jumptables.push(inst.loc()),
 					Call => {
-						let target_loc = self.resolve_target(state, inst.control_target().unwrap());
+						let target_loc = self._resolve_target(state, inst.control_target().unwrap());
 						funcs.push((target_loc, state));
 					}
 					_ => {}
@@ -304,101 +240,68 @@ impl Program {
 				refs.push((bb.term_loc(), succ));
 			}
 
-			has_bank_change |= matches!(bb.term(), BBTerm::BankChange(..));
+			if matches!(bb.term(), BBTerm::BankChange(..)) {
+				changes.push(bb.id());
+			}
 		}
 
 		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
 		for (f, s) in funcs.into_iter()    { self.enqueue_function(s, f); }
-
-		if has_bank_change { self.queue.push_back(AnalysisItem::FuncBankChange(fid)) }
+		for bb in changes.into_iter() {
+			// TODO: make an enqueue method for this
+			self.queue.push_back(AnalysisItem::DetermineStateChange(bb))
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Function bank change analysis
+	// MMU state change analysis
 
-	pub(crate) fn func_bank_change(&mut self, fid: FuncId) {
-		let func = self.get_func(fid);
+	pub(crate) fn determine_state_change(&mut self, bbid: BBId) {
+		let func = self.get_func(bbid.func());
+		let bb = func.get_bb(bbid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function bank change analysis at {}", func.start_loc());
+		trace!("- begin bb state change analysis at {}", bb.loc());
 
-		// 1. make a list of "new states" for each bb.
-		let mut new_states = BBStateChanger::new(func.num_bbs());
+		// See if we get a new state...
+		let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
+			StateChange::None              => unreachable!(),
+			StateChange::Static(new_state) => Some(new_state),
+			StateChange::Dynamic           => self._dynamic_state_change(func, bb),
+		};
 
-		// 2. gather all the BBs that change banks.
-		let changers = func.all_bbs()
-			.filter(|b| matches!(b.term(), BBTerm::BankChange(..)))
-			.collect::<Vec<_>>();
+		// Propagate that state change to the successors.
+		if let Some(new_state) = new_state {
+			log::trace!("  new state: {:?}", new_state);
+			let mut new_states = BBStateChanger::new(func);
 
-		// 3. for each one, try a few techniques to determine the new state.
-		for bb in changers {
-			log::trace!("checking bb @ {}...", bb.loc());
-
-			let state = if let Some(s) = new_states.new_state_for(bb) {
-				log::trace!("  replacing {:?} with {:?}", bb.mmu_state(), s);
-				s
-			} else {
-				bb.mmu_state()
-			};
-
-			// ooh -- it's possible this BB's state was changed on a previous iteration.
-
-			let new_state = match self.mem.inst_state_change(state, bb.term_inst()) {
-				StateChange::Static(new_state) => Some(new_state), // well that's easy.
-				StateChange::Dynamic => {
-					// ooh. more complicated.
-
-					// 1. try interpreting just this BB; that might be enough.
-					match self._interp_bb(bb, state) {
-						Some((new_state, kind)) => {
-							if kind == ValueKind::Immediate {
-								log::warn!("OMFG IT WORKED {:?}", new_state);
-								Some(new_state)
-							} else {
-								log::error!("interpreter found a value but can't yet resolve.");
-								None
-							}
-						}
-
-						// TODO: more, more!
-						None => None
-					}
-				}
-
-				StateChange::None => unreachable!(),
-			};
-
-			// 4. now, propagate that state change to the successors.
-			if let Some(new_state) = new_state {
-				log::trace!("  new state: {:?}", new_state);
-				match new_states.propagate(self, bb, new_state) {
-					Ok(()) => {}
-					Err(()) => todo!("oh noooooooo"),
-				}
-			} else {
-				log::trace!("  could not determine bank");
+			match new_states.propagate(self, bb, new_state) {
+				Ok(..) => {}
+				Err(..) => todo!("oh noooooooo"),
 			}
-		}
 
-		// 5. Finally, apply the changes.
-		if new_states.made_changes() {
-			let func = self.get_func_mut(fid);
-
-			for (bb, new_state) in func.all_bbs_mut().zip(new_states.into_iter()) {
-				if let Some(ns) = new_state {
-					log::trace!("setting state of bb @ {} to {:?}", bb.loc(), ns);
-					bb.set_mmu_state(ns);
-				}
+			for (bbid, new_state) in new_states.into_iter() {
+				self.queue.push_back(AnalysisItem::ChangeState(bbid, new_state))
 			}
+		} else {
+			log::warn!("  could not determine new state");
 		}
 	}
 
-	fn _interp_bb(&self, bb: &BasicBlock, state: MmuState) -> Option<(MmuState, ValueKind)> {
-		use crate::arch::IInterpreter;
-		let mut interpreter = self.plat.arch().new_interpreter();
-		interpreter.interpret_bb(&self.mem, bb, Some(state));
-		interpreter.last_mmu_state_change()
+	// ---------------------------------------------------------------------------------------------
+	// Changing the MMU state of a BB
+
+	fn change_state(&mut self, bbid: BBId, new_state: MmuState) {
+		let func = self.get_func_mut(bbid.func());
+		let bb = func.get_bb_mut(bbid);
+
+		trace!("------------------------------------------------------------------------");
+		trace!("- changing state of bb @ {} to {:?}", bb.loc(), new_state);
+
+		bb.set_mmu_state(new_state);
+
+		// TODO: resolve refs!
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -408,31 +311,125 @@ impl Program {
 		trace!("there's a jumptable at {}", loc);
 		// todo!()
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Private
+
+	fn _should_analyze_func(&self, loc: Location) -> bool {
+		if let Some(bbid) = self.span_at_loc(loc).bb() {
+			let orig_func_head = self.get_func(bbid.func()).head_id();
+
+			if bbid == orig_func_head {
+				// the beginning of an already-analyzed function.
+				trace!("oh, I've seen this one already. NEVERMIIIND");
+			} else {
+				// the middle of an already-analyzed function. TODO: maybe we should
+				// split the function, maybe not. Consider diamond-shaped CFG where we
+				// call a BB in the middle of one path. who owns the BBs at/after
+				// the rejoining point?
+				trace!("middle of an existing function... let's move on");
+			}
+			false
+		} else {
+			true
+		}
+	}
+
+	fn _should_analyze_bb(&mut self, func: &mut Function, start: Location) -> bool {
+		// let's look at this location to see what's here.
+		// we want a fresh, undefined region of memory.
+
+		match self.span_at_loc(start).kind() {
+			SpanKind::Unk         => true, // yeeeeee that's what we want
+			SpanKind::Code(..)    => false,   // fell through into another function.
+			SpanKind::AnaCode(id) => {
+				// oh, we've already analyzed this. but maybe we have some work to do...
+				self._check_split_bb(func, id, start);
+				false
+			}
+
+			SpanKind::Ana => panic!("span at {} is somehow being analyzed", start),
+			SpanKind::Data => todo!("uh oh. what do we do here? {}", start),
+		}
+	}
+
+	fn _check_split_bb(&mut self, func: &mut Function, old_idx: usize, start: Location) {
+		let old_bb = func.get_bb_by_idx(old_idx);
+
+		if start != old_bb.loc {
+			// ooh, now we have to split the existing bb.
+			// first, let's make sure that `start` points to the beginning of an instruction,
+			// because otherwise we'd be jumping to an invalid location.
+			let idx = match old_bb.last_instr_before(start) {
+				Some(idx) => idx,
+				None      => todo!("have to flag referrer as being invalid somehow"),
+			};
+
+			// now we can split the existing BB...
+			let new_bb = func.split_bb(old_idx, idx, start);
+
+			// ...and update the span map.
+			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb));
+		}
+	}
+
+	fn _va_to_loc_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> Location {
+		match self.loc_for_va(state, va) {
+			Some(l) if l.seg == seg => l,
+			_                       => Location::invalid(va.0)
+		}
+	}
+
+	fn _resolve_target(&self, state: MmuState, target: VA) -> Location {
+		match self.loc_for_va(state, target) {
+			Some(l) => l,
+			None    => Location::invalid(target.0),
+		}
+	}
+
+	// _func if/when we need it in the future
+	fn _dynamic_state_change(&self, _func: &Function, bb: &BasicBlock) -> Option<MmuState> {
+		match self._interp_bb(bb) {
+			Some((new_state, kind)) => {
+				if kind == ValueKind::Immediate {
+					Some(new_state)
+				} else {
+					log::error!("interpreter found a value but can't yet resolve.");
+					None
+				}
+			}
+
+			// TODO: more, more!
+			None => None
+		}
+	}
+
+	fn _interp_bb(&self, bb: &BasicBlock) -> Option<(MmuState, ValueKind)> {
+		let mut interpreter = self.plat.arch().new_interpreter();
+		interpreter.interpret_bb(&self.mem, bb, None);
+		interpreter.last_mmu_state_change()
+	}
 }
 
 struct BBStateChanger {
+	ids:        Vec<BBId>,
 	new_states: Vec<Option<MmuState>>,
 	visited:    Vec<bool>,
 }
 
 impl BBStateChanger {
-	fn new(num_bbs: usize) -> Self {
+	fn new(func: &Function) -> Self {
+		let num_bbs = func.num_bbs();
 		Self {
+			ids:        func.all_bbs().map(|bb| bb.id()).collect(),
 			new_states: vec![None;  num_bbs],
 			visited:    vec![false; num_bbs],
 		}
 	}
 
-	fn made_changes(&self) -> bool {
-		self.new_states.iter().any(|s| s.is_some())
-	}
-
-	fn new_state_for(&self, bb: &BasicBlock) -> Option<MmuState> {
-		self.new_states[bb.id().idx()]
-	}
-
-	fn into_iter(self) -> impl Iterator<Item = Option<MmuState>> {
-		self.new_states.into_iter()
+	fn into_iter(self) -> impl Iterator<Item = (BBId, MmuState)> {
+		self.ids.into_iter().zip(self.new_states.into_iter())
+			.filter_map(|(bbid, ns)| ns.map(|ns| (bbid, ns)))
 	}
 
 	fn propagate(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
@@ -467,6 +464,9 @@ impl BBStateChanger {
 		let fid = from.id().func();
 
 		for succ in from.successors() {
+			// TODO: having a "magical" invalid location value is annoying.
+			if succ.is_invalid() { continue; }
+
 			match prog.span_at_loc(*succ).bb() {
 				Some(succ) if succ.func() == fid => {
 					let succ = prog.get_func(fid).get_bb(succ);
