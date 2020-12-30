@@ -1,4 +1,6 @@
 
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
+
 use enum_dispatch::enum_dispatch;
 
 use crate::memory::{ Endian, Memory, MmuState, Location, VA };
@@ -176,6 +178,62 @@ impl INameLookup for NullLookup {
 }
 
 // ------------------------------------------------------------------------------------------------
+// Value, ValueKind
+// ------------------------------------------------------------------------------------------------
+
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum ValueKind {
+	Indeterminate,
+	Immediate,
+	Computed,
+	Loaded(Option<VA>), // the address it was loaded from, if known.
+	Argument(usize),    // the "i'th" argument. (65xx uses Reg::* indexes)
+	Return,             // came out of a function
+}
+
+impl Debug for ValueKind {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use ValueKind::*;
+
+		match self {
+			Indeterminate   => write!(f, "???"),
+			Immediate       => write!(f, "IMM"),
+			Computed        => write!(f, "COMPUTED"),
+			Loaded(None)    => write!(f, "LOAD(????)"),
+			Loaded(Some(a)) => write!(f, "LOAD({:04X})", a.0),
+			Argument(i)     => write!(f, "ARG({})", i),
+			Return          => write!(f, "RETURNVAL"),
+		}
+	}
+}
+
+impl Default for ValueKind {
+	fn default() -> Self { ValueKind::Indeterminate }
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Default)]
+pub struct Value<T> {
+	pub val:  T,
+	pub kind: ValueKind,
+}
+
+impl<T: std::fmt::UpperHex> Debug for Value<T> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "({:0width$X}, {:?})", self.val, self.kind,
+			width = core::mem::size_of::<T>() * 2)
+	}
+}
+
+impl<T> Value<T> {
+	pub fn ind (val: T) -> Self                   { Self { val, kind: ValueKind::Indeterminate } }
+	pub fn imm (val: T) -> Self                   { Self { val, kind: ValueKind::Immediate     } }
+	pub fn comp(val: T) -> Self                   { Self { val, kind: ValueKind::Computed      } }
+	pub fn load(val: T, addr: Option<VA>) -> Self { Self { val, kind: ValueKind::Loaded(addr)  } }
+	pub fn arg (val: T, i: usize) -> Self         { Self { val, kind: ValueKind::Argument(i)   } }
+	pub fn ret (val: T) -> Self                   { Self { val, kind: ValueKind::Return        } }
+}
+
+// ------------------------------------------------------------------------------------------------
 // IInterpreter
 // ------------------------------------------------------------------------------------------------
 
@@ -188,11 +246,16 @@ pub enum Interpreter {
 
 #[enum_dispatch(Interpreter)]
 pub trait IInterpreter: Sized + Sync + Send {
+	// reset all state.
 	fn reset(&mut self);
 
 	// interprets the BB and returns the location of the successor to run, or None if
-	// we hit the end
-	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock) -> Option<Location>;
+	// we hit the end. state is optional state to replace bb.mmu_state().
+	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock, state: Option<MmuState>)
+	-> Option<Location>;
+
+	// the most recent MMU state change that was encountered when interpreting the last BB.
+	fn last_mmu_state_change(&self) -> Option<(MmuState, ValueKind)>;
 }
 
 // ------------------------------------------------------------------------------------------------

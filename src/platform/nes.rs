@@ -231,6 +231,7 @@ trait IMapper {
 	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
 	fn state_change(&self, state: MmuState, va: VA) -> StateChange;
+	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
 }
 
 #[derive(Debug)]
@@ -298,6 +299,10 @@ impl IMmu for NesMmu {
 
 		StateChange::None
 	}
+
+	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
+		self.mapper.write(old, addr, val)
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -360,6 +365,11 @@ impl IMapper for NRom {
 
 	fn state_change(&self, _state: MmuState, _va: VA) -> StateChange {
 		StateChange::None
+	}
+
+	fn write(&self, old: MmuState, _addr: VA, _val: usize) -> MmuState {
+		// state... state never changes...
+		old
 	}
 }
 
@@ -435,6 +445,15 @@ impl IMapper for UXRom {
 		match va.0 {
 			0x8000 ..= 0xFFFF => StateChange::Dynamic,
 			_                 => StateChange::None,
+		}
+	}
+
+	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
+		match addr.0 {
+			0x8000 ..= 0xFFFF => {
+				MmuState::from_usize(val % self.all.len())
+			}
+			_ => old
 		}
 	}
 }

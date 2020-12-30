@@ -4,7 +4,7 @@ use std::iter::IntoIterator;
 
 use log::*;
 
-use crate::arch::{ IArchitecture };
+use crate::arch::{ IArchitecture, ValueKind };
 use crate::platform::{ IPlatform };
 use crate::program::{ InstructionKind, Program, BasicBlock, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange };
@@ -335,15 +335,35 @@ impl Program {
 		for bb in changers {
 			log::trace!("checking bb @ {}...", bb.loc());
 
-			let state = bb.mmu_state();
+			let state = if let Some(s) = new_states.new_state_for(bb) {
+				log::trace!("  replacing {:?} with {:?}", bb.mmu_state(), s);
+				s
+			} else {
+				bb.mmu_state()
+			};
+
+			// ooh -- it's possible this BB's state was changed on a previous iteration.
+
 			let new_state = match self.mem.inst_state_change(state, bb.term_inst()) {
 				StateChange::Static(new_state) => Some(new_state), // well that's easy.
 				StateChange::Dynamic => {
 					// ooh. more complicated.
 
-					log::warn!("dynamic state change unimplemented");
 					// 1. try interpreting just this BB; that might be enough.
-					None
+					match self._interp_bb(bb, state) {
+						Some((new_state, kind)) => {
+							if kind == ValueKind::Immediate {
+								log::warn!("OMFG IT WORKED {:?}", new_state);
+								Some(new_state)
+							} else {
+								log::error!("interpreter found a value but can't yet resolve.");
+								None
+							}
+						}
+
+						// TODO: more, more!
+						None => None
+					}
 				}
 
 				StateChange::None => unreachable!(),
@@ -374,9 +394,12 @@ impl Program {
 		}
 	}
 
-	// fn _interp_bb(&self, bb: &BasicBlock) -> Option<MmuState> {
-
-	// }
+	fn _interp_bb(&self, bb: &BasicBlock, state: MmuState) -> Option<(MmuState, ValueKind)> {
+		use crate::arch::IInterpreter;
+		let mut interpreter = self.plat.arch().new_interpreter();
+		interpreter.interpret_bb(&self.mem, bb, Some(state));
+		interpreter.last_mmu_state_change()
+	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Jump table analysis
@@ -402,6 +425,10 @@ impl BBStateChanger {
 
 	fn made_changes(&self) -> bool {
 		self.new_states.iter().any(|s| s.is_some())
+	}
+
+	fn new_state_for(&self, bb: &BasicBlock) -> Option<MmuState> {
+		self.new_states[bb.id().idx()]
 	}
 
 	fn into_iter(self) -> impl Iterator<Item = Option<MmuState>> {

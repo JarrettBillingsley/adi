@@ -1,6 +1,5 @@
-use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
-use crate::arch::{ IInterpreter, IPrinter };
+use crate::arch::{ IInterpreter, IPrinter, Value, ValueKind };
 use crate::memory::{ Memory, ImageRead, Location, MmuState, VA };
 use crate::program::{ BasicBlock, BBTerm, Instruction };
 
@@ -12,57 +11,6 @@ use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, 
 
 use super::Reg;
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum ValueKind {
-	Indeterminate,
-	Immediate,
-	Computed,
-	Loaded(Option<VA>), // the address it was loaded from, if known.
-	Argument(usize),    // the "i'th" argument. (65xx uses Reg::* indexes)
-	Return,             // came out of a function
-}
-
-impl Debug for ValueKind {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		use ValueKind::*;
-
-		match self {
-			Indeterminate   => write!(f, "???"),
-			Immediate       => write!(f, "IMM"),
-			Computed        => write!(f, "COMPUTED"),
-			Loaded(None)    => write!(f, "LOAD(????)"),
-			Loaded(Some(a)) => write!(f, "LOAD({:04X})", a.0),
-			Argument(i)     => write!(f, "ARG({})", i),
-			Return          => write!(f, "RETURNVAL"),
-		}
-	}
-}
-
-impl Default for ValueKind {
-	fn default() -> Self { ValueKind::Indeterminate }
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Default)]
-pub struct Value<T> {
-	pub val:  T,
-	pub kind: ValueKind,
-}
-
-impl<T: std::fmt::UpperHex> Debug for Value<T> {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "({:0width$X}, {:?})", self.val, self.kind,
-			width = core::mem::size_of::<T>() * 2)
-	}
-}
-
-impl<T> Value<T> {
-	pub fn ind (val: T) -> Self                   { Self { val, kind: ValueKind::Indeterminate } }
-	pub fn imm (val: T) -> Self                   { Self { val, kind: ValueKind::Immediate     } }
-	pub fn comp(val: T) -> Self                   { Self { val, kind: ValueKind::Computed      } }
-	pub fn load(val: T, addr: Option<VA>) -> Self { Self { val, kind: ValueKind::Loaded(addr)  } }
-	pub fn arg (val: T, i: usize) -> Self         { Self { val, kind: ValueKind::Argument(i)   } }
-	pub fn ret (val: T) -> Self                   { Self { val, kind: ValueKind::Return        } }
-}
 
 type Vu8 = Value<u8>;
 type Vu16 = Value<u16>;
@@ -106,6 +54,7 @@ pub struct Mos65xxInterpreter {
 	// TODO: external PRG-RAM
 	ram:       Vec<Vu8>,
 	jmp_dst:   Location,
+	new_state: Option<(MmuState, ValueKind)>,
 }
 
 impl Mos65xxInterpreter {
@@ -124,6 +73,7 @@ impl Mos65xxInterpreter {
 			ret_stack: Vec::new(),
 			ram:       vec![Vu8::ind(0); 0x800],
 			jmp_dst:   Location::invalid(0),
+			new_state:  None,
 		};
 		ret.reset();
 		ret
@@ -159,14 +109,21 @@ impl Mos65xxInterpreter {
 		Vu8::load(ret, Some(VA(addr as usize)))
 	}
 
-	fn write_byte(&mut self, _mem: &Memory, _state: MmuState, addr: u16, val: Vu8) {
-		// TODO: *THIS* is where we detect bank changes!!
+	fn write_byte(&mut self, mem: &Memory, state: MmuState, addr: u16, val: Vu8) {
 		match addr {
 			0x0000 ..= 0x07FF => self.ram[addr as usize] = val,
-			0x8000 ..= 0xFFFF => {
-				log::warn!("WOOAAOOHHHHAHH!!!!!!HAO HOAHFOHFOHAOF!!!! {:?}", val);
+			0x0800 ..= 0x401F => {} // ignore
+			0x4020 ..= 0xFFFF => {
+				let new_state = mem.mmu_write(state, VA(addr as usize), val.val as usize);
+
+				if new_state != state {
+					log::warn!("interpreter determined new state: {:?}", new_state);
+					assert!(self.new_state.is_none());
+					self.new_state = Some((new_state, val.kind))
+				} else {
+					log::warn!("wuh oh. old {:?} new {:?} {:04X} {:02X}", state, new_state, addr, val.val);
+				}
 			}
-			_ => {}
 		}
 	}
 
@@ -531,13 +488,16 @@ impl IInterpreter for Mos65xxInterpreter {
 		self.ret_stack.clear();
 		self.ram.iter_mut().for_each(|x| *x = Vu8::ind(0));
 		self.jmp_dst = Location::invalid(0);
+		self.new_state = None;
 	}
 
-	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock)
+	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock, state: Option<MmuState>)
 	-> Option<Location> {
 		let insts = bb.insts();
 		let last = insts.len() - 1;
-		let state = bb.mmu_state();
+		let state = state.unwrap_or(bb.mmu_state());
+
+		self.new_state = None;
 
 		for i in insts {
 			self.interpret_inst(state, mem, i);
@@ -589,5 +549,9 @@ impl IInterpreter for Mos65xxInterpreter {
 				Some(self.jmp_dst)
 			}
 		}
+	}
+
+	fn last_mmu_state_change(&self) -> Option<(MmuState, ValueKind)> {
+		self.new_state
 	}
 }

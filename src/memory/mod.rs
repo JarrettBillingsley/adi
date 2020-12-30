@@ -172,6 +172,10 @@ impl Memory {
 
 			/// How this instruction changes the MMU state.
 			pub fn inst_state_change(&self, state: MmuState, i: &Instruction) -> StateChange;
+
+			/// Simulate a write to the MMU to produce a new MMU state.
+			#[call(write)]
+			pub fn mmu_write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
 		}
 	}
 

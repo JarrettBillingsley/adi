@@ -165,7 +165,7 @@ impl Program {
 
 		let mut bb = func.get_bb(head);
 		for _ in 0 .. iters {
-			match interpreter.interpret_bb(&self.mem, bb) {
+			match interpreter.interpret_bb(&self.mem, bb, None) {
 				Some(loc) => {
 					if let Some(next_bb) = self.span_at_loc(loc).bb() {
 						bb = self.funcs.get(next_bb.func()).get_bb(next_bb);

@@ -14,6 +14,10 @@ use crate::platform::{ NesMmu };
 pub struct MmuState(u128);
 
 impl MmuState {
+	pub fn from_usize(v: usize) -> Self {
+		Self(v as u128)
+	}
+
 	pub fn to_usize(&self) -> usize {
 		self.0 as usize
 	}
@@ -66,4 +70,8 @@ pub trait IMmu: Debug + Display + Sync + Send {
 
 	/// Given an instruction, tells how that instruction changes the state.
 	fn inst_state_change(&self, state: MmuState, inst: &Instruction) -> StateChange;
+
+	/// Given an old state, a value to write, and an address to write it, produce the new MMU
+	/// state that would result from such a write.
+	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
 }
