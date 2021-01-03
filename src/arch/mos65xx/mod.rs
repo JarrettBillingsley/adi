@@ -421,6 +421,7 @@ impl IPrinter for Mos65xxPrinter {
 						None       => self.fmt_addr(*addr, desc.addr_mode.is_zero_page()),
 					}
 				}
+				_ => unreachable!()
 			};
 
 			let template = desc.addr_mode.operand_template(self.flavor);

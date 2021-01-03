@@ -62,10 +62,14 @@ impl MemAccess {
 pub enum Operand {
 	/// A register. The interpretation of the number is up to the architecture.
 	Reg(usize),
-
 	/// An unsigned immediate that fits in 8 bits.
 	UImm8(u8),
-
+	/// A signed immediate that fits in 8 bits.
+	SImm8(i8),
+	/// An unsigned immediate that fits in 16 bits.
+	UImm16(u16),
+	/// A signed immediate that fits in 16 bits.
+	SImm16(i16),
 	/// A 16-bit memory address, along with what kind of access it is.
 	Mem16(u16, MemAccess),
 }
@@ -93,18 +97,20 @@ impl Operand {
 		}
 	}
 
-	/// If this is an immediate value, get it as an unsigned number; panics otherwise.
+	/// If this is an unsigned immediate value, get it as an unsigned number; panics otherwise.
 	pub fn uimm(&self) -> u64 {
 		match self {
-			Operand::UImm8(i) => *i as u64,
+			Operand::UImm8(i)  => *i as u64,
+			Operand::UImm16(i) => *i as u64,
 			_ => panic!("not an immediate operand"),
 		}
 	}
 
-	/// If this is an immediate value, get it as a signed number; panics otherwise.
+	/// If this is a signed immediate value, get it as a signed number; panics otherwise.
 	pub fn simm(&self) -> i64 {
 		match self {
-			Operand::UImm8(i) => (*i as i8) as i64,
+			Operand::SImm8(i)  => *i as i64,
+			Operand::SImm16(i) => *i as i64,
 			_ => panic!("not an immediate operand"),
 		}
 	}
