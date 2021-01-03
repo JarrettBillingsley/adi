@@ -217,7 +217,7 @@ impl Mos65xxInterpreter {
 		match desc.meta_op {
 			BRK => { todo!("BRK instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
 			UNK => { todo!("unknown instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
-			NOP => {}
+			NOP | DOP => {}
 			// handled by interpret_branch.
 			BCC | BCS | BEQ | BMI | BNE | BPL | BVC | BVS => {}
 			// handled (partly) by interpret_bb.

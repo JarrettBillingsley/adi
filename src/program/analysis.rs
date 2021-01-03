@@ -327,6 +327,9 @@ impl Program {
 				trace!("middle of an existing function... let's move on");
 			}
 			false
+		} else if self.segment_from_loc(loc).is_fake() {
+			trace!("skipping function at invalid location: {:?}", loc);
+			false
 		} else {
 			true
 		}
@@ -359,7 +362,10 @@ impl Program {
 			// because otherwise we'd be jumping to an invalid location.
 			let idx = match old_bb.last_instr_before(start) {
 				Some(idx) => idx,
-				None      => todo!("have to flag referrer as being invalid somehow"),
+				None      => {
+					// todo!("have to flag referrer as being invalid somehow"),
+					return;
+				}
 			};
 
 			// now we can split the existing BB...

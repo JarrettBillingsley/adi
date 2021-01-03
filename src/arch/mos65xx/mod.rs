@@ -156,6 +156,8 @@ pub enum MetaOp {
 	PHA, PHP,  PLA,  PLP,  ROLA, ROL,  RORA, ROR, RTI, RTS,
 	SBC, SEC,  SED,  SEI,  STA,  STX,  STY,  TAX, TAY, TSX,
 	TXA, TXS,  TYA,
+
+	DOP,
 }
 
 impl MetaOp {
@@ -181,7 +183,7 @@ impl MetaOp {
 					RTI  => "rti", RTS  => "rts", SBC  => "sbc", SEC  => "sec",
 					SED  => "sed", SEI  => "sei", STA  => "sta", STX  => "stx",
 					STY  => "sty", TAX  => "tax", TAY  => "tay", TSX  => "tsx",
-					TXA  => "txa", TXS  => "txs", TYA  => "tya",
+					TXA  => "txa", TXS  => "txs", TYA  => "tya", DOP  => "dop",
 				},
 
 			SyntaxFlavor::New =>
@@ -202,7 +204,7 @@ impl MetaOp {
 					RTI  => "rti", RTS  => "rts", SBC  => "sbc", SEC  => "set",
 					SED  => "set", SEI  => "set", STA  => "st",  STX  => "st",
 					STY  => "st",  TAX  => "mov", TAY  => "mov", TSX  => "mov",
-					TXA  => "mov", TXS  => "mov", TYA  => "mov",
+					TXA  => "mov", TXS  => "mov", TYA  => "mov", DOP  => "dop",
 				}
 		}
 	}
@@ -302,6 +304,7 @@ impl IDisassembler for Mos65xxDisassembler {
 		let desc = lookup_desc(img[0]);
 
 		if desc.meta_op == MetaOp::UNK {
+			log::trace!("ran into opcode 0x{:02X}", img[0]);
 			return Err(DisasError::unknown_instruction(va, loc));
 		}
 

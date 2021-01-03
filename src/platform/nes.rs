@@ -106,8 +106,8 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 		2 => {
 			let prg_rom_len = cart.prg_data.len();
 
-			// data must be a multiple of 16KB (0x8000)
-			if (prg_rom_len % 0x8000) != 0 {
+			// data must be a multiple of 16KB (0x4000)
+			if (prg_rom_len % 0x4000) != 0 {
 				return PlatformError::invalid_image(
 					format!("PRG ROM length (0x{:X}) not a multiple of 16KB", cart.prg_data.len()))
 			}
@@ -124,6 +124,31 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			assert_eq!(iter.remainder().len(), 0);
 
 			UXRom::new(all)
+		}
+
+		7 | 11 => {
+			let prg_rom_len = cart.prg_data.len();
+
+			// data must be a multiple of 32KB (0x8000)
+			if (prg_rom_len % 0x8000) != 0 {
+				return PlatformError::invalid_image(
+					format!("PRG ROM length (0x{:X}) not a multiple of 32KB", cart.prg_data.len()))
+			}
+
+			let mut all = Vec::new();
+			let mut iter = cart.prg_data.chunks_exact(0x8000);
+
+			while let Some(chunk) = iter.next() {
+				let prg_img = Image::new(img.name(), chunk);
+				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x8000, Some(prg_img));
+				all.push(seg_id);
+			}
+
+			assert_eq!(iter.remainder().len(), 0);
+
+			// TODO: this sets "orig_offs" to 0 every time.
+			let ctor = if cart.mapper == 7 { AXRom::new } else { AXRom::new_color_dreams };
+			ctor(all)
 		}
 
 		_ => return PlatformError::invalid_image(format!("mapper {} unsupported", cart.mapper)),
@@ -213,13 +238,15 @@ const NES_INT_VECS: &[StdName] = &[
 enum Mapper {
 	NRom,
 	UXRom,
+	AXRom,
 }
 
 impl Display for Mapper {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self {
-			Mapper::NRom(m) => m.fmt(f),
+			Mapper::NRom(m)  => m.fmt(f),
 			Mapper::UXRom(m) => m.fmt(f),
+			Mapper::AXRom(m) => m.fmt(f),
 		}
 	}
 }
@@ -437,6 +464,95 @@ impl IMapper for UXRom {
 		match va.0 {
 			0x8000 ..= 0xBFFF => format!("PRG{}", state.to_usize()),
 			0xC000 ..= 0xFFFF => format!("PRG{}", self.all.len() - 1),
+			_                 => "UNK".into(),
+		}
+	}
+
+	fn state_change(&self, _state: MmuState, va: VA) -> StateChange {
+		match va.0 {
+			0x8000 ..= 0xFFFF => StateChange::Dynamic,
+			_                 => StateChange::None,
+		}
+	}
+
+	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
+		match addr.0 {
+			0x8000 ..= 0xFFFF => {
+				MmuState::from_usize(val % self.all.len())
+			}
+			_ => old
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// iNes 7  (AXROM)
+// iNes 11 (Color Dreams)
+
+#[derive(Debug, Display)]
+#[display("{name}")]
+struct AXRom {
+	name: &'static str,
+	all:  Vec<SegId>,
+}
+
+impl AXRom {
+	fn new(all: Vec<SegId>) -> Mapper {
+		Self::_new("AXROM", all)
+	}
+
+	fn new_color_dreams(all: Vec<SegId>) -> Mapper {
+		Self::_new("Color Dreams", all)
+	}
+
+	fn _new(name: &'static str, all: Vec<SegId>) -> Mapper {
+		Self { name, all }.into()
+	}
+
+	fn seg_idx_for_loc(&self, seg: SegId) -> Option<usize> {
+		// TODO: linear... problem?
+		for (i, &s) in self.all.iter().enumerate() {
+			if s == seg {
+				return Some(i);
+			}
+		}
+
+		None
+	}
+
+	fn contains_seg(&self, seg: SegId) -> bool {
+		self.seg_idx_for_loc(seg).is_some()
+	}
+}
+
+impl IMapper for AXRom {
+	fn initial_state(&self) -> MmuState {
+		Default::default()
+	}
+
+	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+		let offs = va.0 & 0x7FFF;
+
+		match va.0 {
+			0x8000 ..= 0xFFFF => Some(Location::new(self.all[state.to_usize()], offs)),
+			_                 => None,
+		}
+	}
+
+	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
+		let offs = loc.offs & 0x7FFF;
+
+		// every segment has a virtual base of 0x8000.
+		if self.contains_seg(loc.seg) {
+			Some(VA(0x8000 + offs))
+		} else {
+			None
+		}
+	}
+
+	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
+		match va.0 {
+			0x8000 ..= 0xFFFF => format!("PRG{}", state.to_usize()),
 			_                 => "UNK".into(),
 		}
 	}
