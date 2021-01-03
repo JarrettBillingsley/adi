@@ -30,12 +30,15 @@ impl RefMap {
 
 	/// Add a reference from `src` to `dst`.
 	pub fn add(&mut self, src: Location, dst: Location) {
+		// invalid dst is fine
+		assert!(!src.is_invalid());
 		self._add_outref(src, dst);
 		self._add_inref(src, dst);
 	}
 
 	/// Remove a reference.
 	pub fn remove(&mut self, src: Location, dst: Location) {
+		assert!(!src.is_invalid());
 		self._remove_outref(src, dst);
 		self._remove_inref(src, dst);
 	}
@@ -65,6 +68,7 @@ impl RefMap {
 
 	/// Get all outrefs from a given location, or None if there aren't any.
 	pub fn get_outrefs(&self, src: Location) -> Option<&RefSet> {
+		assert!(!src.is_invalid());
 		self.outrefs.get(&src)
 	}
 

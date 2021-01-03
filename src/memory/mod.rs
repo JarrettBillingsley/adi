@@ -231,7 +231,11 @@ impl Memory {
 
 	/// Gets the VA which corresponds to this location, if any.
 	pub fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
-		self.mmu.va_for_loc(state, loc)
+		if loc.is_invalid() {
+			Some(loc.offs)
+		} else {
+			self.mmu.va_for_loc(state, loc)
+		}
 	}
 
 	/// Same as above, but infallible.

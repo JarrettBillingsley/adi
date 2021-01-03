@@ -53,7 +53,7 @@ pub struct Mos65xxInterpreter {
 	ret_stack: Vec<Location>,
 	// TODO: external PRG-RAM
 	ram:       Vec<Vu8>,
-	jmp_dst:   Location,
+	jmp_dst:   Option<Location>,
 	new_state: Option<(MmuState, ValueKind)>,
 }
 
@@ -72,8 +72,8 @@ impl Mos65xxInterpreter {
 			print:     Mos65xxPrinter::new(SyntaxFlavor::New),
 			ret_stack: Vec::new(),
 			ram:       vec![Vu8::ind(0); 0x800],
-			jmp_dst:   Location::invalid(0),
-			new_state:  None,
+			jmp_dst:   None,
+			new_state: None,
 		};
 		ret.reset();
 		ret
@@ -223,7 +223,7 @@ impl Mos65xxInterpreter {
 			// handled (partly) by interpret_bb.
 			JMP => {
 				if desc.addr_mode == AddrMode::IND {
-					self.jmp_dst = mem.loc_from_va(state, VA(addr as usize));
+					self.jmp_dst = Some(mem.loc_from_va(state, VA(addr as usize)));
 				}
 			}
 			RTI => self.pop_n(mem, state, 3),
@@ -239,7 +239,7 @@ impl Mos65xxInterpreter {
 				let lo = self.pop(mem, state).val as usize;
 				let hi = self.pop(mem, state).val as usize;
 				// yes, really, +1
-				self.jmp_dst = mem.loc_from_va(state, VA(((hi << 8) | lo) + 1));
+				self.jmp_dst = Some(mem.loc_from_va(state, VA(((hi << 8) | lo) + 1)));
 			}
 			PHA => self.push(mem, state, self.regs.A),
 			PHP => self.push(mem, state, Vu8::ind(self.regs.P)), // TODO: not really indeterminate
@@ -486,7 +486,7 @@ impl IInterpreter for Mos65xxInterpreter {
 		self.regs.reset();
 		self.ret_stack.clear();
 		self.ram.iter_mut().for_each(|x| *x = Vu8::ind(0));
-		self.jmp_dst = Location::invalid(0);
+		self.jmp_dst = None;
 		self.new_state = None;
 	}
 
@@ -514,11 +514,13 @@ impl IInterpreter for Mos65xxInterpreter {
 					self.regs.X.kind = ValueKind::Return;
 					self.regs.Y.kind = ValueKind::Return;
 
-					if self.jmp_dst == expected {
+					let jmp_dst = self.jmp_dst.expect("return instr has to set this");
+
+					if jmp_dst == expected {
 						Some(expected)
 					} else {
 						log::warn!("ret addr shenanigans at {:04X} (expected {}, found {})",
-							insts[last].va(), expected, self.jmp_dst);
+							insts[last].va(), expected, jmp_dst);
 						None
 					}
 				} else {
@@ -545,7 +547,7 @@ impl IInterpreter for Mos65xxInterpreter {
 			JumpTbl(_targets) => {
 				// TODO: check that jmp_dst is in the targets
 				log::warn!("halfassed jumptable implementation");
-				Some(self.jmp_dst)
+				self.jmp_dst
 			}
 		}
 	}
