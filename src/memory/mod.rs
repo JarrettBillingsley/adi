@@ -232,7 +232,7 @@ impl Memory {
 	/// Gets the VA which corresponds to this location, if any.
 	pub fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
 		if loc.is_invalid() {
-			Some(loc.offs)
+			Some(VA(loc.offs))
 		} else {
 			self.mmu.va_for_loc(state, loc)
 		}

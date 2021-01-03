@@ -16,21 +16,20 @@ use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChan
 /// Things that can be put onto an `Analyzer`'s analysis queue.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum AnalysisItem {
-	/// An unexplored function.
-	Func1stPass(Location, MmuState),
-	/// A function that needs to be analyzed more deeply.
-	Func2ndPass(FuncId),
+	/// Explore an unexplored function.
+	NewFunc(Location, MmuState),
+	/// This function changes MMU state somehow; we have to figure out how.
+	DetermineStateChange(FuncId),
+	/// Any MMU state changes have been propagated; now to resolve references outside the function.
+	FuncRefs(FuncId),
 	/// A jump table. The location points to the jump instruction.
 	JumpTable(Location),
-
-	DetermineStateChange(BBId),
-	ChangeState(BBId, MmuState),
 }
 
 impl Program {
 	/// Puts a location on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, state: MmuState, loc: Location) {
-		self.queue.push_back(AnalysisItem::Func1stPass(loc, state))
+		self.queue.push_back(AnalysisItem::NewFunc(loc, state))
 	}
 
 	/// Puts a location on the queue that should be the jump instruction for a jump table.
@@ -44,12 +43,10 @@ impl Program {
 		while let Some(item) = self.queue.pop_front() {
 			use AnalysisItem::*;
 			match item {
-				Func1stPass(loc, state) => self.func_first_pass(loc, state),
-				Func2ndPass(fid)        => self.func_second_pass(fid),
-				JumpTable(loc)          => self.analyze_jump_table(loc),
-
-				DetermineStateChange(bb) => self.determine_state_change(bb),
-				ChangeState(bb, state)   => self.change_state(bb, state),
+				NewFunc(loc, state)       => self.func_first_pass(loc, state),
+				FuncRefs(fid)             => self.func_refs(fid),
+				JumpTable(loc)            => self.analyze_jump_table(loc),
+				DetermineStateChange(fid) => self.determine_state_change(fid),
 			}
 		}
 	}
@@ -69,6 +66,7 @@ impl Program {
 		// and finding the boundaries of this function.
 		let mut func           = Function::new_inprogress();
 		let mut potential_bbs  = VecDeque::<Location>::new();
+		let mut changes_state  = false;
 		potential_bbs.push_back(loc);
 
 		'outer: while let Some(start) = potential_bbs.pop_front() {
@@ -99,6 +97,7 @@ impl Program {
 				end_loc = inst.next_loc();
 
 				if self.mem.inst_state_change(state, &inst).is_some() {
+					changes_state = true;
 					term = Some(BBTerm::BankChange(end_loc));
 					potential_bbs.push_back(inst.next_loc());
 					insts.push(inst);
@@ -193,14 +192,18 @@ impl Program {
 			let fid = self.new_func(func);
 
 			// finally, turn the crank by putting more work on the queue
-			self.queue.push_back(AnalysisItem::Func2ndPass(fid));
+			if changes_state {
+				self.queue.push_back(AnalysisItem::DetermineStateChange(fid));
+			} else {
+				self.queue.push_back(AnalysisItem::FuncRefs(fid));
+			}
 		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Second pass
+	// Refs pass
 
-	pub(crate) fn func_second_pass(&mut self, fid: FuncId) {
+	pub(crate) fn func_refs(&mut self, fid: FuncId) {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
@@ -209,7 +212,6 @@ impl Program {
 		let mut jumptables = Vec::new();
 		let mut funcs      = Vec::new();
 		let mut refs       = Vec::new();
-		let mut changes    = Vec::new();
 
 		for bb in func.all_bbs() {
 			let state = bb.mmu_state();
@@ -239,69 +241,64 @@ impl Program {
 			for &succ in bb.explicit_successors() {
 				refs.push((bb.term_loc(), succ));
 			}
-
-			if matches!(bb.term(), BBTerm::BankChange(..)) {
-				changes.push(bb.id());
-			}
 		}
 
 		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
 		for (f, s) in funcs.into_iter()    { self.enqueue_function(s, f); }
-		for bb in changes.into_iter() {
-			// TODO: make an enqueue method for this
-			self.queue.push_back(AnalysisItem::DetermineStateChange(bb))
-		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// MMU state change analysis
 
-	pub(crate) fn determine_state_change(&mut self, bbid: BBId) {
-		let func = self.get_func(bbid.func());
-		let bb = func.get_bb(bbid);
+	pub(crate) fn determine_state_change(&mut self, fid: FuncId) {
+		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin bb state change analysis at {}", bb.loc());
+		trace!("- begin func state change analysis at {}", func.start_loc());
 
-		// See if we get a new state...
-		let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
-			StateChange::None              => unreachable!(),
-			StateChange::Static(new_state) => Some(new_state),
-			StateChange::Dynamic           => self._dynamic_state_change(func, bb),
-		};
+		// 1. make a list of "new states" for each bb.
+		let mut new_states = BBStateChanger::new(func);
 
-		// Propagate that state change to the successors.
-		if let Some(new_state) = new_state {
-			log::trace!("  new state: {:?}", new_state);
-			let mut new_states = BBStateChanger::new(func);
+		// 2. gather all the BBs that change banks.
+		let changers = func.all_bbs()
+			.filter(|b| matches!(b.term(), BBTerm::BankChange(..)))
+			.collect::<Vec<_>>();
 
-			match new_states.propagate(self, bb, new_state) {
-				Ok(..) => {}
-				Err(..) => todo!("oh noooooooo"),
+		// 3. for each one, try a few techniques to determine the new state.
+		for bb in changers {
+			// it's possible this BB's state was changed on a previous iteration.
+			let state = new_states.new_state_for(bb);
+
+			// See if we get a new state...
+			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
+				StateChange::None              => unreachable!(),
+				StateChange::Static(new_state) => Some(new_state),
+				StateChange::Dynamic           => self._dynamic_state_change(func, bb, state),
+			};
+
+			// 4. now, propagate that state change to the successors.
+			if let Some(new_state) = new_state {
+				log::trace!("  new state: {:?}", new_state);
+				match new_states.propagate(self, bb, new_state) {
+					Ok(()) => {}
+					Err(()) => todo!("oh noooooooo"),
+				}
+
+			} else {
+				log::warn!("  could not determine new state");
 			}
-
-			for (bbid, new_state) in new_states.into_iter() {
-				self.queue.push_back(AnalysisItem::ChangeState(bbid, new_state))
-			}
-		} else {
-			log::warn!("  could not determine new state");
 		}
-	}
 
-	// ---------------------------------------------------------------------------------------------
-	// Changing the MMU state of a BB
+		// 5. Finally, apply the changes.
+		let func = self.get_func_mut(fid);
 
-	fn change_state(&mut self, bbid: BBId, new_state: MmuState) {
-		let func = self.get_func_mut(bbid.func());
-		let bb = func.get_bb_mut(bbid);
+		for (bbid, new_state) in new_states.into_iter() {
+			func.get_bb_mut(bbid).set_mmu_state(new_state);
+		}
 
-		trace!("------------------------------------------------------------------------");
-		trace!("- changing state of bb @ {} to {:?}", bb.loc(), new_state);
-
-		bb.set_mmu_state(new_state);
-
-		// TODO: resolve refs!
+		// 6. And set this function up for its refs pass.
+		self.queue.push_back(AnalysisItem::FuncRefs(fid));
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -388,8 +385,9 @@ impl Program {
 	}
 
 	// _func if/when we need it in the future
-	fn _dynamic_state_change(&self, _func: &Function, bb: &BasicBlock) -> Option<MmuState> {
-		match self._interp_bb(bb) {
+	fn _dynamic_state_change(&self, _func: &Function, bb: &BasicBlock, state: Option<MmuState>)
+	-> Option<MmuState> {
+		match self._interp_bb(bb, state) {
 			Some((new_state, kind)) => {
 				if kind == ValueKind::Immediate {
 					Some(new_state)
@@ -404,9 +402,9 @@ impl Program {
 		}
 	}
 
-	fn _interp_bb(&self, bb: &BasicBlock) -> Option<(MmuState, ValueKind)> {
+	fn _interp_bb(&self, bb: &BasicBlock, state: Option<MmuState>) -> Option<(MmuState, ValueKind)> {
 		let mut interpreter = self.plat.arch().new_interpreter();
-		interpreter.interpret_bb(&self.mem, bb, None);
+		interpreter.interpret_bb(&self.mem, bb, state);
 		interpreter.last_mmu_state_change()
 	}
 }
@@ -425,6 +423,10 @@ impl BBStateChanger {
 			new_states: vec![None;  num_bbs],
 			visited:    vec![false; num_bbs],
 		}
+	}
+
+	fn new_state_for(&self, bb: &BasicBlock) -> Option<MmuState> {
+		self.new_states[bb.id().idx()]
 	}
 
 	fn into_iter(self) -> impl Iterator<Item = (BBId, MmuState)> {
