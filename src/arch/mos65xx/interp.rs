@@ -127,7 +127,7 @@ impl Mos65xxInterpreter {
 	}
 
 	fn op_addr(&self, i: &Instruction) -> u16 {
-		if let Some(Operand::Mem16(a, ..)) = i.ops.first() { *a } else { panic!() }
+		if let Some(Operand::Mem(a, ..)) = i.ops.first() { *a as u16 } else { panic!() }
 	}
 
 	fn get_addr(&self, desc: InstDesc, state: MmuState, mem: &Memory, i: &Instruction) -> u16 {

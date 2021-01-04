@@ -11,7 +11,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
 	SegId, Location };
-use crate::program::{ Program, Instruction };
+use crate::program::{ Program, Instruction, Operand };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -311,14 +311,16 @@ impl IMmu for NesMmu {
 
 	fn inst_state_change(&self, state: MmuState, inst: &Instruction) -> StateChange {
 		for op in inst.ops() {
-			match op.access() {
-				acc if acc.writes_mem() => {
-					let va = op.addr();
-
-					match self.mapper.state_change(state, va) {
+			match op {
+				Operand::Mem(va, acc) if acc.writes_mem() => {
+					match self.mapper.state_change(state, VA(*va as usize)) {
 						StateChange::None => {},
-						something => return something,
+						something         => return something,
 					}
+				}
+
+				Operand::Indir(_, acc) if acc.writes_mem() => {
+					return StateChange::Maybe;
 				}
 				_ => {}
 			}

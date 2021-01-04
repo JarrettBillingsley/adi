@@ -8,46 +8,66 @@ use crate::memory::{ Location, VA };
 // MemAccess
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum AccessKind {
-	R,
-	W,
-	RW,
-}
-
 /// How a memory operand is accessed.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum MemAccess {
-	/// Doesn't access memory.
-	None,
-	/// A load, store, or RMW operation on that address directly.
-	Direct(AccessKind),
-	/// A load, store, or RMW operation using that address as part of an EA calculation.
-	Calculated(AccessKind),
-	/// Getting the address without accessing the data at it.
+	/// A read (load).
+	R,
+	/// A write (store).
+	W,
+	/// Read *and* write.
+	RW,
+	/// Getting the address without accessing the data at it. (e.g. `lea`, `la`)
 	Offset,
 	/// Used as the target of a jump or branch.
 	Target,
 }
 
 impl MemAccess {
+	/// Does this read memory?
 	pub fn reads_mem(&self) -> bool {
 		use MemAccess::*;
-		use AccessKind::*;
+		matches!(self, R | RW)
+	}
 
+	/// Does this write memory?
+	pub fn writes_mem(&self) -> bool {
+		use MemAccess::*;
+		matches!(self, W | RW)
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// MemIndir
+// ------------------------------------------------------------------------------------------------
+
+/// An indirect memory access.
+/// In all variants, the interpretation of the register is up to the architecture.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum MemIndir {
+	/// The register holds the address.
+	Reg        { reg: u64 },
+	/// The address is `reg + disp`.
+	RegDisp    { reg: u64, disp: i64 },
+	/// x86-style `reg1 + reg2*scale + disp`.
+	RegRegDisp { reg: u64, reg2: u64, scale: u64, disp: i64 },
+}
+
+impl MemIndir {
+	/// The base (first) register.
+	pub fn base_reg(&self) -> u64 {
+		use MemIndir::*;
 		match self {
-			Direct(R) | Direct(RW) | Calculated(R) | Calculated(RW) => true,
-			_ => false,
+			Reg { reg } | RegDisp { reg, .. } | RegRegDisp { reg, .. } => *reg
 		}
 	}
 
-	pub fn writes_mem(&self) -> bool {
-		use MemAccess::*;
-		use AccessKind::*;
-
+	/// The displacement. `MemIndir::Reg` has a displacement of 0.
+	pub fn disp(&self) -> i64 {
+		use MemIndir::*;
 		match self {
-			Direct(W) | Direct(RW) | Calculated(W) | Calculated(RW) => true,
-			_ => false,
+			Reg { .. } => 0,
+			RegDisp { disp, .. } | RegRegDisp { disp, .. } => *disp
 		}
 	}
 }
@@ -61,38 +81,51 @@ impl MemAccess {
 #[display("{:?}")]
 pub enum Operand {
 	/// A register. The interpretation of the number is up to the architecture.
-	Reg(usize),
-	/// An unsigned immediate that fits in 8 bits.
-	UImm8(u8),
-	/// A signed immediate that fits in 8 bits.
-	SImm8(i8),
-	/// An unsigned immediate that fits in 16 bits.
-	UImm16(u16),
-	/// A signed immediate that fits in 16 bits.
-	SImm16(i16),
-	/// A 16-bit memory address, along with what kind of access it is.
-	Mem16(u16, MemAccess),
+	Reg(u64),
+	/// An unsigned immediate.
+	UImm(u64),
+	/// A signed immediate.
+	SImm(i64),
+	/// A memory address, along with what kind of access it is.
+	Mem(u64, MemAccess),
+	/// An indirect memory access, where the address is not part of the instruction.
+	Indir(MemIndir, MemAccess),
 }
 
 impl Operand {
 	/// Does this refer to a register?
-	pub fn is_reg(&self) -> bool { matches!(self, Operand::Reg(..)) }
+	pub fn is_reg(&self) -> bool {
+		matches!(self, Operand::Reg(..))
+	}
 
 	/// Is this an immediate value (but NOT a memory address)?
-	pub fn is_imm(&self) -> bool { matches!(self, Operand::UImm8(..)) }
+	pub fn is_imm(&self) -> bool {
+		matches!(self, Operand::UImm(..) | Operand::SImm(..))
+	}
+
+	/// Does this operand access memory?
+	pub fn is_mem(&self) -> bool {
+		self.access().is_some()
+	}
+
+	/// Does this operand have a hard-coded address?
+	pub fn has_addr(&self) -> bool {
+		matches!(self, Operand::Mem(..))
+	}
 
 	/// How, if any way, does this operand access memory?
-	pub fn access(&self) -> MemAccess {
+	pub fn access(&self) -> Option<MemAccess> {
+		use Operand::*;
 		match self {
-			Operand::Mem16(_, a) => *a,
-			_                    => MemAccess::None,
+			Mem(_, a) | Indir(_, a) => Some(*a),
+			_                       => None,
 		}
 	}
 
 	/// If `access` is Some (`is_mem` returns true), get the address it refers to; panics otherwise.
 	pub fn addr(&self) -> VA {
 		match self {
-			Operand::Mem16(a, _) => VA(*a as usize),
+			Operand::Mem(a, _) => VA(*a as usize),
 			_ => panic!("not a memory operand"),
 		}
 	}
@@ -100,8 +133,7 @@ impl Operand {
 	/// If this is an unsigned immediate value, get it as an unsigned number; panics otherwise.
 	pub fn uimm(&self) -> u64 {
 		match self {
-			Operand::UImm8(i)  => *i as u64,
-			Operand::UImm16(i) => *i as u64,
+			Operand::UImm(i) => *i,
 			_ => panic!("not an immediate operand"),
 		}
 	}
@@ -109,15 +141,9 @@ impl Operand {
 	/// If this is a signed immediate value, get it as a signed number; panics otherwise.
 	pub fn simm(&self) -> i64 {
 		match self {
-			Operand::SImm8(i)  => *i as i64,
-			Operand::SImm16(i) => *i as i64,
+			Operand::SImm(i) => *i,
 			_ => panic!("not an immediate operand"),
 		}
-	}
-
-	/// Does this operand access memory?
-	pub fn is_mem(&self) -> bool {
-		self.access() != MemAccess::None
 	}
 }
 

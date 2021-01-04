@@ -10,7 +10,7 @@ use super::{
 
 use crate::memory::{ MmuState, SegId, Location, VA };
 use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter };
-use crate::program::{ MemAccess, AccessKind, Instruction };
+use crate::program::{ MemAccess, Instruction };
 
 #[test]
 fn opcode_lookup() {
@@ -88,19 +88,18 @@ fn disasm_success() {
 	use MetaOp::*;
 	use Operand::*;
 	use MemAccess::*;
-	use AccessKind::*;
 	use Opcode::*;
 
 	check_disas(0, &[BRK_IMP as u8],               BRK,  None);
-	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(UImm8(0xEF)));
-	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(Mem16(0x3456, Direct(R))));
-	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(Mem16(0x0033, Direct(W))));
-	check_disas(0, &[ASL_ZPG as u8, 0x99],         ASL,  Some(Mem16(0x0099, Direct(RW))));
-	check_disas(0, &[ROL_ABS as u8, 0xAA, 0x99],   ROL,  Some(Mem16(0x99AA, Direct(RW))));
-	check_disas(0, &[JMP_LAB as u8, 0xFE, 0xFF],   JMP,  Some(Mem16(0xFFFE, Target)));
-	check_disas(0, &[JMP_IND as u8, 0xFE, 0xFF],   JMP,  Some(Mem16(0xFFFE, Direct(R))));
-	check_disas(3, &[BCC_REL as u8, 10],           BCC,  Some(Mem16(3 + 10 + 2, Target)));
-	check_disas(8, &[BCC_REL as u8, (-5i8) as u8], BCC,  Some(Mem16(8 - 5 + 2,  Target)));
+	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(UImm(0xEF)));
+	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(Mem(0x3456, R)));
+	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(Mem(0x0033, W)));
+	check_disas(0, &[ASL_ZPG as u8, 0x99],         ASL,  Some(Mem(0x0099, RW)));
+	check_disas(0, &[ROL_ABS as u8, 0xAA, 0x99],   ROL,  Some(Mem(0x99AA, RW)));
+	check_disas(0, &[JMP_LAB as u8, 0xFE, 0xFF],   JMP,  Some(Mem(0xFFFE, Target)));
+	check_disas(0, &[JMP_IND as u8, 0xFE, 0xFF],   JMP,  Some(Mem(0xFFFE, R)));
+	check_disas(3, &[BCC_REL as u8, 10],           BCC,  Some(Mem(3 + 10 + 2, Target)));
+	check_disas(8, &[BCC_REL as u8, (-5i8) as u8], BCC,  Some(Mem(8 - 5 + 2,  Target)));
 }
 
 #[test]

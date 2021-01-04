@@ -2,8 +2,8 @@ use std::default::Default;
 use std::convert::TryInto;
 
 use crate::program::{
-	MemAccess,
 	Operand,
+	MemIndir,
 	Instruction,
 	InstructionKind,
 };
@@ -253,25 +253,16 @@ impl Default for Reg {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct InstDesc {
 	/// The actual opcode byte.
-	opcode:      Opcode,
+	opcode:    Opcode,
 	/// Which meta-op this is.
-	meta_op:     MetaOp,
+	meta_op:   MetaOp,
 	/// What addressing mode is used.
-	addr_mode:   AddrMode,
+	addr_mode: AddrMode,
 	/// Does this access memory, and how?
-	access:      MemAccess,
+	access:    Option<fn(u64) -> Operand>,
 }
 
 impl InstDesc {
-	const fn new(
-		opcode:      Opcode,
-		meta_op:     MetaOp,
-		addr_mode:   AddrMode,
-		access:      MemAccess,
-	) -> Self {
-		Self { opcode, meta_op, addr_mode, access, }
-	}
-
 	fn kind(&self) -> InstructionKind {
 		match self.opcode {
 			Opcode::INVALID                      => InstructionKind::Invalid,
@@ -329,7 +320,7 @@ impl IDisassembler for Mos65xxDisassembler {
 fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Option<VA>) {
 	if desc.addr_mode.op_bytes() > 0 {
 		use AddrMode::*;
-		if desc.access != MemAccess::None {
+		if let Some(operand_ctor) = desc.access {
 			let addr = match desc.addr_mode {
 				ZPG | ZPX | ZPY | IZX | IZY => img[0] as u16,
 
@@ -341,10 +332,10 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 			};
 
 			let target = if desc.kind().has_control_target() { Some(VA(addr as usize)) } else { None };
-			(Some(Operand::Mem16(addr, desc.access)), target)
+			(Some(operand_ctor(addr as u64)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
-			(Some(Operand::UImm8(img[0])), None)
+			(Some(Operand::UImm(img[0] as u64)), None)
 		}
 	} else {
 		(None, None)
@@ -366,7 +357,7 @@ impl Mos65xxPrinter {
 		Self { flavor }
 	}
 
-	fn fmt_imm(self, imm: u8) -> String {
+	fn fmt_imm(self, imm: u64) -> String {
 		match self.flavor {
 			SyntaxFlavor::Old =>
 				if imm < 0x10 { format!("#{}", imm) } else { format!("#${:X}", imm) },
@@ -375,7 +366,7 @@ impl Mos65xxPrinter {
 		}
 	}
 
-	fn fmt_addr(self, addr: u16, zpg: bool) -> String {
+	fn fmt_addr(self, addr: u64, zpg: bool) -> String {
 		match self.flavor {
 			SyntaxFlavor::Old =>
 				if zpg { format!("${:02X}", addr) } else { format!("${:04X}", addr) },
@@ -414,11 +405,17 @@ impl IPrinter for Mos65xxPrinter {
 		if i.ops.len() > 0 {
 			let operand = match i.ops.first().unwrap() {
 				Operand::Reg(..)       => unreachable!(),
-				Operand::UImm8(imm)    => self.fmt_imm(*imm),
-				Operand::Mem16(addr, ..) => {
+				Operand::UImm(imm)     => self.fmt_imm(*imm),
+				Operand::Mem(addr, ..) => {
 					match l.lookup(state, VA(*addr as usize)) {
 						Some(name) => name,
 						None       => self.fmt_addr(*addr, desc.addr_mode.is_zero_page()),
+					}
+				}
+				Operand::Indir(MemIndir::RegDisp { disp, .. }, ..) => {
+					match l.lookup(state, VA(*disp as usize)) {
+						Some(name) => name,
+						None       => self.fmt_addr(*disp as u64, desc.addr_mode.is_zero_page()),
 					}
 				}
 				_ => unreachable!()

@@ -36,11 +36,14 @@ pub enum StateChange {
 	/// No change.
 	None,
 
+	/// Might change it, but not enough info to know yet.
+	Maybe,
+
+	/// Definitely changes it, but in a way that cannot be statically determined.
+	Dynamic,
+
 	/// Changes it to the given state, statically determinable.
 	Static(MmuState),
-
-	/// Changes it, but in a way that cannot be statically determined.
-	Dynamic,
 }
 
 impl StateChange {

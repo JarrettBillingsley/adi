@@ -221,7 +221,7 @@ impl Program {
 				for i in 0 .. inst.num_ops() {
 					let op = inst.get_op(i);
 
-					if op.is_mem() {
+					if op.has_addr() {
 						let dst = self.loc_from_va(state, op.addr());
 						refs.push((src, dst));
 					}
@@ -273,8 +273,9 @@ impl Program {
 			// See if we get a new state...
 			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
 				StateChange::None              => unreachable!(),
-				StateChange::Static(new_state) => Some(new_state),
+				StateChange::Maybe             => None, // TODO: log this!
 				StateChange::Dynamic           => self._dynamic_state_change(func, bb, state),
+				StateChange::Static(new_state) => Some(new_state),
 			};
 
 			// 4. now, propagate that state change to the successors.
