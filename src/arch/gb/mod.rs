@@ -1,3 +1,11 @@
+//! The Game Boy architecture, known as LR35902 and (more recently) Sharp SM83.
+//!
+//! It is *NOT* a Z80. It's a cousin of the Z80, much closer to the Intel 8080.
+//! It borrows the `0xCB`-prefixed bit manipulation instructions from the Z80, but
+//! that's about it. No second register set, no index registers, no other prefixes.
+//! Also, it drops the IO ports/instructions entirely, and adds a "zero-page-like"
+//! addressing mode for accessing `0xFF00..0xFFFF` where memory-mapped IO resides.
+
 use crate::program::{
 	MemAccess,
 	MemIndir,

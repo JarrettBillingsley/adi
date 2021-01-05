@@ -1,3 +1,5 @@
+//! The architecture of the MOSTEK 6502 and derivatives (e.g. 6510).
+
 use std::default::Default;
 use std::convert::TryInto;
 
