@@ -10,6 +10,7 @@ use crate::program::{ Instruction, BasicBlock };
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
+pub mod gb;
 pub mod mos65xx;
 pub mod error;
 
@@ -19,10 +20,12 @@ pub use error::*;
 // IDisassembler
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBDisassembler };
 use mos65xx::{ Mos65xxDisassembler };
 
 #[enum_dispatch]
 pub enum Disassembler {
+	GBDisassembler,
 	Mos65xxDisassembler,
 }
 
@@ -138,10 +141,12 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 // IPrinter
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBPrinter };
 use mos65xx::{ Mos65xxPrinter };
 
 #[enum_dispatch]
 pub enum Printer {
+	GBPrinter,
 	Mos65xxPrinter,
 }
 
@@ -237,10 +242,12 @@ impl<T> Value<T> {
 // IInterpreter
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBInterpreter };
 use mos65xx::{ Mos65xxInterpreter };
 
 #[enum_dispatch]
 pub enum Interpreter {
+	GBInterpreter,
 	Mos65xxInterpreter,
 }
 
@@ -262,10 +269,12 @@ pub trait IInterpreter: Sized + Sync + Send {
 // IArchitecture
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBArchitecture };
 use mos65xx::{ Mos65xxArchitecture };
 
 #[enum_dispatch]
 pub enum Architecture {
+	GBArchitecture,
 	Mos65xxArchitecture,
 }
 
