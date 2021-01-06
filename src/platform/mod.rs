@@ -15,20 +15,25 @@ use crate::program::{ Program };
 // ------------------------------------------------------------------------------------------------
 
 mod nes;
+mod gb;
 
+pub use gb::{ GBMmu };
 pub use nes::{ NesMmu };
 
 // ------------------------------------------------------------------------------------------------
 // IPlatform
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBPlatform };
 use nes::{ NesPlatform };
 
 #[enum_dispatch]
 #[derive(Display)]
 pub enum Platform {
 	#[display("{0}")]
-	NesPlatform
+	GBPlatform,
+	#[display("{0}")]
+	NesPlatform,
 }
 
 #[enum_dispatch(Platform)]
@@ -40,11 +45,13 @@ pub trait IPlatform: Display + Sized {
 // ILoader
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBLoader };
 use nes::{ NesLoader };
 
 #[enum_dispatch]
 pub enum Loader {
-	NesLoader
+	GBLoader,
+	NesLoader,
 }
 
 #[enum_dispatch(Loader)]
@@ -56,6 +63,7 @@ pub trait ILoader: Sync + Send {
 lazy_static! {
 	static ref ALL_LOADERS: Vec<Loader> = {
 		vec![
+			GBLoader.into(),
 			NesLoader.into(),
 		]
 	};

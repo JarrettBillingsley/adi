@@ -6,7 +6,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::program::{ Instruction };
 use crate::memory::{ VA, Location };
-use crate::platform::{ NesMmu };
+use crate::platform::{ GBMmu, NesMmu };
 
 /// Newtype for MMU configuration state. The interpretation of this type is up to each
 /// implementor of `IMmu`.
@@ -26,6 +26,8 @@ impl MmuState {
 #[enum_dispatch]
 #[derive(Debug, Display)]
 pub enum Mmu {
+	#[display("{0}")]
+	GBMmu,
 	#[display("{0}")]
 	NesMmu,
 }

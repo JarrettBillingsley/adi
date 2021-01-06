@@ -15,7 +15,8 @@ use adi::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 	setup_panic();
-	test_nes()?;
+	test_gb()?;
+	//test_nes()?;
 	Ok(())
 }
 
@@ -39,6 +40,23 @@ fn setup_panic() {
 		.verbosity(PanicVerbosity::Full)
 	.install();
 }
+
+fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
+	let img = Image::new_from_file("tests/data/tetris.gb")?;
+	let mut prog = program_from_image(img)?;
+	println!("{}", prog);
+
+	let state = prog.initial_mmu_state();
+	prog.enqueue_function(state, prog.loc_from_name("RESET"));
+	prog.analyze_queue();
+
+	println!("found {} functions.", prog.all_funcs().count());
+	show_all_funcs(&prog);
+
+	Ok(())
+}
+
+// ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
