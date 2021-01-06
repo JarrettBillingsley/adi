@@ -116,6 +116,8 @@ impl Segment {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
 	pub fn new(id: SegId, name: &str, size: usize, image: Option<Image>) -> Self {
+		if let Some(ref image) = image { assert_eq!(size, image.len()); }
+
 		Self {
 			id,
 			name: name.into(),

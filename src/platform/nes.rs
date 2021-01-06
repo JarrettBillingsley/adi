@@ -291,7 +291,7 @@ impl IMmu for NesMmu {
 
 	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
 		match loc.seg {
-			seg if seg == self.ram => Some(VA(loc.offs & 0x7FFF)),
+			seg if seg == self.ram => Some(VA(loc.offs & 0x7FF)),
 			seg if seg == self.ppu => Some(VA(0x2000 + (loc.offs & 0x7))),
 			seg if seg == self.io  => Some(VA(0x4000 + (loc.offs & 0x1F))),
 			_                      => self.mapper.va_for_loc(state, loc),
