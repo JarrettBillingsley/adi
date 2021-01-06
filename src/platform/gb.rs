@@ -575,6 +575,10 @@ impl IMmu for GBMmu {
 					}
 				}
 
+				// TODO: indirect mem accesses *could* change state, but they're so
+				// ridiculously common in this arch that saying "Maybe!" on every one
+				// is prohibitive
+
 				_ => {}
 			}
 		}
