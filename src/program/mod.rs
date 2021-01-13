@@ -22,6 +22,7 @@ use crate::platform::{ Platform, IPlatform };
 
 mod analysis;
 mod bb;
+mod data;
 mod func;
 mod inst;
 mod namemap;
@@ -29,6 +30,7 @@ mod refmap;
 
 use analysis::*;
 pub use bb::*;
+// pub use data::*;
 pub use func::*;
 pub use inst::*;
 pub use namemap::*;
