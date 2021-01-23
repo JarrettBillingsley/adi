@@ -15,8 +15,8 @@ use adi::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 	setup_panic();
-	test_gb()?;
-	//test_nes()?;
+	// test_gb()?;
+	test_nes()?;
 	Ok(())
 }
 
@@ -60,7 +60,7 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// let's set it up
-	let img = Image::new_from_file("tests/data/battletoads.nes")?;
+	let img = Image::new_from_file("tests/data/smb.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -74,6 +74,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	show_all_funcs(&prog);
 	// show_prg0(&prog);
+
 	Ok(())
 }
 

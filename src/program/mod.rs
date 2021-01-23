@@ -30,7 +30,7 @@ mod refmap;
 
 use analysis::*;
 pub use bb::*;
-// pub use data::*;
+pub use data::*;
 pub use func::*;
 pub use inst::*;
 pub use namemap::*;
@@ -47,6 +47,7 @@ pub struct Program {
 	names: NameMap,
 	refs:  RefMap,
 	funcs: FuncIndex,
+	data:  DataIndex,
 	pub(crate) queue: VecDeque<AnalysisItem>,
 	print: Printer,
 }
@@ -67,6 +68,7 @@ impl Program {
 			names: NameMap::new(),
 			refs:  RefMap::new(),
 			funcs: FuncIndex::new(),
+			data:  DataIndex::new(),
 			queue: VecDeque::new(),
 		}
 	}
@@ -262,6 +264,51 @@ impl Program {
 		assert_ne!(new_func.num_bbs(), 0);
 
 		fid
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Data
+
+	delegate! {
+		to self.data {
+			/// Get the data item with the given ID.
+			#[call(get)]
+			pub fn get_data(&self, id: DataId) -> &DataItem;
+			/// Same as above, but mutable.
+			#[call(get_mut)]
+			pub fn get_data_mut(&mut self, id: DataId) -> &mut DataItem;
+		}
+	}
+
+	/// Iterator over all data items in the program, in arbitrary order.
+	pub fn all_data_items(&self) -> impl Iterator<Item = &DataItem> + '_ {
+		self.data.all_items().map(|(_, item)| item)
+	}
+
+	/// Gets the ID of the data item which starts at the given location, if one exists.
+	pub fn data_defined_at(&self, loc: Location) -> Option<&DataItem> {
+		let item = self.data_that_contains(loc)?;
+
+		if item.loc() == loc {
+			Some(item)
+		} else {
+			None
+		}
+	}
+
+	/// Gets the ID of the data item that contains the given location, or None if none does.
+	pub fn data_that_contains(&self, loc: Location) -> Option<&DataItem> {
+		let data_id = self.span_at_loc(loc).data()?;
+		Some(self.data.get(data_id))
+	}
+
+	/// Creates a new data item at the given location. Returns its ID.
+	pub fn new_data(&mut self, name: Option<&str>, loc: Location, ty: Type, size: usize)
+	-> DataId {
+		let did = self.data.new_item(name.map(|s| s.into()), loc, ty, size);
+		let seg = self.segment_from_loc_mut(loc);
+		seg.span_make_data(loc, size, did);
+		did
 	}
 
 	// ---------------------------------------------------------------------------------------------

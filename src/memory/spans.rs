@@ -4,7 +4,7 @@ use std::ops::{ Bound, RangeBounds };
 
 use parse_display::Display;
 
-use crate::program::BBId;
+use crate::program::{ DataId, BBId };
 use crate::memory::{ Location, SegId };
 
 // ------------------------------------------------------------------------------------------------
@@ -60,6 +60,15 @@ impl Span {
 			None
 		}
 	}
+
+	/// If this is a data span, the ID of the data item which owns it; None otherwise.
+	#[inline] pub fn data(&self) -> Option<DataId> {
+		if let SpanKind::Data(ret) = self.kind {
+			Some(ret)
+		} else {
+			None
+		}
+	}
 }
 
 impl RangeBounds<Location> for Span {
@@ -80,7 +89,7 @@ pub enum SpanKind {
 	/// Code (that is, a basic block of a function)
 	Code(BBId),
 	/// Data (anything that isn't code)
-	Data,
+	Data(DataId),
 
 	/// Currently being analyzed
 	Ana,

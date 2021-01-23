@@ -5,6 +5,7 @@ use std::fmt::{ Debug, };
 use parse_display::Display;
 
 use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind };
+use crate::program::{ DataId };
 
 // ------------------------------------------------------------------------------------------------
 // SegId
@@ -186,6 +187,16 @@ impl Segment {
 	/// Iterator over all spans in this segment, in order.
 	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
 		self.spans.iter()
+	}
+
+	pub(crate) fn span_make_data(&mut self, loc: Location, size: usize, id: DataId) {
+		let span = self.span_at_loc(loc);
+
+		assert!(span.is_unknown(), "defining a data item at non-empty location {}", loc);
+		assert!(span.len() >= size,
+			"defining a data item too big for its span (item is {} bytes, have {})", size, span.len());
+
+		self.spans.define(loc.offs, size, SpanKind::Data(id));
 	}
 
 	pub(crate) fn span_begin_analysis(&mut self, loc: Location) {

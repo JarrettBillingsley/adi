@@ -350,7 +350,7 @@ impl Program {
 			}
 
 			SpanKind::Ana => panic!("span at {} is somehow being analyzed", start),
-			SpanKind::Data => todo!("uh oh. what do we do here? {}", start),
+			SpanKind::Data(..) => todo!("uh oh. what do we do here? {}", start),
 		}
 	}
 
