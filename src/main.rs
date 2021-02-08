@@ -75,6 +75,11 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	show_all_funcs(&prog);
 	// show_prg0(&prog);
 
+	// let loc  = prog.loc_from_va(state, VA(0x821A));
+	// let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
+	// let size = ty.size().fixed();
+	// prog.new_data(Some("array"), loc, ty, size);
+
 	Ok(())
 }
 

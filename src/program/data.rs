@@ -215,15 +215,15 @@ pub enum Type {
 
 impl Type {
 	/// ctor for array types. Panics if `ty` is not a fixed-size type.
-	pub fn array(ty: Box<Type>, len: usize) -> Self {
+	pub fn array(ty: Type, len: usize) -> Self {
 		assert!(ty.size().is_fixed(), "arrays can only hold fixed-size values");
-		Self::Array(ArrayType { ty, len })
+		Self::Array(ArrayType { ty: Box::new(ty), len })
 	}
 
 	/// ctor for pointer types. Panics if `kind` is not a strict integer.
-	pub fn ptr(to: Box<Type>, kind: Box<Type>) -> Self {
+	pub fn ptr(to: Type, kind: Type) -> Self {
 		assert!(kind.is_strict_integer(), "pointers can only be integers");
-		Self::Ptr(PtrType { to, kind })
+		Self::Ptr(PtrType { to: Box::new(to), kind: Box::new(kind) })
 	}
 
 	// ---------------------------------------------------------------------------------------------
