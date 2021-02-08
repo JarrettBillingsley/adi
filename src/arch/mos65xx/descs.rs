@@ -16,7 +16,8 @@ use AddrMode::*;
 use MemAccess::*;
 use MemIndir::*;
 
-const OP_INVALID: InstDesc = InstDesc { opcode: INVALID, meta_op: UNK, addr_mode: IMP, access: None };
+const OP_INVALID: InstDesc =
+	InstDesc { opcode: INVALID, meta_op: UNK, addr_mode: IMP, access: None };
 
 fn direct_r (a: u64) -> Operand { Operand::Mem(a, R) }
 fn direct_w (a: u64) -> Operand { Operand::Mem(a, W) }

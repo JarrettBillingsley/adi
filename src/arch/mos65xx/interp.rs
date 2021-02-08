@@ -1,7 +1,7 @@
 
 use crate::arch::{ IInterpreter, IPrinter, Value, ValueKind };
 use crate::memory::{ Memory, ImageRead, Location, MmuState, VA };
-use crate::program::{ BasicBlock, BBTerm, Instruction };
+use crate::program::{ BasicBlock, BBTerm, Instruction, MemIndir };
 
 use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, lookup_desc };
 
@@ -127,7 +127,11 @@ impl Mos65xxInterpreter {
 	}
 
 	fn op_addr(&self, i: &Instruction) -> u16 {
-		if let Some(Operand::Mem(a, ..)) = i.ops.first() { *a as u16 } else { panic!() }
+		match i.ops.first() {
+			Some(Operand::Mem(a, ..)) => *a as u16,
+			Some(Operand::Indir(MemIndir::RegDisp { disp, .. }, ..)) => *disp as u16,
+			_ => panic!("bad operands: {:?}", i.ops),
+		}
 	}
 
 	fn get_addr(&self, desc: InstDesc, state: MmuState, mem: &Memory, i: &Instruction) -> u16 {

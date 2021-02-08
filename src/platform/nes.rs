@@ -11,7 +11,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
 	SegId, Location };
-use crate::program::{ Program, Instruction, Operand };
+use crate::program::{ Program, Instruction, Operand, MemIndir };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -311,6 +311,8 @@ impl IMmu for NesMmu {
 
 	fn inst_state_change(&self, state: MmuState, inst: &Instruction) -> StateChange {
 		for op in inst.ops() {
+			use MemIndir::RegDisp;
+
 			match op {
 				Operand::Mem(va, acc) if acc.writes_mem() => {
 					match self.mapper.state_change(state, VA(*va as usize)) {
@@ -319,8 +321,20 @@ impl IMmu for NesMmu {
 					}
 				}
 
-				Operand::Indir(_, acc) if acc.writes_mem() => {
-					return StateChange::Maybe;
+				Operand::Indir(RegDisp { disp, .. }, acc) if acc.writes_mem() => {
+					// these instructions use X or Y as the register, which means it's impossible to
+					// access memory more than 255 bytes past `disp`.
+					let disp = *disp as usize;
+
+					match self.mapper.state_change(state, VA(disp)) {
+						StateChange::None => {
+							match self.mapper.state_change(state, VA((disp).wrapping_add(255))) {
+								StateChange::None => {},
+								something         => return something,
+							}
+						}
+						something => return something,
+					}
 				}
 				_ => {}
 			}
