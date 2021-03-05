@@ -97,7 +97,7 @@ pub enum SpanKind {
 	Ana,
 	/// Code that's been analyzed, but not yet put into a real BB.
 	/// The data is just for use by the analysis algorithm.
-	AnaCode(usize),
+	AnaCode(BBId),
 }
 
 // ------------------------------------------------------------------------------------------------

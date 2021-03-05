@@ -4,6 +4,8 @@ use std::option;
 use std::slice;
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
+use generational_arena::{ Arena, Index };
+
 use crate::memory::{ Location, MmuState };
 use crate::program::{ Instruction, FuncId };
 
@@ -11,56 +13,14 @@ use crate::program::{ Instruction, FuncId };
 // BBId
 // ------------------------------------------------------------------------------------------------
 
-/// Uniquely identifies a `BasicBlock`. Consists of a `FuncId` and an index into that function's
-/// `bbs` vec.
+/// Uniquely identifies a `BasicBlock`.
 #[derive(PartialEq, Eq, Copy, Clone, Hash)]
-pub struct BBId(pub(super) FuncId, pub(super) usize);
-
-impl BBId {
-	/// The ID of the function which owns this.
-	pub fn func(&self) -> FuncId {
-		self.0
-	}
-
-	/// The index into the owning function.
-	pub fn idx(&self) -> usize {
-		self.1
-	}
-}
+pub struct BBId(pub Index);
 
 impl Debug for BBId {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "BBId({:?}, {})", self.0, self.1)
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// BBIdReal
-// ------------------------------------------------------------------------------------------------
-
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum BBIdReal {
-	InProgress(usize),
-	Complete(BBId),
-}
-
-impl BBIdReal {
-	fn bbid(&self) -> BBId {
-		use BBIdReal::*;
-		match self {
-			InProgress(..) => panic!("bbid() called on in-progress BB"),
-			Complete(bbid) => *bbid,
-		}
-	}
-}
-
-impl Debug for BBIdReal {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		use BBIdReal::*;
-		match self {
-			InProgress(idx) => write!(f, "(in progress: {})", idx),
-			Complete(bbid)  => write!(f, "{:?}", bbid),
-		}
+		let (index, generation) = self.0.into_raw_parts();
+		write!(f, "BBId({}, {})", index, generation)
 	}
 }
 
@@ -71,7 +31,8 @@ impl Debug for BBIdReal {
 /// A basic block within a function's control flow graph.
 #[derive(Debug)]
 pub struct BasicBlock {
-	id:               BBIdReal,
+	id:               BBId,
+	func:             Option<FuncId>,
 	pub(crate) loc:   Location,
 	pub(crate) term:  BBTerm,
 	pub(crate) insts: Vec<Instruction>,
@@ -79,27 +40,14 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
-	pub fn new(id: BBId, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	fn new(id: Index, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
 	-> Self {
 		assert_ne!(insts.len(), 0);
-		Self { id: BBIdReal::Complete(id), loc, term, insts, state }
-	}
-
-	pub fn new_inprogress(idx: usize, loc: Location, term: BBTerm, insts: Vec<Instruction>,
-	state: MmuState) -> Self {
-		assert_ne!(insts.len(), 0);
-		Self { id: BBIdReal::InProgress(idx), loc, term, insts, state }
-	}
-
-	pub fn mark_complete(&mut self, func: FuncId) {
-		match self.id {
-			BBIdReal::InProgress(idx) => self.id = BBIdReal::Complete(BBId(func, idx)),
-			_ => panic!(),
-		}
+		Self { id: BBId(id), func: None, loc, term, insts, state }
 	}
 
 	/// Its globally-unique id.
-	pub fn id      (&self) -> BBId     { self.id.bbid() }
+	pub fn id      (&self) -> BBId     { self.id }
 	/// Its globally-unique location.
 	pub fn loc     (&self) -> Location { self.loc }
 	/// Where its terminator (last instruction) is located.
@@ -123,9 +71,9 @@ impl BasicBlock {
 		self.term.explicit_successors()
 	}
 
-	/// The ID of the function which owns this.
+	/// The ID of the function which owns this. Panics if it has no owner.
 	pub fn func(&self) -> FuncId {
-		self.id().func()
+		self.func.unwrap()
 	}
 
 	pub fn inst_at_loc(&self, loc: Location) -> Option<&Instruction> {
@@ -151,31 +99,64 @@ impl BasicBlock {
 		unreachable!("should never be able to get here")
 	}
 
-	pub(crate) fn split(&mut self, new_idx: usize, inst_idx: usize, new_start: Location) -> Self {
-		let term_loc = self.insts[inst_idx].loc();
-
-		assert!(self.loc < new_start);
-		assert!(term_loc < new_start);
-
-		let new_insts = self.insts.split_off(inst_idx + 1);
-
-		let mut new = BasicBlock::new_inprogress(
-			new_idx,
-			new_start,
-			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
-			new_insts,
-			self.mmu_state(),
-		);
-
-		std::mem::swap(&mut self.term, &mut new.term);
-
-		log::trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
-
-		new
-	}
-
 	pub(crate) fn set_mmu_state(&mut self, new_state: MmuState) {
 		self.state = new_state;
+	}
+
+	pub(crate) fn mark_complete(&mut self, func: FuncId) {
+		assert!(self.func.is_none());
+		self.func = Some(func);
+	}
+
+	pub(crate) fn change_func(&mut self, new_func: FuncId) {
+		assert!(self.func.is_some());
+		self.func = Some(new_func);
+	}
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// BBIndex
+// ------------------------------------------------------------------------------------------------
+
+/// An index of all basic blocks in the program.
+#[derive(Default)]
+pub struct BBIndex {
+	arena: Arena<BasicBlock>,
+}
+
+impl BBIndex {
+	pub fn new() -> Self {
+		Self { arena: Arena::new() }
+	}
+
+	/// Creates a new BB and returns its ID.
+	pub fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	-> BBId {
+		BBId(self.arena.insert_with(move |id| {
+			BasicBlock::new(id, loc, term, insts, state)
+		}))
+	}
+
+	/// Gets the BB with the given ID.
+	pub fn get(&self, id: BBId) -> &BasicBlock {
+		self.arena.get(id.0).expect("stale BBId")
+	}
+
+	/// Same as above but mutable.
+	pub fn get_mut(&mut self, id: BBId) -> &mut BasicBlock {
+		self.arena.get_mut(id.0).expect("stale BBId")
+	}
+
+	/// Same as above but gets *two* mutable BBs.
+	pub fn get2_mut(&mut self, id1: BBId, id2: BBId) -> (&mut BasicBlock, &mut BasicBlock) {
+		let (bb1, bb2) = self.arena.get2_mut(id1.0, id2.0);
+		(bb1.expect("stale BBId 1"), bb2.expect("stale BBId 2"))
+	}
+
+	/// Iterator over all BBs in the index, in arbitrary order.
+	pub fn all_bbs(&self) -> impl Iterator<Item = (Index, &BasicBlock)> {
+		self.arena.iter()
 	}
 }
 

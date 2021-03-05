@@ -1,5 +1,5 @@
 
-use std::collections::VecDeque;
+use std::collections::{ VecDeque, HashMap };
 use std::iter::IntoIterator;
 
 use log::*;
@@ -65,7 +65,7 @@ impl Program {
 
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
-		let mut bbs            = Vec::<BasicBlock>::new();
+		let mut bbs            = Vec::<BBId>::new();
 		let mut potential_bbs  = VecDeque::<Location>::new();
 		let mut changes_state  = false;
 		potential_bbs.push_back(loc);
@@ -215,6 +215,8 @@ impl Program {
 		let mut refs       = Vec::new();
 
 		for bb in func.all_bbs() {
+			let bb = self.bbidx.get(bb);
+
 			let state = bb.mmu_state();
 			for inst in bb.insts() {
 				let src = inst.loc();
@@ -263,13 +265,17 @@ impl Program {
 
 		// 2. gather all the BBs that change banks.
 		let changers = func.all_bbs()
-			.filter(|b| matches!(b.term(), BBTerm::BankChange(..)))
+			.filter(|&b| {
+				let b = self.bbidx.get(b);
+				matches!(b.term(), BBTerm::BankChange(..))
+			})
 			.collect::<Vec<_>>();
 
 		// 3. for each one, try a few techniques to determine the new state.
-		for bb in changers {
+		for bbid in changers {
+			let bb = self.bbidx.get(bbid);
 			// it's possible this BB's state was changed on a previous iteration.
-			let state = new_states.new_state_for(bb);
+			let state = new_states.new_state_for(bbid);
 
 			// See if we get a new state...
 			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
@@ -282,7 +288,7 @@ impl Program {
 			// 4. now, propagate that state change to the successors.
 			if let Some(new_state) = new_state {
 				log::trace!("  new state: {:?}", new_state);
-				match new_states.propagate(self, bb, new_state) {
+				match new_states.propagate(self, bbid, new_state) {
 					Ok(()) => {}
 					Err(()) => todo!("oh noooooooo"),
 				}
@@ -293,10 +299,8 @@ impl Program {
 		}
 
 		// 5. Finally, apply the changes.
-		let func = self.get_func_mut(fid);
-
 		for (bbid, new_state) in new_states.into_iter() {
-			func.get_bb_mut(bbid).set_mmu_state(new_state);
+			self.bbidx.get_mut(bbid).set_mmu_state(new_state);
 		}
 
 		// 6. And set this function up for its refs pass.
@@ -316,7 +320,8 @@ impl Program {
 
 	fn _should_analyze_func(&self, loc: Location) -> bool {
 		if let Some(bbid) = self.span_at_loc(loc).bb() {
-			let orig_func_head = self.get_func(bbid.func()).head_id();
+			let bb = self.bbidx.get(bbid);
+			let orig_func_head = self.get_func(bb.func()).head_id();
 
 			if bbid == orig_func_head {
 				// the beginning of an already-analyzed function.
@@ -337,7 +342,7 @@ impl Program {
 		}
 	}
 
-	fn _should_analyze_bb(&mut self, bbs: &mut Vec<BasicBlock>, start: Location) -> bool {
+	fn _should_analyze_bb(&mut self, bbs: &mut Vec<BBId>, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
@@ -355,8 +360,8 @@ impl Program {
 		}
 	}
 
-	fn _check_split_bb(&mut self, bbs: &mut Vec<BasicBlock>, old_idx: usize, start: Location) {
-		let old_bb = &bbs[old_idx];
+	fn _check_split_bb(&mut self, bbs: &mut Vec<BBId>, old_id: BBId, start: Location) {
+		let old_bb = self.bbidx.get(old_id);
 
 		if start != old_bb.loc {
 			// ooh, now we have to split the existing bb.
@@ -371,31 +376,45 @@ impl Program {
 			};
 
 			// now we can split the existing BB...
-			let new_bb = self._split_bb(bbs, old_idx, idx, start);
+			let new_bb = self._split_bb(bbs, old_id, idx, start);
 
 			// ...and update the span map.
 			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb));
 		}
 	}
 
-	fn _new_bb(&self, bbs: &mut Vec<BasicBlock>, loc: Location, term: BBTerm,
-	insts: Vec<Instruction>, state: MmuState) -> usize {
+	fn _new_bb(&mut self, bbs: &mut Vec<BBId>, loc: Location, term: BBTerm, insts: Vec<Instruction>,
+	state: MmuState) -> BBId {
 		log::trace!("new bb loc: {}, term: {:?}", loc, term);
-		let id = bbs.len();
-		self._push_bb(bbs, BasicBlock::new_inprogress(id, loc, term, insts, state));
-		id
+		let bbid = self.bbidx.new_bb(loc, term, insts, state);
+		bbs.push(bbid);
+		bbid
 	}
 
-	fn _split_bb(&self, bbs: &mut Vec<BasicBlock>, idx: usize, inst_idx: usize, new_start: Location)
-	-> usize {
-		let new_idx = bbs.len();
-		let new = bbs[idx].split(new_idx, inst_idx, new_start);
-		self._push_bb(bbs, new)
-	}
+	// returns id of newly split-off BB
+	fn _split_bb(&mut self, bbs: &mut Vec<BBId>, old_id: BBId, inst_idx: usize, new_start: Location)
+	-> BBId {
+		let old = self.bbidx.get_mut(old_id);
+		let term_loc = old.insts[inst_idx].loc();
+		let state = old.mmu_state();
+		let insts = old.insts.split_off(inst_idx + 1);
 
-	fn _push_bb(&self, bbs: &mut Vec<BasicBlock>, bb: BasicBlock) -> usize {
-		bbs.push(bb);
-		bbs.len() - 1
+		assert!(old.loc < new_start);
+		assert!(term_loc < new_start);
+
+		let new_id = self.bbidx.new_bb(
+			new_start,
+			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
+			insts,
+			state
+		);
+
+		let (old, new) = self.bbidx.get2_mut(old_id, new_id);
+		std::mem::swap(&mut old.term, &mut new.term);
+
+		log::trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
+		bbs.push(new_id);
+		new_id
 	}
 
 	fn _va_to_loc_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> Location {
@@ -437,71 +456,78 @@ impl Program {
 	}
 }
 
+struct BBStateChangeStatus {
+	new_state: Option<MmuState>,
+	visited:   bool,
+}
+
 struct BBStateChanger {
-	ids:        Vec<BBId>,
-	new_states: Vec<Option<MmuState>>,
-	visited:    Vec<bool>,
+	map: HashMap<BBId, BBStateChangeStatus>,
 }
 
 impl BBStateChanger {
 	fn new(func: &Function) -> Self {
-		let num_bbs = func.num_bbs();
-		Self {
-			ids:        func.all_bbs().map(|bb| bb.id()).collect(),
-			new_states: vec![None;  num_bbs],
-			visited:    vec![false; num_bbs],
+		let mut map = HashMap::new();
+
+		for bbid in func.all_bbs() {
+			map.insert(bbid, BBStateChangeStatus { new_state: None, visited: false });
 		}
+
+		Self { map }
 	}
 
-	fn new_state_for(&self, bb: &BasicBlock) -> Option<MmuState> {
-		self.new_states[bb.id().idx()]
+	fn new_state_for(&self, bb: BBId) -> Option<MmuState> {
+		self.map[&bb].new_state
 	}
 
 	fn into_iter(self) -> impl Iterator<Item = (BBId, MmuState)> {
-		self.ids.into_iter().zip(self.new_states.into_iter())
-			.filter_map(|(bbid, ns)| ns.map(|ns| (bbid, ns)))
+		self.map.into_iter().filter_map(|(bbid, cs)| cs.new_state.map(|ns| (bbid, ns)))
 	}
 
-	fn propagate(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
+	fn propagate(&mut self, prog: &Program, from: BBId, new_state: MmuState)
 	-> Result<(), ()> {
-		self.visited.iter_mut().for_each(|v| *v = false);
+		self.map.iter_mut().for_each(|(_, cs)| cs.visited = false);
 		self._propagate_succ(prog, from, new_state)
 	}
 
-	fn _propagate_walk(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
+	fn _propagate_walk(&mut self, prog: &Program, from: BBId, new_state: MmuState)
 	-> Result<(), ()> {
-		let idx = from.id().idx();
-
-		if self.visited[idx] {
+		if self.map[&from].visited {
 			Ok(())
 		} else {
-			self.visited[idx] = true;
+			self.map.get_mut(&from).unwrap().visited = true;
 
-			if let Some(ns) = self.new_states[idx] {
+			if let Some(ns) = self.map[&from].new_state {
 				// uh oh. conflict
+				let loc = prog.get_bb(from).loc();
 				log::trace!("conflicting states @ {} (changing to both {:?} and {:?})",
-					from.loc(), ns, new_state);
+					loc, ns, new_state);
 				Err(())
 			} else {
-				self.new_states[idx] = Some(new_state);
+				self.map.get_mut(&from).unwrap().new_state = Some(new_state);
 				self._propagate_succ(prog, from, new_state)
 			}
 		}
 	}
 
-	fn _propagate_succ(&mut self, prog: &Program, from: &BasicBlock, new_state: MmuState)
+	fn _propagate_succ(&mut self, prog: &Program, from: BBId, new_state: MmuState)
 	-> Result<(), ()> {
-		let fid = from.id().func();
+		let from = prog.get_bb(from);
+		let fid = from.func();
 
 		for succ in from.successors() {
 			// TODO: having a "magical" invalid location value is annoying.
 			if succ.is_invalid() { continue; }
 
 			match prog.span_at_loc(*succ).bb() {
-				Some(succ) if succ.func() == fid => {
-					let succ = prog.get_func(fid).get_bb(succ);
-					if let Err(()) = self._propagate_walk(prog, succ, new_state) {
-						return Err(());
+				Some(succ_id) => {
+					let succ = prog.get_bb(succ_id);
+					if succ.func() == fid {
+						if let Err(()) = self._propagate_walk(prog, succ_id, new_state) {
+							return Err(());
+						}
+					} else {
+						// TODO: is there anything we need to do here??
 					}
 				}
 				_ => {

@@ -106,7 +106,7 @@ fn show_prg0(prog: &Program) {
 			}
 
 			SpanKind::Code(bbid) => {
-				let bb = prog.get_func(bbid.func()).get_bb(bbid);
+				let bb = prog.get_bb(bbid);
 				show_bb(&prog, bb);
 			}
 
@@ -133,7 +133,7 @@ fn show_func(prog: &Program, func: &Function) {
 	let name = prog.name_of_loc(func.start_loc());
 	println!("{}{}", "; Function ".green(), name.green());
 
-	let mut bbs = func.all_bbs().collect::<Vec<_>>();
+	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
 	bbs.sort_by(|a, b| a.loc().cmp(&b.loc()));
 
 	for bb in bbs {

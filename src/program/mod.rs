@@ -48,6 +48,7 @@ pub struct Program {
 	refs:  RefMap,
 	funcs: FuncIndex,
 	data:  DataIndex,
+	bbidx: BBIndex,
 	pub(crate) queue: VecDeque<AnalysisItem>,
 	print: Printer,
 }
@@ -69,6 +70,7 @@ impl Program {
 			refs:  RefMap::new(),
 			funcs: FuncIndex::new(),
 			data:  DataIndex::new(),
+			bbidx: BBIndex::new(),
 			queue: VecDeque::new(),
 		}
 	}
@@ -122,7 +124,7 @@ impl Program {
 
 		match span.kind() {
 			SpanKind::Code(bbid) => {
-				let bb = self.funcs.get(bbid.func()).get_bb(bbid);
+				let bb = self.bbidx.get(bbid);
 				Some(bb.mmu_state())
 			}
 			_ => None,
@@ -161,18 +163,29 @@ impl Program {
 		}
 	}
 
+	delegate! {
+		to self.bbidx {
+			/// Get the basic block with the given ID.
+			#[call(get)]
+			pub fn get_bb(&self, id: BBId) -> &BasicBlock;
+			/// Same as above, but mutable.
+			#[call(get_mut)]
+			pub fn get_bb_mut(&mut self, id: BBId) -> &mut BasicBlock;
+		}
+	}
+
 	pub fn interp(&self, func: FuncId, iters: usize) {
 		use crate::arch::IInterpreter;
 		let mut interpreter = self.plat.arch().new_interpreter();
 		let func = self.funcs.get(func);
 		let head = func.head_id();
 
-		let mut bb = func.get_bb(head);
+		let mut bb = self.bbidx.get(head);
 		for _ in 0 .. iters {
 			match interpreter.interpret_bb(&self.mem, bb, None) {
 				Some(loc) => {
 					if let Some(next_bb) = self.span_at_loc(loc).bb() {
-						bb = self.funcs.get(next_bb.func()).get_bb(next_bb);
+						bb = self.bbidx.get(next_bb);
 						continue;
 					} else {
 						println!("invalid next location: {}", loc);
@@ -206,26 +219,32 @@ impl Program {
 
 	/// Gets the ID of the function that contains the given location, or None if none does.
 	pub fn func_that_contains(&self, loc: Location) -> Option<&Function> {
-		let func_id = self.span_at_loc(loc).bb()?.func();
+		let bbid = self.span_at_loc(loc).bb()?;
+		let func_id = self.bbidx.get(bbid).func();
 		Some(self.funcs.get(func_id))
 	}
 
 	/// Calculate the predecessors of all BBs in this function. **This is an expensive
 	/// operation!**
 	pub fn func_bb_predecessors(&self, func: &Function) -> HashMap<BBId, SmallVec<[BBId; 4]>> {
-		let mut ret = func.bbs.iter().map(|bb|
-			(bb.id(), SmallVec::new())
+		let mut ret = func.bbs.iter().map(|&bbid|
+			(bbid, SmallVec::new())
 		).collect::<HashMap<_, _>>();
 
 		let fid = func.id();
 
 		for pred in func.bbs.iter() {
+			let pred = self.bbidx.get(*pred);
 			for loc in pred.successors() {
 				match self.span_at_loc(*loc).bb() {
-					Some(succ) if succ.func() == fid => {
-						ret.get_mut(&succ)
-							.expect("it's gotta be in there")
-							.push(pred.id());
+					Some(succ_id) => {
+						let succ = self.bbidx.get(succ_id);
+
+						if succ.func() == fid {
+							ret.get_mut(&succ_id)
+								.expect("it's gotta be in there")
+								.push(pred.id());
+						}
 					}
 					_ => {
 						// TODO: is there anything we need to do here??
@@ -247,15 +266,16 @@ impl Program {
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.
 	/// Returns the new function's globally unique ID.
-	pub(crate) fn new_func(&mut self, bbs: Vec<BasicBlock>) -> FuncId {
-		let loc = bbs[0].loc;
+	pub(crate) fn new_func(&mut self, bbs: Vec<BBId>) -> FuncId {
+		let loc = self.bbidx.get(bbs[0]).loc;
 		assert!(self.func_defined_at(loc).is_none(), "redefining a function at {}", loc);
 
-		let fid      = self.funcs.new_func(bbs);
+		let fid      = self.funcs.new_func(loc, bbs);
 		let new_func = self.funcs.get_mut(fid);
 		let seg      = self.mem.segment_from_loc_mut(loc);
 
-		for bb in &mut new_func.bbs {
+		for bb in &new_func.bbs {
+			let bb = self.bbidx.get_mut(*bb);
 			bb.mark_complete(fid);
 			let bb_loc = bb.loc();
 			seg.redefine_span(bb_loc, SpanKind::Code(bb.id()));
