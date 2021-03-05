@@ -6,7 +6,8 @@ use log::*;
 
 use crate::arch::{ IInterpreter, IArchitecture, ValueKind };
 use crate::platform::{ IPlatform };
-use crate::program::{ InstructionKind, Program, BBId, BasicBlock, BBTerm, Function, FuncId };
+use crate::program::{ Instruction, InstructionKind, Program, BBId, BasicBlock, BBTerm, Function,
+	FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange, SegId };
 
 // ------------------------------------------------------------------------------------------------
@@ -64,7 +65,7 @@ impl Program {
 
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
-		let mut func           = Function::new_inprogress();
+		let mut bbs            = Vec::<BasicBlock>::new();
 		let mut potential_bbs  = VecDeque::<Location>::new();
 		let mut changes_state  = false;
 		potential_bbs.push_back(loc);
@@ -73,7 +74,7 @@ impl Program {
 			trace!("evaluating potential bb at {}", start);
 
 			// ok. should we analyze this?
-			if !self._should_analyze_bb(&mut func, start) {
+			if !self._should_analyze_bb(&mut bbs, start) {
 				continue 'outer;
 			}
 
@@ -177,7 +178,7 @@ impl Program {
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let bb_id = func.new_bb(start, term.unwrap(), insts, state);
+				let bb_id = self._new_bb(&mut bbs, start, term.unwrap(), insts, state);
 				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id));
 			}
 		}
@@ -185,11 +186,11 @@ impl Program {
 		assert!(potential_bbs.is_empty());
 
 		// empty func can happen if the very first BB was NO GOOD and was canceled.
-		if func.bbs.len() == 0 {
+		if bbs.len() == 0 {
 			trace!("NOPE that's not a good function.");
 		} else {
-			// now, turn the proto func into a real boy!!
-			let fid = self.new_func(func);
+			// now, make the function!!
+			let fid = self.new_func(bbs);
 
 			// finally, turn the crank by putting more work on the queue
 			if changes_state {
@@ -336,7 +337,7 @@ impl Program {
 		}
 	}
 
-	fn _should_analyze_bb(&mut self, func: &mut Function, start: Location) -> bool {
+	fn _should_analyze_bb(&mut self, bbs: &mut Vec<BasicBlock>, start: Location) -> bool {
 		// let's look at this location to see what's here.
 		// we want a fresh, undefined region of memory.
 
@@ -345,7 +346,7 @@ impl Program {
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
 				// oh, we've already analyzed this. but maybe we have some work to do...
-				self._check_split_bb(func, id, start);
+				self._check_split_bb(bbs, id, start);
 				false
 			}
 
@@ -354,8 +355,8 @@ impl Program {
 		}
 	}
 
-	fn _check_split_bb(&mut self, func: &mut Function, old_idx: usize, start: Location) {
-		let old_bb = func.get_bb_by_idx(old_idx);
+	fn _check_split_bb(&mut self, bbs: &mut Vec<BasicBlock>, old_idx: usize, start: Location) {
+		let old_bb = &bbs[old_idx];
 
 		if start != old_bb.loc {
 			// ooh, now we have to split the existing bb.
@@ -370,11 +371,31 @@ impl Program {
 			};
 
 			// now we can split the existing BB...
-			let new_bb = func.split_bb(old_idx, idx, start);
+			let new_bb = self._split_bb(bbs, old_idx, idx, start);
 
 			// ...and update the span map.
 			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb));
 		}
+	}
+
+	fn _new_bb(&self, bbs: &mut Vec<BasicBlock>, loc: Location, term: BBTerm,
+	insts: Vec<Instruction>, state: MmuState) -> usize {
+		log::trace!("new bb loc: {}, term: {:?}", loc, term);
+		let id = bbs.len();
+		self._push_bb(bbs, BasicBlock::new_inprogress(id, loc, term, insts, state));
+		id
+	}
+
+	fn _split_bb(&self, bbs: &mut Vec<BasicBlock>, idx: usize, inst_idx: usize, new_start: Location)
+	-> usize {
+		let new_idx = bbs.len();
+		let new = bbs[idx].split(new_idx, inst_idx, new_start);
+		self._push_bb(bbs, new)
+	}
+
+	fn _push_bb(&self, bbs: &mut Vec<BasicBlock>, bb: BasicBlock) -> usize {
+		bbs.push(bb);
+		bbs.len() - 1
 	}
 
 	fn _va_to_loc_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> Location {

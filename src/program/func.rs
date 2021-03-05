@@ -3,8 +3,8 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
 
-use crate::memory::{ Location, MmuState };
-use crate::program::{ Instruction, BasicBlock, BBId, BBTerm };
+use crate::memory::{ Location };
+use crate::program::{ BasicBlock, BBId };
 
 // ------------------------------------------------------------------------------------------------
 // Function
@@ -21,41 +21,11 @@ impl Debug for FuncId {
 	}
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum FuncIdReal {
-	InProgress,
-	Complete(FuncId),
-}
-
-impl FuncIdReal {
-	fn id(&self) -> FuncId {
-		use FuncIdReal::*;
-		match self {
-			InProgress   => panic!("id() called on in-progress function"),
-			Complete(id) => *id,
-		}
-	}
-
-	fn is_in_progress(&self) -> bool {
-		matches!(self, FuncIdReal::InProgress)
-	}
-}
-
-impl Debug for FuncIdReal {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		use FuncIdReal::*;
-		match self {
-			InProgress   => write!(f, "(in progress)"),
-			Complete(id) => write!(f, "{:?}", id),
-		}
-	}
-}
-
 /// A single function.
 #[derive(Debug)]
 pub struct Function {
 	/// Its globally-unique identifier.
-	id: FuncIdReal,
+	id: FuncId,
 	name: Option<String>,
 
 	/// All its `BasicBlock`s. The first entry is the head (entry point). There is no implied
@@ -66,7 +36,7 @@ pub struct Function {
 impl Function {
 	/// Its globally-unique identifier.
 	pub fn id(&self) -> FuncId {
-		self.id.id()
+		self.id
 	}
 
 	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
@@ -100,68 +70,29 @@ impl Function {
 		self.bbs.len()
 	}
 
-	/// Get the `idx`'th basic block.
-	pub fn get_bb_by_idx(&self, idx: usize) -> &BasicBlock {
-		assert!(self.id.is_in_progress());
-		&self.bbs[idx]
-	}
-
-	/// Same as above but mutable.
-	pub fn get_bb_by_idx_mut(&mut self, idx: usize) -> &mut BasicBlock {
-		assert!(self.id.is_in_progress());
-		&mut self.bbs[idx]
-	}
-
 	/// Get the ID of the `idx`'th basic block.
 	pub fn get_bbid(&self, idx: usize) -> BBId {
 		assert!(idx < self.bbs.len());
-		BBId(self.id.id(), idx)
+		BBId(self.id, idx)
 	}
 
 	/// Get the basic block with the given ID.
 	pub fn get_bb(&self, id: BBId) -> &BasicBlock {
-		assert!(id.0 == self.id.id());
+		assert!(id.0 == self.id);
 		&self.bbs[id.1]
 	}
 
 	/// Same as above but mutable.
 	pub fn get_bb_mut(&mut self, id: BBId) -> &mut BasicBlock {
-		assert!(id.0 == self.id.id());
+		assert!(id.0 == self.id);
 		&mut self.bbs[id.1]
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// crate
 
-	pub(crate) fn new_inprogress() -> Self {
-		Self { id: FuncIdReal::InProgress, name: None, bbs: Vec::new() }
-	}
-
-	pub(crate) fn mark_complete(&mut self, id: FuncId) {
-		assert!(matches!(self.id, FuncIdReal::InProgress));
-		self.id = FuncIdReal::Complete(id);
-	}
-
-	pub(crate) fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>,
-	state: MmuState) -> usize {
-		log::trace!("new bb loc: {}, term: {:?}", loc, term);
-		let id = self.bbs.len();
-		self._push_bb(BasicBlock::new_inprogress(id, loc, term, insts, state));
-		id
-	}
-
-	pub(crate) fn split_bb(&mut self, idx: usize, inst_idx: usize, new_start: Location) -> usize {
-		let new_idx = self.bbs.len();
-		let new = self.bbs[idx].split(new_idx, inst_idx, new_start);
-		self._push_bb(new)
-	}
-
-	// ---------------------------------------------------------------------------------------------
-	// private
-
-	fn _push_bb(&mut self, bb: BasicBlock) -> usize {
-		self.bbs.push(bb);
-		self.bbs.len() - 1
+	pub(crate) fn new(id: FuncId, bbs: Vec<BasicBlock>) -> Self {
+		Self { id, name: None, bbs }
 	}
 }
 
@@ -182,11 +113,8 @@ impl FuncIndex {
 	}
 
 	/// Creates a new function and returns its ID.
-	pub fn new_func(&mut self, mut func: Function) -> FuncId {
-		FuncId(self.arena.insert_with(move |id| {
-			func.mark_complete(FuncId(id));
-			func
-		}))
+	pub fn new_func(&mut self, bbs: Vec<BasicBlock>) -> FuncId {
+		FuncId(self.arena.insert_with(move |id| { Function::new(FuncId(id), bbs) }))
 	}
 
 	/// Gets the function with the given ID.

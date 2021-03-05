@@ -247,13 +247,13 @@ impl Program {
 
 	/// Creates a new function at the given location, with basic blocks given by the iterator.
 	/// Returns the new function's globally unique ID.
-	pub(crate) fn new_func(&mut self, func: Function) -> FuncId {
-		let loc = func.start_loc();
+	pub(crate) fn new_func(&mut self, bbs: Vec<BasicBlock>) -> FuncId {
+		let loc = bbs[0].loc;
 		assert!(self.func_defined_at(loc).is_none(), "redefining a function at {}", loc);
 
-		let fid = self.funcs.new_func(func);
+		let fid      = self.funcs.new_func(bbs);
 		let new_func = self.funcs.get_mut(fid);
-		let seg = self.mem.segment_from_loc_mut(loc);
+		let seg      = self.mem.segment_from_loc_mut(loc);
 
 		for bb in &mut new_func.bbs {
 			bb.mark_complete(fid);
