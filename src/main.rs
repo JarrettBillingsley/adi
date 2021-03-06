@@ -117,7 +117,7 @@ fn show_prg0(prog: &Program) {
 
 fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by(|a, b| a.start_loc().cmp(&b.start_loc()));
+	funcs.sort_by(|a, b| a.loc().cmp(&b.loc()));
 
 	for func in funcs {
 		show_func(prog, func);
@@ -130,7 +130,7 @@ fn show_func(prog: &Program, func: &Function) {
 
 	println!("{}", divider);
 
-	let name = prog.name_of_loc(func.start_loc());
+	let name = prog.name_of_loc(func.loc());
 	println!("{}{}", "; Function ".green(), name.green());
 
 	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();

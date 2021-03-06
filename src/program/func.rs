@@ -51,7 +51,7 @@ impl Function {
 	}
 
 	/// Where the function starts.
-	pub fn start_loc(&self) -> Location {
+	pub fn loc(&self) -> Location {
 		self.loc
 	}
 

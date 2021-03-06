@@ -210,7 +210,7 @@ impl Program {
 	pub fn func_defined_at(&self, loc: Location) -> Option<&Function> {
 		let func = self.func_that_contains(loc)?;
 
-		if func.start_loc() == loc {
+		if func.loc() == loc {
 			Some(func)
 		} else {
 			None

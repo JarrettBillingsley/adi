@@ -14,7 +14,7 @@ use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChan
 // Analyzer
 // ------------------------------------------------------------------------------------------------
 
-/// Things that can be put onto an `Analyzer`'s analysis queue.
+/// Things that can be put onto the analysis queue.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum AnalysisItem {
 	/// Explore an unexplored function.
@@ -208,7 +208,7 @@ impl Program {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function 2nd pass at {}", func.start_loc());
+		trace!("- begin function 2nd pass at {}", func.loc());
 
 		let mut jumptables = Vec::new();
 		let mut funcs      = Vec::new();
@@ -258,7 +258,7 @@ impl Program {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin func state change analysis at {}", func.start_loc());
+		trace!("- begin func state change analysis at {}", func.loc());
 
 		// 1. make a list of "new states" for each bb.
 		let mut new_states = BBStateChanger::new(func);
