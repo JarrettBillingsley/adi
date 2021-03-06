@@ -11,7 +11,6 @@ use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, 
 
 use super::Reg;
 
-
 type Vu8 = Value<u8>;
 type Vu16 = Value<u16>;
 
@@ -120,7 +119,8 @@ impl Mos65xxInterpreter {
 					assert!(self.new_state.is_none());
 					self.new_state = Some((new_state, val.kind))
 				} else {
-					log::warn!("wuh oh. old {:?} new {:?} {:04X} {:02X}", state, new_state, addr, val.val);
+					log::warn!("wuh oh. old {:?} new {:?} {:04X} {:02X}",
+						state, new_state, addr, val.val);
 				}
 			}
 		}

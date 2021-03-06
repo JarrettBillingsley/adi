@@ -24,19 +24,19 @@ fn direct_w (a: u64) -> Operand { Operand::Mem(a, W) }
 fn direct_rw(a: u64) -> Operand { Operand::Mem(a, RW) }
 fn target   (a: u64) -> Operand { Operand::Mem(a, Target) }
 fn indirx_r (a: u64) -> Operand {
-	Operand::Indir(RegDisp { reg: Reg::X as u64, disp: a as i64 }, R)
+	Operand::Indir(RegDisp { reg: Reg::X as u8, disp: a as i64 }, R)
 }
 fn indirx_w (a: u64) -> Operand {
-	Operand::Indir(RegDisp { reg: Reg::X as u64, disp: a as i64 }, W)
+	Operand::Indir(RegDisp { reg: Reg::X as u8, disp: a as i64 }, W)
 }
 fn indirx_rw(a: u64) -> Operand {
-	Operand::Indir(RegDisp { reg: Reg::X as u64, disp: a as i64 }, RW)
+	Operand::Indir(RegDisp { reg: Reg::X as u8, disp: a as i64 }, RW)
 }
 fn indiry_r (a: u64) -> Operand {
-	Operand::Indir(RegDisp { reg: Reg::Y as u64, disp: a as i64 }, R)
+	Operand::Indir(RegDisp { reg: Reg::Y as u8, disp: a as i64 }, R)
 }
 fn indiry_w (a: u64) -> Operand {
-	Operand::Indir(RegDisp { reg: Reg::Y as u64, disp: a as i64 }, W)
+	Operand::Indir(RegDisp { reg: Reg::Y as u8, disp: a as i64 }, W)
 }
 
 const INST_DESCS: &[InstDesc] = &[

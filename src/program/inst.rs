@@ -46,16 +46,16 @@ impl MemAccess {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum MemIndir {
 	/// The register holds the address.
-	Reg        { reg: u64 },
+	Reg        { reg: u8 },
 	/// The address is `reg + disp`.
-	RegDisp    { reg: u64, disp: i64 },
+	RegDisp    { reg: u8, disp: i64 },
 	/// x86-style `reg1 + reg2*scale + disp`.
-	RegRegDisp { reg: u64, reg2: u64, scale: u64, disp: i64 },
+	RegRegDisp { reg: u8, reg2: u8, scale: u8, disp: i64 },
 }
 
 impl MemIndir {
 	/// The base (first) register.
-	pub fn base_reg(&self) -> u64 {
+	pub fn base_reg(&self) -> u8 {
 		use MemIndir::*;
 		match self {
 			Reg { reg } | RegDisp { reg, .. } | RegRegDisp { reg, .. } => *reg
@@ -195,7 +195,7 @@ impl InstructionKind {
 // ------------------------------------------------------------------------------------------------
 
 const MAX_OPS:   usize = 3; // ? we'll see
-const MAX_BYTES: usize = 3;
+const MAX_BYTES: usize = 8;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
