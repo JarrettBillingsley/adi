@@ -174,8 +174,8 @@ impl InstructionKind {
 	pub fn is_control(&self) -> bool {
 		use InstructionKind::*;
 		match self {
-			Call | Ret | Cond | Uncond | Indir | Halt  => true,
 			Other => false,
+			_     => true,
 		}
 	}
 
@@ -183,7 +183,7 @@ impl InstructionKind {
 		use InstructionKind::*;
 		match self {
 			Call | Cond | Uncond | Indir  => true,
-			Ret | Halt | Other => false,
+			Ret | Halt | Other            => false,
 		}
 	}
 }

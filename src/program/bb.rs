@@ -13,7 +13,7 @@ use crate::program::{ Instruction, FuncId };
 // BBId
 // ------------------------------------------------------------------------------------------------
 
-/// Uniquely identifies a `BasicBlock`.
+/// Uniquely identifies a [`BasicBlock`].
 #[derive(PartialEq, Eq, Copy, Clone, Hash)]
 pub struct BBId(pub Index);
 

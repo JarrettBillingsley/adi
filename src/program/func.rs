@@ -1,13 +1,14 @@
 
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
+use bitflags::bitflags;
 use generational_arena::{ Arena, Index };
 
 use crate::memory::{ Location };
 use crate::program::{ BBId };
 
 // ------------------------------------------------------------------------------------------------
-// Function
+// FuncId
 // ------------------------------------------------------------------------------------------------
 
 /// Newtype which uniquely identifies a `Function`.
@@ -21,17 +22,40 @@ impl Debug for FuncId {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+// FuncAttrs
+// ------------------------------------------------------------------------------------------------
+
+bitflags! {
+	/// Function attributes. Bits of semantic fluff that attach to functions and let us do more
+	/// advanced analysis.
+	pub struct FuncAttrs: u32 {
+		const NONE =        0;
+		const BANK_SWITCH = 1;
+		const JUMP_TABLE =  2;
+		const NO_RETURN =   4;
+		const MULTI_ENTRY = 8;
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Function
+// ------------------------------------------------------------------------------------------------
+
 /// A single function.
 #[derive(Debug)]
 pub struct Function {
 	/// Its globally-unique identifier.
-	id:   FuncId,
-	loc:  Location,
-	name: Option<String>,
-
+	id:    FuncId,
+	/// Where its head BB begins.
+	loc:   Location,
+	/// Its user-given name, if any.
+	name:  Option<String>,
+	/// Attributes.
+	attrs: FuncAttrs,
 	/// The IDs of its `BasicBlock`s. The first entry is the head (entry point). The rest have no
 	/// defined order.
-	pub(crate) bbs: Vec<BBId>, // [0] is head
+	pub(crate) bbs: Vec<BBId>,
 }
 
 impl Function {
@@ -66,11 +90,43 @@ impl Function {
 		self.bbs.len()
 	}
 
+	/// Get the attributes for this function.
+	pub fn attrs(&self) -> &FuncAttrs {
+		&self.attrs
+	}
+
+	/// Is this function used almost like an instruction to switch banks?
+	pub fn is_bank_switch(&self) -> bool {
+		self.attrs.contains(FuncAttrs::BANK_SWITCH)
+	}
+
+	/// Is this function used almost like an instruction to implement jump tables?
+	pub fn is_jump_table(&self) -> bool {
+		self.attrs.contains(FuncAttrs::JUMP_TABLE)
+	}
+
+	/// Does this function never return? Covers both infinite loop functions and those which
+	/// *do* return, but *not to the caller* (like some jump table functions).
+	pub fn is_no_return(&self) -> bool {
+		self.attrs.contains(FuncAttrs::NO_RETURN)
+	}
+
+	/// Does this function have more than one entry point?
+	pub fn is_multi_entry(&self) -> bool {
+		self.attrs.contains(FuncAttrs::MULTI_ENTRY)
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// crate
 
+	/// Ctor. The name defaults to `None` and the attributes default to `FuncAttrs::NONE`.
 	pub(crate) fn new(id: FuncId, loc: Location, bbs: Vec<BBId>) -> Self {
-		Self { id, loc, name: None, bbs }
+		Self { id, loc, name: None, attrs: FuncAttrs::NONE, bbs }
+	}
+
+	/// Mutable version of [`attrs`].
+	pub(crate) fn attrs_mut(&mut self) -> &mut FuncAttrs {
+		&mut self.attrs
 	}
 }
 

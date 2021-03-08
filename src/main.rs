@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Debug)?;
+	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	test_gb()?;
 	// test_nes()?;
@@ -134,6 +134,11 @@ fn show_func(prog: &Program, func: &Function) {
 
 	let name = prog.name_of_loc(func.loc());
 	println!("{}{}", "; Function ".green(), name.green());
+
+	if !func.attrs().is_empty() {
+		let attrs = format!("{:?}", func.attrs());
+		println!("{}{}", "; Attributes: ".green(), attrs.green());
+	}
 
 	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
 	bbs.sort_by(|a, b| a.loc().cmp(&b.loc()));

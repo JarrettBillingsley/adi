@@ -106,7 +106,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		SPImm     => { ops[0] = Indir(rdisp(Reg::SP, img[1] as i8 as i64), R); (1, None) }
 		AddHi(a)  => { ops[0] = Mem(0xFF00 + (img[1] as u64), a);              (1, None) }
 		IndHi(a)  => { ops[0] = Indir(rdisp(Reg::C, 0xFF00), a);               (1, None) }
-		Ind(r, a) => { ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);     (1, None) }
+		Ind(r, a) => { ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);      (1, None) }
 
 		LdHlImm   => {
 			ops[0] = Indir(MemIndir::Reg { reg: Reg::HL as u8 }, W);

@@ -7,7 +7,7 @@ use log::*;
 use crate::arch::{ IInterpreter, IArchitecture, ValueKind };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BasicBlock, BBTerm, Function,
-	FuncId };
+	FuncId, FuncAttrs };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange, SegId };
 
 // ------------------------------------------------------------------------------------------------
@@ -25,6 +25,8 @@ pub(crate) enum AnalysisItem {
 	FuncRefs(FuncId),
 	/// A jump table. The location points to the jump instruction.
 	JumpTable(Location),
+	/// Split an existing function (another function called/jumped to the given location).
+	SplitFunc(Location),
 }
 
 impl Program {
@@ -48,6 +50,7 @@ impl Program {
 				FuncRefs(fid)             => self.func_refs(fid),
 				JumpTable(loc)            => self.analyze_jump_table(loc),
 				DetermineStateChange(fid) => self.determine_state_change(fid),
+				SplitFunc(loc)            => self.split_func(loc),
 			}
 		}
 	}
@@ -177,8 +180,9 @@ impl Program {
 					term = Some(BBTerm::FallThru(end_loc));
 				}
 
-				let bb_id = self._new_bb(&mut bbs, start, term.unwrap(), insts, state);
-				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bb_id));
+				let bbid = self._new_bb(start, term.unwrap(), insts, state);
+				bbs.push(bbid);
+				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bbid));
 			}
 		}
 
@@ -315,9 +319,37 @@ impl Program {
 	}
 
 	// ---------------------------------------------------------------------------------------------
+	// Splitting previously-analyzed functions
+
+	pub(crate) fn split_func(&mut self, loc: Location) {
+		trace!("------------------------------------------------------------------------");
+		trace!("- begin function splitting at {}", loc);
+
+		let mut bbid = self.span_at_loc(loc).bb().expect("uh, there used to be a function here");
+		let fid = self.bbidx.get(bbid).func();
+
+		// first: do we have to split the target BB?
+		if let Some(new_bbid) = self._check_split_bb(bbid, loc, Some(fid)) {
+			// add it to the function's vec of BBs,
+			self.get_func_mut(fid).bbs.push(new_bbid);
+			// and now we're working with the new BB.
+			bbid = new_bbid;
+		}
+
+		// next: have to determine if we can split the function in two.
+		// TODO: idea: if this bb is the dominator of all its successors including descendants,
+		// then we can split the function at `loc`.
+		let _ = bbid; // shush!
+
+		// otherwise, give up and mark it a multi-entry function.
+		trace!(" marking function at {} as multi-entry", self.get_func(fid).loc());
+		self.get_func_mut(fid).attrs_mut().insert(FuncAttrs::MULTI_ENTRY);
+	}
+
+	// ---------------------------------------------------------------------------------------------
 	// Private
 
-	fn _should_analyze_func(&self, loc: Location) -> bool {
+	fn _should_analyze_func(&mut self, loc: Location) -> bool {
 		if let Some(bbid) = self.span_at_loc(loc).bb() {
 			let bb = self.bbidx.get(bbid);
 			let orig_func = self.get_func(bb.func());
@@ -326,11 +358,9 @@ impl Program {
 				// the beginning of an already-analyzed function.
 				trace!("oh, I've seen this one already. NEVERMIIIND");
 			} else {
-				// the middle of an already-analyzed function. TODO: maybe we should
-				// split the function, maybe not. Consider diamond-shaped CFG where we
-				// call a BB in the middle of one path. who owns the BBs at/after
-				// the rejoining point?
-				trace!("middle of an existing function... let's move on");
+				// the middle of an already-analyzed function.
+				trace!("middle of an existing function...");
+				self.queue.push_back(AnalysisItem::SplitFunc(loc));
 			}
 			false
 		} else if self.segment_from_loc(loc).is_fake() {
@@ -349,8 +379,11 @@ impl Program {
 			SpanKind::Unk         => true, // yeeeeee that's what we want
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
-				// oh, we've already analyzed this. but maybe we have some work to do...
-				self._check_split_bb(bbs, id, start);
+				// oh, we've already analyzed this. we might have to split it though.
+				if let Some(bbid) = self._check_split_bb(id, start, None) {
+					bbs.push(bbid);
+				}
+
 				false
 			}
 
@@ -359,7 +392,8 @@ impl Program {
 		}
 	}
 
-	fn _check_split_bb(&mut self, bbs: &mut Vec<BBId>, old_id: BBId, start: Location) {
+	fn _check_split_bb(&mut self, old_id: BBId, start: Location, owner: Option<FuncId>)
+	-> Option<BBId> {
 		let old_bb = self.bbidx.get(old_id);
 
 		if start != old_bb.loc {
@@ -369,30 +403,40 @@ impl Program {
 			let idx = match old_bb.last_instr_before(start) {
 				Some(idx) => idx,
 				None      => {
+					log::warn!("splitting bb at {} failed", old_bb.loc);
 					// todo!("have to flag referrer as being invalid somehow"),
-					return;
+					return None;
 				}
 			};
 
 			// now we can split the existing BB...
-			let new_bb = self._split_bb(bbs, old_id, idx, start);
+			let new_bb = self._split_bb(old_id, idx, start);
 
 			// ...and update the span map.
-			self.segment_from_loc_mut(start).split_span(start, SpanKind::AnaCode(new_bb));
+			let span_kind = if let Some(fid) = owner {
+				// (oh and, fill in the owner)
+				self.bbidx.get_mut(new_bb).mark_complete(fid);
+				SpanKind::Code(new_bb)
+			} else {
+				SpanKind::AnaCode(new_bb)
+			};
+
+			self.segment_from_loc_mut(start).split_span(start, span_kind);
+
+			Some(new_bb)
+		} else {
+			None
 		}
 	}
 
-	fn _new_bb(&mut self, bbs: &mut Vec<BBId>, loc: Location, term: BBTerm, insts: Vec<Instruction>,
-	state: MmuState) -> BBId {
+	fn _new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	-> BBId {
 		log::trace!("new bb loc: {}, term: {:?}", loc, term);
-		let bbid = self.bbidx.new_bb(loc, term, insts, state);
-		bbs.push(bbid);
-		bbid
+		self.bbidx.new_bb(loc, term, insts, state)
 	}
 
 	// returns id of newly split-off BB
-	fn _split_bb(&mut self, bbs: &mut Vec<BBId>, old_id: BBId, inst_idx: usize, new_start: Location)
-	-> BBId {
+	fn _split_bb(&mut self, old_id: BBId, inst_idx: usize, new_start: Location) -> BBId {
 		let old = self.bbidx.get_mut(old_id);
 		let term_loc = old.insts[inst_idx].loc();
 		let state = old.mmu_state();
@@ -412,7 +456,6 @@ impl Program {
 		std::mem::swap(&mut old.term, &mut new.term);
 
 		log::trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
-		bbs.push(new_id);
 		new_id
 	}
 
