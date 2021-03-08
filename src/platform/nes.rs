@@ -290,10 +290,10 @@ impl IMmu for NesMmu {
 	}
 
 	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg {
-			seg if seg == self.ram => Some(VA(loc.offs & 0x7FF)),
-			seg if seg == self.ppu => Some(VA(0x2000 + (loc.offs & 0x7))),
-			seg if seg == self.io  => Some(VA(0x4000 + (loc.offs & 0x1F))),
+		match loc.seg() {
+			seg if seg == self.ram => Some(VA(loc.offs() & 0x7FF)),
+			seg if seg == self.ppu => Some(VA(0x2000 + (loc.offs() & 0x7))),
+			seg if seg == self.io  => Some(VA(0x4000 + (loc.offs() & 0x1F))),
 			_                      => self.mapper.va_for_loc(state, loc),
 		}
 	}
@@ -393,8 +393,8 @@ impl IMapper for NRom {
 	}
 
 	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg {
-			seg if seg == self.prg0 => Some(VA(self.prg0_base + (loc.offs & self.prg0_mask))),
+		match loc.seg() {
+			seg if seg == self.prg0 => Some(VA(self.prg0_base + (loc.offs() & self.prg0_mask))),
 			_                       => None,
 		}
 	}
@@ -464,12 +464,12 @@ impl IMapper for UXRom {
 	}
 
 	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		let offs = loc.offs & 0x3FFF;
+		let offs = loc.offs() & 0x3FFF;
 
 		// every segment except the last has a virtual base of 0x8000.
-		if loc.seg == self.last {
+		if loc.seg() == self.last {
 			Some(VA(0xC000 + offs))
-		} else if self.contains_seg(loc.seg) {
+		} else if self.contains_seg(loc.seg()) {
 			Some(VA(0x8000 + offs))
 		} else {
 			None
@@ -556,10 +556,10 @@ impl IMapper for AXRom {
 	}
 
 	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		let offs = loc.offs & 0x7FFF;
+		let offs = loc.offs() & 0x7FFF;
 
 		// every segment has a virtual base of 0x8000.
-		if self.contains_seg(loc.seg) {
+		if self.contains_seg(loc.seg()) {
 			Some(VA(0x8000 + offs))
 		} else {
 			None

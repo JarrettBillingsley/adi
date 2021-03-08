@@ -460,8 +460,8 @@ impl Program {
 
 	fn _va_to_loc_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> Location {
 		match self.loc_for_va(state, va) {
-			Some(l) if l.seg == seg => l,
-			_                       => Location::invalid(va.0)
+			Some(l) if l.seg() == seg => l,
+			_                         => Location::invalid(va.0)
 		}
 	}
 

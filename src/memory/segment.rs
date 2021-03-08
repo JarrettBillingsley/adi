@@ -30,24 +30,44 @@ impl SegId {
 // ------------------------------------------------------------------------------------------------
 
 /// A unique location consisting of Segment ID and an offset within that Segment.
-#[derive(Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-#[display("{seg.0:04X}:{offs:08X}")]
-pub struct Location {
-	pub seg:  SegId,
-	pub offs: usize,
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct Location(u64);
+
+impl Display for Location {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{:04X}:{:08X}", self.seg().0, self.offs())
+	}
 }
+
+const SEG_MASK: u64  = 0xFFFF0000_00000000;
+const OFFS_MASK: u64 = 0x0000FFFF_FFFFFFFF;
+const SEG_SHIFT: usize = 48;
 
 impl Location {
 	pub fn new(seg: SegId, offs: usize) -> Self {
-		Self { seg, offs }
+		assert!((offs as u64) & SEG_MASK == 0);
+		Self(((seg.0 as u64) << SEG_SHIFT) | (offs as u64))
 	}
 
 	pub fn invalid(offs: usize) -> Self {
-		Self { seg: SegId::invalid(), offs }
+		Self::new(SegId::invalid(), offs)
 	}
 
 	pub fn is_invalid(&self) -> bool {
-		self.seg.is_invalid()
+		self.seg().is_invalid()
+	}
+
+	#[inline]
+	pub fn seg(&self) -> SegId { SegId((self.0 >> SEG_SHIFT) as u16) }
+
+	#[inline]
+	pub fn offs(&self) -> usize { (self.0 & OFFS_MASK) as usize }
+
+	#[inline]
+	fn set_offs(&mut self, new_offs: usize) {
+		assert!((new_offs as u64) & SEG_MASK == 0);
+		self.0 &= !OFFS_MASK;
+		self.0 |= new_offs as u64;
 	}
 }
 
@@ -60,26 +80,26 @@ impl Debug for Location {
 impl Add<usize> for Location {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
-		Location { offs: self.offs + other, ..self }
+		Location::new(self.seg(), self.offs() + other)
 	}
 }
 
 impl AddAssign<usize> for Location {
 	fn add_assign(&mut self, other: usize) {
-		self.offs += other;
+		self.set_offs(self.offs() + other);
 	}
 }
 
 impl Sub<usize> for Location {
 	type Output = Self;
 	fn sub(self, other: usize) -> Self {
-		Location { offs: self.offs - other, ..self }
+		Location::new(self.seg(), self.offs() - other)
 	}
 }
 
 impl SubAssign<usize> for Location {
 	fn sub_assign(&mut self, other: usize) {
-		self.offs -= other;
+		self.set_offs(self.offs() - other);
 	}
 }
 
@@ -142,8 +162,8 @@ impl Segment {
 
 	/// Whether this segment contains a given Location.
 	pub fn contains_loc(&self, loc: Location) -> bool {
-		if loc.seg == self.id {
-			assert!(loc.offs < self.size);
+		if loc.seg() == self.id {
+			assert!(loc.offs() < self.size);
 			true
 		} else {
 			false
@@ -180,8 +200,8 @@ impl Segment {
 
 	/// Get the span which contains the given location.
 	pub fn span_at_loc(&self, loc: Location) -> Span {
-		assert!(loc.seg == self.id);
-		self.spans.span_at(loc.offs)
+		assert!(loc.seg() == self.id);
+		self.spans.span_at(loc.offs())
 	}
 
 	/// Iterator over all spans in this segment, in order.
@@ -196,48 +216,48 @@ impl Segment {
 		assert!(span.len() >= size,
 			"defining a data item too big for its span (item is {} bytes, have {})", size, span.len());
 
-		self.spans.define(loc.offs, size, SpanKind::Data(id));
+		self.spans.define(loc.offs(), size, SpanKind::Data(id));
 	}
 
 	pub(crate) fn span_begin_analysis(&mut self, loc: Location) {
-		assert!(loc.seg == self.id);
+		assert!(loc.seg() == self.id);
 		// may not be at the beginning of a span, so have to use define
-		let end = self.spans.span_at(loc.offs).end();
-		self.spans.define(loc.offs, end.offs - loc.offs, SpanKind::Ana);
+		let end = self.spans.span_at(loc.offs()).end();
+		self.spans.define(loc.offs(), end.offs() - loc.offs(), SpanKind::Ana);
 	}
 
 	pub(crate) fn span_cancel_analysis(&mut self, loc: Location) {
-		assert!(loc.seg == self.id);
+		assert!(loc.seg() == self.id);
 		// may not be at the beginning of a span, so have to use define
-		self.spans.undefine(loc.offs);
+		self.spans.undefine(loc.offs());
 	}
 
 	pub(crate) fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
-		assert!(loc.seg == self.id);
-		assert!(self.spans.span_at(loc.offs).kind() == SpanKind::Ana);
-		self.spans.undefine(loc.offs);
-		self.spans.define(loc.offs, end.offs - loc.offs, kind);
+		assert!(loc.seg() == self.id);
+		assert!(self.spans.span_at(loc.offs()).kind() == SpanKind::Ana);
+		self.spans.undefine(loc.offs());
+		self.spans.define(loc.offs(), end.offs() - loc.offs(), kind);
 	}
 
 	/// Split the span that owns `loc` into two parts; the second part will be given `kind`.
 	/// Panics if the existing span is Unknown, or if the length of either part will be 0.
 	pub fn split_span(&mut self, loc: Location, kind: SpanKind) {
-		assert!(loc.seg == self.id);
-		let existing = self.spans.span_at(loc.offs);
+		assert!(loc.seg() == self.id);
+		let existing = self.spans.span_at(loc.offs());
 
-		assert!(existing.start().offs < loc.offs);
-		assert!(loc.offs < existing.end().offs);
+		assert!(existing.start().offs() < loc.offs());
+		assert!(loc.offs() < existing.end().offs());
 
-		let first_len = loc.offs - existing.start().offs;
-		let second_len = existing.end().offs - loc.offs;
+		let first_len = loc.offs() - existing.start().offs();
+		let second_len = existing.end().offs() - loc.offs();
 
-		self.spans.truncate(existing.start().offs, first_len);
-		self.spans.define(loc.offs, second_len, kind);
+		self.spans.truncate(existing.start().offs(), first_len);
+		self.spans.define(loc.offs(), second_len, kind);
 	}
 
 	pub fn redefine_span(&mut self, start: Location, kind: SpanKind) {
-		assert!(start.seg == self.id);
-		self.spans.redefine(start.offs, kind);
+		assert!(start.seg() == self.id);
+		self.spans.redefine(start.offs(), kind);
 	}
 
 	#[cfg(any(test, debug_assertions))]
@@ -259,14 +279,14 @@ impl Segment {
 		use Bound::*;
 
 		let start = match bounds.start_bound() {
-			Included(&Location { seg, offs }) => { assert!(seg == self.id); Included(offs) }
-			Excluded(&Location { seg, offs }) => { assert!(seg == self.id); Excluded(offs) }
+			Included(loc) => { assert!(loc.seg() == self.id); Included(loc.offs()) }
+			Excluded(loc) => { assert!(loc.seg() == self.id); Excluded(loc.offs()) }
 			Unbounded                         => Unbounded,
 		};
 
 		let end = match bounds.end_bound() {
-			Included(&Location { seg, offs }) => { assert!(seg == self.id); Included(offs) }
-			Excluded(&Location { seg, offs }) => { assert!(seg == self.id); Excluded(offs) }
+			Included(loc) => { assert!(loc.seg() == self.id); Included(loc.offs()) }
+			Excluded(loc) => { assert!(loc.seg() == self.id); Excluded(loc.offs()) }
 			Unbounded                         => Unbounded,
 		};
 
@@ -290,24 +310,24 @@ impl ImageSliceable<Location> for Segment {
 
 impl ImageRead<Location> for Segment {
 	fn read_u8(&self, idx: Location) -> u8      {
-		assert!(idx.seg == self.id);
-		self.read_u8(idx.offs)
+		assert!(idx.seg() == self.id);
+		self.read_u8(idx.offs())
 	}
 	fn read_le_u16(&self, idx: Location) -> u16 {
-		assert!(idx.seg == self.id);
-		self.read_le_u16(idx.offs)
+		assert!(idx.seg() == self.id);
+		self.read_le_u16(idx.offs())
 	}
 	fn read_be_u16(&self, idx: Location) -> u16 {
-		assert!(idx.seg == self.id);
-		self.read_be_u16(idx.offs)
+		assert!(idx.seg() == self.id);
+		self.read_be_u16(idx.offs())
 	}
 	fn read_le_u32(&self, idx: Location) -> u32 {
-		assert!(idx.seg == self.id);
-		self.read_le_u32(idx.offs)
+		assert!(idx.seg() == self.id);
+		self.read_le_u32(idx.offs())
 	}
 	fn read_be_u32(&self, idx: Location) -> u32 {
-		assert!(idx.seg == self.id);
-		self.read_be_u32(idx.offs)
+		assert!(idx.seg() == self.id);
+		self.read_be_u32(idx.offs())
 	}
 }
 

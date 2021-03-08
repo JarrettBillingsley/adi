@@ -538,12 +538,12 @@ impl IMmu for GBMmu {
 	}
 
 	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg {
-			seg if seg == self.vram => Some(VA(0x8000 + (loc.offs & 0x1FFF))),
-			seg if seg == self.ram  => Some(VA(0xC000 + (loc.offs & 0x1FFF))),
-			seg if seg == self.oam  => Some(VA(0xFE00 + (loc.offs % 0xA0))),
-			seg if seg == self.io   => Some(VA(0xFF00 + (loc.offs & 0x7F))),
-			seg if seg == self.hram => Some(VA(0xFF80 + (loc.offs & 0x7F))),
+		match loc.seg() {
+			seg if seg == self.vram => Some(VA(0x8000 + (loc.offs() & 0x1FFF))),
+			seg if seg == self.ram  => Some(VA(0xC000 + (loc.offs() & 0x1FFF))),
+			seg if seg == self.oam  => Some(VA(0xFE00 + (loc.offs() % 0xA0))),
+			seg if seg == self.io   => Some(VA(0xFF00 + (loc.offs() & 0x7F))),
+			seg if seg == self.hram => Some(VA(0xFF80 + (loc.offs() & 0x7F))),
 			seg if seg == self.ie   => Some(VA(0xFFFF)),
 			_                      => self.mbc.va_for_loc(state, loc),
 		}
@@ -649,9 +649,9 @@ impl IMbc for NoMbc {
 	}
 
 	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg {
-			seg if seg == self.rom0 => Some(VA(loc.offs & 0x3FFF)),
-			seg if seg == self.rom1 => Some(VA(0x4000 + (loc.offs & 0x3FFF))),
+		match loc.seg() {
+			seg if seg == self.rom0 => Some(VA(loc.offs() & 0x3FFF)),
+			seg if seg == self.rom1 => Some(VA(0x4000 + (loc.offs() & 0x3FFF))),
 			_                       => None,
 		}
 	}

@@ -103,12 +103,12 @@ impl SegCollection {
 
 	/// Given a location, get the Segment which contains it.
 	pub fn segment_from_loc(&self, loc: Location) -> &Segment {
-		&self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
+		&self.segs[*self.seg_id_map.get(&loc.seg()).unwrap()]
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
-		&mut self.segs[*self.seg_id_map.get(&loc.seg).unwrap()]
+		&mut self.segs[*self.seg_id_map.get(&loc.seg()).unwrap()]
 	}
 
 	/// Given a segment ID, get the Segment which it refers to.
@@ -232,7 +232,7 @@ impl Memory {
 	/// Gets the VA which corresponds to this location, if any.
 	pub fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
 		if loc.is_invalid() {
-			Some(VA(loc.offs))
+			Some(VA(loc.offs()))
 		} else {
 			self.mmu.va_for_loc(state, loc)
 		}

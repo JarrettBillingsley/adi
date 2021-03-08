@@ -393,7 +393,7 @@ impl Program {
 		if let Some(name) = self.names.name_for_loc(loc) {
 			name.into()
 		} else if loc.is_invalid() {
-			self.generate_name("UNRESOLVED", VA(loc.offs))
+			self.generate_name("UNRESOLVED", VA(loc.offs()))
 		} else {
 			// what span is here?
 			let seg = self.mem.segment_from_loc(loc);
@@ -411,7 +411,7 @@ impl Program {
 			} else if let Some(va) = self.va_for_loc(self.initial_mmu_state(), loc) {
 				va
 			} else {
-				VA(loc.offs) // can this ever happen?
+				VA(loc.offs()) // can this ever happen?
 			};
 
 			let start = seg.span_at_loc(loc).start();
