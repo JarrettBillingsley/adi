@@ -321,9 +321,9 @@ impl Program {
 	fn _should_analyze_func(&self, loc: Location) -> bool {
 		if let Some(bbid) = self.span_at_loc(loc).bb() {
 			let bb = self.bbidx.get(bbid);
-			let orig_func_head = self.get_func(bb.func()).head_id();
+			let orig_func = self.get_func(bb.func());
 
-			if bbid == orig_func_head {
+			if loc == orig_func.loc() {
 				// the beginning of an already-analyzed function.
 				trace!("oh, I've seen this one already. NEVERMIIIND");
 			} else {

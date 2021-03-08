@@ -15,8 +15,8 @@ use adi::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 	setup_panic();
-	// test_gb()?;
-	test_nes()?;
+	test_gb()?;
+	// test_nes()?;
 	Ok(())
 }
 
@@ -40,6 +40,8 @@ fn setup_panic() {
 		.verbosity(PanicVerbosity::Full)
 	.install();
 }
+
+// ------------------------------------------------------------------------------------------------
 
 fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	let img = Image::new_from_file("tests/data/tetris.gb")?;
