@@ -176,28 +176,28 @@ impl GBPrinter {
 
 impl IPrinter for GBPrinter {
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
-		self.lookup_desc(&i.bytes).mnemonic().into()
+		self.lookup_desc(i.bytes()).mnemonic().into()
 	}
 
 	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
 		use GBOpKind::*;
 
-		let desc = self.lookup_desc(&i.bytes);
+		let desc = self.lookup_desc(i.bytes());
 		let templ = desc.op_templ();
 
 		match desc.op_kind() {
 			Imp | Dummy | Ind(..) | IndHi(..) =>
 				templ.into(),
 			LdHlImm =>
-				templ.replace("{}", &self.fmt_uimm(i.ops.last().unwrap().uimm())),
+				templ.replace("{}", &self.fmt_uimm(i.ops().last().unwrap().uimm())),
 			UImm8 | Imm16 =>
-				templ.replace("{}", &self.fmt_uimm(i.ops.first().unwrap().uimm())),
+				templ.replace("{}", &self.fmt_uimm(i.ops().first().unwrap().uimm())),
 			SImm8 =>
-				templ.replace("{}", &self.fmt_simm(i.ops.first().unwrap().simm())),
+				templ.replace("{}", &self.fmt_simm(i.ops().first().unwrap().simm())),
 			Rel | Add16(..) | AddHi(..) =>
-				templ.replace("{}", &self.fmt_addr(i.ops.first().unwrap().addr().0 as u64, state, l)),
+				templ.replace("{}", &self.fmt_addr(i.ops().first().unwrap().addr().0 as u64, state, l)),
 			SPImm => {
-				let disp = match i.ops.first().unwrap() {
+				let disp = match i.ops().first().unwrap() {
 					Operand::Indir(MemIndir::RegDisp { disp, .. }, ..) => *disp,
 					_ => unreachable!(),
 				};

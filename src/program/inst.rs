@@ -1,6 +1,5 @@
 
 use parse_display::Display;
-use smallvec::{ SmallVec };
 
 use crate::memory::{ Location, VA };
 
@@ -90,6 +89,12 @@ pub enum Operand {
 	Mem(u64, MemAccess),
 	/// An indirect memory access, where the address is not part of the instruction.
 	Indir(MemIndir, MemAccess),
+}
+
+impl Default for Operand {
+	fn default() -> Self {
+		Operand::Reg(0)
+	}
 }
 
 impl Operand {
@@ -197,26 +202,35 @@ const MAX_BYTES: usize = 8;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
-	pub(crate) va:     VA,
-	pub(crate) loc:    Location,
-	pub(crate) kind:   InstructionKind,
-	pub(crate) target: Option<VA>,
-	pub(crate) ops:    SmallVec<[Operand; MAX_OPS]>,
-	pub(crate) bytes:  SmallVec<[u8; MAX_BYTES]>,
+	va:        VA,
+	loc:       Location,
+	kind:      InstructionKind,
+	target:    Option<VA>,
+	ops:       [Operand; MAX_OPS],
+	bytes:     [u8; MAX_BYTES],
+	num_ops:   u8,
+	num_bytes: u8,
 }
 
 impl Instruction {
 	#[allow(clippy::too_many_arguments)]
 	pub(crate) fn new(va: VA, loc: Location, kind: InstructionKind,
 	target: Option<VA>, ops: &[Operand], bytes: &[u8]) -> Self {
-		Self {
+		let mut ret = Self {
 			va,
 			loc,
 			kind,
 			target,
-			ops:   SmallVec::from_slice(ops),
-			bytes: SmallVec::from_slice(bytes)
-		}
+			ops:       Default::default(),
+			bytes:     Default::default(),
+			num_ops:   ops.len() as u8,
+			num_bytes: bytes.len() as u8,
+		};
+
+		ret.ops[..ops.len()].copy_from_slice(ops);
+		ret.bytes[..bytes.len()].copy_from_slice(bytes);
+
+		ret
 	}
 
 	/// Get Location.
@@ -228,15 +242,15 @@ impl Instruction {
 	/// Get the virtual address of the instruction after this one.
 	pub fn next_va(&self) -> VA { self.va() + self.size() }
 	/// Get size, in bytes.
-	pub fn size(&self) -> usize { self.bytes.len() }
+	pub fn size(&self) -> usize { self.num_bytes as usize }
 	/// The original bytes that this instruction was decoded from.
-	pub fn bytes(&self) -> &[u8] { &self.bytes }
+	pub fn bytes(&self) -> &[u8] { &self.bytes[..self.num_bytes as usize] }
 	/// How many operands it has.
-	pub fn num_ops(&self) -> usize { self.ops.len() }
+	pub fn num_ops(&self) -> usize { self.num_ops as usize }
 	/// Accessor for operands.
 	pub fn get_op(&self, i: usize) -> &Operand { &self.ops[i] }
 	/// The array of operands.
-	pub fn ops(&self) -> &[Operand] { &self.ops }
+	pub fn ops(&self) -> &[Operand] { &self.ops[..self.num_ops as usize] }
 	/// If this is a control instruction, the target address of that control, if it has one.
 	pub fn control_target(&self) -> Option<VA> { self.target }
 	/// What kind of instruction is this?

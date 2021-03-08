@@ -379,7 +379,7 @@ impl Mos65xxPrinter {
 
 impl IPrinter for Mos65xxPrinter {
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
-		let desc = lookup_desc(i.bytes[0]);
+		let desc = lookup_desc(i.bytes()[0]);
 		desc.meta_op.mnemonic(self.flavor).into()
 	}
 
@@ -387,7 +387,7 @@ impl IPrinter for Mos65xxPrinter {
 		use std::fmt::Write;
 
 		let mut ret = String::new();
-		let desc = lookup_desc(i.bytes[0]);
+		let desc = lookup_desc(i.bytes()[0]);
 
 		match desc.meta_op.extra_operands(self.flavor) {
 			[]       => {},
@@ -403,8 +403,8 @@ impl IPrinter for Mos65xxPrinter {
 			_        => unreachable!()
 		}
 
-		if i.ops.len() > 0 {
-			let operand = match i.ops.first().unwrap() {
+		if i.num_ops() > 0 {
+			let operand = match i.ops().first().unwrap() {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::UImm(imm)     => self.fmt_imm(*imm),
 				Operand::Mem(addr, ..) => {

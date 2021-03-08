@@ -127,10 +127,10 @@ impl Mos65xxInterpreter {
 	}
 
 	fn op_addr(&self, i: &Instruction) -> u16 {
-		match i.ops.first() {
+		match i.ops().first() {
 			Some(Operand::Mem(a, ..)) => *a as u16,
 			Some(Operand::Indir(MemIndir::RegDisp { disp, .. }, ..)) => *disp as u16,
-			_ => panic!("bad operands: {:?}", i.ops),
+			_ => panic!("bad operands: {:?}", i.ops()),
 		}
 	}
 
@@ -209,7 +209,7 @@ impl Mos65xxInterpreter {
 	}
 
 	fn interpret_inst(&mut self, state: MmuState, mem: &Memory, i: &Instruction) {
-		let desc = lookup_desc(i.bytes[0]);
+		let desc = lookup_desc(i.bytes()[0]);
 		let addr = self.get_addr(desc, state, mem, i);
 		let inst_display = self.print.fmt_instr(i, state, &crate::arch::NullLookup);
 
@@ -470,7 +470,7 @@ impl Mos65xxInterpreter {
 
 	fn should_branch(&mut self, i: &Instruction) -> bool {
 		use MetaOp::*;
-		let desc = lookup_desc(i.bytes[0]);
+		let desc = lookup_desc(i.bytes()[0]);
 		match desc.meta_op {
 			BCC => self.get_flag(Self::C) == 0,
 			BCS => self.get_flag(Self::C) == 1,
