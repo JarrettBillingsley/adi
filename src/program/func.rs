@@ -3,6 +3,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use bitflags::bitflags;
 use generational_arena::{ Arena, Index };
+use smallvec::{ SmallVec };
 
 use crate::memory::{ Location };
 use crate::program::{ BBId };
@@ -34,7 +35,6 @@ bitflags! {
 		const BANK_SWITCH = 1;
 		const JUMP_TABLE =  2;
 		const NO_RETURN =   4;
-		const MULTI_ENTRY = 8;
 	}
 }
 
@@ -56,6 +56,8 @@ pub struct Function {
 	/// The IDs of its `BasicBlock`s. The first entry is the head (entry point). The rest have no
 	/// defined order.
 	pub(crate) bbs: Vec<BBId>,
+	/// The IDs of the `BasicBlock`s which are entry points into this function.
+	pub(crate) entrypoints: SmallVec<[BBId; 2]>,
 }
 
 impl Function {
@@ -111,22 +113,46 @@ impl Function {
 		self.attrs.contains(FuncAttrs::NO_RETURN)
 	}
 
-	/// Does this function have more than one entry point?
-	pub fn is_multi_entry(&self) -> bool {
-		self.attrs.contains(FuncAttrs::MULTI_ENTRY)
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// crate
 
 	/// Ctor. The name defaults to `None` and the attributes default to `FuncAttrs::NONE`.
 	pub(crate) fn new(id: FuncId, loc: Location, bbs: Vec<BBId>) -> Self {
-		Self { id, loc, name: None, attrs: FuncAttrs::NONE, bbs }
+		let entrypoints = SmallVec::from_slice(&bbs[..1]);
+
+		Self {
+			id,
+			loc,
+			name: None,
+			attrs: FuncAttrs::NONE,
+			bbs,
+			entrypoints
+		}
 	}
 
 	/// Mutable version of [`attrs`].
 	pub(crate) fn attrs_mut(&mut self) -> &mut FuncAttrs {
 		&mut self.attrs
+	}
+
+	/// Adds another entry point. Must exist in `bbs` and must not exist in `entrypoints`.
+	pub(crate) fn add_entrypoint(&mut self, bbid: BBId) {
+		assert!(self.bbs.contains(&bbid));
+		assert!(!self.entrypoints.contains(&bbid));
+		self.entrypoints.push(bbid);
+	}
+
+	/// Tries to add another entry point. Must exist in `bbs`. If it is added successfully,
+	/// returns true; if it already exists in the `entrypoints`, returns false.
+	pub(crate) fn try_add_entrypoint(&mut self, bbid: BBId) -> bool {
+		assert!(self.bbs.contains(&bbid));
+
+		if !self.entrypoints.contains(&bbid) {
+			self.entrypoints.push(bbid);
+			true
+		} else {
+			false
+		}
 	}
 }
 

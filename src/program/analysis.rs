@@ -7,7 +7,7 @@ use log::*;
 use crate::arch::{ IInterpreter, IArchitecture, ValueKind };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BasicBlock, BBTerm, Function,
-	FuncId, FuncAttrs };
+	FuncId };
 use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange, SegId };
 
 // ------------------------------------------------------------------------------------------------
@@ -339,11 +339,10 @@ impl Program {
 		// next: have to determine if we can split the function in two.
 		// TODO: idea: if this bb is the dominator of all its successors including descendants,
 		// then we can split the function at `loc`.
-		let _ = bbid; // shush!
 
 		// otherwise, give up and mark it a multi-entry function.
 		trace!(" marking function at {} as multi-entry", self.get_func(fid).loc());
-		self.get_func_mut(fid).attrs_mut().insert(FuncAttrs::MULTI_ENTRY);
+		self.get_func_mut(fid).try_add_entrypoint(bbid);
 	}
 
 	// ---------------------------------------------------------------------------------------------
