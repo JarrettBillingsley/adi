@@ -107,7 +107,6 @@ impl Program {
 
 				use InstructionKind::*;
 				match inst.kind() {
-					Invalid => panic!("disas_all gave an invalid instruction"),
 					Other => {
 						insts.push(inst);
 						continue 'instloop;

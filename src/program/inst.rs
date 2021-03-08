@@ -154,8 +154,6 @@ impl Operand {
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 /// What rough class of instruction one is.
 pub enum InstructionKind {
-	/// Invalid instruction.
-	Invalid,
 	/// Something else.
 	Other,
 	/// Control flow - function call.
@@ -177,7 +175,7 @@ impl InstructionKind {
 		use InstructionKind::*;
 		match self {
 			Call | Ret | Cond | Uncond | Indir | Halt  => true,
-			Invalid | Other => false,
+			Other => false,
 		}
 	}
 
@@ -185,7 +183,7 @@ impl InstructionKind {
 		use InstructionKind::*;
 		match self {
 			Call | Cond | Uncond | Indir  => true,
-			Ret | Halt | Invalid | Other => false,
+			Ret | Halt | Other => false,
 		}
 	}
 }
@@ -245,8 +243,6 @@ impl Instruction {
 	pub fn kind(&self) -> InstructionKind { self.kind }
 	/// Is this a control flow instruction?
 	pub fn is_control(&self) -> bool { self.kind().is_control() }
-	/// Is this an invalid instruction?
-	pub fn is_invalid(&self) -> bool { matches!(self.kind(), InstructionKind::Invalid) }
 	/// Is this some other kind of instruction?
 	pub fn is_other(&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
 	/// Is this a function call?

@@ -267,7 +267,6 @@ pub struct InstDesc {
 impl InstDesc {
 	fn kind(&self) -> InstructionKind {
 		match self.opcode {
-			Opcode::INVALID                      => InstructionKind::Invalid,
 			Opcode::JSR_LAB                      => InstructionKind::Call,
 			Opcode::RTS_IMP | Opcode::RTI_IMP    => InstructionKind::Ret,
 			Opcode::JMP_LAB                      => InstructionKind::Uncond,
