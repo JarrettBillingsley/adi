@@ -46,11 +46,11 @@ impl Program {
 		while let Some(item) = self.queue.pop_front() {
 			use AnalysisItem::*;
 			match item {
-				NewFunc(ea, state)       => self.func_first_pass(ea, state),
+				NewFunc(ea, state)        => self.func_first_pass(ea, state),
 				FuncRefs(fid)             => self.func_refs(fid),
-				JumpTable(ea)            => self.analyze_jump_table(ea),
+				JumpTable(ea)             => self.analyze_jump_table(ea),
 				DetermineStateChange(fid) => self.determine_state_change(fid),
-				SplitFunc(ea)            => self.split_func(ea),
+				SplitFunc(ea)             => self.split_func(ea),
 			}
 		}
 	}
@@ -295,7 +295,6 @@ impl Program {
 					Ok(()) => {}
 					Err(()) => todo!("oh noooooooo"),
 				}
-
 			} else {
 				log::warn!("  could not determine new state");
 			}
@@ -391,8 +390,7 @@ impl Program {
 		}
 	}
 
-	fn _check_split_bb(&mut self, old_id: BBId, start: EA, owner: Option<FuncId>)
-	-> Option<BBId> {
+	fn _check_split_bb(&mut self, old_id: BBId, start: EA, owner: Option<FuncId>) -> Option<BBId> {
 		let old_bb = self.bbidx.get(old_id);
 
 		if start != old_bb.ea {
@@ -517,42 +515,55 @@ impl BBStateChanger {
 		Self { map }
 	}
 
-	fn new_state_for(&self, bb: BBId) -> Option<MmuState> {
-		self.map[&bb].new_state
-	}
-
 	fn into_iter(self) -> impl Iterator<Item = (BBId, MmuState)> {
 		self.map.into_iter().filter_map(|(bbid, cs)| cs.new_state.map(|ns| (bbid, ns)))
 	}
 
-	fn propagate(&mut self, prog: &Program, from: BBId, new_state: MmuState)
-	-> Result<(), ()> {
-		self.map.iter_mut().for_each(|(_, cs)| cs.visited = false);
-		self._propagate_succ(prog, from, new_state)
+	fn propagate(&mut self, prog: &Program, from: BBId, new_state: MmuState) -> Result<(), ()> {
+		self.clear_visited();
+		self.walk(prog, from, new_state)
 	}
 
-	fn _propagate_walk(&mut self, prog: &Program, from: BBId, new_state: MmuState)
-	-> Result<(), ()> {
-		if self.map[&from].visited {
+	fn clear_visited(&mut self) {
+		self.map.iter_mut().for_each(|(_, cs)| cs.visited = false);
+	}
+
+	fn is_visited(&self, bb: BBId) -> bool {
+		self.map[&bb].visited
+	}
+
+	fn mark_visited(&mut self, bb: BBId) {
+		self.map.get_mut(&bb).unwrap().visited = true;
+	}
+
+	fn new_state_for(&self, bb: BBId) -> Option<MmuState> {
+		self.map[&bb].new_state
+	}
+
+	fn set_new_state(&mut self, bb: BBId, new_state: MmuState) {
+		self.map.get_mut(&bb).unwrap().new_state = Some(new_state);
+	}
+
+	fn visit(&mut self, prog: &Program, from: BBId, new_state: MmuState) -> Result<(), ()> {
+		if self.is_visited(from) {
 			Ok(())
 		} else {
-			self.map.get_mut(&from).unwrap().visited = true;
+			self.mark_visited(from);
 
-			if let Some(ns) = self.map[&from].new_state {
+			if let Some(ns) = self.new_state_for(from) {
 				// uh oh. conflict
 				let ea = prog.get_bb(from).ea();
 				log::trace!("conflicting states @ {} (changing to both {:?} and {:?})",
 					ea, ns, new_state);
 				Err(())
 			} else {
-				self.map.get_mut(&from).unwrap().new_state = Some(new_state);
-				self._propagate_succ(prog, from, new_state)
+				self.set_new_state(from, new_state);
+				self.walk(prog, from, new_state)
 			}
 		}
 	}
 
-	fn _propagate_succ(&mut self, prog: &Program, from: BBId, new_state: MmuState)
-	-> Result<(), ()> {
+	fn walk(&mut self, prog: &Program, from: BBId, new_state: MmuState) -> Result<(), ()> {
 		let from = prog.get_bb(from);
 		let fid = from.func();
 
@@ -564,14 +575,14 @@ impl BBStateChanger {
 				Some(succ_id) => {
 					let succ = prog.get_bb(succ_id);
 					if succ.func() == fid {
-						if let Err(()) = self._propagate_walk(prog, succ_id, new_state) {
-							return Err(());
-						}
+						self.visit(prog, succ_id, new_state)?;
 					} else {
+						// successor BB belongs to another function...
 						// TODO: is there anything we need to do here??
 					}
 				}
 				_ => {
+					// no BB at the successor location...
 					// TODO: is there anything we need to do here??
 				}
 			}
