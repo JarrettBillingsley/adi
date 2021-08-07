@@ -113,6 +113,16 @@ impl Function {
 		self.attrs.contains(FuncAttrs::NO_RETURN)
 	}
 
+	/// Does this function have more than one entry point?
+	pub fn is_multi_entry(&self) -> bool {
+		self.entrypoints.len() > 1
+	}
+
+	/// All the BBs which serve as entry points into this function.
+	pub fn entrypoints(&self) -> &[BBId] {
+		&self.entrypoints
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// crate
 

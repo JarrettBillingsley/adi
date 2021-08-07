@@ -140,6 +140,18 @@ fn show_func(prog: &Program, func: &Function) {
 		println!("{}{}", "; Attributes: ".green(), attrs.green());
 	}
 
+	if func.is_multi_entry() {
+		let entrypoints = func.entrypoints().iter().map(|bbid| prog.get_bb(*bbid).loc());
+
+		print!("{}", "; Entry points: ".green());
+
+		for loc in entrypoints {
+			print!("{} ", prog.name_of_loc(loc).green());
+		}
+
+		println!();
+	}
+
 	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
 	bbs.sort_by(|a, b| a.loc().cmp(&b.loc()));
 
