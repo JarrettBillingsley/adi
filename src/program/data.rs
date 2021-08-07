@@ -4,7 +4,7 @@ use std::rc::{ Rc };
 
 use generational_arena::{ Arena, Index };
 
-use crate::memory::{ Location };
+use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
 // Misc
@@ -39,23 +39,23 @@ pub struct DataId(pub Index);
 pub struct DataItem {
 	id:    DataId,
 	name:  Option<String>,
-	loc:   Location,
+	ea:    EA,
 	ty:    Type,
 	size:  usize,
 	radix: Radix,
 }
 
 impl DataItem {
-	fn new(id: DataId, name: Option<String>, loc: Location, ty: Type, size: usize) -> Self {
-		Self { id, name, loc, ty, size, radix: Radix::Hex }
+	fn new(id: DataId, name: Option<String>, ea: EA, ty: Type, size: usize) -> Self {
+		Self { id, name, ea, ty, size, radix: Radix::Hex }
 	}
 
 	/// Its unique ID.
 	pub fn id(&self) -> DataId { self.id }
 	/// Its name.
 	pub fn name(&self) -> Option<&String> { self.name.as_ref() }
-	/// Its location.
-	pub fn loc(&self) -> Location { self.loc }
+	/// Its EA.
+	pub fn ea(&self) -> EA { self.ea }
 	/// Its type.
 	pub fn ty(&self) -> &Type { &self.ty }
 	/// Its size in bytes.
@@ -83,12 +83,12 @@ impl DataIndex {
 	}
 
 	/// Creates a new data item and returns its ID.
-	pub fn new_item(&mut self, name: Option<String>, loc: Location, ty: Type, size: usize)
+	pub fn new_item(&mut self, name: Option<String>, ea: EA, ty: Type, size: usize)
 	-> DataId {
 		assert!(size >= ty.min_size());
 
 		DataId(self.arena.insert_with(move |id| {
-			DataItem::new(DataId(id), name, loc, ty, size)
+			DataItem::new(DataId(id), name, ea, ty, size)
 		}))
 	}
 

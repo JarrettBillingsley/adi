@@ -8,7 +8,7 @@ use super::{
 	lookup_desc,
 };
 
-use crate::memory::{ MmuState, SegId, Location, VA };
+use crate::memory::{ MmuState, SegId, EA, VA };
 use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter };
 use crate::program::{ MemAccess, Instruction };
 
@@ -42,24 +42,24 @@ fn mnemonics() {
 } */
 
 fn disas(va: usize, img: &[u8]) -> Instruction {
-	let loc = Location::new(SegId(0), va);
+	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match Mos65xxDisassembler.disas_instr(img, state, va, loc) {
+	match Mos65xxDisassembler.disas_instr(img, state, va, ea) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
 	}
 }
 
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
-	let loc = Location::new(SegId(0), va);
+	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match Mos65xxDisassembler.disas_instr(img, state, va, loc) {
+	match Mos65xxDisassembler.disas_instr(img, state, va, ea) {
 		Ok(inst) => {
-			assert_eq!(inst.va, va);
+			assert_eq!(inst.va(), va);
 			assert_eq!(lookup_desc(inst.bytes()[0]).meta_op, meta_op);
-			assert_eq!(inst.ops.first().copied(), op);
+			assert_eq!(inst.ops().first().copied(), op);
 		}
 
 		Err(e) => {
@@ -69,10 +69,10 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 }
 
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
-	let loc = Location::new(SegId(0), va);
+	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match Mos65xxDisassembler.disas_instr(img, state, va, loc) {
+	match Mos65xxDisassembler.disas_instr(img, state, va, ea) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
 		}
@@ -147,7 +147,7 @@ fn disasm_range() {
 	let p = Mos65xxPrinter::new(SyntaxFlavor::Old);
 	let state = MmuState::default();
 	let dis: Disassembler = Mos65xxDisassembler.into();
-	let mut iter = dis.disas_all(code, state, VA(0), Location::new(SegId(0), 0));
+	let mut iter = dis.disas_all(code, state, VA(0), EA::new(SegId(0), 0));
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
@@ -167,14 +167,14 @@ fn disasm_range() {
 fn disasm_failure() {
 	use Opcode::*;
 
-	let loc = Location::new(SegId(0), 0);
+	let ea = EA::new(SegId(0), 0);
 
-	check_fail(0, &[],                    DisasError::out_of_bytes(VA(0), loc, 1, 0));
-	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VA(0), loc));
-	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VA(0), loc));
-	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VA(0), loc, 2, 1));
-	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VA(0), loc, 3, 1));
-	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VA(0), loc, 3, 2));
+	check_fail(0, &[],                    DisasError::out_of_bytes(VA(0), ea, 1, 0));
+	check_fail(0, &[0xCB],                DisasError::unknown_instruction(VA(0), ea));
+	check_fail(0, &[0xFF],                DisasError::unknown_instruction(VA(0), ea));
+	check_fail(0, &[LDA_IMM as u8],       DisasError::out_of_bytes(VA(0), ea, 2, 1));
+	check_fail(0, &[JMP_LAB as u8],       DisasError::out_of_bytes(VA(0), ea, 3, 1));
+	check_fail(0, &[JMP_LAB as u8, 0x00], DisasError::out_of_bytes(VA(0), ea, 3, 2));
 }
 
 struct DummyLookup;

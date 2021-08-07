@@ -1,7 +1,7 @@
 
 use parse_display::Display;
 
-use crate::memory::{ Location, VA };
+use crate::memory::{ EA, VA };
 
 // ------------------------------------------------------------------------------------------------
 // MemAccess
@@ -203,7 +203,7 @@ const MAX_BYTES: usize = 8;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
 	va:        VA,
-	loc:       Location,
+	ea:        EA,
 	kind:      InstructionKind,
 	target:    Option<VA>,
 	ops:       [Operand; MAX_OPS],
@@ -214,11 +214,11 @@ pub struct Instruction {
 
 impl Instruction {
 	#[allow(clippy::too_many_arguments)]
-	pub(crate) fn new(va: VA, loc: Location, kind: InstructionKind,
+	pub(crate) fn new(va: VA, ea: EA, kind: InstructionKind,
 	target: Option<VA>, ops: &[Operand], bytes: &[u8]) -> Self {
 		let mut ret = Self {
 			va,
-			loc,
+			ea,
 			kind,
 			target,
 			ops:       Default::default(),
@@ -233,12 +233,12 @@ impl Instruction {
 		ret
 	}
 
-	/// Get Location.
-	pub fn loc(&self) -> Location { self.loc }
+	/// Get EA.
+	pub fn ea(&self) -> EA { self.ea }
 	/// Get virtual address.
 	pub fn va(&self) -> VA { self.va }
-	/// Get the Location of the instruction after this one.
-	pub fn next_loc(&self) -> Location { self.loc() + self.size() }
+	/// Get the EA of the instruction after this one.
+	pub fn next_ea(&self) -> EA { self.ea() + self.size() }
 	/// Get the virtual address of the instruction after this one.
 	pub fn next_va(&self) -> VA { self.va() + self.size() }
 	/// Get size, in bytes.

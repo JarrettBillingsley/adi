@@ -17,7 +17,7 @@ use crate::arch::{
 	INameLookup,
 	IArchitecture,
 };
-use crate::memory::{ MmuState, Endian, Location, VA };
+use crate::memory::{ MmuState, Endian, EA, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -285,11 +285,11 @@ impl InstDesc {
 pub struct Mos65xxDisassembler;
 
 impl IDisassembler for Mos65xxDisassembler {
-	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, loc: Location)
+	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, ea: EA)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {
-			return Err(DisasError::out_of_bytes(va, loc, 1, 0));
+			return Err(DisasError::out_of_bytes(va, ea, 1, 0));
 		}
 
 		// is the opcode OK?
@@ -297,14 +297,14 @@ impl IDisassembler for Mos65xxDisassembler {
 
 		if desc.meta_op == MetaOp::UNK {
 			log::trace!("ran into opcode 0x{:02X}", img[0]);
-			return Err(DisasError::unknown_instruction(va, loc));
+			return Err(DisasError::unknown_instruction(va, ea));
 		}
 
 		// do we have enough bytes for the operand?
 		let inst_size = desc.addr_mode.op_bytes() + 1;
 
 		if inst_size > img.len() {
-			return Err(DisasError::out_of_bytes(va, loc, inst_size, img.len()));
+			return Err(DisasError::out_of_bytes(va, ea, inst_size, img.len()));
 		}
 
 		// okay cool, let's decode
@@ -314,7 +314,7 @@ impl IDisassembler for Mos65xxDisassembler {
 			Some(op) => std::slice::from_ref(op),
 			None     => &[],
 		};
-		Ok(Instruction::new(va, loc, desc.kind(), target, ops, bytes))
+		Ok(Instruction::new(va, ea, desc.kind(), target, ops, bytes))
 	}
 }
 

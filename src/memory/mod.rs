@@ -101,14 +101,14 @@ impl SegCollection {
 		Some(&mut segs[*idx])
 	}
 
-	/// Given a location, get the Segment which contains it.
-	pub fn segment_from_loc(&self, loc: Location) -> &Segment {
-		&self.segs[*self.seg_id_map.get(&loc.seg()).unwrap()]
+	/// Given an EA, get the Segment which contains it.
+	pub fn segment_from_ea(&self, ea: EA) -> &Segment {
+		&self.segs[*self.seg_id_map.get(&ea.seg()).unwrap()]
 	}
 
 	/// Same as above but mutable.
-	pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment {
-		&mut self.segs[*self.seg_id_map.get(&loc.seg()).unwrap()]
+	pub fn segment_from_ea_mut(&mut self, ea: EA) -> &mut Segment {
+		&mut self.segs[*self.seg_id_map.get(&ea.seg()).unwrap()]
 	}
 
 	/// Given a segment ID, get the Segment which it refers to.
@@ -192,10 +192,10 @@ impl Memory {
 			pub fn segment_for_name(&self, name: &str) -> Option<&Segment>;
 			/// Same as above but mutable.
 			pub fn segment_for_name_mut(&mut self, name: &str) -> Option<&mut Segment>;
-			/// Given a location, get the Segment which contains it.
-			pub fn segment_from_loc(&self, loc: Location) -> &Segment;
+			/// Given an EA, get the Segment which contains it.
+			pub fn segment_from_ea(&self, ea: EA) -> &Segment;
 			/// Same as above but mutable.
-			pub fn segment_from_loc_mut(&mut self, loc: Location) -> &mut Segment;
+			pub fn segment_from_ea_mut(&mut self, ea: EA) -> &mut Segment;
 			/// Given a segment ID, get the Segment which it refers to.
 			pub fn segment_from_id(&self, id: SegId) -> &Segment;
 			/// Same as above but mutable.
@@ -205,42 +205,42 @@ impl Memory {
 
 	/// Given a VA, get the Segment which contains it (if any).
 	pub fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment> {
-		let loc = self.loc_for_va(state, va)?;
-		Some(self.segs.segment_from_loc(loc))
+		let ea = self.ea_for_va(state, va)?;
+		Some(self.segs.segment_from_ea(ea))
 	}
 
 	/// Same as above but mutable.
 	pub fn segment_for_va_mut(&mut self, state: MmuState, va: VA) -> Option<&mut Segment> {
-		let loc = self.loc_for_va(state, va)?;
-		Some(self.segs.segment_from_loc_mut(loc))
+		let ea = self.ea_for_va(state, va)?;
+		Some(self.segs.segment_from_ea_mut(ea))
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Address translation
 
-	/// Tries to find a unique location for the given VA.
+	/// Tries to find a unique EA for the given VA.
 	/// If there is no mapping, or if the region is bankable, returns None.
-	pub fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
-		self.mmu.loc_for_va(state, va)
+	pub fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
+		self.mmu.ea_for_va(state, va)
 	}
 
 	/// Same as above, but infallible.
-	pub fn loc_from_va(&self, state: MmuState, va: VA) -> Location {
-		self.loc_for_va(state, va).unwrap_or_else(|| Location::invalid(va.0))
+	pub fn ea_from_va(&self, state: MmuState, va: VA) -> EA {
+		self.ea_for_va(state, va).unwrap_or_else(|| EA::invalid(va.0))
 	}
 
-	/// Gets the VA which corresponds to this location, if any.
-	pub fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
-		if loc.is_invalid() {
-			Some(VA(loc.offs()))
+	/// Gets the VA which corresponds to this EA, if any.
+	pub fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA> {
+		if ea.is_invalid() {
+			Some(VA(ea.offs()))
 		} else {
-			self.mmu.va_for_loc(state, loc)
+			self.mmu.va_for_ea(state, ea)
 		}
 	}
 
 	/// Same as above, but infallible.
-	pub fn va_from_loc(&self, state: MmuState, loc: Location) -> VA {
-		self.va_for_loc(state, loc).unwrap()
+	pub fn va_from_ea(&self, state: MmuState, ea: EA) -> VA {
+		self.va_for_ea(state, ea).unwrap()
 	}
 
 	/// Formats a number as a hexadecimal number with the appropriate number of digits

@@ -6,21 +6,21 @@ use std::collections::{
 	btree_map::Iter as BTreeIter,
 };
 
-use crate::memory::Location;
+use crate::memory::EA;
 
 // ------------------------------------------------------------------------------------------------
 // RefMap
 // ------------------------------------------------------------------------------------------------
 
-pub type RefSet = BTreeSet<Location>;
+pub type RefSet = BTreeSet<EA>;
 
-/// A many-to-many mapping of references - "arrows" pointing from one location to another.
-/// Every location can have multiple "outrefs" - references *to* other locations and
-/// multiple "inrefs" - references *from* other locations. Looking up these refs is
+/// A many-to-many mapping of references - "arrows" pointing from one EA to another.
+/// Every EA can have multiple "outrefs" - references *to* other EAs and multiple "inrefs" -
+/// references *from* other EAs.
 #[derive(Default)]
 pub struct RefMap {
-	inrefs:  BTreeMap<Location, RefSet>,
-	outrefs: BTreeMap<Location, RefSet>,
+	inrefs:  BTreeMap<EA, RefSet>,
+	outrefs: BTreeMap<EA, RefSet>,
 }
 
 impl RefMap {
@@ -29,7 +29,7 @@ impl RefMap {
 	}
 
 	/// Add a reference from `src` to `dst`.
-	pub fn add(&mut self, src: Location, dst: Location) {
+	pub fn add(&mut self, src: EA, dst: EA) {
 		// invalid dst is fine
 		assert!(!src.is_invalid());
 		self._add_outref(src, dst);
@@ -37,14 +37,14 @@ impl RefMap {
 	}
 
 	/// Remove a reference.
-	pub fn remove(&mut self, src: Location, dst: Location) {
+	pub fn remove(&mut self, src: EA, dst: EA) {
 		assert!(!src.is_invalid());
 		self._remove_outref(src, dst);
 		self._remove_inref(src, dst);
 	}
 
-	/// Remove all outrefs from the given location.
-	pub fn remove_all_outrefs(&mut self, src: Location) {
+	/// Remove all outrefs from the given EA.
+	pub fn remove_all_outrefs(&mut self, src: EA) {
 		let set = self.outrefs.remove(&src).unwrap_or_else(|| panic!("no refs from {}", src));
 
 		for dst in set {
@@ -52,8 +52,8 @@ impl RefMap {
 		}
 	}
 
-	/// Remove all inrefs to the given location.
-	pub fn remove_all_inrefs(&mut self, dst: Location) {
+	/// Remove all inrefs to the given EA.
+	pub fn remove_all_inrefs(&mut self, dst: EA) {
 		let set = self.inrefs.remove(&dst).unwrap_or_else(|| panic!("no refs to {}", dst));
 
 		for src in set {
@@ -61,31 +61,31 @@ impl RefMap {
 		}
 	}
 
-	/// Get all inrefs to a given location, or None if there aren't any.
-	pub fn get_inrefs(&self, dst: Location) -> Option<&RefSet> {
+	/// Get all inrefs to a given EA, or None if there aren't any.
+	pub fn get_inrefs(&self, dst: EA) -> Option<&RefSet> {
 		self.inrefs.get(&dst)
 	}
 
-	/// Get all outrefs from a given location, or None if there aren't any.
-	pub fn get_outrefs(&self, src: Location) -> Option<&RefSet> {
+	/// Get all outrefs from a given EA, or None if there aren't any.
+	pub fn get_outrefs(&self, src: EA) -> Option<&RefSet> {
 		assert!(!src.is_invalid());
 		self.outrefs.get(&src)
 	}
 
 	/// Iterator over all outrefs in the entire map.
-	pub fn all_outrefs(&self) -> BTreeIter<'_, Location, RefSet> {
+	pub fn all_outrefs(&self) -> BTreeIter<'_, EA, RefSet> {
 		self.outrefs.iter()
 	}
 
-	fn _add_outref(&mut self, src: Location, dst: Location) {
+	fn _add_outref(&mut self, src: EA, dst: EA) {
 		self.outrefs.entry(src).or_insert_with(BTreeSet::new).insert(dst);
 	}
 
-	fn _add_inref(&mut self, src: Location, dst: Location) {
+	fn _add_inref(&mut self, src: EA, dst: EA) {
 		self.inrefs.entry(dst).or_insert_with(BTreeSet::new).insert(src);
 	}
 
-	fn _remove_outref(&mut self, src: Location, dst: Location) {
+	fn _remove_outref(&mut self, src: EA, dst: EA) {
 		let set = self.outrefs.get_mut(&src).unwrap_or_else(|| panic!("no outrefs from {}", src));
 		assert!(set.remove(&dst));
 		if set.is_empty() {
@@ -93,7 +93,7 @@ impl RefMap {
 		}
 	}
 
-	fn _remove_inref(&mut self, src: Location, dst: Location) {
+	fn _remove_inref(&mut self, src: EA, dst: EA) {
 		let set = self.inrefs.get_mut(&dst).unwrap_or_else(|| panic!("no inrefs to {}", dst));
 		assert!(set.remove(&src));
 		if set.is_empty() {
@@ -111,11 +111,11 @@ mod tests {
 	#[test]
 	fn basic() {
 		let mut ref_map = RefMap::new();
-		let a = Location::new(SegId(0), 0x00);
-		let b = Location::new(SegId(0), 0x10);
-		let c = Location::new(SegId(0), 0x20);
-		let d = Location::new(SegId(0), 0x30);
-		let e = Location::new(SegId(0), 0x40);
+		let a = EA::new(SegId(0), 0x00);
+		let b = EA::new(SegId(0), 0x10);
+		let c = EA::new(SegId(0), 0x20);
+		let d = EA::new(SegId(0), 0x30);
+		let e = EA::new(SegId(0), 0x40);
 
 		// one-to-many
 		ref_map.add(a, b);

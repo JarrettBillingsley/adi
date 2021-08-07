@@ -8,7 +8,7 @@ use std::collections::{
 };
 use std::ops::RangeBounds;
 
-use crate::memory::Location;
+use crate::memory::EA;
 
 // TODO: make this parameterizable
 pub const AUTOGEN_NAME_PREFIX: &str = "loc";
@@ -17,71 +17,71 @@ pub const AUTOGEN_NAME_PREFIX: &str = "loc";
 // NameMap
 // ------------------------------------------------------------------------------------------------
 
-/// A bidirectional mapping between names and locations.
+/// A bidirectional mapping between names and EAs.
 #[derive(Default)]
 pub struct NameMap {
-	names_to_locs: HashMap<String, Location>,
-	locs_to_names: BTreeMap<Location, String>,
+	names_to_eas: HashMap<String, EA>,
+	eas_to_names: BTreeMap<EA, String>,
 }
 
 impl NameMap {
 	pub fn new() -> Self {
-		Self { names_to_locs: HashMap::new(), locs_to_names: BTreeMap::new() }
+		Self { names_to_eas: HashMap::new(), eas_to_names: BTreeMap::new() }
 	}
 
-	/// Assigns a name to a given Location.
-	pub fn add(&mut self, name: &str, loc: Location) {
-		self.names_to_locs.insert(name.into(), loc);
-		self.locs_to_names.insert(loc, name.into());
+	/// Assigns a name to a given EA.
+	pub fn add(&mut self, name: &str, ea: EA) {
+		self.names_to_eas.insert(name.into(), ea);
+		self.eas_to_names.insert(ea, name.into());
 	}
 
 	/// Removes a mapping by name.
 	pub fn remove_name(&mut self, name: &str) {
-		let loc = *self.names_to_locs.get(name).unwrap();
-		self.names_to_locs.remove(name);
-		self.locs_to_names.remove(&loc);
+		let ea = *self.names_to_eas.get(name).unwrap();
+		self.names_to_eas.remove(name);
+		self.eas_to_names.remove(&ea);
 	}
 
-	/// Removes a mapping by Location.
-	pub fn remove_loc(&mut self, loc: Location) {
-		let name = self.locs_to_names.get(&loc).unwrap();
-		self.names_to_locs.remove(name);
-		self.locs_to_names.remove(&loc);
+	/// Removes a mapping by EA.
+	pub fn remove_ea(&mut self, ea: EA) {
+		let name = self.eas_to_names.get(&ea).unwrap();
+		self.names_to_eas.remove(name);
+		self.eas_to_names.remove(&ea);
 	}
 
-	/// Gets the Location for a name, if one of that name exists.
-	pub fn loc_for_name(&self, name: &str) -> Option<Location> {
-		self.names_to_locs.get(name).copied()
+	/// Gets the EA for a name, if one of that name exists.
+	pub fn ea_for_name(&self, name: &str) -> Option<EA> {
+		self.names_to_eas.get(name).copied()
 	}
 
-	/// Gets the name for an Location, if there is one.
-	pub fn name_for_loc(&self, loc: Location) -> Option<&String> {
-		self.locs_to_names.get(&loc)
+	/// Gets the name for an EA, if there is one.
+	pub fn name_for_ea(&self, ea: EA) -> Option<&String> {
+		self.eas_to_names.get(&ea)
 	}
 
 	/// Whether or not the given name exists.
 	pub fn has_name(&self, name: &str) -> bool {
-		self.names_to_locs.contains_key(name)
+		self.names_to_eas.contains_key(name)
 	}
 
-	/// Whether or not there is a name for the given Location.
-	pub fn has_loc(&self, loc: Location) -> bool {
-		self.locs_to_names.contains_key(&loc)
+	/// Whether or not there is a name for the given EA.
+	pub fn has_ea(&self, ea: EA) -> bool {
+		self.eas_to_names.contains_key(&ea)
 	}
 
-	/// All (name, Location) pairs in arbitrary order.
-	pub fn names(&self) -> HashIter<'_, String, Location> {
-		self.names_to_locs.iter()
+	/// All (name, EA) pairs in arbitrary order.
+	pub fn names(&self) -> HashIter<'_, String, EA> {
+		self.names_to_eas.iter()
 	}
 
-	/// All (Location, name) pairs in Location order.
-	pub fn locations(&self) -> BTreeIter<'_, Location, String> {
-		self.locs_to_names.iter()
+	/// All (EA, name) pairs in EA order.
+	pub fn eas(&self) -> BTreeIter<'_, EA, String> {
+		self.eas_to_names.iter()
 	}
 
-	/// All (Location, name) pairs in a given range of Locations, in Location order.
-	pub fn names_in_range(&self, range: impl RangeBounds<Location>)
-	-> BTreeRange<'_, Location, String> {
-		self.locs_to_names.range(range)
+	/// All (EA, name) pairs in a given range of EAs, in EA order.
+	pub fn names_in_range(&self, range: impl RangeBounds<EA>)
+	-> BTreeRange<'_, EA, String> {
+		self.eas_to_names.range(range)
 	}
 }

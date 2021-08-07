@@ -7,7 +7,7 @@ use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::gb::{ GBArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId,
-	Location };
+	EA };
 use crate::program::{ Program, Instruction, Operand };
 
 // ------------------------------------------------------------------------------------------------
@@ -522,30 +522,30 @@ impl IMmu for GBMmu {
 		self.mbc.initial_state()
 	}
 
-	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
 		match va.0 {
 			0x0000 ..= 0x7FFF |
-			0xA000 ..= 0xBFFF => self.mbc.loc_for_va(state, va),
-			0x8000 ..= 0x9FFF => Some(Location::new(self.vram, va.0 & 0x1FFF)),
-			0xC000 ..= 0xFDFF => Some(Location::new(self.ram,  va.0 & 0x1FFF)),
-			0xFE00 ..= 0xFE9F => Some(Location::new(self.oam,  va.0 % 0xA0)),
+			0xA000 ..= 0xBFFF => self.mbc.ea_for_va(state, va),
+			0x8000 ..= 0x9FFF => Some(EA::new(self.vram, va.0 & 0x1FFF)),
+			0xC000 ..= 0xFDFF => Some(EA::new(self.ram,  va.0 & 0x1FFF)),
+			0xFE00 ..= 0xFE9F => Some(EA::new(self.oam,  va.0 % 0xA0)),
 			0xFEA0 ..= 0xFEFF => None,
-			0xFF00 ..= 0xFF7F => Some(Location::new(self.io,   va.0 & 0x7F)),
-			0xFF80 ..= 0xFFFE => Some(Location::new(self.hram, va.0 & 0x7F)),
-			0xFFFF            => Some(Location::new(self.ie,   0)),
+			0xFF00 ..= 0xFF7F => Some(EA::new(self.io,   va.0 & 0x7F)),
+			0xFF80 ..= 0xFFFE => Some(EA::new(self.hram, va.0 & 0x7F)),
+			0xFFFF            => Some(EA::new(self.ie,   0)),
 			_                 => panic!()
 		}
 	}
 
-	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg() {
-			seg if seg == self.vram => Some(VA(0x8000 + (loc.offs() & 0x1FFF))),
-			seg if seg == self.ram  => Some(VA(0xC000 + (loc.offs() & 0x1FFF))),
-			seg if seg == self.oam  => Some(VA(0xFE00 + (loc.offs() % 0xA0))),
-			seg if seg == self.io   => Some(VA(0xFF00 + (loc.offs() & 0x7F))),
-			seg if seg == self.hram => Some(VA(0xFF80 + (loc.offs() & 0x7F))),
+	fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA> {
+		match ea.seg() {
+			seg if seg == self.vram => Some(VA(0x8000 + (ea.offs() & 0x1FFF))),
+			seg if seg == self.ram  => Some(VA(0xC000 + (ea.offs() & 0x1FFF))),
+			seg if seg == self.oam  => Some(VA(0xFE00 + (ea.offs() % 0xA0))),
+			seg if seg == self.io   => Some(VA(0xFF00 + (ea.offs() & 0x7F))),
+			seg if seg == self.hram => Some(VA(0xFF80 + (ea.offs() & 0x7F))),
 			seg if seg == self.ie   => Some(VA(0xFFFF)),
-			_                      => self.mbc.va_for_loc(state, loc),
+			_                      => self.mbc.va_for_ea(state, ea),
 		}
 	}
 
@@ -612,8 +612,8 @@ impl Display for Mbc {
 #[enum_dispatch(Mbc)]
 trait IMbc {
 	fn initial_state(&self) -> MmuState;
-	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location>;
-	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA>;
+	fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA>;
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
 	fn state_change(&self, state: MmuState, va: VA) -> StateChange;
 	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
@@ -640,18 +640,18 @@ impl IMbc for NoMbc {
 		Default::default()
 	}
 
-	fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
+	fn ea_for_va(&self, _state: MmuState, va: VA) -> Option<EA> {
 		match va.0 {
-			0x0000 ..= 0x3FFF => Some(Location::new(self.rom0, va.0 & 0x3FFF)),
-			0x4000 ..= 0x7FFF => Some(Location::new(self.rom1, va.0 & 0x3FFF)),
+			0x0000 ..= 0x3FFF => Some(EA::new(self.rom0, va.0 & 0x3FFF)),
+			0x4000 ..= 0x7FFF => Some(EA::new(self.rom1, va.0 & 0x3FFF)),
 			_                 => None,
 		}
 	}
 
-	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg() {
-			seg if seg == self.rom0 => Some(VA(loc.offs() & 0x3FFF)),
-			seg if seg == self.rom1 => Some(VA(0x4000 + (loc.offs() & 0x3FFF))),
+	fn va_for_ea(&self, _state: MmuState, ea: EA) -> Option<VA> {
+		match ea.seg() {
+			seg if seg == self.rom0 => Some(VA(ea.offs() & 0x3FFF)),
+			seg if seg == self.rom1 => Some(VA(0x4000 + (ea.offs() & 0x3FFF))),
 			_                       => None,
 		}
 	}

@@ -10,7 +10,7 @@ use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
-	SegId, Location };
+	SegId, EA };
 use crate::program::{ Program, Instruction, Operand, MemIndir };
 
 // ------------------------------------------------------------------------------------------------
@@ -165,18 +165,18 @@ fn setup_nes_labels(prog: &mut Program) {
 	}
 
 	for StdName(name, addr) in NES_INT_VECS {
-		let src_loc = prog.loc_from_va(state, VA(*addr));
-		let seg     = prog.segment_from_loc(src_loc);
-		let dst_va  = VA(seg.read_le_u16(src_loc) as usize);
-		let dst_loc = prog.loc_from_va(state, dst_va);
+		let src_ea = prog.ea_from_va(state, VA(*addr));
+		let seg    = prog.segment_from_ea(src_ea);
+		let dst_va = VA(seg.read_le_u16(src_ea) as usize);
+		let dst_ea = prog.ea_from_va(state, dst_va);
 
-		// sometimes two+ vectors can be pointing at the same location.
-		if !prog.has_name_for_loc(dst_loc) {
+		// sometimes two+ vectors can be pointing at the same EA.
+		if !prog.has_name_for_ea(dst_ea) {
 			prog.add_name_va(name, state, dst_va);
 		}
 
-		// TODO: add a data item for each of these locations
-		prog.add_ref(src_loc, dst_loc);
+		// TODO: add a data item for each of these EAs
+		prog.add_ref(src_ea, dst_ea);
 	}
 }
 
@@ -254,8 +254,8 @@ impl Display for Mapper {
 #[enum_dispatch(Mapper)]
 trait IMapper {
 	fn initial_state(&self) -> MmuState;
-	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location>;
-	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA>;
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA>;
+	fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA>;
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
 	fn state_change(&self, state: MmuState, va: VA) -> StateChange;
 	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
@@ -280,21 +280,21 @@ impl IMmu for NesMmu {
 		self.mapper.initial_state()
 	}
 
-	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
 		match va.0 {
-			0x0000 ..= 0x1FFF => Some(Location::new(self.ram, va.0 & 0x7FF)),
-			0x2000 ..= 0x3FFF => Some(Location::new(self.ppu, va.0 & 0x7)),
-			0x4000 ..= 0x401F => Some(Location::new(self.io,  va.0 & 0x1F)),
-			_                 => self.mapper.loc_for_va(state, va),
+			0x0000 ..= 0x1FFF => Some(EA::new(self.ram, va.0 & 0x7FF)),
+			0x2000 ..= 0x3FFF => Some(EA::new(self.ppu, va.0 & 0x7)),
+			0x4000 ..= 0x401F => Some(EA::new(self.io,  va.0 & 0x1F)),
+			_                 => self.mapper.ea_for_va(state, va),
 		}
 	}
 
-	fn va_for_loc(&self, state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg() {
-			seg if seg == self.ram => Some(VA(loc.offs() & 0x7FF)),
-			seg if seg == self.ppu => Some(VA(0x2000 + (loc.offs() & 0x7))),
-			seg if seg == self.io  => Some(VA(0x4000 + (loc.offs() & 0x1F))),
-			_                      => self.mapper.va_for_loc(state, loc),
+	fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA> {
+		match ea.seg() {
+			seg if seg == self.ram => Some(VA(ea.offs() & 0x7FF)),
+			seg if seg == self.ppu => Some(VA(0x2000 + (ea.offs() & 0x7))),
+			seg if seg == self.io  => Some(VA(0x4000 + (ea.offs() & 0x1F))),
+			_                      => self.mapper.va_for_ea(state, ea),
 		}
 	}
 
@@ -385,16 +385,16 @@ impl IMapper for NRom {
 		Default::default()
 	}
 
-	fn loc_for_va(&self, _state: MmuState, va: VA) -> Option<Location> {
+	fn ea_for_va(&self, _state: MmuState, va: VA) -> Option<EA> {
 		match va.0 {
-			0x8000 ..= 0xFFFF => Some(Location::new(self.prg0, va.0 & self.prg0_mask)),
+			0x8000 ..= 0xFFFF => Some(EA::new(self.prg0, va.0 & self.prg0_mask)),
 			_                 => None,
 		}
 	}
 
-	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		match loc.seg() {
-			seg if seg == self.prg0 => Some(VA(self.prg0_base + (loc.offs() & self.prg0_mask))),
+	fn va_for_ea(&self, _state: MmuState, ea: EA) -> Option<VA> {
+		match ea.seg() {
+			seg if seg == self.prg0 => Some(VA(self.prg0_base + (ea.offs() & self.prg0_mask))),
 			_                       => None,
 		}
 	}
@@ -432,7 +432,7 @@ impl UXRom {
 		Self { all, last }.into()
 	}
 
-	fn seg_idx_for_loc(&self, seg: SegId) -> Option<usize> {
+	fn seg_idx_for_seg_id(&self, seg: SegId) -> Option<usize> {
 		// TODO: linear... problem?
 		for (i, &s) in self.all.iter().enumerate() {
 			if s == seg {
@@ -444,7 +444,7 @@ impl UXRom {
 	}
 
 	fn contains_seg(&self, seg: SegId) -> bool {
-		self.seg_idx_for_loc(seg).is_some()
+		self.seg_idx_for_seg_id(seg).is_some()
 	}
 }
 
@@ -453,23 +453,23 @@ impl IMapper for UXRom {
 		Default::default()
 	}
 
-	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
 		let offs = va.0 & 0x3FFF;
 
 		match va.0 {
-			0x8000 ..= 0xBFFF => Some(Location::new(self.all[state.to_usize()], offs)),
-			0xC000 ..= 0xFFFF => Some(Location::new(self.last,                  offs)),
+			0x8000 ..= 0xBFFF => Some(EA::new(self.all[state.to_usize()], offs)),
+			0xC000 ..= 0xFFFF => Some(EA::new(self.last,                  offs)),
 			_                 => None,
 		}
 	}
 
-	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		let offs = loc.offs() & 0x3FFF;
+	fn va_for_ea(&self, _state: MmuState, ea: EA) -> Option<VA> {
+		let offs = ea.offs() & 0x3FFF;
 
 		// every segment except the last has a virtual base of 0x8000.
-		if loc.seg() == self.last {
+		if ea.seg() == self.last {
 			Some(VA(0xC000 + offs))
-		} else if self.contains_seg(loc.seg()) {
+		} else if self.contains_seg(ea.seg()) {
 			Some(VA(0x8000 + offs))
 		} else {
 			None
@@ -525,7 +525,7 @@ impl AXRom {
 		Self { name, all }.into()
 	}
 
-	fn seg_idx_for_loc(&self, seg: SegId) -> Option<usize> {
+	fn seg_idx_for_seg_id(&self, seg: SegId) -> Option<usize> {
 		// TODO: linear... problem?
 		for (i, &s) in self.all.iter().enumerate() {
 			if s == seg {
@@ -537,7 +537,7 @@ impl AXRom {
 	}
 
 	fn contains_seg(&self, seg: SegId) -> bool {
-		self.seg_idx_for_loc(seg).is_some()
+		self.seg_idx_for_seg_id(seg).is_some()
 	}
 }
 
@@ -546,20 +546,20 @@ impl IMapper for AXRom {
 		Default::default()
 	}
 
-	fn loc_for_va(&self, state: MmuState, va: VA) -> Option<Location> {
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
 		let offs = va.0 & 0x7FFF;
 
 		match va.0 {
-			0x8000 ..= 0xFFFF => Some(Location::new(self.all[state.to_usize()], offs)),
+			0x8000 ..= 0xFFFF => Some(EA::new(self.all[state.to_usize()], offs)),
 			_                 => None,
 		}
 	}
 
-	fn va_for_loc(&self, _state: MmuState, loc: Location) -> Option<VA> {
-		let offs = loc.offs() & 0x7FFF;
+	fn va_for_ea(&self, _state: MmuState, ea: EA) -> Option<VA> {
+		let offs = ea.offs() & 0x7FFF;
 
 		// every segment has a virtual base of 0x8000.
-		if self.contains_seg(loc.seg()) {
+		if self.contains_seg(ea.seg()) {
 			Some(VA(0x8000 + offs))
 		} else {
 			None

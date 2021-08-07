@@ -8,7 +8,7 @@ use crate::arch::{ IInterpreter, IArchitecture, ValueKind };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BasicBlock, BBTerm, Function,
 	FuncId };
-use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChange, SegId };
+use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, StateChange, SegId };
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer
@@ -18,26 +18,26 @@ use crate::memory::{ MmuState, Location, ImageSliceable, SpanKind, VA, StateChan
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum AnalysisItem {
 	/// Explore an unexplored function.
-	NewFunc(Location, MmuState),
+	NewFunc(EA, MmuState),
 	/// This function changes MMU state somehow; we have to figure out how.
 	DetermineStateChange(FuncId),
 	/// Any MMU state changes have been propagated; now to resolve references outside the function.
 	FuncRefs(FuncId),
-	/// A jump table. The location points to the jump instruction.
-	JumpTable(Location),
-	/// Split an existing function (another function called/jumped to the given location).
-	SplitFunc(Location),
+	/// A jump table. The EA points to the jump instruction.
+	JumpTable(EA),
+	/// Split an existing function (another function called/jumped to the given EA).
+	SplitFunc(EA),
 }
 
 impl Program {
-	/// Puts a location on the queue that should be the start of a function.
-	pub fn enqueue_function(&mut self, state: MmuState, loc: Location) {
-		self.queue.push_back(AnalysisItem::NewFunc(loc, state))
+	/// Puts an EA on the queue that should be the start of a function.
+	pub fn enqueue_function(&mut self, state: MmuState, ea: EA) {
+		self.queue.push_back(AnalysisItem::NewFunc(ea, state))
 	}
 
-	/// Puts a location on the queue that should be the jump instruction for a jump table.
-	pub fn enqueue_jump_table(&mut self, loc: Location) {
-		self.queue.push_back(AnalysisItem::JumpTable(loc))
+	/// Puts an EA on the queue that should be the jump instruction for a jump table.
+	pub fn enqueue_jump_table(&mut self, ea: EA) {
+		self.queue.push_back(AnalysisItem::JumpTable(ea))
 	}
 
 	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
@@ -46,11 +46,11 @@ impl Program {
 		while let Some(item) = self.queue.pop_front() {
 			use AnalysisItem::*;
 			match item {
-				NewFunc(loc, state)       => self.func_first_pass(loc, state),
+				NewFunc(ea, state)       => self.func_first_pass(ea, state),
 				FuncRefs(fid)             => self.func_refs(fid),
-				JumpTable(loc)            => self.analyze_jump_table(loc),
+				JumpTable(ea)            => self.analyze_jump_table(ea),
 				DetermineStateChange(fid) => self.determine_state_change(fid),
-				SplitFunc(loc)            => self.split_func(loc),
+				SplitFunc(ea)            => self.split_func(ea),
 			}
 		}
 	}
@@ -58,20 +58,20 @@ impl Program {
 	// ---------------------------------------------------------------------------------------------
 	// First pass
 
-	pub(crate) fn func_first_pass(&mut self, loc: Location, state: MmuState) {
+	pub(crate) fn func_first_pass(&mut self, ea: EA, state: MmuState) {
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function 1st pass at {}", loc);
+		trace!("- begin function 1st pass at {}", ea);
 
-		if !self._should_analyze_func(loc) {
+		if !self._should_analyze_func(ea) {
 			return;
 		}
 
 		// first pass is to build up the CFG. we're just looking for control flow
 		// and finding the boundaries of this function.
 		let mut bbs            = Vec::<BBId>::new();
-		let mut potential_bbs  = VecDeque::<Location>::new();
+		let mut potential_bbs  = VecDeque::<EA>::new();
 		let mut changes_state  = false;
-		potential_bbs.push_back(loc);
+		potential_bbs.push_back(ea);
 
 		'outer: while let Some(start) = potential_bbs.pop_front() {
 			trace!("evaluating potential bb at {}", start);
@@ -85,25 +85,25 @@ impl Program {
 			self.span_begin_analysis(start);
 
 			// now, we need the actual data.
-			let (seg, span)  = self.seg_and_span_at_loc(start);
+			let (seg, span)  = self.seg_and_span_at_ea(start);
 			let slice        = seg.image_slice(span).into_data();
-			let va           = self.va_from_loc(state, start);
+			let va           = self.va_from_ea(state, start);
 
 			// let's start disassembling instructions
 			let dis          = self.plat().arch().new_disassembler();
-			let mut end_loc  = start;
+			let mut end_ea   = start;
 			let mut term     = None;
 			let mut insts    = Vec::new();
 			let mut iter     = dis.disas_all(slice, state, va, start);
 
 			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
-				end_loc = inst.next_loc();
+				end_ea = inst.next_ea();
 
 				if self.mem.inst_state_change(state, &inst).is_some() {
 					changes_state = true;
-					term = Some(BBTerm::BankChange(end_loc));
-					potential_bbs.push_back(inst.next_loc());
+					term = Some(BBTerm::BankChange(end_ea));
+					potential_bbs.push_back(inst.next_ea());
 					insts.push(inst);
 					break 'instloop;
 				}
@@ -129,34 +129,34 @@ impl Program {
 					}
 					Call => {
 						let target_va = inst.control_target().expect("should have control target");
-						let target_loc = self._va_to_loc_in_same_seg(seg.id(), state, target_va);
+						let target_ea = self._va_to_ea_in_same_seg(seg.id(), state, target_va);
 
-						let next = inst.next_loc();
+						let next = inst.next_ea();
 						potential_bbs.push_back(next);
 
-						// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
+						// debug!("{:04X} t: {} next: {}", inst.va(), target_ea, next);
 
-						term = Some(BBTerm::Call { dst: target_loc, ret: next });
+						term = Some(BBTerm::Call { dst: target_ea, ret: next });
 					}
 					Uncond | Cond => {
 						let target_va = inst.control_target().expect("should have control target");
-						let target_loc = self._va_to_loc_in_same_seg(seg.id(), state, target_va);
+						let target_ea = self._va_to_ea_in_same_seg(seg.id(), state, target_va);
 
 						// if it's into the same segment, it might be part of this function.
 						// if not, it's probably a tailcall to another function.
-						if seg.contains_loc(target_loc) {
-							potential_bbs.push_back(target_loc);
+						if seg.contains_ea(target_ea) {
+							potential_bbs.push_back(target_ea);
 						}
 
 						if inst.kind() == Uncond {
-							term = Some(BBTerm::Jump(target_loc));
+							term = Some(BBTerm::Jump(target_ea));
 						} else {
-							let next = inst.next_loc();
+							let next = inst.next_ea();
 							potential_bbs.push_back(next);
 
-							// debug!("{:04X} t: {} next: {}", inst.va(), target_loc, next);
+							// debug!("{:04X} t: {} next: {}", inst.va(), target_ea, next);
 
-							term = Some(BBTerm::Cond { t: target_loc, f: next });
+							term = Some(BBTerm::Cond { t: target_ea, f: next });
 						}
 					}
 				}
@@ -166,23 +166,23 @@ impl Program {
 				break 'instloop;
 			}
 
-			if start == end_loc {
+			if start == end_ea {
 				// oop. no good.
 				trace!("{} is NO GOOD", start);
 				self.span_cancel_analysis(start);
 			} else {
 				if let Some(..) = iter.err() {
-					assert!(end_loc == iter.err_loc());
+					assert!(end_ea == iter.err_ea());
 					term = Some(BBTerm::DeadEnd);
 				} else if term.is_none() {
 					// we got through the whole slice with no errors, meaning
 					// this is a fallthrough to the next bb.
-					term = Some(BBTerm::FallThru(end_loc));
+					term = Some(BBTerm::FallThru(end_ea));
 				}
 
 				let bbid = self._new_bb(start, term.unwrap(), insts, state);
 				bbs.push(bbid);
-				self.span_end_analysis(start, end_loc, SpanKind::AnaCode(bbid));
+				self.span_end_analysis(start, end_ea, SpanKind::AnaCode(bbid));
 			}
 		}
 
@@ -211,7 +211,7 @@ impl Program {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function 2nd pass at {}", func.loc());
+		trace!("- begin function 2nd pass at {}", func.ea());
 
 		let mut jumptables = Vec::new();
 		let mut funcs      = Vec::new();
@@ -222,30 +222,30 @@ impl Program {
 
 			let state = bb.mmu_state();
 			for inst in bb.insts() {
-				let src = inst.loc();
+				let src = inst.ea();
 
 				for i in 0 .. inst.num_ops() {
 					let op = inst.get_op(i);
 
 					if op.has_addr() {
-						let dst = self.loc_from_va(state, op.addr());
+						let dst = self.ea_from_va(state, op.addr());
 						refs.push((src, dst));
 					}
 				}
 
 				use InstructionKind::*;
 				match inst.kind() {
-					Indir => jumptables.push(inst.loc()),
+					Indir => jumptables.push(inst.ea()),
 					Call => {
-						let target_loc = self._resolve_target(state, inst.control_target().unwrap());
-						funcs.push((target_loc, state));
+						let target_ea = self._resolve_target(state, inst.control_target().unwrap());
+						funcs.push((target_ea, state));
 					}
 					_ => {}
 				}
 			}
 
 			for &succ in bb.explicit_successors() {
-				refs.push((bb.term_loc(), succ));
+				refs.push((bb.term_ea(), succ));
 			}
 		}
 
@@ -261,7 +261,7 @@ impl Program {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin func state change analysis at {}", func.loc());
+		trace!("- begin func state change analysis at {}", func.ea());
 
 		// 1. make a list of "new states" for each bb.
 		let mut new_states = BBStateChanger::new(func);
@@ -313,23 +313,23 @@ impl Program {
 	// ---------------------------------------------------------------------------------------------
 	// Jump table analysis
 
-	pub(crate) fn analyze_jump_table(&mut self, loc: Location) {
-		trace!("there's a jumptable at {}", loc);
+	pub(crate) fn analyze_jump_table(&mut self, ea: EA) {
+		trace!("there's a jumptable at {}", ea);
 		// todo!()
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Splitting previously-analyzed functions
 
-	pub(crate) fn split_func(&mut self, loc: Location) {
+	pub(crate) fn split_func(&mut self, ea: EA) {
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function splitting at {}", loc);
+		trace!("- begin function splitting at {}", ea);
 
-		let mut bbid = self.span_at_loc(loc).bb().expect("uh, there used to be a function here");
+		let mut bbid = self.span_at_ea(ea).bb().expect("uh, there used to be a function here");
 		let fid = self.bbidx.get(bbid).func();
 
 		// first: do we have to split the target BB?
-		if let Some(new_bbid) = self._check_split_bb(bbid, loc, Some(fid)) {
+		if let Some(new_bbid) = self._check_split_bb(bbid, ea, Some(fid)) {
 			// add it to the function's vec of BBs,
 			self.get_func_mut(fid).bbs.push(new_bbid);
 			// and now we're working with the new BB.
@@ -338,43 +338,43 @@ impl Program {
 
 		// next: have to determine if we can split the function in two.
 		// TODO: idea: if this bb is the dominator of all its successors including descendants,
-		// then we can split the function at `loc`.
+		// then we can split the function at `ea`.
 
 		// otherwise, give up and mark it a multi-entry function.
-		trace!(" marking function at {} as multi-entry", self.get_func(fid).loc());
+		trace!(" marking function at {} as multi-entry", self.get_func(fid).ea());
 		self.get_func_mut(fid).try_add_entrypoint(bbid);
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Private
 
-	fn _should_analyze_func(&mut self, loc: Location) -> bool {
-		if let Some(bbid) = self.span_at_loc(loc).bb() {
+	fn _should_analyze_func(&mut self, ea: EA) -> bool {
+		if let Some(bbid) = self.span_at_ea(ea).bb() {
 			let bb = self.bbidx.get(bbid);
 			let orig_func = self.get_func(bb.func());
 
-			if loc == orig_func.loc() {
+			if ea == orig_func.ea() {
 				// the beginning of an already-analyzed function.
 				trace!("oh, I've seen this one already. NEVERMIIIND");
 			} else {
 				// the middle of an already-analyzed function.
 				trace!("middle of an existing function...");
-				self.queue.push_back(AnalysisItem::SplitFunc(loc));
+				self.queue.push_back(AnalysisItem::SplitFunc(ea));
 			}
 			false
-		} else if self.segment_from_loc(loc).is_fake() {
-			trace!("skipping function at invalid location: {:?}", loc);
+		} else if self.segment_from_ea(ea).is_fake() {
+			trace!("skipping function at invalid EA: {:?}", ea);
 			false
 		} else {
 			true
 		}
 	}
 
-	fn _should_analyze_bb(&mut self, bbs: &mut Vec<BBId>, start: Location) -> bool {
-		// let's look at this location to see what's here.
+	fn _should_analyze_bb(&mut self, bbs: &mut Vec<BBId>, start: EA) -> bool {
+		// let's look at this EA to see what's here.
 		// we want a fresh, undefined region of memory.
 
-		match self.span_at_loc(start).kind() {
+		match self.span_at_ea(start).kind() {
 			SpanKind::Unk         => true, // yeeeeee that's what we want
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
@@ -391,18 +391,18 @@ impl Program {
 		}
 	}
 
-	fn _check_split_bb(&mut self, old_id: BBId, start: Location, owner: Option<FuncId>)
+	fn _check_split_bb(&mut self, old_id: BBId, start: EA, owner: Option<FuncId>)
 	-> Option<BBId> {
 		let old_bb = self.bbidx.get(old_id);
 
-		if start != old_bb.loc {
+		if start != old_bb.ea {
 			// ooh, now we have to split the existing bb.
 			// first, let's make sure that `start` points to the beginning of an instruction,
-			// because otherwise we'd be jumping to an invalid location.
+			// because otherwise we'd be jumping to an invalid EA.
 			let idx = match old_bb.last_instr_before(start) {
 				Some(idx) => idx,
 				None      => {
-					log::warn!("splitting bb at {} failed", old_bb.loc);
+					log::warn!("splitting bb at {} failed", old_bb.ea);
 					// todo!("have to flag referrer as being invalid somehow"),
 					return None;
 				}
@@ -420,7 +420,7 @@ impl Program {
 				SpanKind::AnaCode(new_bb)
 			};
 
-			self.segment_from_loc_mut(start).split_span(start, span_kind);
+			self.segment_from_ea_mut(start).split_span(start, span_kind);
 
 			Some(new_bb)
 		} else {
@@ -428,21 +428,21 @@ impl Program {
 		}
 	}
 
-	fn _new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	fn _new_bb(&mut self, ea: EA, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
 	-> BBId {
-		log::trace!("new bb loc: {}, term: {:?}", loc, term);
-		self.bbidx.new_bb(loc, term, insts, state)
+		log::trace!("new bb ea: {}, term: {:?}", ea, term);
+		self.bbidx.new_bb(ea, term, insts, state)
 	}
 
 	// returns id of newly split-off BB
-	fn _split_bb(&mut self, old_id: BBId, inst_idx: usize, new_start: Location) -> BBId {
+	fn _split_bb(&mut self, old_id: BBId, inst_idx: usize, new_start: EA) -> BBId {
 		let old = self.bbidx.get_mut(old_id);
-		let term_loc = old.insts[inst_idx].loc();
+		let term_ea = old.insts[inst_idx].ea();
 		let state = old.mmu_state();
 		let insts = old.insts.split_off(inst_idx + 1);
 
-		assert!(old.loc < new_start);
-		assert!(term_loc < new_start);
+		assert!(old.ea < new_start);
+		assert!(term_ea < new_start);
 
 		let new_id = self.bbidx.new_bb(
 			new_start,
@@ -454,21 +454,21 @@ impl Program {
 		let (old, new) = self.bbidx.get2_mut(old_id, new_id);
 		std::mem::swap(&mut old.term, &mut new.term);
 
-		log::trace!("split bb loc: {}, term: {:?}", new.loc, new.term);
+		log::trace!("split bb ea: {}, term: {:?}", new.ea, new.term);
 		new_id
 	}
 
-	fn _va_to_loc_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> Location {
-		match self.loc_for_va(state, va) {
+	fn _va_to_ea_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> EA {
+		match self.ea_for_va(state, va) {
 			Some(l) if l.seg() == seg => l,
-			_                         => Location::invalid(va.0)
+			_                         => EA::invalid(va.0)
 		}
 	}
 
-	fn _resolve_target(&self, state: MmuState, target: VA) -> Location {
-		match self.loc_for_va(state, target) {
+	fn _resolve_target(&self, state: MmuState, target: VA) -> EA {
+		match self.ea_for_va(state, target) {
 			Some(l) => l,
-			None    => Location::invalid(target.0),
+			None    => EA::invalid(target.0),
 		}
 	}
 
@@ -540,9 +540,9 @@ impl BBStateChanger {
 
 			if let Some(ns) = self.map[&from].new_state {
 				// uh oh. conflict
-				let loc = prog.get_bb(from).loc();
+				let ea = prog.get_bb(from).ea();
 				log::trace!("conflicting states @ {} (changing to both {:?} and {:?})",
-					loc, ns, new_state);
+					ea, ns, new_state);
 				Err(())
 			} else {
 				self.map.get_mut(&from).unwrap().new_state = Some(new_state);
@@ -557,10 +557,10 @@ impl BBStateChanger {
 		let fid = from.func();
 
 		for succ in from.successors() {
-			// TODO: having a "magical" invalid location value is annoying.
+			// TODO: having a "magical" invalid EA value is annoying.
 			if succ.is_invalid() { continue; }
 
-			match prog.span_at_loc(*succ).bb() {
+			match prog.span_at_ea(*succ).bb() {
 				Some(succ_id) => {
 					let succ = prog.get_bb(succ_id);
 					if succ.func() == fid {

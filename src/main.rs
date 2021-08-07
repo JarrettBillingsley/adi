@@ -49,7 +49,7 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	println!("{}", prog);
 
 	let state = prog.initial_mmu_state();
-	prog.enqueue_function(state, prog.loc_from_name("RESET"));
+	prog.enqueue_function(state, prog.ea_from_name("RESET"));
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
@@ -68,8 +68,8 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	println!("{}", prog);
 
 	let state = prog.initial_mmu_state();
-	prog.enqueue_function(state, prog.loc_from_name("VEC_RESET"));
-	prog.enqueue_function(state, prog.loc_from_name("VEC_NMI"));
+	prog.enqueue_function(state, prog.ea_from_name("VEC_RESET"));
+	prog.enqueue_function(state, prog.ea_from_name("VEC_NMI"));
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
@@ -77,10 +77,10 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	show_all_funcs(&prog);
 	// show_prg0(&prog);
 
-	// let loc  = prog.loc_from_va(state, VA(0x821A));
+	// let ea   = prog.ea_from_va(state, VA(0x821A));
 	// let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
 	// let size = ty.size().fixed();
-	// prog.new_data(Some("array"), loc, ty, size);
+	// prog.new_data(Some("array"), ea, ty, size);
 
 	Ok(())
 }
@@ -94,9 +94,9 @@ fn show_prg0(prog: &Program) {
 		match span.kind() {
 			SpanKind::Unk => {
 				// TODO: this is kind of a mess
-				let loc = span.start();
-				let state = prog.mmu_state_at(loc).unwrap_or_else(|| prog.initial_mmu_state());
-				let va = prog.va_from_loc(state, loc);
+				let ea = span.start();
+				let state = prog.mmu_state_at(ea).unwrap_or_else(|| prog.initial_mmu_state());
+				let va = prog.va_from_ea(state, ea);
 				let addr = prog.fmt_addr(va.0);
 
 				let msg = format!("[{} unexplored byte(s)]", span.len());
@@ -119,7 +119,7 @@ fn show_prg0(prog: &Program) {
 
 fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by(|a, b| a.loc().cmp(&b.loc()));
+	funcs.sort_by(|a, b| a.ea().cmp(&b.ea()));
 
 	for func in funcs {
 		show_func(prog, func);
@@ -132,7 +132,7 @@ fn show_func(prog: &Program, func: &Function) {
 
 	println!("{}", divider);
 
-	let name = prog.name_of_loc(func.loc());
+	let name = prog.name_of_ea(func.ea());
 	println!("{}{}", "; Function ".green(), name.green());
 
 	if !func.attrs().is_empty() {
@@ -141,19 +141,19 @@ fn show_func(prog: &Program, func: &Function) {
 	}
 
 	if func.is_multi_entry() {
-		let entrypoints = func.entrypoints().iter().map(|bbid| prog.get_bb(*bbid).loc());
+		let entrypoints = func.entrypoints().iter().map(|bbid| prog.get_bb(*bbid).ea());
 
 		print!("{}", "; Entry points: ".green());
 
-		for loc in entrypoints {
-			print!("{} ", prog.name_of_loc(loc).green());
+		for ea in entrypoints {
+			print!("{} ", prog.name_of_ea(ea).green());
 		}
 
 		println!();
 	}
 
 	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
-	bbs.sort_by(|a, b| a.loc().cmp(&b.loc()));
+	bbs.sort_by(|a, b| a.ea().cmp(&b.ea()));
 
 	for bb in bbs {
 		show_bb(prog, bb);
@@ -161,20 +161,20 @@ fn show_func(prog: &Program, func: &Function) {
 }
 
 fn show_bb(prog: &Program, bb: &BasicBlock) {
-	let bb_loc = bb.loc();
-	let seg = prog.segment_from_loc(bb_loc);
+	let bb_ea = bb.ea();
+	let seg = prog.segment_from_ea(bb_ea);
 
 	// Inrefs and label
-	if let Some(ir) = prog.get_inrefs(bb_loc) {
+	if let Some(ir) = prog.get_inrefs(bb_ea) {
 		print!("{:20}{}", "", ";".green());
 
 		for &r in ir {
-			print!(" {}{}", "<-".green(), prog.name_of_loc(r).green());
+			print!(" {}{}", "<-".green(), prog.name_of_ea(r).green());
 		}
 
 		println!();
 
-		println!("{:20}{}:", "", prog.name_of_loc(bb_loc).truecolor(127, 63, 0));
+		println!("{:20}{}:", "", prog.name_of_ea(bb_ea).truecolor(127, 63, 0));
 	}
 
 	// Instructions
@@ -207,18 +207,18 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		BankChange(..) => println!("{}", "---------- BANK CHANGE ----------".cyan().bold()),
 		Halt | Return => {
 		}
-		FallThru(loc) => {
-			thinger(prog, bb_loc, *loc, "Fall through", Color::Yellow);
+		FallThru(ea) => {
+			thinger(prog, bb_ea, *ea, "Fall through", Color::Yellow);
 		}
-		Jump(loc) => {
-			thinger(prog, bb_loc, *loc, "Tailcall", Color::Yellow);
+		Jump(ea) => {
+			thinger(prog, bb_ea, *ea, "Tailcall", Color::Yellow);
 		}
 		Call { ret, .. } => {
-			thinger(prog, bb_loc, *ret, "Fall through", Color::Yellow);
+			thinger(prog, bb_ea, *ret, "Fall through", Color::Yellow);
 		}
 		Cond { t, f } => {
-			thinger(prog, bb_loc, *t, "Tailbranch", Color::Yellow);
-			thinger(prog, bb_loc, *f, "Fall through", Color::Yellow);
+			thinger(prog, bb_ea, *t, "Tailbranch", Color::Yellow);
+			thinger(prog, bb_ea, *f, "Fall through", Color::Yellow);
 		}
 		JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
 	}
@@ -226,17 +226,17 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 	println!();
 }
 
-fn thinger(prog: &Program, from: Location, to: Location, msg: &str, color: Color){
+fn thinger(prog: &Program, from: EA, to: EA, msg: &str, color: Color){
 	if diff_funcs(prog, from, to) {
-		let dest = prog.name_of_loc(to);
+		let dest = prog.name_of_ea(to);
 		let msg = format!("---------- {} to {} ----------", msg, dest);
 		println!("{}", msg.color(color));
 	}
 }
 
-fn diff_funcs(prog: &Program, loc1: Location, loc2: Location) -> bool {
-	let func1 = prog.func_that_contains(loc1).map(|f| f.id());
-	let func2 = prog.func_that_contains(loc2).map(|f| f.id());
+fn diff_funcs(prog: &Program, ea1: EA, ea2: EA) -> bool {
+	let func1 = prog.func_that_contains(ea1).map(|f| f.id());
+	let func2 = prog.func_that_contains(ea2).map(|f| f.id());
 
 	func1 != func2
 }

@@ -5,7 +5,7 @@ use bitflags::bitflags;
 use generational_arena::{ Arena, Index };
 use smallvec::{ SmallVec };
 
-use crate::memory::{ Location };
+use crate::memory::{ EA };
 use crate::program::{ BBId };
 
 // ------------------------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ pub struct Function {
 	/// Its globally-unique identifier.
 	id:    FuncId,
 	/// Where its head BB begins.
-	loc:   Location,
+	ea:    EA,
 	/// Its user-given name, if any.
 	name:  Option<String>,
 	/// Attributes.
@@ -77,8 +77,8 @@ impl Function {
 	}
 
 	/// Where the function starts.
-	pub fn loc(&self) -> Location {
-		self.loc
+	pub fn ea(&self) -> EA {
+		self.ea
 	}
 
 	/// Iterator over this function's basic blocks, starting with the head, but then
@@ -127,12 +127,12 @@ impl Function {
 	// crate
 
 	/// Ctor. The name defaults to `None` and the attributes default to `FuncAttrs::NONE`.
-	pub(crate) fn new(id: FuncId, loc: Location, bbs: Vec<BBId>) -> Self {
+	pub(crate) fn new(id: FuncId, ea: EA, bbs: Vec<BBId>) -> Self {
 		let entrypoints = SmallVec::from_slice(&bbs[..1]);
 
 		Self {
 			id,
-			loc,
+			ea,
 			name: None,
 			attrs: FuncAttrs::NONE,
 			bbs,
@@ -183,8 +183,8 @@ impl FuncIndex {
 	}
 
 	/// Creates a new function and returns its ID.
-	pub fn new_func(&mut self, loc: Location, bbs: Vec<BBId>) -> FuncId {
-		FuncId(self.arena.insert_with(move |id| { Function::new(FuncId(id), loc, bbs) }))
+	pub fn new_func(&mut self, ea: EA, bbs: Vec<BBId>) -> FuncId {
+		FuncId(self.arena.insert_with(move |id| { Function::new(FuncId(id), ea, bbs) }))
 	}
 
 	/// Gets the function with the given ID.

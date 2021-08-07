@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use crate::memory::{ MmuState, SegId, Location, VA };
+use crate::memory::{ MmuState, SegId, EA, VA };
 use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter };
 use crate::program::{ MemAccess, MemIndir, Instruction, Operand };
 
@@ -32,26 +32,26 @@ fn mnemonics() {
 }
 
 fn disas(va: usize, img: &[u8]) -> Instruction {
-	let loc = Location::new(SegId(0), va);
+	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match GBDisassembler.disas_instr(img, state, va, loc) {
+	match GBDisassembler.disas_instr(img, state, va, ea) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
 	}
 }
 
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
-	let loc = Location::new(SegId(0), va);
+	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match GBDisassembler.disas_instr(img, state, va, loc) {
+	match GBDisassembler.disas_instr(img, state, va, ea) {
 		Ok(inst) => {
-			assert_eq!(inst.va, va);
+			assert_eq!(inst.va(), va);
 			assert_eq!(lookup_desc(inst.bytes()[0]).unwrap().meta_op(), meta_op);
-			assert_eq!(inst.ops.len(), ops.len());
+			assert_eq!(inst.ops().len(), ops.len());
 
-			for (op, expected) in inst.ops.iter().zip(ops.iter()) {
+			for (op, expected) in inst.ops().iter().zip(ops.iter()) {
 				assert_eq!(op, expected);
 			}
 		}
@@ -63,10 +63,10 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
 }
 
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
-	let loc = Location::new(SegId(0), va);
+	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match GBDisassembler.disas_instr(img, state, va, loc) {
+	match GBDisassembler.disas_instr(img, state, va, ea) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
 		}
@@ -78,11 +78,11 @@ fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 }
 
 fn indr(reg: Reg, acc: MemAccess) -> Operand {
-	Operand::Indir(MemIndir::Reg { reg: reg as u64 }, acc)
+	Operand::Indir(MemIndir::Reg { reg: reg as u8 }, acc)
 }
 
 fn indrd(reg: Reg, disp: i64, acc: MemAccess) -> Operand {
-	Operand::Indir(MemIndir::RegDisp { reg: reg as u64, disp }, acc)
+	Operand::Indir(MemIndir::RegDisp { reg: reg as u8, disp }, acc)
 }
 
 #[test]
@@ -116,14 +116,14 @@ fn disasm_success() {
 
 #[test]
 fn disasm_failure() {
-	let loc = Location::new(SegId(0), 0);
+	let ea = EA::new(SegId(0), 0);
 
-	check_fail(0, &[],           DisasError::out_of_bytes(VA(0), loc, 1, 0));
-	check_fail(0, &[0xCB],       DisasError::out_of_bytes(VA(0), loc, 2, 1));
-	check_fail(0, &[0xFD],       DisasError::unknown_instruction(VA(0), loc));
-	check_fail(0, &[0x3E],       DisasError::out_of_bytes(VA(0), loc, 2, 1));
-	check_fail(0, &[0x01],       DisasError::out_of_bytes(VA(0), loc, 3, 1));
-	check_fail(0, &[0x01, 0x00], DisasError::out_of_bytes(VA(0), loc, 3, 2));
+	check_fail(0, &[],           DisasError::out_of_bytes(VA(0), ea, 1, 0));
+	check_fail(0, &[0xCB],       DisasError::out_of_bytes(VA(0), ea, 2, 1));
+	check_fail(0, &[0xFD],       DisasError::unknown_instruction(VA(0), ea));
+	check_fail(0, &[0x3E],       DisasError::out_of_bytes(VA(0), ea, 2, 1));
+	check_fail(0, &[0x01],       DisasError::out_of_bytes(VA(0), ea, 3, 1));
+	check_fail(0, &[0x01, 0x00], DisasError::out_of_bytes(VA(0), ea, 3, 2));
 }
 
 struct DummyLookup;
@@ -229,7 +229,7 @@ fn disasm_range() {
 	let p = GBPrinter::new();
 	let state = MmuState::default();
 	let dis: Disassembler = GBDisassembler.into();
-	let mut iter = dis.disas_all(code, state, VA(0), Location::new(SegId(0), 0));
+	let mut iter = dis.disas_all(code, state, VA(0), EA::new(SegId(0), 0));
 	let mut output = Vec::new();
 
 	for inst in &mut iter {

@@ -1,6 +1,6 @@
 
 use crate::arch::{ IInterpreter, IPrinter, Value, ValueKind };
-use crate::memory::{ Memory, ImageRead, Location, MmuState, VA };
+use crate::memory::{ Memory, ImageRead, EA, MmuState, VA };
 use crate::program::{ BasicBlock, BBTerm, Instruction, MemIndir };
 
 use super::{ AddrMode, MetaOp, SyntaxFlavor, Operand, Mos65xxPrinter, InstDesc, lookup_desc };
@@ -49,10 +49,10 @@ impl InterpRegs {
 pub struct Mos65xxInterpreter {
 	regs:      InterpRegs,
 	print:     Mos65xxPrinter,
-	ret_stack: Vec<Location>,
+	ret_stack: Vec<EA>,
 	// TODO: external PRG-RAM
 	ram:       Vec<Vu8>,
-	jmp_dst:   Option<Location>,
+	jmp_dst:   Option<EA>,
 	new_state: Option<(MmuState, ValueKind)>,
 }
 
@@ -91,11 +91,11 @@ impl Mos65xxInterpreter {
 			}
 			0x2002 => 0xFF,
 			_ => {
-				if let Some(loc) = mem.loc_for_va(state, VA(addr.into())) {
-					let seg = mem.segment_from_loc(loc);
+				if let Some(ea) = mem.ea_for_va(state, VA(addr.into())) {
+					let seg = mem.segment_from_ea(ea);
 
 					if seg.is_real() {
-						seg.read_u8(loc)
+						seg.read_u8(ea)
 					} else {
 						0
 					}
@@ -219,15 +219,15 @@ impl Mos65xxInterpreter {
 
 		use MetaOp::*;
 		match desc.meta_op {
-			BRK => { todo!("BRK instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
-			UNK => { todo!("unknown instruction @ {} (VA: {:04X})", i.loc(), i.va()) }
+			BRK => { todo!("BRK instruction @ {} (VA: {:04X})", i.ea(), i.va()) }
+			UNK => { todo!("unknown instruction @ {} (VA: {:04X})", i.ea(), i.va()) }
 			NOP | DOP => {}
 			// handled by interpret_branch.
 			BCC | BCS | BEQ | BMI | BNE | BPL | BVC | BVS => {}
 			// handled (partly) by interpret_bb.
 			JMP => {
 				if desc.addr_mode == AddrMode::IND {
-					self.jmp_dst = Some(mem.loc_from_va(state, VA(addr as usize)));
+					self.jmp_dst = Some(mem.ea_from_va(state, VA(addr as usize)));
 				}
 			}
 			RTI => self.pop_n(mem, state, 3),
@@ -243,7 +243,7 @@ impl Mos65xxInterpreter {
 				let lo = self.pop(mem, state).val as usize;
 				let hi = self.pop(mem, state).val as usize;
 				// yes, really, +1
-				self.jmp_dst = Some(mem.loc_from_va(state, VA(((hi << 8) | lo) + 1)));
+				self.jmp_dst = Some(mem.ea_from_va(state, VA(((hi << 8) | lo) + 1)));
 			}
 			PHA => self.push(mem, state, self.regs.A),
 			PHP => self.push(mem, state, Vu8::ind(self.regs.P)), // TODO: not really indeterminate
@@ -495,7 +495,7 @@ impl IInterpreter for Mos65xxInterpreter {
 	}
 
 	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock, state: Option<MmuState>)
-	-> Option<Location> {
+	-> Option<EA> {
 		let insts = bb.insts();
 		let last = insts.len() - 1;
 		let state = state.unwrap_or(bb.mmu_state());

@@ -3,7 +3,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use enum_dispatch::enum_dispatch;
 
-use crate::memory::{ Endian, Memory, MmuState, Location, VA };
+use crate::memory::{ Endian, Memory, MmuState, EA, VA };
 use crate::program::{ Instruction, BasicBlock };
 
 // ------------------------------------------------------------------------------------------------
@@ -31,19 +31,19 @@ pub enum Disassembler {
 
 impl Disassembler {
 	/// Iterator over all instructions in a slice, where the first one has the given VA.
-	pub fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, loc: Location)
+	pub fn disas_all<'dis, 'img>(&'dis self, img: &'img [u8], state: MmuState, va: VA, ea: EA)
 	-> DisasAll<'dis, 'img> {
-		DisasAll::new(self, img, state, va, loc)
+		DisasAll::new(self, img, state, va, ea)
 	}
 }
 
 #[enum_dispatch(Disassembler)]
 /// Trait for disassemblers.
 pub trait IDisassembler : Sized {
-	/// Disassemble a single instruction from `img` with the given VA and Location.
+	/// Disassemble a single instruction from `img` with the given VA and EA.
 	/// Returns the disassembled instruction and the new MMU state (which will be in effect
 	/// on the *next* instruction).
-	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, loc: Location)
+	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, ea: EA)
 	-> DisasResult<Instruction>;
 
 	// --------------------------------------------------------------------------------------------
@@ -67,15 +67,15 @@ pub struct DisasAll<'dis, 'img> {
 	img:   &'img [u8],
 	state: MmuState,
 	va:    VA,
-	loc:   Location,
+	ea:    EA,
 	offs:  usize,
 	err:   Option<DisasError>,
 }
 
 impl<'dis, 'img> DisasAll<'dis, 'img> {
-	fn new(disas: &'dis Disassembler, img: &'img [u8], state: MmuState, va: VA, loc: Location)
+	fn new(disas: &'dis Disassembler, img: &'img [u8], state: MmuState, va: VA, ea: EA)
 	-> Self {
-		Self { disas, img, state, va, loc, offs: 0, err: None }
+		Self { disas, img, state, va, ea, offs: 0, err: None }
 	}
 
 	/// If iteration stopped because of an error, returns that error.
@@ -98,14 +98,14 @@ impl<'dis, 'img> DisasAll<'dis, 'img> {
 		self.va
 	}
 
-	/// The Location where an error occurred, if any.
-	pub fn err_loc(&self) -> Location {
-		self.loc
+	/// The EA where an error occurred, if any.
+	pub fn err_ea(&self) -> EA {
+		self.ea
 	}
 
 	pub fn skip_it(&mut self) {
 		self.va += 1;
-		self.loc += 1;
+		self.ea += 1;
 		self.offs += 1;
 		self.err = None;
 	}
@@ -119,11 +119,11 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 			// don't want to produce an error when successfully disassembling all instructions
 			None
 		} else {
-			match self.disas.disas_instr(&self.img[self.offs ..], self.state, self.va, self.loc) {
+			match self.disas.disas_instr(&self.img[self.offs ..], self.state, self.va, self.ea) {
 				Ok(inst) => {
 					let size = inst.size();
 					self.va += size;
-					self.loc += size;
+					self.ea += size;
 					self.offs += size;
 					Some(inst)
 				}
@@ -256,10 +256,10 @@ pub trait IInterpreter: Sized + Sync + Send {
 	// reset all state.
 	fn reset(&mut self);
 
-	// interprets the BB and returns the location of the successor to run, or None if
+	// interprets the BB and returns the EA of the successor to run, or None if
 	// we hit the end. state is optional state to replace bb.mmu_state().
 	fn interpret_bb(&mut self, mem: &Memory, bb: &BasicBlock, state: Option<MmuState>)
-	-> Option<Location>;
+	-> Option<EA>;
 
 	// the most recent MMU state change that was encountered when interpreting the last BB.
 	fn last_mmu_state_change(&self) -> Option<(MmuState, ValueKind)>;

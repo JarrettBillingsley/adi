@@ -1,6 +1,6 @@
 
 use crate::arch::{ IInterpreter, ValueKind };
-use crate::memory::{ Memory, Location, MmuState };
+use crate::memory::{ Memory, EA, MmuState };
 use crate::program::{ BasicBlock };
 
 // ------------------------------------------------------------------------------------------------
@@ -19,7 +19,7 @@ impl IInterpreter for GBInterpreter {
 	fn reset(&mut self) {}
 
 	fn interpret_bb(&mut self, _mem: &Memory, _bb: &BasicBlock, _state: Option<MmuState>)
-	-> Option<Location> {
+	-> Option<EA> {
 		None
 	}
 

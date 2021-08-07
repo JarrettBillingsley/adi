@@ -26,14 +26,14 @@ impl SegId {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Location
+// EA
 // ------------------------------------------------------------------------------------------------
 
 /// A unique location consisting of Segment ID and an offset within that Segment.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Location(u64);
+pub struct EA(u64);
 
-impl Display for Location {
+impl Display for EA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{:04X}:{:08X}", self.seg().0, self.offs())
 	}
@@ -43,7 +43,7 @@ const SEG_MASK: u64  = 0xFFFF0000_00000000;
 const OFFS_MASK: u64 = 0x0000FFFF_FFFFFFFF;
 const SEG_SHIFT: usize = 48;
 
-impl Location {
+impl EA {
 	pub fn new(seg: SegId, offs: usize) -> Self {
 		assert!((offs as u64) & SEG_MASK == 0);
 		Self(((seg.0 as u64) << SEG_SHIFT) | (offs as u64))
@@ -71,33 +71,33 @@ impl Location {
 	}
 }
 
-impl Debug for Location {
+impl Debug for EA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{}", self)
 	}
 }
 
-impl Add<usize> for Location {
+impl Add<usize> for EA {
 	type Output = Self;
 	fn add(self, other: usize) -> Self {
-		Location::new(self.seg(), self.offs() + other)
+		EA::new(self.seg(), self.offs() + other)
 	}
 }
 
-impl AddAssign<usize> for Location {
+impl AddAssign<usize> for EA {
 	fn add_assign(&mut self, other: usize) {
 		self.set_offs(self.offs() + other);
 	}
 }
 
-impl Sub<usize> for Location {
+impl Sub<usize> for EA {
 	type Output = Self;
 	fn sub(self, other: usize) -> Self {
-		Location::new(self.seg(), self.offs() - other)
+		EA::new(self.seg(), self.offs() - other)
 	}
 }
 
-impl SubAssign<usize> for Location {
+impl SubAssign<usize> for EA {
 	fn sub_assign(&mut self, other: usize) {
 		self.set_offs(self.offs() - other);
 	}
@@ -160,10 +160,10 @@ impl Segment {
 	/// Length in bytes.
 	#[inline] pub fn len(&self) -> usize            { self.size }
 
-	/// Whether this segment contains a given Location.
-	pub fn contains_loc(&self, loc: Location) -> bool {
-		if loc.seg() == self.id {
-			assert!(loc.offs() < self.size);
+	/// Whether this segment contains a given EA.
+	pub fn contains_ea(&self, ea: EA) -> bool {
+		if ea.seg() == self.id {
+			assert!(ea.offs() < self.size);
 			true
 		} else {
 			false
@@ -198,10 +198,10 @@ impl Segment {
 	// ---------------------------------------------------------------------------------------------
 	// Span management (spanagement?)
 
-	/// Get the span which contains the given location.
-	pub fn span_at_loc(&self, loc: Location) -> Span {
-		assert!(loc.seg() == self.id);
-		self.spans.span_at(loc.offs())
+	/// Get the span which contains the given EA.
+	pub fn span_at_ea(&self, ea: EA) -> Span {
+		assert!(ea.seg() == self.id);
+		self.spans.span_at(ea.offs())
 	}
 
 	/// Iterator over all spans in this segment, in order.
@@ -209,53 +209,53 @@ impl Segment {
 		self.spans.iter()
 	}
 
-	pub(crate) fn span_make_data(&mut self, loc: Location, size: usize, id: DataId) {
-		let span = self.span_at_loc(loc);
+	pub(crate) fn span_make_data(&mut self, ea: EA, size: usize, id: DataId) {
+		let span = self.span_at_ea(ea);
 
-		assert!(span.is_unknown(), "defining a data item at non-empty location {}", loc);
+		assert!(span.is_unknown(), "defining a data item at non-empty EA {}", ea);
 		assert!(span.len() >= size,
 			"defining a data item too big for its span (item is {} bytes, have {})", size, span.len());
 
-		self.spans.define(loc.offs(), size, SpanKind::Data(id));
+		self.spans.define(ea.offs(), size, SpanKind::Data(id));
 	}
 
-	pub(crate) fn span_begin_analysis(&mut self, loc: Location) {
-		assert!(loc.seg() == self.id);
+	pub(crate) fn span_begin_analysis(&mut self, ea: EA) {
+		assert!(ea.seg() == self.id);
 		// may not be at the beginning of a span, so have to use define
-		let end = self.spans.span_at(loc.offs()).end();
-		self.spans.define(loc.offs(), end.offs() - loc.offs(), SpanKind::Ana);
+		let end = self.spans.span_at(ea.offs()).end();
+		self.spans.define(ea.offs(), end.offs() - ea.offs(), SpanKind::Ana);
 	}
 
-	pub(crate) fn span_cancel_analysis(&mut self, loc: Location) {
-		assert!(loc.seg() == self.id);
+	pub(crate) fn span_cancel_analysis(&mut self, ea: EA) {
+		assert!(ea.seg() == self.id);
 		// may not be at the beginning of a span, so have to use define
-		self.spans.undefine(loc.offs());
+		self.spans.undefine(ea.offs());
 	}
 
-	pub(crate) fn span_end_analysis(&mut self, loc: Location, end: Location, kind: SpanKind) {
-		assert!(loc.seg() == self.id);
-		assert!(self.spans.span_at(loc.offs()).kind() == SpanKind::Ana);
-		self.spans.undefine(loc.offs());
-		self.spans.define(loc.offs(), end.offs() - loc.offs(), kind);
+	pub(crate) fn span_end_analysis(&mut self, start: EA, end: EA, kind: SpanKind) {
+		assert!(start.seg() == self.id);
+		assert!(self.spans.span_at(start.offs()).kind() == SpanKind::Ana);
+		self.spans.undefine(start.offs());
+		self.spans.define(start.offs(), end.offs() - start.offs(), kind);
 	}
 
-	/// Split the span that owns `loc` into two parts; the second part will be given `kind`.
+	/// Split the span that owns `ea` into two parts; the second part will be given `kind`.
 	/// Panics if the existing span is Unknown, or if the length of either part will be 0.
-	pub fn split_span(&mut self, loc: Location, kind: SpanKind) {
-		assert!(loc.seg() == self.id);
-		let existing = self.spans.span_at(loc.offs());
+	pub fn split_span(&mut self, ea: EA, kind: SpanKind) {
+		assert!(ea.seg() == self.id);
+		let existing = self.spans.span_at(ea.offs());
 
-		assert!(existing.start().offs() < loc.offs());
-		assert!(loc.offs() < existing.end().offs());
+		assert!(existing.start().offs() < ea.offs());
+		assert!(ea.offs() < existing.end().offs());
 
-		let first_len = loc.offs() - existing.start().offs();
-		let second_len = existing.end().offs() - loc.offs();
+		let first_len = ea.offs() - existing.start().offs();
+		let second_len = existing.end().offs() - ea.offs();
 
 		self.spans.truncate(existing.start().offs(), first_len);
-		self.spans.define(loc.offs(), second_len, kind);
+		self.spans.define(ea.offs(), second_len, kind);
 	}
 
-	pub fn redefine_span(&mut self, start: Location, kind: SpanKind) {
+	pub fn redefine_span(&mut self, start: EA, kind: SpanKind) {
 		assert!(start.seg() == self.id);
 		self.spans.redefine(start.offs(), kind);
 	}
@@ -273,20 +273,20 @@ impl Segment {
 		self.spans.span_at(offs)
 	}
 
-	// Given Location bounds, convert them into offset bounds.
-	fn offset_bounds_from_loc_bounds(&self, bounds: impl RangeBounds<Location>)
+	// Given EA bounds, convert them into offset bounds.
+	fn offset_bounds_from_ea_bounds(&self, bounds: impl RangeBounds<EA>)
 	-> impl RangeBounds<usize> {
 		use Bound::*;
 
 		let start = match bounds.start_bound() {
-			Included(loc) => { assert!(loc.seg() == self.id); Included(loc.offs()) }
-			Excluded(loc) => { assert!(loc.seg() == self.id); Excluded(loc.offs()) }
+			Included(ea) => { assert!(ea.seg() == self.id); Included(ea.offs()) }
+			Excluded(ea) => { assert!(ea.seg() == self.id); Excluded(ea.offs()) }
 			Unbounded                         => Unbounded,
 		};
 
 		let end = match bounds.end_bound() {
-			Included(loc) => { assert!(loc.seg() == self.id); Included(loc.offs()) }
-			Excluded(loc) => { assert!(loc.seg() == self.id); Excluded(loc.offs()) }
+			Included(ea) => { assert!(ea.seg() == self.id); Included(ea.offs()) }
+			Excluded(ea) => { assert!(ea.seg() == self.id); Excluded(ea.offs()) }
 			Unbounded                         => Unbounded,
 		};
 
@@ -301,31 +301,31 @@ impl ImageSliceable<usize> for Segment {
 	}
 }
 
-impl ImageSliceable<Location> for Segment {
+impl ImageSliceable<EA> for Segment {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<Location>) -> ImageSlice {
-		self.image_slice(self.offset_bounds_from_loc_bounds(range))
+	fn image_slice(&self, range: impl RangeBounds<EA>) -> ImageSlice {
+		self.image_slice(self.offset_bounds_from_ea_bounds(range))
 	}
 }
 
-impl ImageRead<Location> for Segment {
-	fn read_u8(&self, idx: Location) -> u8      {
+impl ImageRead<EA> for Segment {
+	fn read_u8(&self, idx: EA) -> u8      {
 		assert!(idx.seg() == self.id);
 		self.read_u8(idx.offs())
 	}
-	fn read_le_u16(&self, idx: Location) -> u16 {
+	fn read_le_u16(&self, idx: EA) -> u16 {
 		assert!(idx.seg() == self.id);
 		self.read_le_u16(idx.offs())
 	}
-	fn read_be_u16(&self, idx: Location) -> u16 {
+	fn read_be_u16(&self, idx: EA) -> u16 {
 		assert!(idx.seg() == self.id);
 		self.read_be_u16(idx.offs())
 	}
-	fn read_le_u32(&self, idx: Location) -> u32 {
+	fn read_le_u32(&self, idx: EA) -> u32 {
 		assert!(idx.seg() == self.id);
 		self.read_le_u32(idx.offs())
 	}
-	fn read_be_u32(&self, idx: Location) -> u32 {
+	fn read_be_u32(&self, idx: EA) -> u32 {
 		assert!(idx.seg() == self.id);
 		self.read_be_u32(idx.offs())
 	}

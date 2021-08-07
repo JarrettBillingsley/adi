@@ -5,7 +5,7 @@ use std::ops::{ Bound, RangeBounds };
 use parse_display::Display;
 
 use crate::program::{ DataId, BBId };
-use crate::memory::{ Location, SegId };
+use crate::memory::{ EA, SegId };
 
 // ------------------------------------------------------------------------------------------------
 // Span
@@ -39,9 +39,9 @@ impl Span {
 	}
 
 	/// address of first byte of span.
-	#[inline] pub fn start(&self) -> Location { Location::new(self.seg, self.start) }
+	#[inline] pub fn start(&self) -> EA { EA::new(self.seg, self.start) }
 	/// address of first byte after span.
-	#[inline] pub fn end  (&self) -> Location { Location::new(self.seg, self.end) }
+	#[inline] pub fn end  (&self) -> EA { EA::new(self.seg, self.end) }
 	/// what kind of span it is.
 	#[inline] pub fn kind (&self) -> SpanKind { self.kind }
 	/// The ID of the segment which owns this span.

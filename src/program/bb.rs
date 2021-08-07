@@ -6,7 +6,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
 
-use crate::memory::{ Location, MmuState };
+use crate::memory::{ EA, MmuState };
 use crate::program::{ Instruction, FuncId };
 
 // ------------------------------------------------------------------------------------------------
@@ -33,25 +33,25 @@ impl Debug for BBId {
 pub struct BasicBlock {
 	id:               BBId,
 	func:             Option<FuncId>,
-	pub(crate) loc:   Location,
+	pub(crate) ea:    EA,
 	pub(crate) term:  BBTerm,
 	pub(crate) insts: Vec<Instruction>,
 	state:            MmuState,
 }
 
 impl BasicBlock {
-	fn new(id: Index, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	fn new(id: Index, ea: EA, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
 	-> Self {
 		assert_ne!(insts.len(), 0);
-		Self { id: BBId(id), func: None, loc, term, insts, state }
+		Self { id: BBId(id), func: None, ea, term, insts, state }
 	}
 
 	/// Its globally-unique id.
 	pub fn id      (&self) -> BBId     { self.id }
-	/// Its globally-unique location.
-	pub fn loc     (&self) -> Location { self.loc }
+	/// Its globally-unique EA.
+	pub fn ea     (&self) -> EA { self.ea }
 	/// Where its terminator (last instruction) is located.
-	pub fn term_loc(&self) -> Location { self.term_inst().loc() }
+	pub fn term_ea(&self) -> EA { self.term_inst().ea() }
 	/// How it ends, and what its successors are.
 	pub fn term    (&self) -> &BBTerm  { &self.term }
 	/// The terminating instruction.
@@ -76,19 +76,19 @@ impl BasicBlock {
 		self.func.unwrap()
 	}
 
-	pub fn inst_at_loc(&self, loc: Location) -> Option<&Instruction> {
-		self.insts.iter().find(|&inst| inst.loc() == loc)
+	pub fn inst_at_ea(&self, ea: EA) -> Option<&Instruction> {
+		self.insts.iter().find(|&inst| inst.ea() == ea)
 	}
 
-	pub(crate) fn last_instr_before(&self, loc: Location) -> Option<usize> {
+	pub(crate) fn last_instr_before(&self, ea: EA) -> Option<usize> {
 		for (i, inst) in self.insts.iter().enumerate() {
-			if inst.loc() < loc {
-				let next = inst.next_loc();
+			if inst.ea() < ea {
+				let next = inst.next_ea();
 
 				use std::cmp::Ordering::*;
 
-				match next.cmp(&loc) {
-					// uh oh. loc is in the middle of this instruction.
+				match next.cmp(&ea) {
+					// uh oh. ea is in the middle of this instruction.
 					Greater => return None,
 					Equal   => return Some(i),
 					Less    => {}
@@ -131,10 +131,10 @@ impl BBIndex {
 	}
 
 	/// Creates a new BB and returns its ID.
-	pub fn new_bb(&mut self, loc: Location, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
+	pub fn new_bb(&mut self, ea: EA, term: BBTerm, insts: Vec<Instruction>, state: MmuState)
 	-> BBId {
 		BBId(self.arena.insert_with(move |id| {
-			BasicBlock::new(id, loc, term, insts, state)
+			BasicBlock::new(id, ea, term, insts, state)
 		}))
 	}
 
@@ -174,21 +174,21 @@ pub enum BBTerm {
 	/// A return instruction.
 	Return,
 	/// Execution falls through to the next BB.
-	FallThru(Location),
+	FallThru(EA),
 	/// Unconditional jump.
-	Jump(Location),
+	Jump(EA),
 	/// Function call (dst = function called, ret = return location).
-	Call { dst: Location, ret: Location },
+	Call { dst: EA, ret: EA },
 	/// Conditional branch within a function.
-	Cond { t: Location, f: Location },
+	Cond { t: EA, f: EA },
 	/// Jump table with any number of destinations.
-	JumpTbl(Vec<Location>),
+	JumpTbl(Vec<EA>),
 	/// Like FallThru, but perform a bank change as well.
-	BankChange(Location),
+	BankChange(EA),
 }
 
 /// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
-pub type Successors<'a> = Chain<option::IntoIter<&'a Location>, slice::Iter<'a, Location>>;
+pub type Successors<'a> = Chain<option::IntoIter<&'a EA>, slice::Iter<'a, EA>>;
 
 impl BBTerm {
 	/// An iterator over the owning block's successors.
@@ -197,11 +197,11 @@ impl BBTerm {
 
 		match self {
 			DeadEnd | Return | Halt   => None     .into_iter().chain(&[]),
-			FallThru(loc) | Jump(loc) |
-			BankChange(loc)           => Some(loc).into_iter().chain(&[]),
+			FallThru(ea) | Jump(ea) |
+			BankChange(ea)            => Some(ea) .into_iter().chain(&[]),
 			Call { dst, ret }         => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }             => Some(t)  .into_iter().chain(slice::from_ref(f)),
-			JumpTbl(locs)             => None     .into_iter().chain(locs),
+			JumpTbl(eas)              => None     .into_iter().chain(eas),
 		}
 	}
 
@@ -213,10 +213,10 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt | FallThru(..) |
 			BankChange(..)                           => None     .into_iter().chain(&[]),
-			Jump(loc)                                => Some(loc).into_iter().chain(&[]),
+			Jump(ea)                                 => Some(ea) .into_iter().chain(&[]),
 			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),
-			JumpTbl(locs)                            => None     .into_iter().chain(locs),
+			JumpTbl(eas)                             => None     .into_iter().chain(eas),
 		}
 	}
 }
