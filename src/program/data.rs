@@ -1,6 +1,7 @@
 
 use std::cell::{ RefCell, /*RefMut*/ };
 use std::rc::{ Rc };
+use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
 
@@ -159,6 +160,12 @@ impl ArrayType {
 	pub fn len(&self) -> usize { self.len }
 }
 
+impl Display for ArrayType {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{}[{}]", self.ty, self.len)
+	}
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PtrType {
 	to:   Box<Type>,
@@ -168,6 +175,12 @@ pub struct PtrType {
 impl PtrType {
 	pub fn to(&self)   -> &Type { self.to.as_ref() }
 	pub fn kind(&self) -> &Type { self.kind.as_ref() }
+}
+
+impl Display for PtrType {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{} ptr to {}", self.kind, self.to)
+	}
 }
 
 /// The possible types.
@@ -284,6 +297,34 @@ impl Type {
 	pub fn is_strict_unsigned_integer(&self) -> bool {
 		use Type::*;
 		matches!(self, U8 | U16 | U32 | U64)
+	}
+}
+
+impl Display for Type {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use Type::*;
+
+		match self {
+			Bool           => write!(f, "bool"),
+			I8             => write!(f, "i8"),
+			I16            => write!(f, "i16"),
+			I32            => write!(f, "i32"),
+			I64            => write!(f, "i64"),
+			U8             => write!(f, "u8"),
+			U16            => write!(f, "u16"),
+			U32            => write!(f, "u32"),
+			U64            => write!(f, "u64"),
+			Char           => write!(f, "char"),
+			WChar          => write!(f, "wchar"),
+			StrZ(len)      => write!(f, "strz({})", len),
+			WStrZ(len)     => write!(f, "wstrz({})", len),
+			Enum(desc)     => write!(f, "enum {}",     desc.borrow().name()),
+			Bitfield(desc) => write!(f, "bitfield {}", desc.borrow().name()),
+			Struct(desc)   => write!(f, "struct {}",   desc.borrow().name()),
+			Array(at)      => write!(f, "{}", at),
+			Ptr(pt)        => write!(f, "{}", pt),
+			Code           => write!(f, "code"),
+		}
 	}
 }
 

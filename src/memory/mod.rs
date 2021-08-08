@@ -125,6 +125,11 @@ impl SegCollection {
 	pub fn iter(&self) -> impl Iterator<Item = &Segment> {
 		self.segs.iter()
 	}
+
+	/// Iterator over all segments that map to an image.
+	pub fn image_segs_iter(&self) -> impl Iterator<Item = &Segment> {
+		self.segs.iter().filter(|s| s.is_real())
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -200,6 +205,11 @@ impl Memory {
 			pub fn segment_from_id(&self, id: SegId) -> &Segment;
 			/// Same as above but mutable.
 			pub fn segment_from_id_mut(&mut self, id: SegId) -> &mut Segment;
+			/// Iterator over all segments.
+			#[call(iter)]
+			pub fn segs_iter(&self) -> impl Iterator<Item = &Segment>;
+			/// Iterator over all segments that map to an image.
+			pub fn image_segs_iter(&self) -> impl Iterator<Item = &Segment>;
 		}
 	}
 

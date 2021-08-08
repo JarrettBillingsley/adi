@@ -74,8 +74,18 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("found {} functions.", prog.all_funcs().count());
 
-	show_all_funcs(&prog);
+	let ea   = prog.ea_from_va(state, VA(0xFFB3));
+	let ty   = Type::array(Type::U8, 24);
+	let size = ty.size().fixed();
+	prog.new_data(Some("array_of_things"), ea, ty, size);
+
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
+
+	// show_all_funcs(&prog);
 	// show_prg0(&prog);
+
 
 	// let ea   = prog.ea_from_va(state, VA(0x821A));
 	// let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
@@ -86,20 +96,39 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn show_prg0(prog: &Program) {
-	let seg = prog.segment_for_name("PRG0").unwrap();
+	show_segment(prog, prog.segment_for_name("PRG0").unwrap().id());
+}
 
+fn show_segment(prog: &Program, segid: SegId) {
+	let seg = prog.segment_from_id(segid);
 	let divider = "; -------------------------------------------------------------------------";
+	let mut cur_func = None;
 
 	for span in seg.all_spans() {
+		if let Some(func) = prog.func_that_contains(span.start()) {
+			let func_id = func.id();
+
+			if cur_func.is_none() || cur_func.unwrap() != func_id {
+				cur_func = Some(func_id);
+
+				if span.bb() == Some(func.head_id()) {
+					show_func_header(prog, func);
+				} else {
+					show_func_piece_header(prog, func);
+				}
+			}
+		} else {
+			cur_func = None;
+		}
+
 		match span.kind() {
 			SpanKind::Unk => {
 				// TODO: this is kind of a mess
-				let ea = span.start();
+				let ea    = span.start();
 				let state = prog.mmu_state_at(ea).unwrap_or_else(|| prog.initial_mmu_state());
-				let va = prog.va_from_ea(state, ea);
-				let addr = prog.fmt_addr(va.0);
-
-				let msg = format!("[{} unexplored byte(s)]", span.len());
+				let va    = prog.va_from_ea(state, ea);
+				let addr  = prog.fmt_addr(va.0);
+				let msg   = format!("[{} unexplored byte(s)]", span.len());
 
 				println!("{}", divider.green());
 				println!("{:>4}:{} {}", seg.name().yellow(), addr, msg.truecolor(255, 127, 0));
@@ -107,13 +136,113 @@ fn show_prg0(prog: &Program) {
 				println!();
 			}
 
-			SpanKind::Code(bbid) => {
-				let bb = prog.get_bb(bbid);
-				show_bb(&prog, bb);
+			SpanKind::Code(id) => {
+				show_bb(prog, prog.get_bb(id));
+			}
+
+			SpanKind::Data(id) => {
+				show_data(prog, prog.get_data(id));
 			}
 
 			_ => {}
 		}
+	}
+}
+
+fn show_data(prog: &Program, data: &DataItem) {
+	let divider =
+		"; -------------------------------------------------------------------------".green();
+
+	let start = data.ea();
+	let size = data.size();
+
+	println!("{}", divider);
+	let msg = format!("; {} byte(s), type {}", size, data.ty());
+	println!("{}: {}", prog.name_of_ea(start).truecolor(127, 63, 0), msg.green());
+
+	let seg = prog.segment_from_ea(start);
+
+	if seg.is_real() {
+		let slice = seg.image_slice(start .. start + size);
+		println!("    {}", interpret_data(prog, data.radix(), data.ty(), &slice));
+	}
+}
+
+fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -> String {
+	use Type::*;
+
+	let endian = prog.endianness();
+
+	match ty {
+		Bool => format!("{}", slice.read_u8(0) != 0),
+
+		I8  => interpret_int(slice.read_u8(0) as i64, 8, radix),
+		I16 => interpret_int(slice.read_u16(0, endian) as i64, 16, radix),
+		I32 => interpret_int(slice.read_u32(0, endian) as i64, 32, radix),
+		I64 => interpret_int(slice.read_u64(0, endian) as i64, 64, radix),
+
+		U8  => interpret_uint(slice.read_u8(0) as u64, 8, radix),
+		U16 => interpret_uint(slice.read_u16(0, endian) as u64, 16, radix),
+		U32 => interpret_uint(slice.read_u32(0, endian) as u64, 32, radix),
+		U64 => interpret_uint(slice.read_u64(0, endian) as u64, 64, radix),
+
+		Char  => interpret_char(slice.read_u8(0) as char),
+		WChar => {
+			let v = slice.read_u16(0, endian);
+
+			match std::char::from_u32(v as u32) {
+				Some(c) => interpret_char(c),
+				None    => interpret_uint(v as u64, 16, Radix::Hex),
+			}
+		}
+
+		Array(at) => {
+			let mut ret = String::with_capacity(at.len() * 4);
+			let sub_ty = at.ty();
+			let stride = sub_ty.size().fixed();
+
+			for i in 0 .. at.len() {
+				let offs = i * stride;
+				let sub_slice = slice.image_slice(offs .. offs + stride);
+				let sub_str = interpret_data(prog, radix, sub_ty, &sub_slice);
+
+				if i != 0 {
+					ret.push(' ');
+				}
+
+				ret.push_str(&sub_str);
+			}
+
+			ret
+		}
+
+		StrZ(_len) => unimplemented!(),
+		WStrZ(_len) => unimplemented!(),
+		Ptr(_pt) => unimplemented!(),
+
+		Enum(_) | Bitfield(_) | Struct(_) => unimplemented!(),
+		Code => unreachable!(),
+	}
+}
+
+fn interpret_char(val: char) -> String {
+	format!("'{}'", val.escape_default())
+}
+
+fn interpret_int(val: i64, bits: usize, radix: Radix) -> String {
+	match radix {
+		Radix::Bin => format!("0b{:0width$b}", val, width = bits),
+		Radix::Dec => format!("{}", val),
+		Radix::Hex => format!("0x{:0width$X}", val, width = bits / 4),
+	}
+}
+
+// really the only difference is the Dec case
+fn interpret_uint(val: u64, bits: usize, radix: Radix) -> String {
+	match radix {
+		Radix::Bin => format!("0b{:0width$b}", val, width = bits),
+		Radix::Dec => format!("{}", val),
+		Radix::Hex => format!("0x{:0width$X}", val, width = bits / 4),
 	}
 }
 
@@ -127,6 +256,26 @@ fn show_all_funcs(prog: &Program) {
 }
 
 fn show_func(prog: &Program, func: &Function) {
+	show_func_header(prog, func);
+
+	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
+	bbs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+
+	for bb in bbs {
+		show_bb(prog, bb);
+	}
+}
+
+fn show_func_piece_header(prog: &Program, func: &Function) {
+	let divider =
+		"; -------------------------------------------------------------------------".green();
+
+	println!("{}", divider);
+	let name = prog.name_of_ea(func.ea());
+	println!("{}{}{}", "; (Piece of function ".green(), name.green(), ")".green());
+}
+
+fn show_func_header(prog: &Program, func: &Function) {
 	let divider =
 		"; -------------------------------------------------------------------------".green();
 
@@ -150,13 +299,6 @@ fn show_func(prog: &Program, func: &Function) {
 		}
 
 		println!();
-	}
-
-	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
-	bbs.sort_by(|a, b| a.ea().cmp(&b.ea()));
-
-	for bb in bbs {
-		show_bb(prog, bb);
 	}
 }
 

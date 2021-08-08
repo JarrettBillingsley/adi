@@ -1,6 +1,8 @@
 use std::ops::{ Range, RangeBounds, Bound, Index };
 use std::convert::TryInto;
 
+use crate::memory::{ Endian };
+
 // ------------------------------------------------------------------------------------------------
 // ImageRead
 // ------------------------------------------------------------------------------------------------
@@ -11,6 +13,41 @@ pub trait ImageRead<Index> {
 	fn read_be_u16(&self, index: Index) -> u16;
 	fn read_le_u32(&self, index: Index) -> u32;
 	fn read_be_u32(&self, index: Index) -> u32;
+	fn read_le_u64(&self, index: Index) -> u64;
+	fn read_be_u64(&self, index: Index) -> u64;
+
+	fn read_u16(&self, index: Index, endian: Endian) -> u16 {
+		match endian {
+			Endian::Little => self.read_le_u16(index),
+			Endian::Big    => self.read_be_u16(index),
+			Endian::NA     => panic!("invalid endianness"),
+		}
+	}
+
+	fn read_u32(&self, index: Index, endian: Endian) -> u32 {
+		match endian {
+			Endian::Little => self.read_le_u32(index),
+			Endian::Big    => self.read_be_u32(index),
+			Endian::NA     => panic!("invalid endianness"),
+		}
+	}
+
+	fn read_u64(&self, index: Index, endian: Endian) -> u64 {
+		match endian {
+			Endian::Little => self.read_le_u64(index),
+			Endian::Big    => self.read_be_u64(index),
+			Endian::NA     => panic!("invalid endianness"),
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// ImageSliceable
+// ------------------------------------------------------------------------------------------------
+
+/// Trait for getting `ImageSlice`s from things.
+pub trait ImageSliceable<Index> {
+	fn image_slice(&self, bounds: impl RangeBounds<Index>) -> ImageSlice;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -29,6 +66,16 @@ impl<'img> ImageSlice<'img> {
 
 	pub fn into_data(self) -> &'img [u8] {
 		self.data
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// private
+
+	fn check_range(&self, range: Range<usize>) -> (usize, usize) {
+		let (start, end) = (range.start, range.end);
+		assert!(end > start, "no zero-size slices");
+		assert!(end <= self.data.len(), "range exceeds data length");
+		(start, end)
 	}
 }
 
@@ -63,16 +110,38 @@ impl ImageRead<usize> for ImageSlice<'_> {
 		let data = &self.data[idx .. idx + 4];
 		u32::from_be_bytes(data.try_into().unwrap())
 	}
+
+	fn read_le_u64(&self, idx: usize) -> u64 {
+		let data = &self.data[idx .. idx + 8];
+		u64::from_le_bytes(data.try_into().unwrap())
+	}
+
+	fn read_be_u64(&self, idx: usize) -> u64 {
+		let data = &self.data[idx .. idx + 8];
+		u64::from_be_bytes(data.try_into().unwrap())
+	}
 }
 
-// ------------------------------------------------------------------------------------------------
-// ImageSliceable
-// ------------------------------------------------------------------------------------------------
+impl ImageSliceable<usize> for ImageSlice<'_> {
+	/// Get a read-only slice of this image's data.
+	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
+		let start = match range.start_bound() {
+			Bound::Included(&s) => s,
+			Bound::Excluded(&s) => s + 1,
+			Bound::Unbounded    => 0,
+		};
 
-/// Trait for getting `ImageSlice`s from things.
-pub trait ImageSliceable<Index> {
-	fn image_slice(&self, bounds: impl RangeBounds<Index>) -> ImageSlice;
+		let end = match range.end_bound() {
+			Bound::Included(&e) => e + 1,
+			Bound::Excluded(&e) => e,
+			Bound::Unbounded    => self.data.len(),
+		};
+
+		let (start, end) = self.check_range(start .. end);
+		ImageSlice { data: &self.data[start .. end] }
+	}
 }
+
 
 // ------------------------------------------------------------------------------------------------
 // Image

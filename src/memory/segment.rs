@@ -329,6 +329,14 @@ impl ImageRead<EA> for Segment {
 		assert!(idx.seg() == self.id);
 		self.read_be_u32(idx.offs())
 	}
+	fn read_le_u64(&self, idx: EA) -> u64 {
+		assert!(idx.seg() == self.id);
+		self.read_le_u64(idx.offs())
+	}
+	fn read_be_u64(&self, idx: EA) -> u64 {
+		assert!(idx.seg() == self.id);
+		self.read_be_u64(idx.offs())
+	}
 }
 
 impl ImageRead<usize> for Segment {
@@ -337,4 +345,6 @@ impl ImageRead<usize> for Segment {
 	fn read_be_u16(&self, idx: usize) -> u16 { self.image_slice_all().read_be_u16(idx) }
 	fn read_le_u32(&self, idx: usize) -> u32 { self.image_slice_all().read_le_u32(idx) }
 	fn read_be_u32(&self, idx: usize) -> u32 { self.image_slice_all().read_be_u32(idx) }
+	fn read_le_u64(&self, idx: usize) -> u64 { self.image_slice_all().read_le_u64(idx) }
+	fn read_be_u64(&self, idx: usize) -> u64 { self.image_slice_all().read_be_u64(idx) }
 }

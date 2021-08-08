@@ -13,7 +13,8 @@ use smallvec::{ SmallVec };
 use delegate::delegate;
 
 use crate::arch::{ INameLookup, IPrinter, Printer, IArchitecture };
-use crate::memory::{ Memory, MmuState, StateChange, EA, VA, SegId, Span, SpanKind, Segment };
+use crate::memory::{ Memory, MmuState, StateChange, EA, VA, SegId, Span, SpanKind, Segment,
+Endian };
 use crate::platform::{ Platform, IPlatform };
 
 // ------------------------------------------------------------------------------------------------
@@ -84,6 +85,8 @@ impl Program {
 
 	delegate! {
 		to self.mem {
+			/// Endianness.
+			pub fn endianness(&self) -> Endian;
 			/// The initial state of the MMU.
 			pub fn initial_mmu_state(&self) -> MmuState;
 			/// How this instruction changes the MMU state.
@@ -117,6 +120,16 @@ impl Program {
 			/// for the size of the address space.
 			pub fn fmt_addr(&self, addr: usize) -> String;
 		}
+	}
+
+	/// Iterator over all segments.
+	pub fn all_segs(&self) -> impl Iterator<Item = SegId> + '_ {
+		self.mem.segs_iter().map(|s| s.id())
+	}
+
+	/// Iterator over all segments that map to an image.
+	pub fn all_image_segs(&self) -> impl Iterator<Item = SegId> + '_ {
+		self.mem.image_segs_iter().map(|s| s.id())
 	}
 
 	pub fn mmu_state_at(&self, ea: EA) -> Option<MmuState> {
@@ -328,6 +341,11 @@ impl Program {
 		let did = self.data.new_item(name.map(|s| s.into()), ea, ty, size);
 		let seg = self.segment_from_ea_mut(ea);
 		seg.span_make_data(ea, size, did);
+
+		if let Some(name) = name {
+			self.add_name(name, ea);
+		}
+
 		did
 	}
 
