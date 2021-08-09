@@ -338,6 +338,13 @@ impl Program {
 		// next: have to determine if we can split the function in two.
 		// TODO: idea: if this bb is the dominator of all its successors including descendants,
 		// then we can split the function at `ea`.
+		// 1. compute dominator tree of cfg.
+		//    a. compute reverse postorder
+		//    b. do The Thing
+		// 2. compute recursive successor set R of this node EA.
+		//    a. just recursively add successors to this set
+		// 3. for each node N in R,
+		//    a. if EA is not in the dominator chain from N to bb0, fail.
 
 		// otherwise, give up and mark it a multi-entry function.
 		trace!(" marking function at {} as multi-entry", self.get_func(fid).ea());

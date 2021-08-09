@@ -61,7 +61,6 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 // ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	// let's set it up
 	let img = Image::new_from_file("tests/data/battletoads.nes")?;
 	let mut prog = program_from_image(img)?;
 
@@ -70,6 +69,51 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	let state = prog.initial_mmu_state();
 	prog.enqueue_function(state, prog.ea_from_name("VEC_RESET"));
 	prog.enqueue_function(state, prog.ea_from_name("VEC_NMI"));
+	prog.enqueue_function(state, prog.ea_from_name("VEC_IRQ"));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8003)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8006)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8009)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x800C)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x800F)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8012)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8015)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8018)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x801B)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x801E)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8021)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8024)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8027)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x802A)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x802D)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8030)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8085)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x80F7)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x831F)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x84E8)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x857A)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x86DE)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x87A3)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x87C2)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x884B)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x88EF)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8DC1)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x9150)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x9200)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x923E)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x9252)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x930A)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x93C8)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x944E)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x95E8)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x95EB)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x9643)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x9E4E)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0x9ED2)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0xA51E)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0xA521)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0xA560)));
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0xB06B)));
+	// prog.enqueue_function(MmuState::from_usize(3), EA::new(SegId(6), 0xFF84 - 0x8000));
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
@@ -77,22 +121,64 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	let ea   = prog.ea_from_va(state, VA(0xFFB3));
 	let ty   = Type::array(Type::U8, 24);
 	let size = ty.size().fixed();
-	prog.new_data(Some("array_of_things"), ea, ty, size);
-
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
-
-	// show_all_funcs(&prog);
-	// show_prg0(&prog);
-
+	prog.new_data(Some("BANK_CHANGE"), ea, ty, size);
 
 	// let ea   = prog.ea_from_va(state, VA(0x821A));
 	// let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
 	// let size = ty.size().fixed();
 	// prog.new_data(Some("array"), ea, ty, size);
 
+	let ty = Type::ptr(Type::Code, Type::U16);
+	prog.new_data(Some("VEC_NMI_PTR"),   prog.ea_from_va(state, VA(0xFFFA)), ty.clone(), 2);
+	prog.new_data(Some("VEC_RESET_PTR"), prog.ea_from_va(state, VA(0xFFFC)), ty.clone(), 2);
+	prog.new_data(Some("VEC_IRQ_PTR"),   prog.ea_from_va(state, VA(0xFFFE)), ty.clone(), 2);
+
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
+
+	// show_all_func_cfgs(&prog);
+
+	// show_all_funcs(&prog);
+	// show_prg0(&prog);
+
 	Ok(())
+}
+
+fn find_identical_image_pieces(prog: &Program) {
+	let seg_datas = prog.all_image_segs()
+		.map(|id| prog.segment_from_id(id).image_slice_all().data())
+		.collect::<Vec<_>>();
+
+	let mut in_run = false;
+	let mut run_start = 0;
+
+	for i in 0 .. seg_datas[0].len() {
+		let b0 = seg_datas[0][i];
+
+		let all_eq = seg_datas[1..].iter().all(|sd| sd[i] == b0);
+
+		if !all_eq {
+			if in_run {
+				in_run = false;
+				println!("run of identical bytes from {:04X} to {:04X}",
+					run_start + 0x8000, i + 0x8000);
+
+				for d in seg_datas.iter() {
+					print!("{:02X} ", d[i]);
+				}
+				println!();
+			}
+		} else if !in_run {
+			in_run = true;
+			run_start = i;
+		}
+	}
+
+	if in_run {
+		println!("run of identical bytes from {:04X} to {:04X}",
+			run_start + 0x8000, seg_datas[0].len() + 0x8000);
+	}
 }
 
 fn show_prg0(prog: &Program) {
@@ -101,14 +187,14 @@ fn show_prg0(prog: &Program) {
 
 fn show_segment(prog: &Program, segid: SegId) {
 	let seg = prog.segment_from_id(segid);
-	let divider = "; -------------------------------------------------------------------------";
+
 	let mut cur_func = None;
 
 	for span in seg.all_spans() {
 		if let Some(func) = prog.func_that_contains(span.start()) {
 			let func_id = func.id();
 
-			if cur_func.is_none() || cur_func.unwrap() != func_id {
+			if cur_func != Some(func_id) {
 				cur_func = Some(func_id);
 
 				if span.bb() == Some(func.head_id()) {
@@ -122,31 +208,58 @@ fn show_segment(prog: &Program, segid: SegId) {
 		}
 
 		match span.kind() {
-			SpanKind::Unk => {
-				// TODO: this is kind of a mess
-				let ea    = span.start();
-				let state = prog.mmu_state_at(ea).unwrap_or_else(|| prog.initial_mmu_state());
-				let va    = prog.va_from_ea(state, ea);
-				let addr  = prog.fmt_addr(va.0);
-				let msg   = format!("[{} unexplored byte(s)]", span.len());
-
-				println!("{}", divider.green());
-				println!("{:>4}:{} {}", seg.name().yellow(), addr, msg.truecolor(255, 127, 0));
-				println!("{}", divider.green());
-				println!();
-			}
-
-			SpanKind::Code(id) => {
-				show_bb(prog, prog.get_bb(id));
-			}
-
-			SpanKind::Data(id) => {
-				show_data(prog, prog.get_data(id));
-			}
-
+			SpanKind::Unk      => show_unk(prog, &span),
+			SpanKind::Code(id) => show_bb(prog, prog.get_bb(id)),
+			SpanKind::Data(id) => show_data(prog, prog.get_data(id)),
 			_ => {}
 		}
 	}
+}
+
+const UNK_SIZE_CUTOFF: usize = 512;
+const UNK_STRIDE: usize = 16;
+
+fn show_unk(prog: &Program, span: &Span) {
+	let divider =
+		"; -------------------------------------------------------------------------".green();
+
+	// TODO: this is kind of a mess
+	let ea    = span.start();
+	let seg   = prog.segment_from_ea(ea);
+	let state = prog.mmu_state_at(ea).unwrap_or_else(|| prog.initial_mmu_state());
+	let va    = prog.va_from_ea(state, ea);
+	let addr  = prog.fmt_addr(va.0);
+	let msg   = format!("[{} unexplored byte(s)]", span.len());
+
+	println!("{}", &divider);
+	println!("{:>4}:{} {}", seg.name().yellow(), addr, msg.truecolor(255, 127, 0));
+
+	if seg.is_real() {
+		let len = span.len().min(UNK_SIZE_CUTOFF);
+		let slice = seg.image_slice(ea .. ea + len);
+		let data = slice.data();
+		let seg_name = seg.name().yellow();
+
+		for (i, chunk) in data.chunks(UNK_STRIDE).enumerate() {
+			let mut bytes = String::with_capacity(chunk.len() * 3);
+
+			bytes.push_str(&format!("{:02X}", chunk[0]));
+
+			for byte in &chunk[1 ..] {
+				bytes.push_str(&format!(" {:02X}", byte));
+			}
+
+			let addr = prog.fmt_addr(va.0 + i * UNK_STRIDE);
+			println!("{:>4}:{} {}", seg_name, addr, bytes.truecolor(255, 127, 0));
+		}
+
+		if span.len() > UNK_SIZE_CUTOFF {
+			println!("          {}", "...".truecolor(255, 127, 0));
+		}
+	}
+
+	println!("{}", &divider);
+	println!();
 }
 
 fn show_data(prog: &Program, data: &DataItem) {
@@ -216,9 +329,12 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 			ret
 		}
 
+		Ptr(pt) => {
+			interpret_data(prog, Radix::Hex, &pt.kind(), slice)
+		}
+
 		StrZ(_len) => unimplemented!(),
 		WStrZ(_len) => unimplemented!(),
-		Ptr(_pt) => unimplemented!(),
 
 		Enum(_) | Bitfield(_) | Struct(_) => unimplemented!(),
 		Code => unreachable!(),
@@ -255,6 +371,15 @@ fn show_all_funcs(prog: &Program) {
 	}
 }
 
+fn show_all_func_cfgs(prog: &Program) {
+	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
+	funcs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+
+	for func in funcs {
+		show_func_cfg(prog, func);
+	}
+}
+
 fn show_func(prog: &Program, func: &Function) {
 	show_func_header(prog, func);
 
@@ -263,6 +388,32 @@ fn show_func(prog: &Program, func: &Function) {
 
 	for bb in bbs {
 		show_bb(prog, bb);
+	}
+}
+
+fn show_func_cfg(prog: &Program, func: &Function) {
+	show_func_header(prog, func);
+
+	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
+	bbs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+
+	for bb in bbs {
+		let bb_ea = bb.ea();
+
+		print!("{}", prog.name_of_ea(bb_ea).truecolor(127, 63, 0));
+
+		// S U C C
+		let succ = bb.successors().collect::<Vec<_>>();
+
+		if !succ.is_empty() {
+			print!(" ->");
+
+			for s in succ {
+				print!(" {}", prog.name_of_ea(*s));
+			}
+		}
+
+		println!();
 	}
 }
 
