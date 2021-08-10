@@ -335,20 +335,68 @@ impl Program {
 			bbid = new_bbid;
 		}
 
-		// next: have to determine if we can split the function in two.
-		// TODO: idea: if this bb is the dominator of all its successors including descendants,
-		// then we can split the function at `ea`.
-		// 1. compute dominator tree of cfg.
-		//    a. compute reverse postorder
-		//    b. do The Thing
-		// 2. compute recursive successor set R of this node EA.
-		//    a. just recursively add successors to this set
-		// 3. for each node N in R,
-		//    a. if EA is not in the dominator chain from N to bb0, fail.
+		// TODO: technically, it *is* possible to split multi-entry functions, as long as
+		// the head node dominates all the other entry points. but I don't care to deal with
+		// that right now.
+		if self.get_func(fid).is_multi_entry() {
+			trace!(" function at {} is multi-entry already", self.get_func(fid).ea());
+			self.get_func_mut(fid).try_add_entrypoint(bbid);
+			return;
+		}
 
-		// otherwise, give up and mark it a multi-entry function.
-		trace!(" marking function at {} as multi-entry", self.get_func(fid).ea());
-		self.get_func_mut(fid).try_add_entrypoint(bbid);
+		// idea: if this bb is the dominator of all its successors including descendants,
+		// then we can split the function at `ea`.
+		let ana           = self.func_begin_analysis(self.get_func(fid));
+		let doms          = self.func_bb_dominators(&ana);
+		let mut reachable = self.func_reachable_bbs(&ana, bbid);
+
+		// this makes some subsequent operations simpler.
+		reachable.remove(&bbid);
+
+		// self.func_dump_cfg(&ana);
+		// println!("trying to add entry point in {:?}", bbid);
+		// println!("{:#?}", doms);
+		// println!("reachable: {:#?}", reachable);
+
+		// if this BB doesn't dominate all BBs in reachable (except itself), then we can't split.
+		let mut can_split = true;
+
+		for &n in reachable.iter() {
+			let mut doms_of_n = doms.strict_dominators(n).expect("unreachable from start");
+
+			if !doms_of_n.any(|d| d == bbid) {
+				can_split = false;
+				break;
+			}
+		}
+
+		if can_split {
+			// alright, we can split! conveniently, the reachable set is the set of BBs that the
+			// new function will inherit, and bbid will become its head.
+
+			// first, remove all the 'reachable' bbs from func
+			self.get_func_mut(fid).bbs
+				.retain(|&to_keep| to_keep != bbid && !reachable.contains(&to_keep));
+
+			// then, turn 'reachable' into a vec, with bbid as the first item.
+			let new_func_bbs = Some(bbid).into_iter()
+				.chain(reachable.into_iter())
+				.collect::<Vec<_>>();
+
+			// last, make a new function out of the new_func_bbs, and change what function
+			// they belong to.
+			let new_fid = self.funcs.new_func(ea, new_func_bbs);
+
+			for &bb in &self.funcs.get(new_fid).bbs {
+				self.bbidx.get_mut(bb).change_func(new_fid);
+			}
+
+			trace!(" split off new function {:?} at {}.", new_fid, ea);
+		} else {
+			// otherwise, give up and mark it a multi-entry function.
+			trace!(" can't split, marking function at {} as multi-entry", self.get_func(fid).ea());
+			self.get_func_mut(fid).try_add_entrypoint(bbid);
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -459,7 +507,7 @@ impl Program {
 		let (old, new) = self.bbidx.get2_mut(old_id, new_id);
 		std::mem::swap(&mut old.term, &mut new.term);
 
-		log::trace!("split bb ea: {}, term: {:?}", new.ea, new.term);
+		log::trace!("split bb new id: {:?} ea: {}, term: {:?}", new_id, new.ea, new.term);
 		new_id
 	}
 

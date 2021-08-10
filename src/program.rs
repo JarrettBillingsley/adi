@@ -4,6 +4,7 @@ use std::collections::{
 	btree_map::Range as BTreeRange,
 	hash_map::Iter as HashIter,
 	HashMap,
+	HashSet,
 	VecDeque,
 };
 use std::ops::{ Bound, RangeBounds };
@@ -237,42 +238,12 @@ impl Program {
 		Some(self.funcs.get(func_id))
 	}
 
-	/// Calculate the predecessors of all BBs in this function. **This is an expensive
-	/// operation!**
-	pub fn func_bb_predecessors(&self, func: &Function) -> HashMap<BBId, SmallVec<[BBId; 4]>> {
-		let mut ret = func.bbs.iter().map(|&bbid|
-			(bbid, SmallVec::new())
-		).collect::<HashMap<_, _>>();
-
-		let fid = func.id();
-
-		for pred in func.bbs.iter() {
-			let pred = self.bbidx.get(*pred);
-			for ea in pred.successors() {
-				match self.span_at_ea(*ea).bb() {
-					Some(succ_id) => {
-						let succ = self.bbidx.get(succ_id);
-
-						if succ.func() == fid {
-							ret.get_mut(&succ_id)
-								.expect("it's gotta be in there")
-								.push(pred.id());
-						}
-					}
-					_ => {
-						// TODO: is there anything we need to do here??
-					}
-				}
-			}
-		}
-
-		ret
-	}
-
+	/// Formats the given instruction's mnemonic into a string.
 	pub fn inst_fmt_mnemonic(&self, i: &Instruction) -> String {
 		self.print.fmt_mnemonic(i)
 	}
 
+	/// Formats the given instruction's operands into a string.
 	pub fn inst_fmt_operands(&self, state: MmuState, i: &Instruction) -> String {
 		self.print.fmt_operands(i, state, self)
 	}
@@ -518,4 +489,133 @@ fn va_range_to_ea_range(range: impl RangeBounds<VA>, f: impl Fn(VA) -> EA)
 	};
 
 	(start, end)
+}
+
+// -------------------------------------------------------------------------------------------------
+// CFG Algorithms
+
+use lazycell::LazyCell;
+
+pub type CfgGraph        = petgraph::graphmap::DiGraphMap<BBId, ()>;
+pub type CfgDominators   = petgraph::algo::dominators::Dominators<BBId>;
+pub type CfgPredecessors = HashMap<BBId, SmallVec<[BBId; 4]>>;
+
+/// Type to hold onto function CFG analysis data structures to avoid having to recompute them
+/// during longer analyses. Holds a reference to the function to prevent it from being modified
+/// during the analysis.
+pub struct FuncAnalysis<'f> {
+	func:  &'f Function,
+	cfg:   CfgGraph,
+	doms:  LazyCell<CfgDominators>,
+	preds: LazyCell<CfgPredecessors>,
+}
+
+impl<'f> FuncAnalysis<'f> {
+	fn new(func: &'f Function, cfg: CfgGraph) -> Self {
+		Self {
+			func,
+			cfg,
+			doms:  LazyCell::new(),
+			preds: LazyCell::new(),
+		}
+	}
+}
+
+impl Program {
+	/// Begin the analysis of a function. The returned object is meant to be passed to the other
+	/// analysis methods and is used to cache their results (as some methods use the results of
+	/// others to operate properly).
+	pub fn func_begin_analysis<'f>(&self, func: &'f Function) -> FuncAnalysis<'f> {
+		let num_bbs = func.num_bbs();
+		let mut cfg = CfgGraph::with_capacity(num_bbs, num_bbs);
+
+		// for CFGs with only one node, there are 0 edges, so the loop below will not add
+		// the head node.
+		cfg.add_node(func.head_id());
+
+		for bbid in func.all_bbs() {
+			self.bb_successors_in_function(bbid, |succ_id| {
+				cfg.add_edge(bbid, succ_id, ());
+			});
+		}
+
+		// should be true... the only way it couldn't be true is if there were a BB that had no
+		// successors or predecessors in the function, which seeeeeeeems impossible. FOR NOW.
+		// this is going to be the setup for a brick joke, isn't it?
+		assert!(cfg.node_count() == num_bbs);
+
+		FuncAnalysis::new(func, cfg)
+	}
+
+	/// Get or calculate the predecessors of all BBs in this function.
+	pub fn func_bb_predecessors<'f>(&self, ana: &'f FuncAnalysis) -> &'f CfgPredecessors {
+		use petgraph::visit::{ DfsPostOrder, Walker };
+
+		if !ana.preds.filled() {
+			let mut preds = CfgPredecessors::new();
+
+			// "borrowed" from petgraph::algo::dominators::simple_fast_post_order :P
+			for pred in DfsPostOrder::new(&ana.cfg, ana.func.head_id()).iter(&ana.cfg) {
+				for succ in ana.cfg.neighbors(pred) {
+					preds.entry(succ).or_insert_with(SmallVec::new).push(pred);
+				}
+			}
+
+			ana.preds.fill(preds).unwrap();
+		}
+
+		ana.preds.borrow().unwrap()
+	}
+
+	/// Get or calculate the dominators of all BBs in this function.
+	///
+	/// Panics if the function is multi-entry.
+	pub fn func_bb_dominators<'f>(&self, ana: &'f FuncAnalysis) -> &'f CfgDominators {
+		if !ana.doms.filled() {
+			assert!(!ana.func.is_multi_entry());
+
+			let doms = petgraph::algo::dominators::simple_fast(&ana.cfg, ana.func.head_id());
+
+			ana.doms.fill(doms).unwrap();
+		}
+
+		ana.doms.borrow().unwrap()
+	}
+
+	/// Dump the function's CFG as a DOT diagram description to the console. DEBUGGING!
+	pub fn func_dump_cfg<'f>(&self, ana: &'f FuncAnalysis) {
+		use petgraph::dot::{ Dot, Config };
+		println!("--------------------------------------------------------------");
+		println!("function {}", self.name_of_ea(ana.func.ea()));
+		println!("{:?}", Dot::with_config(&ana.cfg, &[Config::EdgeNoLabel]));
+	}
+
+	/// Calculates the set of all BBs reachable from the `start` bb in this function. The returned
+	/// set includes `start`. The result of this analysis is not cached.
+	pub fn func_reachable_bbs<'f>(&self, ana: &'f FuncAnalysis, start: BBId) -> HashSet<BBId> {
+		use petgraph::visit::{ DfsPostOrder, Walker };
+
+		let mut reachable = HashSet::new();
+
+		for bb in DfsPostOrder::new(&ana.cfg, start).iter(&ana.cfg) {
+			reachable.insert(bb);
+		}
+
+		reachable
+	}
+
+	/// Given a BB, iterate over only the successors which appear within the same function.
+	/// This does not return an iterator for Borrowing Reasons.
+	pub fn bb_successors_in_function(&self, bbid: BBId, mut visit: impl FnMut(BBId)) {
+		let bb = self.bbidx.get(bbid);
+		let fid = bb.func();
+
+		for &ea in bb.successors() {
+			if let Some(succ_id) = self.span_at_ea(ea).bb() {
+				if self.bbidx.get(succ_id).func() == fid {
+					visit(succ_id);
+				}
+			}
+		}
+	}
 }

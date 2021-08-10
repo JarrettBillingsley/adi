@@ -14,7 +14,7 @@ use crate::program::{ Instruction, FuncId };
 // ------------------------------------------------------------------------------------------------
 
 /// Uniquely identifies a [`BasicBlock`].
-#[derive(PartialEq, Eq, Copy, Clone, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
 pub struct BBId(pub Index);
 
 impl Debug for BBId {
