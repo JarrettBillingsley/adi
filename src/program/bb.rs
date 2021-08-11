@@ -167,7 +167,7 @@ impl BBIndex {
 // ------------------------------------------------------------------------------------------------
 
 /// The kinds of terminators for a `BasicBlock`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BBTerm {
 	/// Hit a dead end (e.g. invalid instruction, or user undefined some code).
 	DeadEnd,
@@ -192,18 +192,35 @@ pub enum BBTerm {
 /// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
 pub type Successors<'a> = Chain<option::IntoIter<&'a EA>, slice::Iter<'a, EA>>;
 
+/// Same as above but mutable.
+pub type SuccessorsMut<'a> = Chain<option::IntoIter<&'a mut EA>, slice::IterMut<'a, EA>>;
+
 impl BBTerm {
 	/// An iterator over the owning block's successors.
 	pub fn successors(&self) -> Successors {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return | Halt   => None     .into_iter().chain(&[]),
+			DeadEnd | Return | Halt => None     .into_iter().chain(&[]),
 			FallThru(ea) | Jump(ea) |
-			BankChange(ea)            => Some(ea) .into_iter().chain(&[]),
-			Call { dst, ret }         => Some(dst).into_iter().chain(slice::from_ref(ret)),
-			Cond { t, f }             => Some(t)  .into_iter().chain(slice::from_ref(f)),
-			JumpTbl(eas)              => None     .into_iter().chain(eas),
+			BankChange(ea)          => Some(ea) .into_iter().chain(&[]),
+			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_ref(ret)),
+			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
+			JumpTbl(eas)            => None     .into_iter().chain(eas),
+		}
+	}
+
+	/// Same as above, but mutable.
+	pub fn successors_mut(&mut self) -> SuccessorsMut {
+		use BBTerm::*;
+
+		match self {
+			DeadEnd | Return | Halt => None     .into_iter().chain([].iter_mut()),
+			FallThru(ea) | Jump(ea) |
+			BankChange(ea)          => Some(ea) .into_iter().chain([].iter_mut()),
+			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
+			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
+			JumpTbl(eas)            => None     .into_iter().chain(eas.iter_mut()),
 		}
 	}
 

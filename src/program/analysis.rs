@@ -205,6 +205,68 @@ impl Program {
 	}
 
 	// ---------------------------------------------------------------------------------------------
+	// MMU state change analysis
+
+	pub(crate) fn determine_state_change(&mut self, fid: FuncId) {
+		let func = self.get_func(fid);
+
+		trace!("------------------------------------------------------------------------");
+		trace!("- begin func state change analysis at {}", func.ea());
+
+		// 1. make a list of "new states" for each bb.
+		let mut new_states = BBStateChanger::new(func);
+
+		// 2. gather all the BBs that change banks.
+		let changers = func.all_bbs()
+			.filter(|&b| {
+				let b = self.bbidx.get(b);
+				matches!(b.term(), BBTerm::BankChange(..))
+			})
+			.collect::<Vec<_>>();
+
+		// 3. for each one, try a few techniques to determine the new state.
+		for bbid in changers {
+			let bb = self.bbidx.get(bbid);
+			// it's possible this BB's state was changed on a previous iteration.
+			let state = new_states.new_state_for(bbid);
+
+			// See if we get a new state...
+			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
+				StateChange::None              => unreachable!(),
+				StateChange::Maybe             => None, // TODO: log this!
+				StateChange::Dynamic           => self._dynamic_state_change(func, bb, state),
+				StateChange::Static(new_state) => Some(new_state),
+			};
+
+			// 4. now, propagate that state change to the successors.
+			if let Some(new_state) = new_state {
+				log::trace!("  new state: {:?}", new_state);
+				match new_states.propagate(self, bbid, new_state) {
+					Ok(()) => {}
+					Err(()) => todo!("oh noooooooo"),
+				}
+			} else {
+				log::warn!("  could not determine new state");
+				// TODO: mark this function as incompletely analyzed somehow.
+			}
+		}
+
+		// 5. Finally, apply the changes.
+		for (bbid, new_state) in new_states.into_iter() {
+			self.bbidx.get_mut(bbid).set_mmu_state(new_state);
+			// with new knowledge, we might be able to resolve unresolved EAs in the terminator.
+			let changed = self._resolve_unresolved_terminator(new_state, bbid);
+
+			if changed {
+				trace!("changed terminator of {:?}", bbid);
+			}
+		}
+
+		// 6. And set this function up for its refs pass.
+		self.queue.push_back(AnalysisItem::FuncRefs(fid));
+	}
+
+	// ---------------------------------------------------------------------------------------------
 	// Refs pass
 
 	pub(crate) fn func_refs(&mut self, fid: FuncId) {
@@ -264,67 +326,6 @@ impl Program {
 		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
 		for (f, s) in funcs.into_iter()    { self.enqueue_function(s, f); }
-	}
-
-	// ---------------------------------------------------------------------------------------------
-	// MMU state change analysis
-
-	pub(crate) fn determine_state_change(&mut self, fid: FuncId) {
-		let func = self.get_func(fid);
-
-		trace!("------------------------------------------------------------------------");
-		trace!("- begin func state change analysis at {}", func.ea());
-
-		// 1. make a list of "new states" for each bb.
-		let mut new_states = BBStateChanger::new(func);
-
-		// 2. gather all the BBs that change banks.
-		let changers = func.all_bbs()
-			.filter(|&b| {
-				let b = self.bbidx.get(b);
-				matches!(b.term(), BBTerm::BankChange(..))
-			})
-			.collect::<Vec<_>>();
-
-		// 3. for each one, try a few techniques to determine the new state.
-		for bbid in changers {
-			let bb = self.bbidx.get(bbid);
-			// it's possible this BB's state was changed on a previous iteration.
-			let state = new_states.new_state_for(bbid);
-
-			// See if we get a new state...
-			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
-				StateChange::None              => unreachable!(),
-				StateChange::Maybe             => None, // TODO: log this!
-				StateChange::Dynamic           => self._dynamic_state_change(func, bb, state),
-				StateChange::Static(new_state) => Some(new_state),
-			};
-
-			// 4. now, propagate that state change to the successors.
-			if let Some(new_state) = new_state {
-				log::trace!("  new state: {:?}", new_state);
-				match new_states.propagate(self, bbid, new_state) {
-					Ok(()) => {}
-					Err(()) => todo!("oh noooooooo"),
-				}
-			} else {
-				log::warn!("  could not determine new state");
-			}
-		}
-
-		// 5. Finally, apply the changes.
-		for (bbid, new_state) in new_states.into_iter() {
-			self.bbidx.get_mut(bbid).set_mmu_state(new_state);
-			// with new knowledge, we might be able to resolve unresolved EAs in the terminator.
-			let changed = self._resolve_unresolved_terminator(new_state, bbid);
-
-			if changed {
-				trace!("changed terminator of {:?}", bbid);
-			}
-		}
-
-		// 6. And set this function up for its refs pass.
-		self.queue.push_back(AnalysisItem::FuncRefs(fid));
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -544,28 +545,18 @@ impl Program {
 	}
 
 	fn _resolve_unresolved_terminator(&mut self, state: MmuState, bbid: BBId) -> bool {
-		use BBTerm::*;
 		let mut term = self.bbidx.get(bbid).term().clone();
 		let mut changed = false;
 
-		let mut resolve = |target: &mut EA| {
+		for target in term.successors_mut() {
 			let old_target = *target;
 
 			if target.is_invalid() {
 				*target = self._resolve_target(state, VA(old_target.offs()));
-				changed = true;
-				trace!("resolved terminator from {:?} to {:?}", old_target, *target);
-			}
-		};
-
-		match &mut term {
-			DeadEnd | Halt | Return => {}
-			FallThru(target) | Jump(target) | BankChange(target) => resolve(target),
-			Call { dst, ret } => { resolve(dst); resolve(ret); }
-			Cond { t, f }     => { resolve(t); resolve(f); }
-			JumpTbl(targets) => {
-				for t in targets {
-					resolve(t);
+				// the above *could* still fail!
+				if old_target != *target {
+					changed = true;
+					trace!("resolved terminator from {:?} to {:?}", old_target, *target);
 				}
 			}
 		}
