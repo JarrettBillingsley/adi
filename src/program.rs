@@ -163,6 +163,18 @@ impl Program {
 		(seg, span)
 	}
 
+	pub(crate) fn span_begin_analysis(&mut self, ea: EA) {
+		self.segment_from_ea_mut(ea).span_begin_analysis(ea)
+	}
+
+	pub(crate) fn span_cancel_analysis(&mut self, ea: EA) {
+		self.segment_from_ea_mut(ea).span_cancel_analysis(ea)
+	}
+
+	pub(crate) fn span_end_analysis(&mut self, ea: EA, end: EA, kind: SpanKind) {
+		self.segment_from_ea_mut(ea).span_end_analysis(ea, end, kind)
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Functions
 
@@ -378,6 +390,9 @@ impl Program {
 
 	/// Gets the name of a given EA if one exists, or generates one if not.
 	pub fn name_of_ea(&self, ea: EA) -> String {
+		// TODO: uhhhh Functions and DataItems have their own name fields. how does
+		// that interact with this? (should they even have name fields?)
+
 		// see if there's already a name here.
 		if let Some(name) = self.names.name_for_ea(ea) {
 			name.into()
@@ -421,18 +436,6 @@ impl Program {
 	-> BTreeRange<'_, EA, String> {
 		let range = va_range_to_ea_range(range, |va| self.mem.ea_for_va(state, va).unwrap());
 		self.names_in_range(range)
-	}
-
-	pub(crate) fn span_begin_analysis(&mut self, ea: EA) {
-		self.segment_from_ea_mut(ea).span_begin_analysis(ea)
-	}
-
-	pub(crate) fn span_cancel_analysis(&mut self, ea: EA) {
-		self.segment_from_ea_mut(ea).span_cancel_analysis(ea)
-	}
-
-	pub(crate) fn span_end_analysis(&mut self, ea: EA, end: EA, kind: SpanKind) {
-		self.segment_from_ea_mut(ea).span_end_analysis(ea, end, kind)
 	}
 
 	// ---------------------------------------------------------------------------------------------

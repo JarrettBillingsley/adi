@@ -13,8 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Trace)?;
-	// setup_logging(LevelFilter::Off)?;
+	// setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	// test_gb()?;
 	test_nes()?;
