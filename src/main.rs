@@ -15,8 +15,8 @@ use adi::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// setup_logging(LevelFilter::Trace)?;
 	setup_panic();
-	// test_gb()?;
-	test_nes()?;
+	test_gb()?;
+	// test_nes()?;
 	Ok(())
 }
 
@@ -53,7 +53,10 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
-	show_all_funcs(&prog);
+
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
 
 	Ok(())
 }
