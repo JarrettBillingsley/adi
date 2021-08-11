@@ -23,6 +23,10 @@ impl SegId {
 	pub fn is_invalid(&self) -> bool {
 		self.0 == u16::MAX
 	}
+
+	pub fn is_valid(&self) -> bool {
+		self.0 != u16::MAX
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -55,6 +59,10 @@ impl EA {
 
 	pub fn is_invalid(&self) -> bool {
 		self.seg().is_invalid()
+	}
+
+	pub fn is_valid(&self) -> bool {
+		!self.seg().is_invalid()
 	}
 
 	#[inline]

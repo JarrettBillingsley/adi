@@ -54,6 +54,8 @@ impl BasicBlock {
 	pub fn term_ea(&self) -> EA { self.term_inst().ea() }
 	/// How it ends, and what its successors are.
 	pub fn term    (&self) -> &BBTerm  { &self.term }
+	/// Same as above, but mutable.
+	pub fn term_mut(&mut self) -> &mut BBTerm { &mut self.term }
 	/// The terminating instruction.
 	pub fn term_inst(&self) -> &Instruction { &self.insts.last().unwrap() }
 	/// Its instructions.

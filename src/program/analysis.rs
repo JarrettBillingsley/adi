@@ -211,7 +211,7 @@ impl Program {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function 2nd pass at {}", func.ea());
+		trace!("- begin function refs pass at {}", func.ea());
 
 		let mut jumptables = Vec::new();
 		let mut funcs      = Vec::new();
@@ -236,9 +236,21 @@ impl Program {
 				use InstructionKind::*;
 				match inst.kind() {
 					Indir => jumptables.push(inst.ea()),
-					Call => {
+					Call | Cond | Uncond => {
 						let target_ea = self._resolve_target(state, inst.control_target().unwrap());
-						funcs.push((target_ea, state));
+
+						if target_ea.is_valid() {
+							use SpanKind::*;
+							let should_push = match self.span_at_ea(target_ea).kind() {
+								Unk => true,
+								Code(other_bbid) => self.get_bb(other_bbid).func() != func.id(),
+								_ => false,
+							};
+
+							if should_push {
+								funcs.push((target_ea, state));
+							}
+						}
 					}
 					_ => {}
 				}
@@ -303,6 +315,12 @@ impl Program {
 		// 5. Finally, apply the changes.
 		for (bbid, new_state) in new_states.into_iter() {
 			self.bbidx.get_mut(bbid).set_mmu_state(new_state);
+			// with new knowledge, we might be able to resolve unresolved EAs in the terminator.
+			let changed = self._resolve_unresolved_terminator(new_state, bbid);
+
+			if changed {
+				trace!("changed terminator of {:?}", bbid);
+			}
 		}
 
 		// 6. And set this function up for its refs pass.
@@ -523,6 +541,40 @@ impl Program {
 			Some(l) => l,
 			None    => EA::invalid(target.0),
 		}
+	}
+
+	fn _resolve_unresolved_terminator(&mut self, state: MmuState, bbid: BBId) -> bool {
+		use BBTerm::*;
+		let mut term = self.bbidx.get(bbid).term().clone();
+		let mut changed = false;
+
+		let mut resolve = |target: &mut EA| {
+			let old_target = *target;
+
+			if target.is_invalid() {
+				*target = self._resolve_target(state, VA(old_target.offs()));
+				changed = true;
+				trace!("resolved terminator from {:?} to {:?}", old_target, *target);
+			}
+		};
+
+		match &mut term {
+			DeadEnd | Halt | Return => {}
+			FallThru(target) | Jump(target) | BankChange(target) => resolve(target),
+			Call { dst, ret } => { resolve(dst); resolve(ret); }
+			Cond { t, f }     => { resolve(t); resolve(f); }
+			JumpTbl(targets) => {
+				for t in targets {
+					resolve(t);
+				}
+			}
+		}
+
+		if changed {
+			*self.bbidx.get_mut(bbid).term_mut() = term;
+		}
+
+		changed
 	}
 
 	// _func if/when we need it in the future
