@@ -10,6 +10,7 @@ use crate::program::{ Instruction };
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
 
+mod ea;
 mod image;
 mod mmu;
 mod segment;
@@ -19,6 +20,7 @@ mod va;
 #[cfg(test)]
 mod tests;
 
+pub use ea::*;
 pub use image::*;
 pub use mmu::*;
 pub use segment::*;
