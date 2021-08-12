@@ -59,7 +59,10 @@ impl SegCollection {
 	/// Makes a new empty collection.
 	pub fn new() -> Self {
 		let mut ret = Self {
-			segs: vec![Segment::new(SegId::invalid(), "[UNRESOLVED]", usize::MAX, None)],
+			segs: vec![
+				Segment::new_with_va(SegId::invalid(), "[UNRESOLVED]", usize::MAX, None,
+					Some(VA(0)))
+			],
 			next_seg_id: SegId(0),
 			seg_name_map: HashMap::new(),
 			seg_id_map: HashMap::new(),
@@ -88,6 +91,18 @@ impl SegCollection {
 		self.segs.push(Segment::new(id, name, size, image));
 
 		id
+	}
+
+	/// Same as above, but also initializes its base VA.
+	///
+	/// # Panics
+	///
+	/// - if `name` is already the name of an existing segment.
+	pub fn add_segment_with_va(&mut self, name: &str, size: usize, image: Option<Image>,
+	base_va: VA) -> SegId {
+		let ret = self.add_segment(name, size, image);
+		self.segment_from_id_mut(ret).set_base_va(base_va);
+		ret
 	}
 
 	/// Given a segment name, get the Segment named that (if any).

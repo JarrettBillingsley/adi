@@ -383,12 +383,12 @@ impl ILoader for GBLoader {
 
 fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 	// TODO: CGB memory map
-	let vram = segs.add_segment("VRAM",  0x2000, None);
-	let ram  = segs.add_segment("RAM",   0x2000, None);
-	let oam  = segs.add_segment("OAM",     0xA0, None);
-	let io   = segs.add_segment("IOREG",   0x80, None);
-	let hram = segs.add_segment("HRAM",    0x7F, None);
-	let ie   = segs.add_segment("IE",         1, None);
+	let vram = segs.add_segment_with_va("VRAM",  0x2000, None, VA(0x8000));
+	let ram  = segs.add_segment_with_va("RAM",   0x2000, None, VA(0xC000));
+	let oam  = segs.add_segment_with_va("OAM",     0xA0, None, VA(0xFE00));
+	let io   = segs.add_segment_with_va("IOREG",   0x80, None, VA(0xFF00));
+	let hram = segs.add_segment_with_va("HRAM",    0x7F, None, VA(0xFF80));
+	let ie   = segs.add_segment_with_va("IE",         1, None, VA(0xFFFF));
 
 	let mbc = match cart.header.mbc_type {
 		MbcType::None => {
@@ -403,7 +403,8 @@ fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 			let segids = cart.rom_banks
 				.into_iter()
 				.enumerate()
-				.map(|(i, bank)| segs.add_segment(&format!("ROM{}", i), 0x4000, Some(bank)))
+				.map(|(i, bank)| segs.add_segment_with_va(
+					&format!("ROM{}", i), 0x4000, Some(bank), VA(0x4000 * i)))
 				.collect::<Vec<_>>();
 
 			// TODO: cart RAM
@@ -545,7 +546,7 @@ impl IMmu for GBMmu {
 			seg if seg == self.io   => Some(VA(0xFF00 + (ea.offs() & 0x7F))),
 			seg if seg == self.hram => Some(VA(0xFF80 + (ea.offs() & 0x7F))),
 			seg if seg == self.ie   => Some(VA(0xFFFF)),
-			_                      => self.mbc.va_for_ea(state, ea),
+			_                       => self.mbc.va_for_ea(state, ea),
 		}
 	}
 

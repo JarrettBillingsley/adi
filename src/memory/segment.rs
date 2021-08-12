@@ -4,7 +4,9 @@ use std::fmt::{ Debug, };
 
 use parse_display::Display;
 
-use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind, EA };
+use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind, EA,
+VA };
+
 use crate::program::{ DataId };
 
 // ------------------------------------------------------------------------------------------------
@@ -36,11 +38,12 @@ impl SegId {
 /// A single segment. Can be an image segment (data comes from a ROM image) or a fake
 /// segment (there is no data, e.g. RAM, but it's useful to put spans there).
 pub struct Segment {
-	id:    SegId,
-	name:  String,
-	size:  usize,
-	spans: SpanMap,
-	image: Option<Image>,
+	id:      SegId,
+	name:    String,
+	size:    usize,
+	spans:   SpanMap,
+	image:   Option<Image>,
+	base_va: Option<VA>,
 }
 
 impl Display for Segment {
@@ -50,10 +53,15 @@ impl Display for Segment {
 				let orig = image.orig_range();
 
 				write!(f, "{} (image '{}') PA: [{:08X}..{:08X})",
-					self.name, image.name(), orig.start, orig.end)
+					self.name, image.name(), orig.start, orig.end)?;
 			}
 			None =>
-				write!(f, "{} (fake)", self.name),
+				write!(f, "{} (fake)", self.name)?,
+		}
+
+		match self.base_va {
+			Some(base) => write!(f, " Base VA: {:08X}", base),
+			None       => write!(f, " Base VA: (not determined)"),
 		}
 	}
 }
@@ -63,6 +71,12 @@ impl Segment {
 	/// Creates a new Segment that covers a given virtual address range, optionally mapped to
 	/// part of a ROM image.
 	pub fn new(id: SegId, name: &str, size: usize, image: Option<Image>) -> Self {
+		Self::new_with_va(id, name, size, image, None)
+	}
+
+	/// Same as above, but also initializes the base VA.
+	pub fn new_with_va(id: SegId, name: &str, size: usize, image: Option<Image>,
+	base_va: Option<VA>) -> Self {
 		if let Some(ref image) = image { assert_eq!(size, image.len()); }
 
 		Self {
@@ -71,6 +85,7 @@ impl Segment {
 			size,
 			spans: SpanMap::new(id, size),
 			image,
+			base_va,
 		}
 	}
 
@@ -96,6 +111,19 @@ impl Segment {
 		}
 	}
 
+	/// Gets the VA which corresponds to this EA if a base VA has been set, or `None` if not.
+	///
+	/// Panics if the given EA does not fall within this segment.
+	pub fn va_for_ea(&self, ea: EA) -> Option<VA> {
+		assert!(self.contains_ea(ea));
+		self.base_va.map(|base_va| VA(ea.offs() - base_va.0))
+	}
+
+	/// Same as above, but infallible.
+	pub fn va_from_ea(&self, ea: EA) -> VA {
+		self.va_for_ea(ea).unwrap()
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Image
 
@@ -119,6 +147,27 @@ impl Segment {
 	/// `image_slice` is overloaded so `image_slice(..)` is ambiguous.
 	pub fn image_slice_all(&self) -> ImageSlice {
 		self.image_slice(0..)
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Base VA
+
+	/// Gets this segment's base VA, or `None` if none has been set.
+	pub fn base_va(&self) -> Option<VA> {
+		self.base_va
+	}
+
+	/// Set this segment's base VA. Does nothing if the base VA was already set to the same VA.
+	///
+	/// Panics if its VA has already been set to a different VA.
+	pub fn set_base_va(&mut self, va: VA) {
+		if let Some(cur_va) = self.base_va {
+			// it's OK to set it to the same VA; changing it is a Problem.
+			assert!(cur_va == va,
+				"trying to change {:?}'s VA from {:X} to {:X}", self.id, cur_va, va);
+		} else {
+			self.base_va = Some(va);
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
