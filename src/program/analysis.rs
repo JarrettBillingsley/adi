@@ -20,7 +20,7 @@ pub(crate) enum AnalysisItem {
 	/// Explore an unexplored function.
 	NewFunc(EA, MmuState),
 	/// This function changes MMU state somehow; we have to figure out how.
-	DetermineStateChange(FuncId),
+	StateChange(FuncId),
 	/// Any MMU state changes have been propagated; now to resolve references outside the function.
 	FuncRefs(FuncId),
 	/// A jump table. The EA points to the jump instruction.
@@ -40,17 +40,32 @@ impl Program {
 		self.queue.push_back(AnalysisItem::JumpTable(ea))
 	}
 
+	/// Schedules a function to have its references analyzed.
+	fn enqueue_func_refs(&mut self, fid: FuncId) {
+		self.queue.push_back(AnalysisItem::FuncRefs(fid));
+	}
+
+	/// Schedules a function to have its MMU state changes analyzed.
+	fn enqueue_state_change(&mut self, fid: FuncId) {
+		self.queue.push_back(AnalysisItem::StateChange(fid));
+	}
+
+	/// Schedules a function to attempt to be split at the given EA.
+	fn enqueue_split_func(&mut self, ea: EA) {
+		self.queue.push_back(AnalysisItem::SplitFunc(ea));
+	}
+
 	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
 	/// so this can do a lot of work in a single call.
 	pub fn analyze_queue(&mut self) {
 		while let Some(item) = self.queue.pop_front() {
 			use AnalysisItem::*;
 			match item {
-				NewFunc(ea, state)        => self.func_first_pass(ea, state),
-				FuncRefs(fid)             => self.func_refs(fid),
-				JumpTable(ea)             => self.analyze_jump_table(ea),
-				DetermineStateChange(fid) => self.determine_state_change(fid),
-				SplitFunc(ea)             => self.split_func(ea),
+				NewFunc(ea, state) => self.func_first_pass(ea, state),
+				StateChange(fid)   => self.determine_state_change(fid),
+				FuncRefs(fid)      => self.func_refs(fid),
+				JumpTable(ea)      => self.analyze_jump_table(ea),
+				SplitFunc(ea)      => self.split_func(ea),
 			}
 		}
 	}
@@ -197,9 +212,9 @@ impl Program {
 
 			// finally, turn the crank by putting more work on the queue
 			if changes_state {
-				self.queue.push_back(AnalysisItem::DetermineStateChange(fid));
+				self.enqueue_state_change(fid);
 			} else {
-				self.queue.push_back(AnalysisItem::FuncRefs(fid));
+				self.enqueue_func_refs(fid);
 			}
 		}
 	}
@@ -263,7 +278,7 @@ impl Program {
 		}
 
 		// 6. And set this function up for its refs pass.
-		self.queue.push_back(AnalysisItem::FuncRefs(fid));
+		self.enqueue_func_refs(fid);
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -432,7 +447,7 @@ impl Program {
 			} else {
 				// the middle of an already-analyzed function.
 				trace!("middle of an existing function...");
-				self.queue.push_back(AnalysisItem::SplitFunc(ea));
+				self.enqueue_split_func(ea);
 			}
 			false
 		} else if self.segment_from_ea(ea).is_fake() {
