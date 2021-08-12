@@ -15,8 +15,8 @@ use adi::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// setup_logging(LevelFilter::Trace)?;
 	setup_panic();
-	test_gb()?;
-	// test_nes()?;
+	// test_gb()?;
+	test_nes()?;
 	Ok(())
 }
 
@@ -74,7 +74,10 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	let state = prog.initial_mmu_state();
 	prog.enqueue_function(state, prog.ea_from_name("VEC_RESET"));
 	prog.enqueue_function(state, prog.ea_from_name("VEC_NMI"));
-	// prog.enqueue_function(state, prog.ea_from_name("VEC_IRQ"));
+
+	if let Some(ea) = prog.ea_for_name("VEC_IRQ") {
+		prog.enqueue_function(state, ea);
+	}
 
 	// BATTLETOAAADS
 	// prog.enqueue_function(state, prog.ea_from_va(state, VA(0x8003)));

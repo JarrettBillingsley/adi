@@ -345,6 +345,10 @@ impl Program {
 			/// Removes the name from an EA. Panics if there is no name.
 			#[call(remove_ea)]
 			pub fn remove_name_from_ea(&mut self, ea: EA);
+			/// Gets the EA for a name, if one of that name exists.
+			pub fn ea_for_name(&self, name: &str) -> Option<EA>;
+			/// Gets the name for an EA, if there is one.
+			pub fn name_for_ea(&self, ea: EA) -> Option<&String>;
 			/// Whether this name exists.
 			pub fn has_name(&self, name: &str) -> bool;
 			/// Whether this EA has a name.

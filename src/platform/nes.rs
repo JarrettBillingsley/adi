@@ -81,9 +81,9 @@ impl ILoader for NesLoader {
 
 fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 -> PlatformResult<NesMmu> {
-	let ram = segs.add_segment("RAM",   0x800, None);
-	let ppu = segs.add_segment("PPU",   0x008, None);
-	let io  = segs.add_segment("IOREG", 0x020, None);
+	let ram = segs.add_segment_with_va("RAM",   0x800, None, VA(0x0000));
+	let ppu = segs.add_segment_with_va("PPU",   0x008, None, VA(0x2000));
+	let io  = segs.add_segment_with_va("IOREG", 0x020, None, VA(0x4000));
 
 	// TODO: PRG RAM and RAM banking
 	let mapper = match cart.mapper {
@@ -98,7 +98,8 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			// TODO: this sets "orig_offs" to 0 every time.
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
 			let prg0_len = prg0_img.len();
-			let prg0 = segs.add_segment("PRG0", prg0_len, Some(prg0_img));
+			let base_va = if cart.prg_data.len() == 0x4000 { 0xC000 } else { 0x8000 };
+			let prg0 = segs.add_segment_with_va("PRG0", prg0_len, Some(prg0_img), VA(base_va));
 			let ctor = if cart.mapper == 0 { NRom::new } else { NRom::new_cnrom };
 			ctor(prg0, prg0_len)
 		}
@@ -116,12 +117,22 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let mut iter = cart.prg_data.chunks_exact(0x4000);
 
 			while let Some(chunk) = iter.next() {
+				// TODO: this sets "orig_offs" to 0 every time.
 				let prg_img = Image::new(img.name(), chunk);
 				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x4000, Some(prg_img));
 				all.push(seg_id);
 			}
 
 			assert_eq!(iter.remainder().len(), 0);
+
+			// Now set the base VAs for all segments since that's statically determined.
+			// Last segment starts at 0xC000, rest are 0x8000
+			let mut iter = all.iter().rev();
+			segs.segment_from_id_mut(*iter.next().unwrap()).set_base_va(VA(0xC000));
+
+			for &seg_id in iter {
+				segs.segment_from_id_mut(seg_id).set_base_va(VA(0x8000));
+			}
 
 			UXRom::new(all)
 		}
@@ -139,14 +150,13 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let mut iter = cart.prg_data.chunks_exact(0x8000);
 
 			while let Some(chunk) = iter.next() {
+				// TODO: this sets "orig_offs" to 0 every time.
 				let prg_img = Image::new(img.name(), chunk);
-				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x8000, Some(prg_img));
+				let seg_id = segs.add_segment_with_va(
+					&format!("PRG{}", all.len()), 0x8000, Some(prg_img), VA(0x8000));
 				all.push(seg_id);
 			}
 
-			assert_eq!(iter.remainder().len(), 0);
-
-			// TODO: this sets "orig_offs" to 0 every time.
 			let ctor = if cart.mapper == 7 { AXRom::new } else { AXRom::new_color_dreams };
 			ctor(all)
 		}
