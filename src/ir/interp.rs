@@ -188,6 +188,7 @@ impl<'c, C: InterpCompiler> IrInterp<'c, C> {
 		InterpResult::FallThru
 	}
 
+	/*
 	fn irbranch(&self, irpc: &mut usize, offs: i32, end: usize) {
 		assert!(offs != 0);
 
@@ -202,6 +203,7 @@ impl<'c, C: InterpCompiler> IrInterp<'c, C> {
 
 		*irpc = next_irpc as usize;
 	}
+	*/
 
 	// doin it like this because returning a reference to the contents of a RefCell is no good
 	fn with_compiled_bb<T>(&self, bbid: BBId, f: impl Fn(&Vec<IrInst>) -> T) -> T {

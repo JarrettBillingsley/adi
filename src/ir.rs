@@ -46,6 +46,8 @@ impl ValSize {
 pub enum PlaceKind {
 	/// A register. The field is its offset within the register "segment."
 	Reg(u16),
+	/// An SSA renumbered register. The second field is its "generation."
+	RegSub(u16, u32),
 	/// A memory address.
 	Mem(EA),
 }
@@ -112,6 +114,15 @@ impl Place {
 	#[inline]
 	pub fn kind(&self) -> PlaceKind {
 		self.kind
+	}
+
+	/// If this is a `PlaceKind::Reg`, returns a new `Place` subscripted with the given index.
+	/// Panics if this is anything other than `PlaceKind::Reg`.
+	fn sub(&self, i: u32) -> Self {
+		match self.kind {
+			PlaceKind::Reg(r) => Self { kind: PlaceKind::RegSub(r, i), ..*self },
+			_ => panic!(".sub() called on '{:?}'", self),
+		}
 	}
 }
 
@@ -259,8 +270,8 @@ pub enum IrInstKind {
 	Load      { dst: Place, addr: Src },                         // dst = *addr
 	Store     { addr: Src,  src: Src },                          // *addr = src
 
-	IrBranch  { offs: i32 },                                     // irpc += offs
-	IrCBranch { cond: Src, offs: i32 },                          // if(cond) irpc += offs
+	// IrBranch  { offs: i32 },                                     // irpc += offs
+	// IrCBranch { cond: Src, offs: i32 },                          // if(cond) irpc += offs
 
 	Branch    { target: EA },                                    // pc = target
 	CBranch   { cond: Src, target: EA },                         // if(cond) pc = target
@@ -281,7 +292,7 @@ impl IrInstKind {
 	pub fn src_size(&self) -> ValSize {
 		match self {
 			IrInstKind::Nop
-			| IrInstKind::IrBranch { .. }
+			// | IrInstKind::IrBranch { .. }
 			| IrInstKind::Branch { .. }
 			| IrInstKind::IBranch { .. }
 			| IrInstKind::Call { .. }
@@ -291,7 +302,7 @@ impl IrInstKind {
 			IrInstKind::Assign    { src, .. }  => src.size(),
 			IrInstKind::Load      { dst, .. }  => dst.size(), // yes, it's weird
 			IrInstKind::Store     { src, .. }  => src.size(),
-			IrInstKind::IrCBranch { cond, .. } => cond.size(),
+			// IrInstKind::IrCBranch { cond, .. } => cond.size(),
 			IrInstKind::CBranch   { cond, .. } => cond.size(),
 			IrInstKind::Unary     { src, .. }  => src.size(),
 			IrInstKind::Binary    { src1, .. } => src1.size(),
@@ -303,13 +314,13 @@ impl IrInstKind {
 	pub fn dst_size(&self) -> ValSize {
 		match self {
 			IrInstKind::Nop
-			| IrInstKind::IrBranch { .. }
+			// | IrInstKind::IrBranch { .. }
 			| IrInstKind::Branch { .. }
 			| IrInstKind::IBranch { .. }
 			| IrInstKind::Call { .. }
 			| IrInstKind::ICall { .. }
 			| IrInstKind::Ret { .. }
-			| IrInstKind::IrCBranch { .. }
+			// | IrInstKind::IrCBranch { .. }
 			| IrInstKind::CBranch { .. } => panic!("no destination"),
 
 			IrInstKind::Assign { dst, .. } => dst.size(),
@@ -533,15 +544,15 @@ impl IrInst {
 		Self { ea, kind: IrInstKind::Store { addr, src } }
 	}
 
-	///
-	pub fn irbranch(ea: EA, offs: i32) -> Self {
-		Self { ea, kind: IrInstKind::IrBranch { offs } }
-	}
+	// ///
+	// pub fn irbranch(ea: EA, offs: i32) -> Self {
+	// 	Self { ea, kind: IrInstKind::IrBranch { offs } }
+	// }
 
-	///
-	pub fn ircbranch(ea: EA, cond: Src, offs: i32) -> Self {
-		Self { ea, kind: IrInstKind::IrCBranch { cond, offs } }
-	}
+	// ///
+	// pub fn ircbranch(ea: EA, cond: Src, offs: i32) -> Self {
+	// 	Self { ea, kind: IrInstKind::IrCBranch { cond, offs } }
+	// }
 
 	///
 	pub fn branch(ea: EA, target: EA) -> Self {
