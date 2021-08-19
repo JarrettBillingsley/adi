@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Jarrett Billingsley <jarrett.billingsley@gmail.com>"]
 edition = "2018"
 description = "A RE (reverse engineering) framework aimed at software for retro 8- and 16-bit machines."
+default-run = "adi"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
