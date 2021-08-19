@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod arch;
+pub mod arch;
 mod ir;
 mod memory;
 mod platform;

@@ -27,7 +27,7 @@ use crate::memory::{ Memory, MmuState, Endian, EA, VA };
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-enum Reg {
+pub enum Reg {
 	A, B, C, D, // data regs
 	DC,         // paired reg
 	NF, ZF, CF, // flag regs
@@ -83,8 +83,7 @@ impl Default for Reg {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum MetaOp {
-	UNK,
-	LI,                 // load immediate
+	LI,  MOV,           // load immediate, reg-reg move
 	ADD, ADC, SUB, SBC, // math(s)
 	AND, OR,  XOR, NOT, // bitwise
 	CMP, CMC,           // compare (and with carry)
@@ -93,17 +92,12 @@ enum MetaOp {
 	LD,  ST,            // memory
 }
 
-impl Default for MetaOp {
-	fn default() -> Self { Self::UNK }
-}
-
 impl MetaOp {
 	/// Instruction mnemonics
 	fn mnemonic(&self) -> &'static str {
 		use MetaOp::*;
 		match self {
-			UNK => "???",
-			LI  => "li",
+			LI  => "li",  MOV => "mov",
 			ADD => "add", ADC => "adc", SUB => "sub", SBC => "sbc",
 			AND => "and", OR  => "or",  XOR => "xor", NOT => "not",
 			CMP => "cmp", CMC => "cmc",
@@ -116,10 +110,10 @@ impl MetaOp {
 	fn access(&self) -> Option<MemAccess> {
 		use MetaOp::*;
 		match self {
-			LD                          => Some(MemAccess::R),
-			ST                          => Some(MemAccess::W),
-			BLT | BLE | BEQ | BNE | JMP => Some(MemAccess::Target),
-			_                           => None,
+			LD                                => Some(MemAccess::R),
+			ST                                => Some(MemAccess::W),
+			BLT | BLE | BEQ | BNE | JMP | CAL => Some(MemAccess::Target),
+			_                                 => None,
 		}
 	}
 }
@@ -158,13 +152,13 @@ impl AddrMode {
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Opcode {
-	LI_RI8,
+	LI_RI8, MOV_RR,
 	ADD_RR, ADD_RI8, ADC_RR, ADC_RI8, SUB_RR, SUB_RI8, SBC_RR, SBC_RI8,
 	AND_RR, AND_RI8, OR_RR,  OR_RI8,  XOR_RR, XOR_RI8, NOT_RR, NOT_RI8,
 	CMP_RR, CMP_RI8, CMC_RR, CMC_RI8,
 	BLT_S8, BLE_S8, BEQ_S8, BNE_S8,
 	JMP_I16, CAL_I16, RET_IMP,
-	LD_RI8, LD_RI16, LD_RR, ST_RI8, ST_RI16, ST_RR,
+	LD_RI16, LD_RR, ST_RI16, ST_RR,
 }
 
 const OPCODE_MASK: u8 = 0x3F;
@@ -217,40 +211,39 @@ mod descs {
 
 	// IMPORTANT: MUST STAY IN SAME ORDER AS Opcode ENUM
 	pub(super) const INST_DESCS: &[InstDesc] = &[
-		InstDesc(LI_RI8,  LI,  RI8,  "{0}, {1}",   Other),  // 0x00
-		InstDesc(ADD_RR,  ADD, RR,   "{0}, {1}",   Other),  // 0x01
-		InstDesc(ADD_RI8, ADD, RI8,  "{0}, {1}",   Other),  // 0x02
-		InstDesc(ADC_RR,  ADC, RR,   "{0}, {1}",   Other),  // 0x03
-		InstDesc(ADC_RI8, ADC, RI8,  "{0}, {1}",   Other),  // 0x04
-		InstDesc(SUB_RR,  SUB, RR,   "{0}, {1}",   Other),  // 0x05
-		InstDesc(SUB_RI8, SUB, RI8,  "{0}, {1}",   Other),  // 0x06
-		InstDesc(SBC_RR,  SBC, RR,   "{0}, {1}",   Other),  // 0x07
-		InstDesc(SBC_RI8, SBC, RI8,  "{0}, {1}",   Other),  // 0x08
-		InstDesc(AND_RR,  AND, RR,   "{0}, {1}",   Other),  // 0x09
-		InstDesc(AND_RI8, AND, RI8,  "{0}, {1}",   Other),  // 0x0A
-		InstDesc(OR_RR,   OR,  RR,   "{0}, {1}",   Other),  // 0x0B
-		InstDesc(OR_RI8,  OR,  RI8,  "{0}, {1}",   Other),  // 0x0C
-		InstDesc(XOR_RR,  XOR, RR,   "{0}, {1}",   Other),  // 0x0D
-		InstDesc(XOR_RI8, XOR, RI8,  "{0}, {1}",   Other),  // 0x0E
-		InstDesc(NOT_RR,  NOT, RR,   "{0}, {1}",   Other),  // 0x0F
-		InstDesc(NOT_RI8, NOT, RI8,  "{0}, {1}",   Other),  // 0x10
-		InstDesc(CMP_RR,  CMP, RR,   "{0}, {1}",   Other),  // 0x11
-		InstDesc(CMP_RI8, CMP, RI8,  "{0}, {1}",   Other),  // 0x12
-		InstDesc(CMC_RR,  CMC, RR,   "{0}, {1}",   Other),  // 0x13
-		InstDesc(CMC_RI8, CMC, RI8,  "{0}, {1}",   Other),  // 0x14
-		InstDesc(BLT_S8,  BLT, S8,   "{0}",        Cond),   // 0x15
-		InstDesc(BLE_S8,  BLE, S8,   "{0}",        Cond),   // 0x16
-		InstDesc(BEQ_S8,  BEQ, S8,   "{0}",        Cond),   // 0x17
-		InstDesc(BNE_S8,  BNE, S8,   "{0}",        Cond),   // 0x18
-		InstDesc(JMP_I16, JMP, I16,  "{0}",        Uncond), // 0x19
-		InstDesc(CAL_I16, CAL, I16,  "{0}",        Call),   // 0x1A
-		InstDesc(RET_IMP, RET, IMP,  "",           Ret),    // 0x1B
-		InstDesc(LD_RI8,  LD,  RI8,  "{0}, [{1}]", Other),  // 0x1C
-		InstDesc(LD_RI16, LD,  RI16, "{0}, [{1}]", Other),  // 0x1D
-		InstDesc(LD_RR,   LD,  RR,   "{0}, [{1}]", Other),  // 0x1E
-		InstDesc(ST_RI8,  ST,  RI8,  "{0}, [{1}]", Other),  // 0x1F
-		InstDesc(ST_RI16, ST,  RI16, "{0}, [{1}]", Other),  // 0x20
-		InstDesc(ST_RR,   ST,  RR,   "{0}, [{1}]", Other),  // 0x21
+		InstDesc(LI_RI8,  LI,  RI8,  "{0}, {1}",   Other),
+		InstDesc(MOV_RR,  MOV, RR,   "{0}, {1}",   Other),
+		InstDesc(ADD_RR,  ADD, RR,   "{0}, {1}",   Other),
+		InstDesc(ADD_RI8, ADD, RI8,  "{0}, {1}",   Other),
+		InstDesc(ADC_RR,  ADC, RR,   "{0}, {1}",   Other),
+		InstDesc(ADC_RI8, ADC, RI8,  "{0}, {1}",   Other),
+		InstDesc(SUB_RR,  SUB, RR,   "{0}, {1}",   Other),
+		InstDesc(SUB_RI8, SUB, RI8,  "{0}, {1}",   Other),
+		InstDesc(SBC_RR,  SBC, RR,   "{0}, {1}",   Other),
+		InstDesc(SBC_RI8, SBC, RI8,  "{0}, {1}",   Other),
+		InstDesc(AND_RR,  AND, RR,   "{0}, {1}",   Other),
+		InstDesc(AND_RI8, AND, RI8,  "{0}, {1}",   Other),
+		InstDesc(OR_RR,   OR,  RR,   "{0}, {1}",   Other),
+		InstDesc(OR_RI8,  OR,  RI8,  "{0}, {1}",   Other),
+		InstDesc(XOR_RR,  XOR, RR,   "{0}, {1}",   Other),
+		InstDesc(XOR_RI8, XOR, RI8,  "{0}, {1}",   Other),
+		InstDesc(NOT_RR,  NOT, RR,   "{0}, {1}",   Other),
+		InstDesc(NOT_RI8, NOT, RI8,  "{0}, {1}",   Other),
+		InstDesc(CMP_RR,  CMP, RR,   "{0}, {1}",   Other),
+		InstDesc(CMP_RI8, CMP, RI8,  "{0}, {1}",   Other),
+		InstDesc(CMC_RR,  CMC, RR,   "{0}, {1}",   Other),
+		InstDesc(CMC_RI8, CMC, RI8,  "{0}, {1}",   Other),
+		InstDesc(BLT_S8,  BLT, S8,   "{0}",        Cond),
+		InstDesc(BLE_S8,  BLE, S8,   "{0}",        Cond),
+		InstDesc(BEQ_S8,  BEQ, S8,   "{0}",        Cond),
+		InstDesc(BNE_S8,  BNE, S8,   "{0}",        Cond),
+		InstDesc(JMP_I16, JMP, I16,  "{0}",        Uncond),
+		InstDesc(CAL_I16, CAL, I16,  "{0}",        Call),
+		InstDesc(RET_IMP, RET, IMP,  "",           Ret),
+		InstDesc(LD_RI16, LD,  RI16, "{0}, [{1}]", Other),
+		InstDesc(LD_RR,   LD,  RR,   "{0}, [{1}]", Other),
+		InstDesc(ST_RI16, ST,  RI16, "{0}, [{1}]", Other),
+		InstDesc(ST_RR,   ST,  RR,   "{0}, [{1}]", Other),
 	];
 }
 
@@ -324,19 +317,16 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 			ops[1] = if let Some(access) = desc.meta_op.access() {
 				Operand::Indir(MemIndir::Reg { reg: decode_reg(img[1]) as u8 }, access)
 			} else {
-				Operand::Reg(decode_reg(img[1]) as u64)
+				let r1 = decode_reg(img[1]) as u64;
+				assert!(r1 < 4); // can't use dc as a second operand
+				Operand::Reg(r1)
 			};
 
 			(2, None)
 		}
 		RI8 => {
 			ops[0] = opcode_reg;
-			ops[1] = if let Some(access) = desc.meta_op.access() {
-				Operand::Mem(img[1] as u64, access)
-			} else {
-				Operand::UImm(img[1] as u64)
-			};
-
+			ops[1] = Operand::UImm(img[1] as u64);
 			(2, None)
 		}
 		S8 => {
@@ -473,4 +463,264 @@ impl IArchitecture for ToyArchitecture {
 	fn new_disassembler(&self) -> Disassembler { ToyDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { ToyPrinter::new().into() }
 	fn new_interpreter (&self) -> Interpreter  { ToyInterpreter::new().into() }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ToyBuilder
+// ------------------------------------------------------------------------------------------------
+
+fn encode_op(op: Opcode) -> u8 {
+	op as u8
+}
+
+fn encode_opr0(op: Opcode, r0: Reg) -> u8 {
+	check_8bit_reg(r0);
+	op as u8 | ((r0 as u8) << 6)
+}
+
+fn encode_r1_8bit(r1: Reg) -> u8 {
+	check_8bit_reg(r1);
+	r1 as u8
+}
+
+fn encode_r1_any(r1: Reg) -> u8 {
+	match r1 {
+		Reg::A | Reg::B | Reg::C | Reg::D | Reg::DC => r1 as u8,
+		_ => panic!("cannot use register {:?}", r1),
+	}
+}
+
+fn check_8bit_reg(reg: Reg) {
+	match reg {
+		Reg::A | Reg::B | Reg::C | Reg::D => {},
+		_ => panic!("cannot use register {:?}", reg),
+	}
+}
+
+fn calc_branch_offset(from: usize, to: usize) -> u8 {
+	let diff = (to as isize) - (from as isize) - 2;
+	let diff: i8 = diff.try_into().expect("branch offset too far");
+	diff as u8
+}
+
+fn encode_16bit_addr(target: usize) -> [u8; 2] {
+	assert!(matches!(target, 0 ..= 0xFFFF), "invalid 16-bit address");
+	[
+		(target & 0xFF) as u8,
+		((target >> 8) & 0xFF) as u8
+	]
+}
+
+pub struct ToyBuilder {
+	bytes: Vec<u8>,
+}
+
+impl ToyBuilder {
+	pub fn new() -> Self {
+		Self { bytes: vec![] }
+	}
+
+	pub fn finish(self) -> Vec<u8> {
+		let mut insts = self.bytes;
+		insts.resize(0x8000, 0);
+		let mut ret = vec![b'T', b'O', b'Y'];
+		ret.append(&mut insts);
+		ret
+	}
+
+	pub fn org(&mut self, addr: usize) {
+		assert!(addr >= self.bytes.len(), "can only move origin up");
+		assert!(addr <= 0x7FFF, "invalid address {:X} (valid addresses 0..=0x7FFF)", addr);
+		self.bytes.resize(addr, 0);
+	}
+
+	pub fn append(&mut self, bytes: &[u8]) -> usize {
+		let ret = self.bytes.len();
+		assert!(ret + bytes.len() <= 0x8000, "ROM segment too big");
+		self.bytes.extend_from_slice(bytes);
+		ret
+	}
+
+	pub fn branch_here(&mut self, from: usize) {
+		assert!(from < self.bytes.len(), "bad source address {:X}", from);
+		let opc = self.bytes[from];
+		if opc != Opcode::BLT_S8 as u8 && opc != Opcode::BLE_S8 as u8 &&
+			opc != Opcode::BEQ_S8 as u8 && opc != Opcode::BNE_S8 as u8 {
+			panic!("patching something that isn't a branch at {:X}", from);
+		}
+
+		self.bytes[from + 1] = calc_branch_offset(from, self.bytes.len());
+	}
+
+	pub fn jump_here(&mut self, from: usize) {
+		assert!(from < self.bytes.len(), "bad source address {:X}", from);
+		let opc = self.bytes[from];
+		if opc != Opcode::JMP_I16 as u8 && opc != Opcode::CAL_I16 as u8 {
+			panic!("patching something that isn't a jump/call at {:X}", from);
+		}
+
+		let target = encode_16bit_addr(self.bytes.len());
+		self.bytes[from + 1] = target[0];
+		self.bytes[from + 2] = target[1];
+	}
+
+	pub fn li(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::LI_RI8, dst), src.into()])
+	}
+
+	pub fn mov(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::MOV_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn add(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::ADD_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn addi(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::ADD_RI8, dst), src.into()])
+	}
+
+	pub fn adc(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::ADC_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn adci(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::ADC_RI8, dst), src.into()])
+	}
+
+	pub fn sub(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::SUB_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn subi(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::SUB_RI8, dst), src.into()])
+	}
+
+	pub fn sbc(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::SBC_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn sbci(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::SBC_RI8, dst), src.into()])
+	}
+
+	pub fn and(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::AND_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn andi(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::AND_RI8, dst), src.into()])
+	}
+
+	pub fn or(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::OR_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn ori(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::OR_RI8, dst), src.into()])
+	}
+
+	pub fn xor(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::XOR_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn xori(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::XOR_RI8, dst), src.into()])
+	}
+
+	pub fn not(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::NOT_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn noti(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::NOT_RI8, dst), src.into()])
+	}
+
+	pub fn cmp(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::CMP_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn cmpi(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::CMP_RI8, dst), src.into()])
+	}
+
+	pub fn cmc(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::CMC_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn cmci(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::CMC_RI8, dst), src.into()])
+	}
+
+	pub fn blt(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::BLT_S8), 0])
+	}
+
+	pub fn blt_to(&mut self, to: usize) -> usize {
+		self.append(&[encode_op(Opcode::BLT_S8), calc_branch_offset(self.bytes.len(), to)])
+	}
+
+	pub fn ble(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::BLE_S8), 0])
+	}
+
+	pub fn ble_to(&mut self, to: usize) -> usize {
+		self.append(&[encode_op(Opcode::BLE_S8), calc_branch_offset(self.bytes.len(), to)])
+	}
+
+	pub fn beq(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::BEQ_S8), 0])
+	}
+
+	pub fn beq_to(&mut self, to: usize) -> usize {
+		self.append(&[encode_op(Opcode::BEQ_S8), calc_branch_offset(self.bytes.len(), to)])
+	}
+
+	pub fn bne(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::BNE_S8), 0])
+	}
+
+	pub fn bne_to(&mut self, to: usize) -> usize {
+		self.append(&[encode_op(Opcode::BNE_S8), calc_branch_offset(self.bytes.len(), to)])
+	}
+
+	pub fn jmp(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::JMP_I16), 0, 0])
+	}
+
+	pub fn jmp_to(&mut self, target: usize) -> usize {
+		let target = encode_16bit_addr(target);
+		self.append(&[encode_op(Opcode::JMP_I16), target[0], target[1]])
+	}
+
+	pub fn cal(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::CAL_I16), 0, 0])
+	}
+
+	pub fn cal_to(&mut self, target: usize) -> usize {
+		let target = encode_16bit_addr(target);
+		self.append(&[encode_op(Opcode::CAL_I16), target[0], target[1]])
+	}
+
+	pub fn ret(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::RET_IMP)])
+	}
+
+	pub fn ld(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::LD_RR, dst), encode_r1_any(src)])
+	}
+
+	pub fn ldi(&mut self, dst: Reg, addr: u16) -> usize {
+		let addr = encode_16bit_addr(addr as usize);
+		self.append(&[encode_opr0(Opcode::LD_RI16, dst), addr[0], addr[1]])
+	}
+
+	pub fn st(&mut self, dst: Reg, src: Reg) -> usize {
+		self.append(&[encode_opr0(Opcode::ST_RR, dst), encode_r1_any(src)])
+	}
+
+	pub fn sti(&mut self, dst: Reg, addr: u16) -> usize {
+		let addr = encode_16bit_addr(addr as usize);
+		self.append(&[encode_opr0(Opcode::ST_RI16, dst), addr[0], addr[1]])
+	}
 }
