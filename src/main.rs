@@ -46,7 +46,55 @@ fn setup_panic() {
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	let mut img_data = vec![b'T', b'O', b'Y'];
-	img_data.append(&mut vec![0; 32768]);
+	const R0A: u8 = 0b0000_0000;
+	const R0B: u8 = 0b0100_0000;
+	const R0C: u8 = 0b1000_0000;
+	const R0D: u8 = 0b1100_0000;
+	const R1A: u8 = 0;
+	const R1B: u8 = 1;
+	const R1C: u8 = 2;
+	const R1D: u8 = 3;
+	const R1DC: u8 = 4;
+
+	let mut instructions = vec![
+		0x00 | R0A, 0xBE,       // li  a, 0xBE
+		0x00 | R0D, 0x05,       // li  d, 5
+		0x01 | R0A, R1D,        // add a, d
+		0x02 | R0B, 0x30,       // add b, 0x30
+		0x03 | R0B, R1C,        // adc b, c
+		0x04 | R0C, 1,          // adc c, 1
+		0x05 | R0A, R1D,        // sub a, d
+		0x06 | R0B, 0x30,       // sub b, 0x30
+		0x07 | R0B, R1C,        // sbc b, c
+		0x08 | R0C, 1,          // sbc c, 1
+		0x09 | R0A, R1D,        // and a, d
+		0x0A | R0B, 0x30,       // and b, 0x30
+		0x0B | R0B, R1C,        // or  b, c
+		0x0C | R0C, 1,          // or  c, 1
+		0x0D | R0A, R1D,        // xor a, d
+		0x0E | R0B, 0x30,       // xor b, 0x30
+		0x0F | R0B, R1C,        // not b, c
+		0x10 | R0C, 1,          // not c, 1
+		0x11 | R0A, R1D,        // cmp a, d
+		0x12 | R0B, 0x30,       // cmp b, 0x30
+		0x13 | R0B, R1C,        // cmc b, c
+		0x14 | R0C, 1,          // cmc c, 1
+		0x15, -10i8 as u8,      // blt -10
+		0x16, -12i8 as u8,      // ble -12
+		0x17, -14i8 as u8,      // beq -14
+		0x18, -16i8 as u8,      // bne -16
+		0x19, 0x37, 0x00,       // jmp 0x0037 (next instruction)
+		0x1A, 0xFE, 0x7F,       // cal 0x7FFE
+		0x1C | R0B, 0x13,       // ld  b, [0x13]
+		0x1D | R0C, 0x00, 0x80, // ld  c, [0x8000]
+		0x1E | R0A, R1DC,       // ld  a, [dc]
+		0x1F | R0B, 0x13,       // st  b, [0x13]
+		0x20 | R0C, 0x00, 0x80, // st  c, [0x8000]
+		0x21 | R0A, R1A,        // st  a, [a]
+		0x1B,                   // ret
+	];
+	instructions.resize(0x8000, 0);
+	img_data.append(&mut instructions);
 
 	let img = Image::new("<toy test>", &img_data);
 	let mut prog = program_from_image(img)?;

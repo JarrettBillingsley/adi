@@ -193,8 +193,8 @@ impl Program {
 					// we got through the whole slice with no errors, meaning
 					// this is a fallthrough to the next bb.
 					// if we got to the end of the *segment,* though, end_ea may be invalid.
-					if end_ea.offs() >= self.segment_from_ea(end_ea).len() {
-						term = Some(BBTerm::Halt)
+					if end_ea.offs() >= seg.len() {
+						term = Some(BBTerm::DeadEnd)
 					} else {
 						term = Some(BBTerm::FallThru(end_ea));
 					}

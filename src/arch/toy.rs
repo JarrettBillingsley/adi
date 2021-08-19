@@ -29,6 +29,7 @@ use crate::memory::{ Memory, MmuState, Endian, EA, VA };
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum Reg {
 	A, B, C, D, // data regs
+	DC,         // paired reg
 	NF, ZF, CF, // flag regs
 
 	Tmp, // temporary reg only used in the IR
@@ -40,20 +41,20 @@ impl Reg {
 
 	/// how many bytes each register takes up
 	fn byte_size(&self) -> usize {
-		1
+		if matches!(self, Reg::DC) { 2 } else { 1 }
 	}
 
 	/// offset into registers "segment" for the IR
 	fn offset(&self) -> usize {
 		match self {
-			Reg::A   => 0,
-			Reg::B   => 1,
-			Reg::C   => 2,
-			Reg::D   => 3,
-			Reg::NF  => 4,
-			Reg::ZF  => 5,
-			Reg::CF  => 6,
-			Reg::Tmp => 7,
+			Reg::A           => 0,
+			Reg::B           => 1,
+			Reg::C | Reg::DC => 2,
+			Reg::D           => 3,
+			Reg::NF          => 4,
+			Reg::ZF          => 5,
+			Reg::CF          => 6,
+			Reg::Tmp         => 7,
 		}
 	}
 
@@ -63,6 +64,7 @@ impl Reg {
 			Reg::B   => "b",
 			Reg::C   => "c",
 			Reg::D   => "d",
+			Reg::DC  => "dc",
 			Reg::NF  => "nf",
 			Reg::ZF  => "zf",
 			Reg::CF  => "cf",
@@ -215,40 +217,40 @@ mod descs {
 
 	// IMPORTANT: MUST STAY IN SAME ORDER AS Opcode ENUM
 	pub(super) const INST_DESCS: &[InstDesc] = &[
-		InstDesc(LI_RI8,  LI,  RI8,  "{0}, {1}",   Other),
-		InstDesc(ADD_RR,  ADD, RR,   "{0}, {1}",   Other),
-		InstDesc(ADD_RI8, ADD, RI8,  "{0}, {1}",   Other),
-		InstDesc(ADC_RR,  ADC, RR,   "{0}, {1}",   Other),
-		InstDesc(ADC_RI8, ADC, RI8,  "{0}, {1}",   Other),
-		InstDesc(SUB_RR,  SUB, RR,   "{0}, {1}",   Other),
-		InstDesc(SUB_RI8, SUB, RI8,  "{0}, {1}",   Other),
-		InstDesc(SBC_RR,  SBC, RR,   "{0}, {1}",   Other),
-		InstDesc(SBC_RI8, SBC, RI8,  "{0}, {1}",   Other),
-		InstDesc(AND_RR,  AND, RR,   "{0}, {1}",   Other),
-		InstDesc(AND_RI8, AND, RI8,  "{0}, {1}",   Other),
-		InstDesc(OR_RR,   OR,  RR,   "{0}, {1}",   Other),
-		InstDesc(OR_RI8,  OR,  RI8,  "{0}, {1}",   Other),
-		InstDesc(XOR_RR,  XOR, RR,   "{0}, {1}",   Other),
-		InstDesc(XOR_RI8, XOR, RI8,  "{0}, {1}",   Other),
-		InstDesc(NOT_RR,  NOT, RR,   "{0}, {1}",   Other),
-		InstDesc(NOT_RI8, NOT, RI8,  "{0}, {1}",   Other),
-		InstDesc(CMP_RR,  CMP, RR,   "{0}, {1}",   Other),
-		InstDesc(CMP_RI8, CMP, RI8,  "{0}, {1}",   Other),
-		InstDesc(CMC_RR,  CMC, RR,   "{0}, {1}",   Other),
-		InstDesc(CMC_RI8, CMC, RI8,  "{0}, {1}",   Other),
-		InstDesc(BLT_S8,  BLT, S8,   "{0}",        Cond),
-		InstDesc(BLE_S8,  BLE, S8,   "{0}",        Cond),
-		InstDesc(BEQ_S8,  BEQ, S8,   "{0}",        Cond),
-		InstDesc(BNE_S8,  BNE, S8,   "{0}",        Cond),
-		InstDesc(JMP_I16, JMP, I16,  "{0}",        Uncond),
-		InstDesc(CAL_I16, CAL, I16,  "{0}",        Call),
-		InstDesc(RET_IMP, RET, IMP,  "",           Ret),
-		InstDesc(LD_RI8,  LD,  RI8,  "{0}, [{1}]", Other),
-		InstDesc(LD_RI16, LD,  RI16, "{0}, [{1}]", Other),
-		InstDesc(LD_RR,   LD,  RR,   "{0}, [{1}]", Other),
-		InstDesc(ST_RI8,  ST,  RI8,  "{0}, [{1}]", Other),
-		InstDesc(ST_RI16, ST,  RI16, "{0}, [{1}]", Other),
-		InstDesc(ST_RR,   ST,  RR,   "{0}, [{1}]", Other),
+		InstDesc(LI_RI8,  LI,  RI8,  "{0}, {1}",   Other),  // 0x00
+		InstDesc(ADD_RR,  ADD, RR,   "{0}, {1}",   Other),  // 0x01
+		InstDesc(ADD_RI8, ADD, RI8,  "{0}, {1}",   Other),  // 0x02
+		InstDesc(ADC_RR,  ADC, RR,   "{0}, {1}",   Other),  // 0x03
+		InstDesc(ADC_RI8, ADC, RI8,  "{0}, {1}",   Other),  // 0x04
+		InstDesc(SUB_RR,  SUB, RR,   "{0}, {1}",   Other),  // 0x05
+		InstDesc(SUB_RI8, SUB, RI8,  "{0}, {1}",   Other),  // 0x06
+		InstDesc(SBC_RR,  SBC, RR,   "{0}, {1}",   Other),  // 0x07
+		InstDesc(SBC_RI8, SBC, RI8,  "{0}, {1}",   Other),  // 0x08
+		InstDesc(AND_RR,  AND, RR,   "{0}, {1}",   Other),  // 0x09
+		InstDesc(AND_RI8, AND, RI8,  "{0}, {1}",   Other),  // 0x0A
+		InstDesc(OR_RR,   OR,  RR,   "{0}, {1}",   Other),  // 0x0B
+		InstDesc(OR_RI8,  OR,  RI8,  "{0}, {1}",   Other),  // 0x0C
+		InstDesc(XOR_RR,  XOR, RR,   "{0}, {1}",   Other),  // 0x0D
+		InstDesc(XOR_RI8, XOR, RI8,  "{0}, {1}",   Other),  // 0x0E
+		InstDesc(NOT_RR,  NOT, RR,   "{0}, {1}",   Other),  // 0x0F
+		InstDesc(NOT_RI8, NOT, RI8,  "{0}, {1}",   Other),  // 0x10
+		InstDesc(CMP_RR,  CMP, RR,   "{0}, {1}",   Other),  // 0x11
+		InstDesc(CMP_RI8, CMP, RI8,  "{0}, {1}",   Other),  // 0x12
+		InstDesc(CMC_RR,  CMC, RR,   "{0}, {1}",   Other),  // 0x13
+		InstDesc(CMC_RI8, CMC, RI8,  "{0}, {1}",   Other),  // 0x14
+		InstDesc(BLT_S8,  BLT, S8,   "{0}",        Cond),   // 0x15
+		InstDesc(BLE_S8,  BLE, S8,   "{0}",        Cond),   // 0x16
+		InstDesc(BEQ_S8,  BEQ, S8,   "{0}",        Cond),   // 0x17
+		InstDesc(BNE_S8,  BNE, S8,   "{0}",        Cond),   // 0x18
+		InstDesc(JMP_I16, JMP, I16,  "{0}",        Uncond), // 0x19
+		InstDesc(CAL_I16, CAL, I16,  "{0}",        Call),   // 0x1A
+		InstDesc(RET_IMP, RET, IMP,  "",           Ret),    // 0x1B
+		InstDesc(LD_RI8,  LD,  RI8,  "{0}, [{1}]", Other),  // 0x1C
+		InstDesc(LD_RI16, LD,  RI16, "{0}, [{1}]", Other),  // 0x1D
+		InstDesc(LD_RR,   LD,  RR,   "{0}, [{1}]", Other),  // 0x1E
+		InstDesc(ST_RI8,  ST,  RI8,  "{0}, [{1}]", Other),  // 0x1F
+		InstDesc(ST_RI16, ST,  RI16, "{0}, [{1}]", Other),  // 0x20
+		InstDesc(ST_RR,   ST,  RR,   "{0}, [{1}]", Other),  // 0x21
 	];
 }
 
@@ -300,8 +302,9 @@ fn decode_reg(num: u8) -> Reg {
 		1 => Reg::B,
 		2 => Reg::C,
 		3 => Reg::D,
+		4 => Reg::DC,
 		// it's a fake arch, if there's any incorrectly-encoded programs it's MY fault
-		_ => panic!(),
+		_ => panic!("{}", num),
 	}
 }
 
@@ -337,7 +340,7 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 			(2, None)
 		}
 		S8 => {
-			let target = ((va.0 as isize) + (img[0] as i8 as isize) + 2) as usize;
+			let target = ((va.0 as isize) + (img[1] as i8 as isize) + 2) as usize;
 			ops[0] = Operand::Mem(target as u64, MemAccess::Target);
 			(1, Some(VA(target)))
 		}
