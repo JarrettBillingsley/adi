@@ -6,7 +6,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::program::{ Instruction };
 use crate::memory::{ VA, EA };
-use crate::platform::{ GBMmu, NesMmu };
+use crate::platform::{ GBMmu, NesMmu, ToyMmu };
 
 /// Newtype for MMU configuration state. The interpretation of this type is up to each
 /// implementor of `IMmu`.
@@ -30,6 +30,8 @@ pub enum Mmu {
 	GBMmu,
 	#[display("{0}")]
 	NesMmu,
+	#[display("{0}")]
+	ToyMmu,
 }
 
 /// How an instruction can possibly change the state of an MMU.

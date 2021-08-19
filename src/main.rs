@@ -16,7 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	// test_gb()?;
-	test_nes()?;
+	// test_nes()?;
+	test_toy()?;
 	Ok(())
 }
 
@@ -39,6 +40,29 @@ fn setup_panic() {
 		// .most_recent_first(false)
 		.verbosity(PanicVerbosity::Full)
 	.install();
+}
+
+// ------------------------------------------------------------------------------------------------
+
+fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
+	let mut img_data = vec![b'T', b'O', b'Y'];
+	img_data.append(&mut vec![0; 32768]);
+
+	let img = Image::new("<toy test>", &img_data);
+	let mut prog = program_from_image(img)?;
+	println!("{}", prog);
+
+	let state = prog.initial_mmu_state();
+	prog.enqueue_function(state, prog.ea_from_va(state, VA(0)));
+	prog.analyze_queue();
+
+	println!("found {} functions.", prog.all_funcs().count());
+
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
+
+	Ok(())
 }
 
 // ------------------------------------------------------------------------------------------------

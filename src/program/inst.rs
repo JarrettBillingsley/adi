@@ -150,6 +150,15 @@ impl Operand {
 			_ => panic!("not an immediate operand"),
 		}
 	}
+
+	/// If this is register, get it; panics otherwise.
+	pub fn reg(&self) -> u64 {
+		match self {
+			Operand::Reg(r) => *r,
+			Operand::Indir(MemIndir::Reg { reg: r }, ..) => *r as u64,
+			_ => panic!("not a register operand"),
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -12,6 +12,7 @@ use crate::program::{ Instruction, BasicBlock };
 
 pub mod gb;
 pub mod mos65xx;
+pub mod toy;
 pub mod error;
 
 pub use error::*;
@@ -22,11 +23,13 @@ pub use error::*;
 
 use gb::{ GBDisassembler };
 use mos65xx::{ Mos65xxDisassembler };
+use toy::{ ToyDisassembler };
 
 #[enum_dispatch]
 pub enum Disassembler {
 	GBDisassembler,
 	Mos65xxDisassembler,
+	ToyDisassembler,
 }
 
 impl Disassembler {
@@ -143,11 +146,13 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 
 use gb::{ GBPrinter };
 use mos65xx::{ Mos65xxPrinter };
+use toy::{ ToyPrinter };
 
 #[enum_dispatch]
 pub enum Printer {
 	GBPrinter,
 	Mos65xxPrinter,
+	ToyPrinter,
 }
 
 /// Trait for instruction printers.
@@ -244,11 +249,13 @@ impl<T> Value<T> {
 
 use gb::{ GBInterpreter };
 use mos65xx::{ Mos65xxInterpreter };
+use toy::{ ToyInterpreter };
 
 #[enum_dispatch]
 pub enum Interpreter {
 	GBInterpreter,
 	Mos65xxInterpreter,
+	ToyInterpreter,
 }
 
 #[enum_dispatch(Interpreter)]
@@ -271,11 +278,13 @@ pub trait IInterpreter: Sized + Sync + Send {
 
 use gb::{ GBArchitecture };
 use mos65xx::{ Mos65xxArchitecture };
+use toy::{ ToyArchitecture };
 
 #[enum_dispatch]
 pub enum Architecture {
 	GBArchitecture,
 	Mos65xxArchitecture,
+	ToyArchitecture,
 }
 
 #[enum_dispatch(Architecture)]
