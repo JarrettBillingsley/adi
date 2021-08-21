@@ -3,6 +3,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use enum_dispatch::enum_dispatch;
 
+use crate::ir::{ IrBuilder };
 use crate::memory::{ Endian, Memory, MmuState, EA, VA };
 use crate::program::{ Instruction, BasicBlock };
 
@@ -273,6 +274,22 @@ pub trait IInterpreter: Sized + Sync + Send {
 }
 
 // ------------------------------------------------------------------------------------------------
+// IIrCompiler
+// ------------------------------------------------------------------------------------------------
+
+use toy::{ ToyIrCompiler };
+
+#[enum_dispatch]
+pub enum IrCompiler {
+	ToyIrCompiler,
+}
+
+#[enum_dispatch(IrCompiler)]
+pub trait IIrCompiler: Sized + Sync + Send {
+	fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder);
+}
+
+// ------------------------------------------------------------------------------------------------
 // IArchitecture
 // ------------------------------------------------------------------------------------------------
 
@@ -299,4 +316,8 @@ pub trait IArchitecture: Sized + Sync + Send {
 	fn new_printer(&self) -> Printer;
 	/// Construct a new interpreter.
 	fn new_interpreter(&self) -> Interpreter;
+
+	fn new_ir_compiler(&self) -> IrCompiler {
+		ToyIrCompiler.into()
+	}
 }

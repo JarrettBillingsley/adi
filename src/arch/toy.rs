@@ -19,8 +19,10 @@ use crate::arch::{
 	INameLookup,
 	IArchitecture,
 	IInterpreter, ValueKind,
+	IIrCompiler,
 };
 use crate::memory::{ Memory, MmuState, Endian, EA, VA };
+use crate::ir::{ IrBuilder };
 
 // ------------------------------------------------------------------------------------------------
 // Reg
@@ -30,45 +32,55 @@ use crate::memory::{ Memory, MmuState, Endian, EA, VA };
 pub enum Reg {
 	A, B, C, D, // data regs
 	DC,         // paired reg
+	SP,         // stack ptr
 	NF, ZF, CF, // flag regs
 
-	Tmp, // temporary reg only used in the IR
+	Tmp, Tmp16, // temporary reg for the IR
+	TmpCF,      // temporary carry flag
 }
 
 impl Reg {
 	/// how many bytes are needed to represent all regs
-	const ALL_BYTES: usize = 8;
+	const ALL_BYTES: usize = 12;
 
 	/// how many bytes each register takes up
-	fn byte_size(&self) -> usize {
-		if matches!(self, Reg::DC) { 2 } else { 1 }
+	const fn byte_size(&self) -> usize {
+		match self {
+			Reg::DC | Reg::SP | Reg::Tmp16 => 2,
+			_ => 1,
+		}
 	}
 
 	/// offset into registers "segment" for the IR
-	fn offset(&self) -> usize {
+	const fn offset(&self) -> u16 {
 		match self {
-			Reg::A           => 0,
-			Reg::B           => 1,
-			Reg::C | Reg::DC => 2,
-			Reg::D           => 3,
-			Reg::NF          => 4,
-			Reg::ZF          => 5,
-			Reg::CF          => 6,
-			Reg::Tmp         => 7,
+			Reg::A                => 0,
+			Reg::B                => 1,
+			Reg::C | Reg::DC      => 2,
+			Reg::D                => 3,
+			Reg::NF               => 4,
+			Reg::ZF               => 5,
+			Reg::CF               => 6,
+			Reg::Tmp | Reg::Tmp16 => 7,
+			Reg::TmpCF            => 9,
+			Reg::SP               => 10,
 		}
 	}
 
 	fn name(&self) -> &'static str {
 		match self {
-			Reg::A   => "a",
-			Reg::B   => "b",
-			Reg::C   => "c",
-			Reg::D   => "d",
-			Reg::DC  => "dc",
-			Reg::NF  => "nf",
-			Reg::ZF  => "zf",
-			Reg::CF  => "cf",
-			Reg::Tmp => "tmp",
+			Reg::A     => "a",
+			Reg::B     => "b",
+			Reg::C     => "c",
+			Reg::D     => "d",
+			Reg::DC    => "dc",
+			Reg::NF    => "nf",
+			Reg::ZF    => "zf",
+			Reg::CF    => "cf",
+			Reg::Tmp   => "tmp",
+			Reg::Tmp16 => "tmp16",
+			Reg::TmpCF => "tmpcf",
+			Reg::SP    => "sp",
 		}
 	}
 }
@@ -385,6 +397,18 @@ impl ToyPrinter {
 	}
 }
 
+fn inst_reg(i: &Instruction, op: usize) -> Reg {
+	decode_reg(i.ops()[op].reg() as u8)
+}
+
+fn inst_addr(i: &Instruction, op: usize) -> VA {
+	i.ops()[op].addr()
+}
+
+fn inst_imm(i: &Instruction) -> u8 {
+	i.ops()[1].uimm() as u8
+}
+
 impl IPrinter for ToyPrinter {
 	fn fmt_mnemonic(&self, i: &Instruction) -> String {
 		self.lookup_desc(i.bytes()).mnemonic().into()
@@ -399,27 +423,27 @@ impl IPrinter for ToyPrinter {
 		match desc.addr_mode {
 			IMP => templ.into(),
 			RR => {
-				let r0 = decode_reg(i.ops()[0].reg() as u8).name();
-				let r1 = decode_reg(i.ops()[1].reg() as u8).name();
+				let r0 = inst_reg(i, 0).name();
+				let r1 = inst_reg(i, 1).name();
 				templ.replace("{0}", r0).replace("{1}", r1)
 			}
 			RI8 => {
-				let r0 = decode_reg(i.ops()[0].reg() as u8).name();
+				let r0 = inst_reg(i, 0).name();
 				if desc.meta_op.access().is_some() {
 					templ.replace("{0}", r0)
-						.replace("{1}", &self.fmt_addr(i.ops()[1].addr(), state, l))
+						.replace("{1}", &self.fmt_addr(inst_addr(i, 1), state, l))
 				} else {
 					templ.replace("{0}", r0)
-						.replace("{1}", &self.fmt_uimm(i.ops()[1].uimm()))
+						.replace("{1}", &self.fmt_uimm(inst_imm(i) as u64))
 				}
 			}
 			S8 | I16 => {
-				let imm = self.fmt_addr(i.ops()[0].addr(), state, l);
+				let imm = self.fmt_addr(inst_addr(i, 0), state, l);
 				templ.replace("{0}", &imm)
 			}
 			RI16 => {
-				let r0 = decode_reg(i.ops()[0].reg() as u8).name();
-				let imm = self.fmt_addr(i.ops()[1].addr(), state, l);
+				let r0 = inst_reg(i, 0).name();
+				let imm = self.fmt_addr(inst_addr(i, 1), state, l);
 				templ.replace("{0}", r0).replace("{1}", &imm)
 			}
 		}
@@ -463,6 +487,185 @@ impl IArchitecture for ToyArchitecture {
 	fn new_disassembler(&self) -> Disassembler { ToyDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { ToyPrinter::new().into() }
 	fn new_interpreter (&self) -> Interpreter  { ToyInterpreter::new().into() }
+}
+
+// ------------------------------------------------------------------------------------------------
+// IR
+// ------------------------------------------------------------------------------------------------
+
+pub struct ToyIrCompiler;
+
+impl IIrCompiler for ToyIrCompiler {
+	fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+		lookup_desc(i.bytes()[0]).expect("ono").to_ir(i, target, b);
+	}
+}
+
+mod ir {
+	use super::*;
+	use crate::ir::{ Place, Const, Src, IrBuilder };
+
+	const REG_A:     Place = Place::reg8(Reg::A.offset());
+	const REG_B:     Place = Place::reg8(Reg::B.offset());
+	const REG_C:     Place = Place::reg8(Reg::C.offset());
+	const REG_D:     Place = Place::reg8(Reg::D.offset());
+	const REG_DC:    Place = Place::reg16(Reg::DC.offset());
+	const REG_NF:    Place = Place::reg8(Reg::NF.offset());
+	const REG_ZF:    Place = Place::reg8(Reg::ZF.offset());
+	const REG_CF:    Place = Place::reg8(Reg::CF.offset());
+	const REG_TMP:   Place = Place::reg8(Reg::Tmp.offset());
+	const REG_TMP16: Place = Place::reg16(Reg::Tmp16.offset());
+	const REG_TMPCF: Place = Place::reg8(Reg::TmpCF.offset());
+	const REG_SP:    Place = Place::reg16(Reg::SP.offset());
+
+	fn reg_to_place(reg: Reg) -> Place {
+		match reg {
+			Reg::A  => REG_A,
+			Reg::B  => REG_B,
+			Reg::C  => REG_C,
+			Reg::D  => REG_D,
+			Reg::DC => REG_DC,
+			_       => panic!(),
+		}
+	}
+
+	impl InstDesc {
+		fn r1(&self, i: &Instruction) -> Src {
+			match self.addr_mode {
+				AddrMode::RR   => reg_to_place(inst_reg(i, 1)).into(),
+				AddrMode::RI8  => Const::_8(inst_imm(i)).into(),
+				AddrMode::RI16 => Place::mem8(inst_addr(i, 1)).into(),
+				_ => panic!(),
+			}
+		}
+
+		pub(super) fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+			use MetaOp::*;
+
+			fn r0(i: &Instruction) -> Place {
+				reg_to_place(inst_reg(i, 0))
+			}
+
+			match self.meta_op {
+				LI | MOV => {
+					b.assign(i.ea(), r0(i), self.r1(i));
+				}
+				ADD => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.icarry(i.ea(), REG_CF, s1, s2);
+					b.iuadd(i.ea(),  s1,     s1, s2);
+				}
+				ADC => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.assign(i.ea(),  REG_TMPCF, REG_CF);
+					b.icarryc(i.ea(), REG_CF,    s1, s2, REG_CF);
+					b.iuaddc(i.ea(),  s1,        s1, s2, REG_TMPCF);
+				}
+				SUB => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.isborrow(i.ea(), REG_CF, s1, s2);
+					b.iusub(i.ea(),    s1,     s1, s2);
+				}
+				SBC => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.assign(i.ea(),    REG_TMPCF, REG_CF);
+					b.isborrowc(i.ea(), REG_CF,    s1, s2, REG_CF);
+					b.iusubb(i.ea(),    s1,        s1, s2, REG_TMPCF);
+				}
+				AND => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.iand(i.ea(), s1, s1, s2);
+				}
+				OR => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.ior(i.ea(), s1, s1, s2);
+				}
+				XOR => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.ixor(i.ea(), s1, s1, s2);
+				}
+				NOT => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.inot(i.ea(), s1, s2);
+				}
+				CMP => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.ieq(i.ea(),  REG_ZF, s1, s2);
+					b.islt(i.ea(), REG_NF, s1, s2);
+					b.iult(i.ea(), REG_CF, s1, s2);
+				}
+				CMC => {
+					let s1 = r0(i);
+					let s2 = self.r1(i);
+					b.assign(i.ea(),    REG_TMPCF, REG_CF);
+					b.isborrowc(i.ea(), REG_CF,    s1, s2, REG_CF);
+					b.iusubb(i.ea(),    REG_TMP,   s1, s2, REG_TMPCF);
+					b.ieq(i.ea(),       REG_ZF, REG_TMP, Const::ZERO_8);
+					b.islt(i.ea(),      REG_NF, REG_TMP, Const::ZERO_8);
+				}
+				BLT => {
+					b.cbranch(i.ea(), REG_NF, target.unwrap());
+				}
+				BLE => {
+					b.bor(i.ea(),     REG_TMP, REG_CF, REG_ZF);
+					b.cbranch(i.ea(), REG_TMP, target.unwrap());
+				}
+				BEQ => {
+					b.cbranch(i.ea(), REG_ZF, target.unwrap());
+				}
+				BNE => {
+					b.bnot(i.ea(),    REG_TMP, REG_ZF);
+					b.cbranch(i.ea(), REG_TMP, target.unwrap());
+				}
+				JMP => {
+					b.branch(i.ea(), target.unwrap());
+				}
+				CAL => {
+					b.iusub(i.ea(), REG_SP, REG_SP, Const::_16(2));
+					b.store(i.ea(), REG_SP, Const::_16(i.next_va().0 as u16));
+					b.call(i.ea(), target.unwrap());
+				}
+				RET => {
+					b.load(i.ea(),  REG_TMP16, REG_SP);
+					b.iuadd(i.ea(), REG_SP, REG_SP, Const::_16(2));
+					b.ret(i.ea(),   REG_TMP16);
+				}
+				LD => {
+					let reg = r0(i);
+
+					let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
+						b.ipair(i.ea(), REG_TMP16, REG_D, REG_C);
+						REG_TMP16.into()
+					} else {
+						self.r1(i)
+					};
+
+					b.load(i.ea(), reg, addr);
+				}
+				ST => {
+					let reg = r0(i);
+
+					let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
+						b.ipair(i.ea(), REG_TMP16, REG_D, REG_C);
+						REG_TMP16.into()
+					} else {
+						self.r1(i)
+					};
+
+					b.store(i.ea(), addr, reg);
+				}
+			}
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

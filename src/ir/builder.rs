@@ -8,16 +8,13 @@ use crate::memory::{ EA };
 
 /// Helper for building blocks of IR instructions.
 pub struct IrBuilder {
-	ea:    EA,
 	insts: Vec<IrInst>,
 }
 
 impl IrBuilder {
-	/// Constructor. `ea` is the address of the beginning of this block of IR,
-	/// mostly used for debugging/error messages.
-	pub fn new(ea: EA) -> Self {
+	/// Constructor.
+	pub fn new() -> Self {
 		Self {
-			ea,
 			insts: Vec::with_capacity(8),
 		}
 	}
@@ -105,8 +102,20 @@ impl IrBuilder {
 	}
 
 	///
+	pub fn iuaddc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	src3: impl Into<Src>) -> usize {
+		self.inst(IrInst::iuaddc(ea, dst, src1.into(), src2.into(), src3.into()))
+	}
+
+	///
 	pub fn iusub(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iusub(ea, dst, src1.into(), src2.into()))
+	}
+
+	///
+	pub fn iusubb(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	src3: impl Into<Src>) -> usize {
+		self.inst(IrInst::iusubb(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
@@ -115,13 +124,31 @@ impl IrBuilder {
 	}
 
 	///
+	pub fn icarryc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	src3: impl Into<Src>) -> usize {
+		self.inst(IrInst::icarryc(ea, dst, src1.into(), src2.into(), src3.into()))
+	}
+
+	///
 	pub fn iscarry(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iscarry(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
+	pub fn iscarryc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	src3: impl Into<Src>) -> usize {
+		self.inst(IrInst::iscarryc(ea, dst, src1.into(), src2.into(), src3.into()))
+	}
+
+	///
 	pub fn isborrow(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::isborrow(ea, dst, src1.into(), src2.into()))
+	}
+
+	///
+	pub fn isborrowc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	src3: impl Into<Src>) -> usize {
+		self.inst(IrInst::isborrowc(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
@@ -177,6 +204,11 @@ impl IrBuilder {
 	///
 	pub fn isshr(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::isshr(ea, dst, src1.into(), src2.into()))
+	}
+
+	///
+	pub fn ipair(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+		self.inst(IrInst::ipair(ea, dst, src1.into(), src2.into()))
 	}
 
 	///

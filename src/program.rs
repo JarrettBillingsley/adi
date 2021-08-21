@@ -283,6 +283,54 @@ impl Program {
 	}
 
 	// ---------------------------------------------------------------------------------------------
+	// IR
+
+	/// TESTING
+	pub fn func_to_ir(&self, func: FuncId) {
+		use crate::arch::{ IIrCompiler };
+		use crate::ir::{ IrBuilder };
+
+		let compiler = self.plat.arch().new_ir_compiler();
+		let func = self.funcs.get(func);
+
+		for bbid in func.all_bbs() {
+			let bb = self.get_bb(bbid);
+			let target = match bb.term() {
+				BBTerm::DeadEnd
+				| BBTerm::Halt
+				| BBTerm::Return
+				| BBTerm::FallThru(..)
+				| BBTerm::BankChange(..) => None,
+
+				BBTerm::Jump(dst)
+				| BBTerm::Call { dst, .. }
+				| BBTerm::Cond { t: dst, .. } => Some(*dst),
+
+				BBTerm::JumpTbl(_targets) => unimplemented!(),
+			};
+
+			let mut b = IrBuilder::new();
+
+			for inst in bb.insts() {
+				let t = if std::ptr::eq(inst, bb.term_inst()) {
+					target
+				} else {
+					None
+				};
+
+				compiler.to_ir(inst, t, &mut b);
+			}
+
+			let insts = b.finish();
+			println!("{:?}: ", bbid);
+
+			for i in insts {
+				println!("    {:?}", i);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------
 	// Data
 
 	delegate! {

@@ -1,6 +1,6 @@
 
-use crate::memory::{ EA };
-
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
+use crate::memory::{ EA, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -35,6 +35,24 @@ impl ValSize {
 			ValSize::_64 => 8,
 		}
 	}
+
+	fn is_twice(&self, other: ValSize) -> bool {
+		match other {
+			ValSize::_8  => matches!(self, ValSize::_16),
+			ValSize::_16 => matches!(self, ValSize::_32),
+			ValSize::_32 => matches!(self, ValSize::_64),
+			ValSize::_64 => panic!("can't represent paired 64-bit values"),
+		}
+	}
+
+	fn name(&self) -> &'static str {
+		match self {
+			ValSize::_8  => "b",
+			ValSize::_16 => "s",
+			ValSize::_32 => "i",
+			ValSize::_64 => "l",
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -42,14 +60,24 @@ impl ValSize {
 // ------------------------------------------------------------------------------------------------
 
 /// What kinds of [`Place`]s there are.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum PlaceKind {
 	/// A register. The field is its offset within the register "segment."
 	Reg(u16),
 	/// An SSA renumbered register. The second field is its "generation."
 	RegSub(u16, u32),
 	/// A memory address.
-	Mem(EA),
+	Mem(VA),
+}
+
+impl Debug for PlaceKind {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		match self {
+			PlaceKind::Reg(n)       => write!(f, "r{}", n),
+			PlaceKind::RegSub(n, i) => write!(f, "r{}_{}", n, i),
+			PlaceKind::Mem(va)      => write!(f, "addr 0x{:08X}", va),
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -57,10 +85,16 @@ pub enum PlaceKind {
 // ------------------------------------------------------------------------------------------------
 
 /// A location where a value can be stored. Can appear as the destination/LHS of IR instructions.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Place {
 	size: ValSize,
 	kind: PlaceKind,
+}
+
+impl Debug for Place {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{:?}.{}", self.kind, self.size.name())
+	}
 }
 
 impl Place {
@@ -85,23 +119,23 @@ impl Place {
 	}
 
 	/// Constructs an 8-bit memory place.
-	pub const fn mem8(ea: EA) -> Self {
-		Self { size: ValSize::_8, kind: PlaceKind::Mem(ea) }
+	pub const fn mem8(va: VA) -> Self {
+		Self { size: ValSize::_8, kind: PlaceKind::Mem(va) }
 	}
 
 	/// Constructs a 16-bit memory place.
-	pub const fn mem16(ea: EA) -> Self {
-		Self { size: ValSize::_16, kind: PlaceKind::Mem(ea) }
+	pub const fn mem16(va: VA) -> Self {
+		Self { size: ValSize::_16, kind: PlaceKind::Mem(va) }
 	}
 
 	/// Constructs a 32-bit memory place.
-	pub const fn mem32(ea: EA) -> Self {
-		Self { size: ValSize::_32, kind: PlaceKind::Mem(ea) }
+	pub const fn mem32(va: VA) -> Self {
+		Self { size: ValSize::_32, kind: PlaceKind::Mem(va) }
 	}
 
 	/// Constructs a 64-bit memory place.
-	pub const fn mem64(ea: EA) -> Self {
-		Self { size: ValSize::_64, kind: PlaceKind::Mem(ea) }
+	pub const fn mem64(va: VA) -> Self {
+		Self { size: ValSize::_64, kind: PlaceKind::Mem(va) }
 	}
 
 	/// The size of this place.
@@ -131,10 +165,21 @@ impl Place {
 // ------------------------------------------------------------------------------------------------
 
 /// A constant value.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Const {
 	size: ValSize,
 	val:  u64,
+}
+
+impl Debug for Const {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		match self.size {
+			ValSize::_8  => write!(f, "const 0x{:02X}", self.val),
+			ValSize::_16 => write!(f, "const 0x{:04X}", self.val),
+			ValSize::_32 => write!(f, "const 0x{:08X}", self.val),
+			ValSize::_64 => write!(f, "const 0x{:016X}", self.val),
+		}
+	}
 }
 
 impl Const {
@@ -181,10 +226,19 @@ impl Const {
 // ------------------------------------------------------------------------------------------------
 
 /// The source of a value. Can be either a [`Place`] or a [`Const`].
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Src {
 	Place(Place),
 	Const(Const),
+}
+
+impl Debug for Src {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		match self {
+			Src::Place(p) => write!(f, "{:?}", p),
+			Src::Const(c) => write!(f, "{:?}", c),
+		}
+	}
 }
 
 impl Src {
@@ -236,6 +290,7 @@ pub enum IrBinOp {
 
 	IntUAdd,    // dst = s1 + s2  (unsigned)
 	IntUSub,    // dst = s1 - s2  (unsigned)
+
 	IntCarry,   // dst = true if (s1 unsigned+ s2) has carry-out
 	IntSCarry,  // dst = true if (s1 signed+ s2) has carry-out
 	IntSBorrow, // dst = true if (s1 signed- s2) has borrow-out
@@ -252,9 +307,22 @@ pub enum IrBinOp {
 	IntUShr,    // dst = s1 >> s2 (unsigned/logical)
 	IntSShr,    // dst = s1 >> s2 (signed/arithmetic)
 
+	IntPair,    // dst = (s1 in upper bits, s2 in lower bits)
+
 	BoolXor,    // dst = s1 != s2
 	BoolAnd,    // dst = s1 and s2
 	BoolOr,     // dst = s1 or s2
+}
+
+/// Ternary operations.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum IrTernOp {
+	IntUAddC,    // dst = s1 + s2 + s3  (unsigned, s3 = bool)
+	IntUSubB,    // dst = s1 - s2 - s3  (unsigned, s3 = bool)
+
+	IntCarryC,   // dst = true if unsigned sum(s1, s2, s3) has carry-out
+	IntSCarryC,  // dst = true if signed sum(s1, s2, s3) has carry-out
+	IntSBorrowC, // dst = true if signed (s1 - s2 - s3) has borrow-out
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -262,28 +330,89 @@ pub enum IrBinOp {
 // ------------------------------------------------------------------------------------------------
 
 /// Represents IR instructions.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum IrInstKind {
 	Nop,
 
-	Assign    { dst: Place, src: Src },                          // dst = src
-	Load      { dst: Place, addr: Src },                         // dst = *addr
-	Store     { addr: Src,  src: Src },                          // *addr = src
+	Assign  { dst: Place, src: Src },  // dst = src
+	Load    { dst: Place, addr: Src }, // dst = *addr
+	Store   { addr: Src,  src: Src },  // *addr = src
 
-	// IrBranch  { offs: i32 },                                     // irpc += offs
-	// IrCBranch { cond: Src, offs: i32 },                          // if(cond) irpc += offs
+	Branch  { target: EA },            // pc = target
+	CBranch { cond: Src, target: EA }, // if(cond) pc = target
+	IBranch { target: Src },           // pc = src
 
-	Branch    { target: EA },                                    // pc = target
-	CBranch   { cond: Src, target: EA },                         // if(cond) pc = target
-	IBranch   { target: Src },                                   // pc = src
+	Call    { target: EA },  // pc = target (but it's a call)
+	ICall   { target: Src }, // pc = src (but it's a call)
+	Ret     { target: Src }, // pc = src (but it's a return)
 
-	Call      { target: EA },                                    // pc = target (but it's a call)
-	ICall     { target: Src },                                   // pc = src (but it's a call)
-	Ret       { target: Src },                                   // pc = src (but it's a return)
+	Unary   { dst: Place, op: IrUnOp, src: Src },                          // dst = op src
+	Binary  { dst: Place, src1: Src, op: IrBinOp, src2: Src },             // dst = src1 op src2
+	Ternary { dst: Place, src1: Src, op: IrTernOp, src2: Src, src3: Src }, // dst = ...yeah
+}
 
-	Unary     { dst: Place, op: IrUnOp, src: Src },              // dst = op src
-	Binary    { dst: Place, src1: Src, op: IrBinOp, src2: Src }, // dst = src1 op src2
-	// Custom { dst: Place, src1: Src, op: u8, src2: Src },      // dst = op(src1, src2)
+impl Debug for IrInstKind {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use IrInstKind::*;
+		use IrUnOp::*;
+		use IrBinOp::*;
+		use IrTernOp::*;
+
+		match self {
+			Nop =>                      write!(f, "nop"),
+			Assign { dst, src } =>      write!(f, "{:?} = {:?}", dst, src),
+			Load { dst, addr } =>       write!(f, "{:?} = *{:?}", dst, addr),
+			Store { addr,  src } =>     write!(f, "*{:?} = {:?}", addr, src),
+			Branch { target } =>        write!(f, "goto {}", target),
+			CBranch { cond, target } => write!(f, "if {:?} goto {}", cond, target),
+			IBranch { target } =>       write!(f, "goto [{:?}]", target),
+			Call { target } =>          write!(f, "call {}", target),
+			ICall { target } =>         write!(f, "call [{:?}]", target),
+			Ret { target } =>           write!(f, "ret [{:?}]", target),
+			Unary { dst, op, src } => match op {
+				IntZxt  => write!(f, "{:?} = zxt({:?})", dst, src),
+				IntSxt  => write!(f, "{:?} = sxt({:?})", dst, src),
+				IntNeg  => write!(f, "{:?} = -{:?}", dst, src),
+				IntNot  => write!(f, "{:?} = ~{:?}", dst, src),
+				BoolNot => write!(f, "{:?} = not {:?}", dst, src),
+			},
+			Binary { dst, src1, op, src2 } => match op {
+				IntEq      => write!(f, "{:?} = {:?} == {:?}", dst, src1, src2),
+				IntNe      => write!(f, "{:?} = {:?} != {:?}", dst, src1, src2),
+				IntSlt     => write!(f, "{:?} = {:?} s< {:?}", dst, src1, src2),
+				IntSle     => write!(f, "{:?} = {:?} s<= {:?}", dst, src1, src2),
+				IntUlt     => write!(f, "{:?} = {:?} u< {:?}", dst, src1, src2),
+				IntUle     => write!(f, "{:?} = {:?} u<= {:?}", dst, src1, src2),
+				IntUAdd    => write!(f, "{:?} = {:?} u+ {:?}", dst, src1, src2),
+				IntUSub    => write!(f, "{:?} = {:?} u- {:?}", dst, src1, src2),
+				IntCarry   => write!(f, "{:?} = ucarry({:?}, {:?})", dst, src1, src2),
+				IntSCarry  => write!(f, "{:?} = scarry({:?}, {:?})", dst, src1, src2),
+				IntSBorrow => write!(f, "{:?} = sborrow({:?}, {:?})", dst, src1, src2),
+				IntMul     => write!(f, "{:?} = {:?} * {:?}", dst, src1, src2),
+				IntUDiv    => write!(f, "{:?} = {:?} u/ {:?}", dst, src1, src2),
+				IntSDiv    => write!(f, "{:?} = {:?} s/ {:?}", dst, src1, src2),
+				IntUMod    => write!(f, "{:?} = {:?} u% {:?}", dst, src1, src2),
+				IntSMod    => write!(f, "{:?} = {:?} s% {:?}", dst, src1, src2),
+				IntXor     => write!(f, "{:?} = {:?} ^ {:?}", dst, src1, src2),
+				IntAnd     => write!(f, "{:?} = {:?} & {:?}", dst, src1, src2),
+				IntOr      => write!(f, "{:?} = {:?} | {:?}", dst, src1, src2),
+				IntShl     => write!(f, "{:?} = {:?} << {:?}", dst, src1, src2),
+				IntUShr    => write!(f, "{:?} = {:?} u>> {:?}", dst, src1, src2),
+				IntSShr    => write!(f, "{:?} = {:?} s>> {:?}", dst, src1, src2),
+				IntPair    => write!(f, "{:?} = pair(hi = {:?}, lo = {:?})", dst, src1, src2),
+				BoolXor    => write!(f, "{:?} = {:?} boolxor {:?}", dst, src1, src2),
+				BoolAnd    => write!(f, "{:?} = {:?} booland {:?}", dst, src1, src2),
+				BoolOr     => write!(f, "{:?} = {:?} boolor {:?}", dst, src1, src2),
+			},
+			Ternary { dst, src1, op, src2, src3 } => match op {
+				IntUAddC    => write!(f, "{:?} = {:?} u+ {:?} u+ {:?}", dst, src1, src2, src3),
+				IntUSubB    => write!(f, "{:?} = {:?} u- {:?} u- {:?}", dst, src1, src2, src3),
+				IntCarryC   => write!(f, "{:?} = ucarryc({:?}, {:?}, {:?})", dst, src1, src2, src3),
+				IntSCarryC  => write!(f, "{:?} = scarryc({:?}, {:?}, {:?})", dst, src1, src2, src3),
+				IntSBorrowC => write!(f, "{:?} = sborrowc({:?}, {:?}, {:?})", dst, src1, src2, src3),
+			},
+		}
+	}
 }
 
 impl IrInstKind {
@@ -306,6 +435,7 @@ impl IrInstKind {
 			IrInstKind::CBranch   { cond, .. } => cond.size(),
 			IrInstKind::Unary     { src, .. }  => src.size(),
 			IrInstKind::Binary    { src1, .. } => src1.size(),
+			IrInstKind::Ternary   { src1, .. } => src1.size(),
 		}
 	}
 
@@ -323,11 +453,12 @@ impl IrInstKind {
 			// | IrInstKind::IrCBranch { .. }
 			| IrInstKind::CBranch { .. } => panic!("no destination"),
 
-			IrInstKind::Assign { dst, .. } => dst.size(),
-			IrInstKind::Load   { dst, .. } => dst.size(),
-			IrInstKind::Store  { src, .. } => src.size(), // yes, it's weird
-			IrInstKind::Unary  { dst, .. } => dst.size(),
-			IrInstKind::Binary { dst, .. } => dst.size(),
+			IrInstKind::Assign  { dst, .. } => dst.size(),
+			IrInstKind::Load    { dst, .. } => dst.size(),
+			IrInstKind::Store   { src, .. } => src.size(), // yes, it's weird
+			IrInstKind::Unary   { dst, .. } => dst.size(),
+			IrInstKind::Binary  { dst, .. } => dst.size(),
+			IrInstKind::Ternary { dst, .. } => dst.size(),
 		}
 	}
 }
@@ -336,10 +467,16 @@ impl IrInstKind {
 // IrInst
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct IrInst {
 	ea:   EA,
 	kind: IrInstKind,
+}
+
+impl Debug for IrInst {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{:?} {:?}", self.ea, self.kind)
+	}
 }
 
 impl IrInst {
@@ -427,9 +564,21 @@ impl IrInst {
 	}
 
 	///
+	pub fn iuaddc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntUAddC, src2, src3 } }
+	}
+
+	///
 	pub fn iusub(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUSub, src2 } }
+	}
+
+	///
+	pub fn iusubb(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntUSubB, src2, src3 } }
 	}
 
 	///
@@ -439,15 +588,33 @@ impl IrInst {
 	}
 
 	///
+	pub fn icarryc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntCarryC, src2, src3 } }
+	}
+
+	///
 	pub fn iscarry(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSCarry, src2 } }
 	}
 
 	///
+	pub fn iscarryc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntSCarryC, src2, src3 } }
+	}
+
+	///
 	pub fn isborrow(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSBorrow, src2 } }
+	}
+
+	///
+	pub fn isborrowc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntSBorrowC, src2, src3 } }
 	}
 
 	///
@@ -514,6 +681,13 @@ impl IrInst {
 	pub fn isshr(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSShr, src2 } }
+	}
+
+	///
+	pub fn ipair(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+		assert!(src1.size() == src2.size());
+		assert!(dst.size().is_twice(src1.size()));
+		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntPair, src2 } }
 	}
 
 	///

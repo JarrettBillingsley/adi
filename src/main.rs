@@ -46,9 +46,9 @@ fn setup_panic() {
 
 fn toy_test_all_instructions() -> Vec<u8> {
 	use adi::arch::toy::{ Reg, ToyBuilder };
+	use Reg::*;
 
 	let mut b = ToyBuilder::new();
-	use Reg::*;
 	b.li(A, 0xBE);
 	b.mov(D, A);
 	b.add(A, D);
@@ -90,15 +90,67 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	b.finish()
 }
 
+fn toy_test_ssa() -> Vec<u8> {
+	use adi::arch::toy::{ Reg, ToyBuilder };
+	use Reg::*;
+
+	let mut b = ToyBuilder::new();
+
+	// bb0
+	b.li(D, 0);
+
+	// bb1
+	let bb1 = b.ldi(D, 0x8000);
+	b.cmpi(D, 0);
+	let bb1_branch = b.beq();
+
+	// bb2
+	b.li(B, 0);
+	b.li(A, 0);
+	let bb2_jump = b.jmp();
+
+	// bb3
+	b.branch_here(bb1_branch);
+	b.mov(C, A);
+	b.mov(A, B);
+	b.mov(B, C);
+	b.cmpi(D, 1);
+	let bb3_branch = b.beq();
+
+	// bb4
+	b.jump_here(bb2_jump);
+	b.sti(A, 0x8000);
+	b.sti(B, 0x8001);
+	let bb4_cal = b.cal();
+	b.ldi(A, 0x8002);
+	b.cmpi(A, 1);
+	b.beq_to(bb1);
+
+	// bb5
+	b.branch_here(bb3_branch);
+	b.sti(A, 0x8000);
+	b.ret();
+
+	// f
+	b.org(0x40);
+	b.jump_here(bb4_cal);
+	b.ret();
+
+	b.finish()
+}
+
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	let img_data = toy_test_all_instructions();
+	// let img_data = toy_test_ssa();
 
 	let img = Image::new("<toy test>", &img_data);
 	let mut prog = program_from_image(img)?;
 	println!("{}", prog);
 
 	let state = prog.initial_mmu_state();
-	prog.enqueue_function(state, prog.ea_from_va(state, VA(0)));
+	let reset_ea = prog.ea_from_va(state, VA(0));
+
+	prog.enqueue_function(state, reset_ea);
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
@@ -106,6 +158,9 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	for segid in prog.all_image_segs() {
 		show_segment(&prog, segid);
 	}
+
+	let func = prog.func_defined_at(reset_ea).unwrap();
+	prog.func_to_ir(func.id());
 
 	Ok(())
 }
