@@ -49,7 +49,7 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	use Reg::*;
 
 	let mut b = ToyBuilder::new();
-	b.li(A, 0xBE);
+	b.movi(A, 0xBE);
 	b.mov(D, A);
 	b.add(A, D);
 	b.addi(B, 0x30);
@@ -85,7 +85,7 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	b.ret();
 
 	b.org(0x7FFE);
-	b.li(Reg::A, 10);
+	b.movi(Reg::A, 10);
 
 	b.finish()
 }
@@ -97,7 +97,7 @@ fn toy_test_ssa() -> Vec<u8> {
 	let mut b = ToyBuilder::new();
 
 	// bb0
-	b.li(D, 0);
+	b.movi(D, 0);
 
 	// bb1
 	let bb1 = b.ldi(D, 0x8000);
@@ -105,8 +105,8 @@ fn toy_test_ssa() -> Vec<u8> {
 	let bb1_branch = b.beq();
 
 	// bb2
-	b.li(B, 0);
-	b.li(A, 0);
+	b.movi(B, 0);
+	b.movi(A, 0);
 	let bb2_jump = b.jmp();
 
 	// bb3
@@ -140,8 +140,8 @@ fn toy_test_ssa() -> Vec<u8> {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	let img_data = toy_test_all_instructions();
-	// let img_data = toy_test_ssa();
+	// let img_data = toy_test_all_instructions();
+	let img_data = toy_test_ssa();
 
 	let img = Image::new("<toy test>", &img_data);
 	let mut prog = program_from_image(img)?;

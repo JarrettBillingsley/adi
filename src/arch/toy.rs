@@ -35,13 +35,15 @@ pub enum Reg {
 	SP,         // stack ptr
 	NF, ZF, CF, // flag regs
 
-	Tmp, Tmp16, // temporary reg for the IR
-	TmpCF,      // temporary carry flag
+	// temporary regs for the IR
+	Tmp,
+	Tmp16,
+	TmpCF,
 }
 
 impl Reg {
 	/// how many bytes are needed to represent all regs
-	const ALL_BYTES: usize = 12;
+	const ALL_BYTES: usize = 13;
 
 	/// how many bytes each register takes up
 	const fn byte_size(&self) -> usize {
@@ -54,16 +56,19 @@ impl Reg {
 	/// offset into registers "segment" for the IR
 	const fn offset(&self) -> u16 {
 		match self {
-			Reg::A                => 0,
-			Reg::B                => 1,
-			Reg::C | Reg::DC      => 2,
-			Reg::D                => 3,
-			Reg::NF               => 4,
-			Reg::ZF               => 5,
-			Reg::CF               => 6,
-			Reg::Tmp | Reg::Tmp16 => 7,
-			Reg::TmpCF            => 9,
-			Reg::SP               => 10,
+			Reg::A     => 0,
+			Reg::B     => 1,
+			Reg::C     => 2,
+			Reg::D     => 3,
+			Reg::DC    => u16::MAX, // TODO: when const panics are stabilized...
+			// Reg::DC    => panic!(),
+			Reg::SP    => 4,
+			Reg::NF    => 6,
+			Reg::ZF    => 7,
+			Reg::CF    => 8,
+			Reg::Tmp   => 9,
+			Reg::Tmp16 => 10,
+			Reg::TmpCF => 12,
 		}
 	}
 
@@ -74,13 +79,13 @@ impl Reg {
 			Reg::C     => "c",
 			Reg::D     => "d",
 			Reg::DC    => "dc",
+			Reg::SP    => "sp",
 			Reg::NF    => "nf",
 			Reg::ZF    => "zf",
 			Reg::CF    => "cf",
 			Reg::Tmp   => "tmp",
 			Reg::Tmp16 => "tmp16",
 			Reg::TmpCF => "tmpcf",
-			Reg::SP    => "sp",
 		}
 	}
 }
@@ -95,7 +100,7 @@ impl Default for Reg {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum MetaOp {
-	LI,  MOV,           // load immediate, reg-reg move
+	MOV,                // copy reg/imm into reg
 	ADD, ADC, SUB, SBC, // math(s)
 	AND, OR,  XOR, NOT, // bitwise
 	CMP, CMC,           // compare (and with carry)
@@ -109,7 +114,7 @@ impl MetaOp {
 	fn mnemonic(&self) -> &'static str {
 		use MetaOp::*;
 		match self {
-			LI  => "li",  MOV => "mov",
+			MOV => "mov",
 			ADD => "add", ADC => "adc", SUB => "sub", SBC => "sbc",
 			AND => "and", OR  => "or",  XOR => "xor", NOT => "not",
 			CMP => "cmp", CMC => "cmc",
@@ -164,7 +169,7 @@ impl AddrMode {
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Opcode {
-	LI_RI8, MOV_RR,
+	MOV_RR, MOV_RI8,
 	ADD_RR, ADD_RI8, ADC_RR, ADC_RI8, SUB_RR, SUB_RI8, SBC_RR, SBC_RI8,
 	AND_RR, AND_RI8, OR_RR,  OR_RI8,  XOR_RR, XOR_RI8, NOT_RR, NOT_RI8,
 	CMP_RR, CMP_RI8, CMC_RR, CMC_RI8,
@@ -223,8 +228,8 @@ mod descs {
 
 	// IMPORTANT: MUST STAY IN SAME ORDER AS Opcode ENUM
 	pub(super) const INST_DESCS: &[InstDesc] = &[
-		InstDesc(LI_RI8,  LI,  RI8,  "{0}, {1}",   Other),
 		InstDesc(MOV_RR,  MOV, RR,   "{0}, {1}",   Other),
+		InstDesc(MOV_RI8, MOV, RI8,  "{0}, {1}",   Other),
 		InstDesc(ADD_RR,  ADD, RR,   "{0}, {1}",   Other),
 		InstDesc(ADD_RI8, ADD, RI8,  "{0}, {1}",   Other),
 		InstDesc(ADC_RR,  ADC, RR,   "{0}, {1}",   Other),
@@ -547,7 +552,7 @@ mod ir {
 			}
 
 			match self.meta_op {
-				LI | MOV => {
+				MOV => {
 					b.assign(i.ea(), r0(i), self.r1(i));
 				}
 				ADD => {
@@ -767,12 +772,12 @@ impl ToyBuilder {
 		self.bytes[from + 2] = target[1];
 	}
 
-	pub fn li(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
-		self.append(&[encode_opr0(Opcode::LI_RI8, dst), src.into()])
-	}
-
 	pub fn mov(&mut self, dst: Reg, src: Reg) -> usize {
 		self.append(&[encode_opr0(Opcode::MOV_RR, dst), encode_r1_8bit(src)])
+	}
+
+	pub fn movi(&mut self, dst: Reg, src: impl Into<u8>) -> usize {
+		self.append(&[encode_opr0(Opcode::MOV_RI8, dst), src.into()])
 	}
 
 	pub fn add(&mut self, dst: Reg, src: Reg) -> usize {
