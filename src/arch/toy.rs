@@ -503,22 +503,22 @@ impl IIrCompiler for ToyIrCompiler {
 
 mod ir {
 	use super::*;
-	use crate::ir::{ Place, Const, Src, IrBuilder };
+	use crate::ir::{ IrReg, Const, Src, IrBuilder };
 
-	const REG_A:     Place = Place::reg8(Reg::A.offset());
-	const REG_B:     Place = Place::reg8(Reg::B.offset());
-	const REG_C:     Place = Place::reg8(Reg::C.offset());
-	const REG_D:     Place = Place::reg8(Reg::D.offset());
-	const REG_DC:    Place = Place::reg16(Reg::DC.offset());
-	const REG_NF:    Place = Place::reg8(Reg::NF.offset());
-	const REG_ZF:    Place = Place::reg8(Reg::ZF.offset());
-	const REG_CF:    Place = Place::reg8(Reg::CF.offset());
-	const REG_TMP:   Place = Place::reg8(Reg::Tmp.offset());
-	const REG_TMP16: Place = Place::reg16(Reg::Tmp16.offset());
-	const REG_TMPCF: Place = Place::reg8(Reg::TmpCF.offset());
-	const REG_SP:    Place = Place::reg16(Reg::SP.offset());
+	const REG_A:     IrReg = IrReg::reg8(Reg::A.offset());
+	const REG_B:     IrReg = IrReg::reg8(Reg::B.offset());
+	const REG_C:     IrReg = IrReg::reg8(Reg::C.offset());
+	const REG_D:     IrReg = IrReg::reg8(Reg::D.offset());
+	const REG_DC:    IrReg = IrReg::reg16(Reg::DC.offset());
+	const REG_NF:    IrReg = IrReg::reg8(Reg::NF.offset());
+	const REG_ZF:    IrReg = IrReg::reg8(Reg::ZF.offset());
+	const REG_CF:    IrReg = IrReg::reg8(Reg::CF.offset());
+	const REG_TMP:   IrReg = IrReg::reg8(Reg::Tmp.offset());
+	const REG_TMP16: IrReg = IrReg::reg16(Reg::Tmp16.offset());
+	const REG_TMPCF: IrReg = IrReg::reg8(Reg::TmpCF.offset());
+	const REG_SP:    IrReg = IrReg::reg16(Reg::SP.offset());
 
-	fn reg_to_place(reg: Reg) -> Place {
+	fn reg_to_ir_reg(reg: Reg) -> IrReg {
 		match reg {
 			Reg::A  => REG_A,
 			Reg::B  => REG_B,
@@ -532,9 +532,9 @@ mod ir {
 	impl InstDesc {
 		fn r1(&self, i: &Instruction) -> Src {
 			match self.addr_mode {
-				AddrMode::RR   => reg_to_place(inst_reg(i, 1)).into(),
+				AddrMode::RR   => reg_to_ir_reg(inst_reg(i, 1)).into(),
 				AddrMode::RI8  => Const::_8(inst_imm(i)).into(),
-				AddrMode::RI16 => Place::mem8(inst_addr(i, 1)).into(),
+				AddrMode::RI16 => Const::_16(inst_addr(i, 1).0 as u16).into(),
 				_ => panic!(),
 			}
 		}
@@ -542,8 +542,8 @@ mod ir {
 		pub(super) fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 			use MetaOp::*;
 
-			fn r0(i: &Instruction) -> Place {
-				reg_to_place(inst_reg(i, 0))
+			fn r0(i: &Instruction) -> IrReg {
+				reg_to_ir_reg(inst_reg(i, 0))
 			}
 
 			match self.meta_op {

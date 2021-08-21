@@ -1,6 +1,6 @@
 
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
-use crate::memory::{ EA, VA };
+use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -56,86 +56,63 @@ impl ValSize {
 }
 
 // ------------------------------------------------------------------------------------------------
-// PlaceKind
+// IrRegKind
 // ------------------------------------------------------------------------------------------------
 
-/// What kinds of [`Place`]s there are.
+/// What kinds of [`Reg`]s there are.
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub enum PlaceKind {
-	/// A register. The field is its offset within the register "segment."
-	Reg(u16),
+pub enum IrRegKind {
+	/// An un-renumbered register. The field is its offset within the register "segment."
+	Bare(u16),
 	/// An SSA renumbered register. The second field is its "generation."
-	RegSub(u16, u32),
-	/// A memory address.
-	Mem(VA),
+	Sub(u16, u32),
 }
 
-impl Debug for PlaceKind {
+impl Debug for IrRegKind {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self {
-			PlaceKind::Reg(n)       => write!(f, "r{}", n),
-			PlaceKind::RegSub(n, i) => write!(f, "r{}_{}", n, i),
-			PlaceKind::Mem(va)      => write!(f, "addr 0x{:08X}", va),
+			IrRegKind::Bare(n)   => write!(f, "r{}", n),
+			IrRegKind::Sub(n, i) => write!(f, "r{}_{}", n, i),
 		}
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-// Place
+// IrReg
 // ------------------------------------------------------------------------------------------------
 
 /// A location where a value can be stored. Can appear as the destination/LHS of IR instructions.
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub struct Place {
+pub struct IrReg {
 	size: ValSize,
-	kind: PlaceKind,
+	kind: IrRegKind,
 }
 
-impl Debug for Place {
+impl Debug for IrReg {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		write!(f, "{:?}.{}", self.kind, self.size.name())
 	}
 }
 
-impl Place {
+impl IrReg {
 	/// Constructs an 8-bit register place.
 	pub const fn reg8(offs: u16) -> Self {
-		Self { size: ValSize::_8, kind: PlaceKind::Reg(offs) }
+		Self { size: ValSize::_8, kind: IrRegKind::Bare(offs) }
 	}
 
 	/// Constructs a 16-bit register place.
 	pub const fn reg16(offs: u16) -> Self {
-		Self { size: ValSize::_16, kind: PlaceKind::Reg(offs) }
+		Self { size: ValSize::_16, kind: IrRegKind::Bare(offs) }
 	}
 
 	/// Constructs a 32-bit register place.
 	pub const fn reg32(offs: u16) -> Self {
-		Self { size: ValSize::_32, kind: PlaceKind::Reg(offs) }
+		Self { size: ValSize::_32, kind: IrRegKind::Bare(offs) }
 	}
 
 	/// Constructs a 64-bit register place.
 	pub const fn reg64(offs: u16) -> Self {
-		Self { size: ValSize::_64, kind: PlaceKind::Reg(offs) }
-	}
-
-	/// Constructs an 8-bit memory place.
-	pub const fn mem8(va: VA) -> Self {
-		Self { size: ValSize::_8, kind: PlaceKind::Mem(va) }
-	}
-
-	/// Constructs a 16-bit memory place.
-	pub const fn mem16(va: VA) -> Self {
-		Self { size: ValSize::_16, kind: PlaceKind::Mem(va) }
-	}
-
-	/// Constructs a 32-bit memory place.
-	pub const fn mem32(va: VA) -> Self {
-		Self { size: ValSize::_32, kind: PlaceKind::Mem(va) }
-	}
-
-	/// Constructs a 64-bit memory place.
-	pub const fn mem64(va: VA) -> Self {
-		Self { size: ValSize::_64, kind: PlaceKind::Mem(va) }
+		Self { size: ValSize::_64, kind: IrRegKind::Bare(offs) }
 	}
 
 	/// The size of this place.
@@ -146,15 +123,15 @@ impl Place {
 
 	/// What kind of place this is.
 	#[inline]
-	pub fn kind(&self) -> PlaceKind {
+	pub fn kind(&self) -> IrRegKind {
 		self.kind
 	}
 
-	/// If this is a `PlaceKind::Reg`, returns a new `Place` subscripted with the given index.
-	/// Panics if this is anything other than `PlaceKind::Reg`.
+	/// If this is a `IrRegKind::Bare`, returns a new `IrReg` subscripted with the given index.
+	/// Panics if this is anything other than `IrRegKind::Bare`.
 	fn sub(&self, i: u32) -> Self {
 		match self.kind {
-			PlaceKind::Reg(r) => Self { kind: PlaceKind::RegSub(r, i), ..*self },
+			IrRegKind::Bare(r) => Self { kind: IrRegKind::Sub(r, i), ..*self },
 			_ => panic!(".sub() called on '{:?}'", self),
 		}
 	}
@@ -225,17 +202,17 @@ impl Const {
 // Src
 // ------------------------------------------------------------------------------------------------
 
-/// The source of a value. Can be either a [`Place`] or a [`Const`].
+/// The source of a value. Can be either a [`IrReg`] or a [`Const`].
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Src {
-	Place(Place),
+	Reg(IrReg),
 	Const(Const),
 }
 
 impl Debug for Src {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self {
-			Src::Place(p) => write!(f, "{:?}", p),
+			Src::Reg(p) => write!(f, "{:?}", p),
 			Src::Const(c) => write!(f, "{:?}", c),
 		}
 	}
@@ -246,15 +223,15 @@ impl Src {
 	#[inline]
 	pub fn size(&self) -> ValSize {
 		match self {
-			Src::Place(Place { size, .. }) |
+			Src::Reg(IrReg { size, .. }) |
 			Src::Const(Const { size, .. }) => *size,
 		}
 	}
 }
 
-impl From<Place> for Src {
-	fn from(p: Place) -> Self {
-		Src::Place(p)
+impl From<IrReg> for Src {
+	fn from(p: IrReg) -> Self {
+		Src::Reg(p)
 	}
 }
 
@@ -334,8 +311,8 @@ pub enum IrTernOp {
 pub enum IrInstKind {
 	Nop,
 
-	Assign  { dst: Place, src: Src },  // dst = src
-	Load    { dst: Place, addr: Src }, // dst = *addr
+	Assign  { dst: IrReg, src: Src },  // dst = src
+	Load    { dst: IrReg, addr: Src }, // dst = *addr
 	Store   { addr: Src,  src: Src },  // *addr = src
 
 	Branch  { target: EA },            // pc = target
@@ -346,9 +323,9 @@ pub enum IrInstKind {
 	ICall   { target: Src }, // pc = src (but it's a call)
 	Ret     { target: Src }, // pc = src (but it's a return)
 
-	Unary   { dst: Place, op: IrUnOp, src: Src },                          // dst = op src
-	Binary  { dst: Place, src1: Src, op: IrBinOp, src2: Src },             // dst = src1 op src2
-	Ternary { dst: Place, src1: Src, op: IrTernOp, src2: Src, src3: Src }, // dst = ...yeah
+	Unary   { dst: IrReg, op: IrUnOp, src: Src },                          // dst = op src
+	Binary  { dst: IrReg, src1: Src, op: IrBinOp, src2: Src },             // dst = src1 op src2
+	Ternary { dst: IrReg, src1: Src, op: IrTernOp, src2: Src, src3: Src }, // dst = ...yeah
 }
 
 impl Debug for IrInstKind {
@@ -486,230 +463,230 @@ impl IrInst {
 	}
 
 	///
-	pub fn assign(ea: EA, dst: Place, src: Src) -> Self {
+	pub fn assign(ea: EA, dst: IrReg, src: Src) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Assign { dst, src } }
 	}
 
 	///
-	pub fn izxt(ea: EA, dst: Place, src: Src) -> Self {
+	pub fn izxt(ea: EA, dst: IrReg, src: Src) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntZxt, src } }
 	}
 
 	///
-	pub fn isxt(ea: EA, dst: Place, src: Src) -> Self {
+	pub fn isxt(ea: EA, dst: IrReg, src: Src) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntSxt, src } }
 	}
 
 	///
-	pub fn ineg(ea: EA, dst: Place, src: Src) -> Self {
+	pub fn ineg(ea: EA, dst: IrReg, src: Src) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNeg, src } }
 	}
 
 	///
-	pub fn inot(ea: EA, dst: Place, src: Src) -> Self {
+	pub fn inot(ea: EA, dst: IrReg, src: Src) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNot, src } }
 	}
 
 	///
-	pub fn bnot(ea: EA, dst: Place, src: Src) -> Self {
+	pub fn bnot(ea: EA, dst: IrReg, src: Src) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::BoolNot, src } }
 	}
 
 	///
-	pub fn ieq(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ieq(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntEq, src2 } }
 	}
 
 	///
-	pub fn ine(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ine(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntNe, src2 } }
 	}
 
 	///
-	pub fn islt(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn islt(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSlt, src2 } }
 	}
 
 	///
-	pub fn isle(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn isle(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSle, src2 } }
 	}
 
 	///
-	pub fn iult(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iult(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUlt, src2 } }
 	}
 
 	///
-	pub fn iule(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iule(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUle, src2 } }
 	}
 
 	///
-	pub fn iuadd(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iuadd(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUAdd, src2 } }
 	}
 
 	///
-	pub fn iuaddc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+	pub fn iuaddc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntUAddC, src2, src3 } }
 	}
 
 	///
-	pub fn iusub(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iusub(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUSub, src2 } }
 	}
 
 	///
-	pub fn iusubb(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+	pub fn iusubb(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntUSubB, src2, src3 } }
 	}
 
 	///
-	pub fn icarry(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn icarry(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntCarry, src2 } }
 	}
 
 	///
-	pub fn icarryc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+	pub fn icarryc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntCarryC, src2, src3 } }
 	}
 
 	///
-	pub fn iscarry(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iscarry(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSCarry, src2 } }
 	}
 
 	///
-	pub fn iscarryc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+	pub fn iscarryc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntSCarryC, src2, src3 } }
 	}
 
 	///
-	pub fn isborrow(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn isborrow(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSBorrow, src2 } }
 	}
 
 	///
-	pub fn isborrowc(ea: EA, dst: Place, src1: Src, src2: Src, src3: Src) -> Self {
+	pub fn isborrowc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntSBorrowC, src2, src3 } }
 	}
 
 	///
-	pub fn imul(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn imul(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntMul, src2 } }
 	}
 
 	///
-	pub fn iudiv(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iudiv(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUDiv, src2 } }
 	}
 
 	///
-	pub fn isdiv(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn isdiv(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSDiv, src2 } }
 	}
 
 	///
-	pub fn iumod(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iumod(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUMod, src2 } }
 	}
 
 	///
-	pub fn ismod(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ismod(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSMod, src2 } }
 	}
 
 	///
-	pub fn ixor(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ixor(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntXor, src2 } }
 	}
 
 	///
-	pub fn iand(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iand(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntAnd, src2 } }
 	}
 
 	///
-	pub fn ior(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ior(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntOr, src2 } }
 	}
 
 	///
-	pub fn ishl(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ishl(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntShl, src2 } }
 	}
 
 	///
-	pub fn iushr(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn iushr(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUShr, src2 } }
 	}
 
 	///
-	pub fn isshr(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn isshr(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSShr, src2 } }
 	}
 
 	///
-	pub fn ipair(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn ipair(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		assert!(dst.size().is_twice(src1.size()));
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntPair, src2 } }
 	}
 
 	///
-	pub fn bxor(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn bxor(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::BoolXor, src2 } }
 	}
 
 	///
-	pub fn band(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn band(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::BoolAnd, src2 } }
 	}
 
 	///
-	pub fn bor(ea: EA, dst: Place, src1: Src, src2: Src) -> Self {
+	pub fn bor(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::BoolOr, src2 } }
 	}
 
 	///
-	pub fn load(ea: EA, dst: Place, addr: Src) -> Self {
+	pub fn load(ea: EA, dst: IrReg, addr: Src) -> Self {
 		Self { ea, kind: IrInstKind::Load { dst, addr } }
 	}
 
@@ -770,3 +747,12 @@ impl IrInst {
 		self.kind
 	}
 }
+
+// ------------------------------------------------------------------------------------------------
+// IrPhi
+// ------------------------------------------------------------------------------------------------
+
+// #[derive(PartialEq, Eq, Clone, Copy)]
+// pub struct IrPhi {
+// 	dst:
+// }

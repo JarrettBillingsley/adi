@@ -1,5 +1,5 @@
 
-use crate::ir::{ IrInst, /*IrInstKind,*/ Src, Place };
+use crate::ir::{ IrInst, /*IrInstKind,*/ Src, IrReg };
 use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
@@ -37,197 +37,197 @@ impl IrBuilder {
 	}
 
 	///
-	pub fn assign(&mut self, ea: EA, dst: Place, src: impl Into<Src>) -> usize {
+	pub fn assign(&mut self, ea: EA, dst: IrReg, src: impl Into<Src>) -> usize {
 		self.inst(IrInst::assign(ea, dst, src.into()))
 	}
 
 	///
-	pub fn izxt(&mut self, ea: EA, dst: Place, src: impl Into<Src>) -> usize {
+	pub fn izxt(&mut self, ea: EA, dst: IrReg, src: impl Into<Src>) -> usize {
 		self.inst(IrInst::izxt(ea, dst, src.into()))
 	}
 
 	///
-	pub fn isxt(&mut self, ea: EA, dst: Place, src: impl Into<Src>) -> usize {
+	pub fn isxt(&mut self, ea: EA, dst: IrReg, src: impl Into<Src>) -> usize {
 		self.inst(IrInst::isxt(ea, dst, src.into()))
 	}
 
 	///
-	pub fn ineg(&mut self, ea: EA, dst: Place, src: impl Into<Src>) -> usize {
+	pub fn ineg(&mut self, ea: EA, dst: IrReg, src: impl Into<Src>) -> usize {
 		self.inst(IrInst::ineg(ea, dst, src.into()))
 	}
 
 	///
-	pub fn inot(&mut self, ea: EA, dst: Place, src: impl Into<Src>) -> usize {
+	pub fn inot(&mut self, ea: EA, dst: IrReg, src: impl Into<Src>) -> usize {
 		self.inst(IrInst::inot(ea, dst, src.into()))
 	}
 
 	///
-	pub fn bnot(&mut self, ea: EA, dst: Place, src: impl Into<Src>) -> usize {
+	pub fn bnot(&mut self, ea: EA, dst: IrReg, src: impl Into<Src>) -> usize {
 		self.inst(IrInst::bnot(ea, dst, src.into()))
 	}
 
 	///
-	pub fn ieq(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ieq(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ieq(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn ine(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ine(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ine(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn islt(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn islt(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::islt(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn isle(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn isle(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::isle(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iult(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iult(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iult(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iule(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iule(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iule(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iuadd(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iuadd(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iuadd(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iuaddc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	pub fn iuaddc(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>,
 	src3: impl Into<Src>) -> usize {
 		self.inst(IrInst::iuaddc(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
-	pub fn iusub(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iusub(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iusub(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iusubb(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	pub fn iusubb(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>,
 	src3: impl Into<Src>) -> usize {
 		self.inst(IrInst::iusubb(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
-	pub fn icarry(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn icarry(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::icarry(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn icarryc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	pub fn icarryc(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>,
 	src3: impl Into<Src>) -> usize {
 		self.inst(IrInst::icarryc(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
-	pub fn iscarry(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iscarry(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iscarry(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iscarryc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	pub fn iscarryc(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>,
 	src3: impl Into<Src>) -> usize {
 		self.inst(IrInst::iscarryc(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
-	pub fn isborrow(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn isborrow(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::isborrow(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn isborrowc(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>,
+	pub fn isborrowc(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>,
 	src3: impl Into<Src>) -> usize {
 		self.inst(IrInst::isborrowc(ea, dst, src1.into(), src2.into(), src3.into()))
 	}
 
 	///
-	pub fn imul(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn imul(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::imul(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iudiv(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iudiv(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iudiv(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn isdiv(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn isdiv(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::isdiv(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iumod(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iumod(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iumod(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn ismod(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ismod(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ismod(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn ixor(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ixor(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ixor(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iand(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iand(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iand(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn ior(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ior(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ior(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn ishl(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ishl(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ishl(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn iushr(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn iushr(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::iushr(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn isshr(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn isshr(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::isshr(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn ipair(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn ipair(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::ipair(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn bxor(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn bxor(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::bxor(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn band(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn band(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::band(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn bor(&mut self, ea: EA, dst: Place, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
+	pub fn bor(&mut self, ea: EA, dst: IrReg, src1: impl Into<Src>, src2: impl Into<Src>) -> usize {
 		self.inst(IrInst::bor(ea, dst, src1.into(), src2.into()))
 	}
 
 	///
-	pub fn load(&mut self, ea: EA, dst: Place, addr: impl Into<Src>) -> usize {
+	pub fn load(&mut self, ea: EA, dst: IrReg, addr: impl Into<Src>) -> usize {
 		self.inst(IrInst::load(ea, dst, addr.into()))
 	}
 
