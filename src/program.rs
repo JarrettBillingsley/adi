@@ -341,7 +341,7 @@ impl Program {
 			});
 		}
 
-		let irfunc = IrFunction::new(fid, bbs, cfg);
+		let irfunc = IrFunction::new(&compiler, fid, bbs, cfg);
 		println!("{:?}", irfunc);
 	}
 

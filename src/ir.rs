@@ -1,5 +1,6 @@
 
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
+use crate::arch::{ IIrCompiler };
 use crate::memory::{ EA };
 use crate::program::{ BBId, FuncId };
 
@@ -194,29 +195,37 @@ impl IrConst {
 // IrSrc
 // ------------------------------------------------------------------------------------------------
 
-/// The source of a value. Can be either an [`IrReg`] or an [`IrConst`].
+/// The source of a value. Can an [`IrReg`], an [`IrConst`], or a special value indicating a
+/// return value from a function call.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum IrSrc {
 	Reg(IrReg),
 	Const(IrConst),
+	Return(ValSize),
 }
 
 impl Debug for IrSrc {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self {
-			IrSrc::Reg(p) => write!(f, "{:?}", p),
-			IrSrc::Const(c) => write!(f, "{:?}", c),
+			IrSrc::Reg(p)    => write!(f, "{:?}", p),
+			IrSrc::Const(c)  => write!(f, "{:?}", c),
+			IrSrc::Return(s) => write!(f, "<return.{}>", s.name()),
 		}
 	}
 }
 
 impl IrSrc {
+	pub(crate) fn ret(reg: IrReg) -> Self {
+		IrSrc::Return(reg.size())
+	}
+
 	/// The size of this value.
 	#[inline]
 	pub(crate) fn size(&self) -> ValSize {
 		match self {
 			IrSrc::Reg(IrReg { size, .. }) |
-			IrSrc::Const(IrConst { size, .. }) => *size,
+			IrSrc::Const(IrConst { size, .. }) |
+			IrSrc::Return(size) => *size,
 		}
 	}
 
@@ -419,7 +428,9 @@ pub(crate) struct IrFunction {
 }
 
 impl IrFunction {
-	pub(crate) fn new(real_fid: FuncId, mut bbs: Vec<IrBasicBlock>, cfg: IrCfg) -> Self {
+	pub(crate) fn new(compiler: &impl IIrCompiler, real_fid: FuncId, mut bbs: Vec<IrBasicBlock>,
+	mut cfg: IrCfg) -> Self {
+		rewrite_calls_and_rets(compiler, &mut bbs, &mut cfg);
 		ssa::to_ssa(&mut bbs, &cfg);
 		Self { real_fid, bbs, cfg, }
 	}
@@ -437,5 +448,90 @@ impl Debug for IrFunction {
 		}
 
 		Ok(())
+	}
+}
+
+/// Rewrites each call instruction in two ways:
+/// 1. before, insert 'use' instructions to mark all argument registers as being used
+///    as arguments to the call.
+/// 2. after, insert a new dummy BB that assigns a special "return" value to each
+///    return register.
+/// Also inserts 'use' instructions before each return to mark all return registers as used.
+fn rewrite_calls_and_rets(compiler: &impl IIrCompiler, bbs: &mut Vec<IrBasicBlock>,
+cfg: &mut IrCfg) {
+	// TODO: what about tailcalls/tailbranches? aaa...
+	let arg_regs = compiler.arg_regs();
+	let ret_regs = compiler.return_regs();
+
+	let mut new_bbs = vec![];
+	let mut new_bbid = bbs.len();
+
+	for bb in bbs.iter_mut() {
+		if bb.rewrite_call_or_ret(arg_regs, ret_regs) {
+			// it was a call; we have to make a new dummy bb!
+
+			// first update the cfg.
+			let mut edges_iter = cfg.edges(bb.id);
+			let old_dest = edges_iter.next().unwrap().1;
+			assert!(edges_iter.next().is_none(), "more than 1 edge coming out of call bb??");
+
+			assert!(cfg.remove_edge(bb.id, old_dest).is_some());
+			cfg.add_edge(bb.id, new_bbid, ());
+			cfg.add_edge(new_bbid, old_dest, ());
+
+			// now make the dummy BB.
+			// this unwrap is safe, because the rewrite_call_or_ret ensures it has at least 1 inst.
+			let ea = bb.insts.last().unwrap().ea();
+
+			let mut b = IrBuilder::new();
+
+			for &reg in ret_regs.iter() {
+				b.assign(ea, reg, IrSrc::Return(reg.size()));
+			}
+
+			let new_bb = IrBasicBlock::new(new_bbid, bb.real_bbid, b.finish());
+			new_bbid += 1;
+			new_bbs.push(new_bb);
+		}
+	}
+
+	bbs.append(&mut new_bbs);
+}
+
+impl IrBasicBlock {
+	/// Inserts dummy uses of the arg/return regs before call and return instructions.
+	/// Returns true if a call was rewritten, so the caller can then insert the dummy BB.
+	fn rewrite_call_or_ret(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg])
+	-> bool {
+		if self.insts.is_empty() {
+			return false;
+		}
+
+		// unwraps below are safe because of the above check.
+		match self.insts.last().unwrap().kind() {
+			IrInstKind::Call { .. } | IrInstKind::ICall { .. } => {
+				let old_inst = self.insts.pop().unwrap();
+				let ea = old_inst.ea();
+
+				for &reg in arg_regs.iter() {
+					self.insts.push(IrInst::use_(ea, reg));
+				}
+
+				self.insts.push(old_inst);
+				true
+			}
+			IrInstKind::Ret { .. } => {
+				let old_inst = self.insts.pop().unwrap();
+				let ea = old_inst.ea();
+
+				for &reg in ret_regs.iter() {
+					self.insts.push(IrInst::use_(ea, reg));
+				}
+
+				self.insts.push(old_inst);
+				false
+			}
+			_ => false,
+		}
 	}
 }

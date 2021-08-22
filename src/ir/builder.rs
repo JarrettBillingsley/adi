@@ -37,6 +37,11 @@ impl IrBuilder {
 	}
 
 	///
+	pub(crate) fn use_(&mut self, ea: EA, reg: IrReg) -> usize {
+		self.inst(IrInst::use_(ea, reg))
+	}
+
+	///
 	pub(crate) fn assign(&mut self, ea: EA, dst: IrReg, src: impl Into<IrSrc>) -> usize {
 		self.inst(IrInst::assign(ea, dst, src.into()))
 	}

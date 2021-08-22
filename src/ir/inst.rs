@@ -71,20 +71,21 @@ pub(crate) enum IrTernOp {
 pub(crate) enum IrInstKind {
 	Nop,
 
-	Assign  { dst: IrReg, src: IrSrc },  // dst = src
-	Load    { dst: IrReg, addr: IrSrc }, // dst = *addr
+	Use     { reg: IrReg },                // dummy use of reg
+	Assign  { dst: IrReg, src: IrSrc },    // dst = src
+	Load    { dst: IrReg, addr: IrSrc },   // dst = *addr
 	Store   { addr: IrSrc,  src: IrSrc },  // *addr = src
 
-	Branch  { target: EA },            // pc = target
-	CBranch { cond: IrSrc, target: EA }, // if(cond) pc = target
-	IBranch { target: IrSrc },           // pc = src
+	Branch  { target: EA },                // pc = target
+	CBranch { cond: IrSrc, target: EA },   // if(cond) pc = target
+	IBranch { target: IrSrc },             // pc = src
 
-	Call    { target: EA },  // pc = target (but it's a call)
-	ICall   { target: IrSrc }, // pc = src (but it's a call)
-	Ret     { target: IrSrc }, // pc = src (but it's a return)
+	Call    { target: EA },                // pc = target (but it's a call)
+	ICall   { target: IrSrc },             // pc = src (but it's a call)
+	Ret     { target: IrSrc },             // pc = src (but it's a return)
 
-	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc },                          // dst = op src
-	Binary  { dst: IrReg, src1: IrSrc, op: IrBinOp, src2: IrSrc },             // dst = src1 op src2
+	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc }, // dst = op src
+	Binary  { dst: IrReg, src1: IrSrc, op: IrBinOp, src2: IrSrc }, // dst = src1 op src2
 	Ternary { dst: IrReg, src1: IrSrc, op: IrTernOp, src2: IrSrc, src3: IrSrc }, // dst = ...yeah
 }
 
@@ -97,6 +98,7 @@ impl Debug for IrInstKind {
 
 		match self {
 			Nop =>                      write!(f, "nop"),
+			Use { reg } =>              write!(f, "use({:?})", reg),
 			Assign { dst, src } =>      write!(f, "{:?} = {:?}", dst, src),
 			Load { dst, addr } =>       write!(f, "{:?} = *{:?}", dst, addr),
 			Store { addr,  src } =>     write!(f, "*{:?} = {:?}", addr, src),
@@ -172,6 +174,11 @@ impl IrInst {
 	///
 	pub(crate) fn nop(ea: EA) -> Self {
 		Self { ea, kind: IrInstKind::Nop }
+	}
+
+	///
+	pub(crate) fn use_(ea: EA, reg: IrReg) -> Self {
+		Self { ea, kind: IrInstKind::Use { reg } }
 	}
 
 	///
@@ -407,16 +414,6 @@ impl IrInst {
 		Self { ea, kind: IrInstKind::Store { addr, src } }
 	}
 
-	// ///
-	// pub(crate) fn irbranch(ea: EA, offs: i32) -> Self {
-	// 	Self { ea, kind: IrInstKind::IrBranch { offs } }
-	// }
-
-	// ///
-	// pub(crate) fn ircbranch(ea: EA, cond: IrSrc, offs: i32) -> Self {
-	// 	Self { ea, kind: IrInstKind::IrCBranch { cond, offs } }
-	// }
-
 	///
 	pub(crate) fn branch(ea: EA, target: EA) -> Self {
 		Self { ea, kind: IrInstKind::Branch { target } }
@@ -466,17 +463,16 @@ impl IrInst {
 
 		match &self.kind {
 			Nop
-			// | IrBranch { .. }
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
 			| ICall { .. }
 			| Ret { .. } => panic!("no source"),
 
+			Use       { reg }      => reg.size(),
 			Assign    { src, .. }  => src.size(),
 			Load      { dst, .. }  => dst.size(), // yes, it's weird
 			Store     { src, .. }  => src.size(),
-			// IrCBranch { cond, .. } => cond.size(),
 			CBranch   { cond, .. } => cond.size(),
 			Unary     { src, .. }  => src.size(),
 			Binary    { src1, .. } => src1.size(),
@@ -491,14 +487,13 @@ impl IrInst {
 
 		match &self.kind {
 			Nop
-			// | IrBranch { .. }
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
 			| ICall { .. }
 			| Ret { .. }
-			// | IrCBranch { .. }
-			| CBranch { .. } => panic!("no destination"),
+			| CBranch { .. }
+			| Use { .. } => panic!("no destination"),
 
 			Assign  { dst, .. } => dst.size(),
 			Load    { dst, .. } => dst.size(),
@@ -519,6 +514,7 @@ impl IrInst {
 			| IBranch { .. }
 			| Call { .. } => {}
 
+			Use { reg }            => { f(reg); }
 			Assign { dst, src }    => { f(dst); src.regs(&mut f); }
 			Load { dst, addr }     => { f(dst); addr.regs(&mut f); }
 			Store { addr,  src }   => { addr.regs(&mut f); src.regs(&mut f); }
@@ -546,8 +542,8 @@ impl IrInst {
 		use IrInstKind::*;
 
 		match &self.kind {
-			Nop | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. } | IBranch { .. }
-			| Store { .. } | Call { .. } => false,
+			Nop | Use { .. } | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. }
+			| IBranch { .. } | Store { .. } | Call { .. } => false,
 
 			Assign { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
 			| Ternary { dst, .. } => *dst == reg,
@@ -562,6 +558,7 @@ impl IrInst {
 			| Branch { .. }
 			| Call { .. } => {}
 
+			Use { reg }          => { f(*reg); }
 			Assign { src, .. }   => { src.visit_use(&mut f); }
 			Load { addr, .. }    => { addr.visit_use(&mut f); }
 			Store { addr, src }  => { addr.visit_use(&mut f); src.visit_use(&mut f); }
@@ -590,6 +587,7 @@ impl IrInst {
 			| Branch { .. }
 			| Call { .. } => {}
 
+			Use { reg }          => { f(reg); }
 			Assign { src, .. }   => { src.visit_use_mut(&mut f); }
 			Load { addr, .. }    => { addr.visit_use_mut(&mut f); }
 			Store { addr, src }  => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
@@ -615,6 +613,7 @@ impl IrInst {
 
 		match &self.kind {
 			Nop
+			| Use { .. }
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
@@ -636,6 +635,7 @@ impl IrInst {
 
 		match &mut self.kind {
 			Nop
+			| Use { .. }
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
