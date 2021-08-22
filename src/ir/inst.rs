@@ -562,14 +562,14 @@ impl IrInst {
 			| Branch { .. }
 			| Call { .. } => {}
 
-			Assign { src, .. } => { src.visit_use_mut(&mut f); }
-			Load { addr, .. } => { addr.visit_use_mut(&mut f); }
-			Store { addr, src } => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
+			Assign { src, .. }   => { src.visit_use_mut(&mut f); }
+			Load { addr, .. }    => { addr.visit_use_mut(&mut f); }
+			Store { addr, src }  => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
 			CBranch { cond, .. } => { cond.visit_use_mut(&mut f); }
-			IBranch { target } => { target.visit_use_mut(&mut f); }
-			ICall { target } => { target.visit_use_mut(&mut f); }
-			Ret { target } => { target.visit_use_mut(&mut f); }
-			Unary { src, .. } => { src.visit_use_mut(&mut f); }
+			IBranch { target }   => { target.visit_use_mut(&mut f); }
+			ICall { target }     => { target.visit_use_mut(&mut f); }
+			Ret { target }       => { target.visit_use_mut(&mut f); }
+			Unary { src, .. }    => { src.visit_use_mut(&mut f); }
 			Binary { src1, src2, .. } => {
 				src1.visit_use_mut(&mut f);
 				src2.visit_use_mut(&mut f);

@@ -8,12 +8,10 @@ use crate::program::{ BBId, FuncId };
 // ------------------------------------------------------------------------------------------------
 
 pub mod builder;
-pub mod interp;
 pub mod inst;
 pub mod ssa;
 
 pub(crate) use builder::*;
-// pub(crate) use interp::*;
 pub(crate) use inst::*;
 // pub use ssa::*;
 
