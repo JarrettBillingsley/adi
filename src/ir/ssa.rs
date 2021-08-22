@@ -11,16 +11,29 @@ use petgraph::{
 use super::*;
 
 // ------------------------------------------------------------------------------------------------
+// Conversion to SSA
+// ------------------------------------------------------------------------------------------------
+
+pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
+	let dom_tree = DomTree::new(cfg);
+	let df = compute_dominance_frontiers(cfg, &dom_tree);
+	let all_regs = find_all_regs(bbs);
+	insert_phis(bbs, cfg, &df, all_regs.iter().copied());
+	rename_regs(bbs, cfg, &dom_tree, all_regs.iter().copied());
+	prune_phis(bbs, &dom_tree);
+}
+
+// ------------------------------------------------------------------------------------------------
 // Dominator tree
 // ------------------------------------------------------------------------------------------------
 
 // TODO: implement this directly rather than in terms of a DiGraphMap?
-pub(super) struct DomTree {
+struct DomTree {
 	g: DiGraphMap<IrBBId, ()>,
 }
 
 impl DomTree {
-	pub(super) fn new(cfg: &IrCfg) -> Self {
+	fn new(cfg: &IrCfg) -> Self {
 		let doms = dominators::simple_fast(&cfg, 0);
 		let mut g = DiGraphMap::<IrBBId, ()>::new();
 
@@ -49,23 +62,23 @@ impl DomTree {
 		Self { g }
 	}
 
-	pub(super) fn show(&self) {
+	fn show(&self) {
 		println!("Dominators");
 		println!("-------------");
 		println!();
 		println!("{:?}", Dot::with_config(&self.g, &[DotConfig::EdgeNoLabel]));
 	}
 
-	pub(super) fn idom(&self, node: IrBBId) -> Option<IrBBId> {
+	fn idom(&self, node: IrBBId) -> Option<IrBBId> {
 		self.g.edges_directed(node, Direction::Incoming).map(|(d, _, _)| d).next()
 	}
 
-	pub(super) fn immediately_dominated_by(&self, node: IrBBId) -> impl Iterator<Item = IrBBId> + '_ {
+	fn immediately_dominated_by(&self, node: IrBBId) -> impl Iterator<Item = IrBBId> + '_ {
 		self.g.edges_directed(node, Direction::Outgoing).map(|(_, c, _)| c)
 	}
 
 	/// `true` if `x` strictly dominates `b` (directly or indirectly).
-	pub(super) fn strictly_dominates(&self, x: IrBBId, mut b: IrBBId) -> bool {
+	fn strictly_dominates(&self, x: IrBBId, mut b: IrBBId) -> bool {
 		while let Some(dom) = self.idom(b) {
 			if x == dom {
 				return true;
@@ -82,9 +95,9 @@ impl DomTree {
 // Dominance frontiers
 // ------------------------------------------------------------------------------------------------
 
-pub(super) type DomFrontiers = Vec<BTreeSet<IrBBId>>;
+type DomFrontiers = Vec<BTreeSet<IrBBId>>;
 
-pub(super) fn compute_dominance_frontiers(cfg: &IrCfg, doms: &DomTree) -> DomFrontiers {
+fn compute_dominance_frontiers(cfg: &IrCfg, doms: &DomTree) -> DomFrontiers {
 	let mut df = cfg.nodes().map(|_| BTreeSet::new()).collect::<DomFrontiers>();
 
 	for (a, b, _) in cfg.all_edges() {
@@ -103,7 +116,7 @@ pub(super) fn compute_dominance_frontiers(cfg: &IrCfg, doms: &DomTree) -> DomFro
 	df
 }
 
-pub(super) fn show_df(df: &DomFrontiers) {
+fn show_df(df: &DomFrontiers) {
 	println!("Dominance Frontiers");
 	println!("-------------------");
 	println!();
@@ -117,7 +130,7 @@ pub(super) fn show_df(df: &DomFrontiers) {
 // Reg finder
 // ------------------------------------------------------------------------------------------------
 
-pub(super) fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
+fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
 	let mut ret = BTreeSet::new();
 
 	for bb in bbs.iter() {
@@ -136,7 +149,7 @@ pub(super) fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
 // Phi-insertion
 // ------------------------------------------------------------------------------------------------
 
-pub(super) fn insert_phis(
+fn insert_phis(
 	bbs:  &mut [IrBasicBlock],
 	cfg:  &IrCfg,
 	df:   &DomFrontiers,
@@ -193,7 +206,7 @@ fn insert_phis_impl(bbs: &mut [IrBasicBlock], cfg: &IrCfg, df: &DomFrontiers, re
 // Register renaming
 // ------------------------------------------------------------------------------------------------
 
-pub(super) fn rename_regs(
+fn rename_regs(
 	bbs: &mut [IrBasicBlock],
 	cfg: &IrCfg,
 	doms: &DomTree,
@@ -287,7 +300,7 @@ impl RegRenamer {
 // phi-pruning
 // ------------------------------------------------------------------------------------------------
 
-pub(super) fn prune_phis(bbs: &mut [IrBasicBlock], doms: &DomTree) {
+fn prune_phis(bbs: &mut [IrBasicBlock], doms: &DomTree) {
 	let mut pruner = PhiPruner::new();
 	pruner.prune(bbs, doms);
 }

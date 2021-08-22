@@ -11,7 +11,7 @@ use crate::ir::{ IrInst };
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for objects which can compile BBs to IR instructions, used by the interpreter.
-pub trait InterpCompiler {
+pub(crate) trait InterpCompiler {
 	/// Given a BBId, compile it to IR and return it.
 	fn compile_bb(&self, bbid: BBId) -> Vec<IrInst>;
 
@@ -29,7 +29,7 @@ pub trait InterpCompiler {
 /// Trait for objects which can resolve VAs to EAs, and EAs to BBIds, used by the interpreter.
 /// The intention is for this to be implemented by things which want to monitor the execution
 /// and log things like referenced addresses.
-pub trait InterpResolver {
+pub(crate) trait InterpResolver {
 	/// Given a VA, resolve it to an EA if possible; otherwise return `None`.
 	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA>;
 
@@ -69,7 +69,7 @@ else
 const MAX_BB_INSTRUCTIONS: usize = 5000;
 type BBCache = HashMap<BBId, Vec<IrInst>>;
 
-pub enum InterpResult {
+pub(crate) enum InterpResult {
 	/// All instructions completed and no control flow was found.
 	FallThru,
 
@@ -87,7 +87,7 @@ pub enum InterpResult {
 }
 
 /// Interprets IR instructions.
-pub struct IrInterp<'c, C: InterpCompiler> {
+pub(crate) struct IrInterp<'c, C: InterpCompiler> {
 	comp:  &'c C,
 	cache: RefCell<BBCache>,
 }
@@ -95,7 +95,7 @@ pub struct IrInterp<'c, C: InterpCompiler> {
 impl<'c, C: InterpCompiler> IrInterp<'c, C> {
 	/// Constructor. Takes and maintains a reference to a compiler object used to compile
 	/// BBs during interpretation.
-	pub fn new(comp: &'c C) -> Self {
+	pub(crate) fn new(comp: &'c C) -> Self {
 		Self {
 			comp,
 			cache: RefCell::new(BBCache::new()),
@@ -103,7 +103,7 @@ impl<'c, C: InterpCompiler> IrInterp<'c, C> {
 	}
 
 	/// Interpret a single BB. Any control flow out of the BB will halt interpretation.
-	pub fn interp_bb(&self, bbid: BBId, resolve: &impl InterpResolver) -> InterpResult {
+	pub(crate) fn interp_bb(&self, bbid: BBId, resolve: &impl InterpResolver) -> InterpResult {
 		self.with_compiled_bb(bbid, |insts| {
 			self.interp_bb_impl(bbid, resolve, insts)
 		})

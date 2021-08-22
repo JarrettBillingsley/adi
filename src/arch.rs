@@ -280,12 +280,12 @@ pub trait IInterpreter: Sized + Sync + Send {
 use toy::{ ToyIrCompiler };
 
 #[enum_dispatch]
-pub enum IrCompiler {
+pub(crate) enum IrCompiler {
 	ToyIrCompiler,
 }
 
 #[enum_dispatch(IrCompiler)]
-pub trait IIrCompiler: Sized + Sync + Send {
+pub(crate) trait IIrCompiler: Sized + Sync + Send {
 	fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder);
 }
 
@@ -305,7 +305,7 @@ pub enum Architecture {
 }
 
 #[enum_dispatch(Architecture)]
-pub trait IArchitecture: Sized + Sync + Send {
+pub(crate) trait IArchitecture: Sized + Sync + Send {
 	/// The system's endianness.
 	fn endianness(&self) -> Endian;
 	/// How many bits in an address.

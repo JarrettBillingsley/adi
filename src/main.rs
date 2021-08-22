@@ -139,9 +139,25 @@ fn toy_test_ssa() -> Vec<u8> {
 	b.finish()
 }
 
+fn toy_test_const_prop() -> Vec<u8> {
+	use adi::arch::toy::{ Reg, ToyBuilder };
+	use Reg::*;
+
+	let mut b = ToyBuilder::new();
+	b.movi(A, 0x80);
+	b.movi(B, 0xE7);
+	b.mov(C, B);
+	b.mov(D, A);
+	b.ld(A, DC);
+	b.ret();
+
+	b.finish()
+}
+
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	let img_data = toy_test_all_instructions();
+	// let img_data = toy_test_all_instructions();
 	// let img_data = toy_test_ssa();
+	let img_data = toy_test_const_prop();
 
 	let img = Image::new("<toy test>", &img_data);
 	let mut prog = program_from_image(img)?;
