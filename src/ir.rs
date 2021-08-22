@@ -510,6 +510,8 @@ impl IrBasicBlock {
 		// unwraps below are safe because of the above check.
 		match self.insts.last().unwrap().kind() {
 			IrInstKind::Call { .. } | IrInstKind::ICall { .. } => {
+				// boy I wish I could abstract these two nearly identical pieces of code out
+				// into a closure! too bad it's basically fuckin impossible
 				let old_inst = self.insts.pop().unwrap();
 				let ea = old_inst.ea();
 
