@@ -22,7 +22,6 @@ use crate::arch::{
 	IIrCompiler,
 };
 use crate::memory::{ Memory, MmuState, Endian, EA, VA };
-use crate::ir::{ IrBuilder };
 
 // ------------------------------------------------------------------------------------------------
 // Submodules
