@@ -286,14 +286,16 @@ impl Program {
 	// IR
 
 	/// TESTING
-	pub fn func_to_ir(&self, func: FuncId) {
+	pub fn func_to_ir(&self, fid: FuncId) {
 		use crate::arch::{ IIrCompiler };
-		use crate::ir::{ IrBuilder };
+		use crate::ir::{ IrBuilder, IrBasicBlock, IrFunction, IrCfg };
 
 		let compiler = self.plat.arch().new_ir_compiler();
-		let func = self.funcs.get(func);
+		let func = self.funcs.get(fid);
+		let mut bbs = vec![];
+		let mut bbid_to_irbbid = std::collections::HashMap::new();
 
-		for bbid in func.all_bbs() {
+		for (irbbid, bbid) in func.all_bbs().enumerate() {
 			let bb = self.get_bb(bbid);
 			let target = match bb.term() {
 				BBTerm::DeadEnd
@@ -322,12 +324,23 @@ impl Program {
 			}
 
 			let insts = b.finish();
-			println!("{:?}: ", bbid);
-
-			for i in insts {
-				println!("    {:?}", i);
-			}
+			bbs.push(IrBasicBlock::new(irbbid, bbid, insts));
+			bbid_to_irbbid.insert(bbid, irbbid);
 		}
+
+		let mut cfg = IrCfg::new();
+
+		for bbid in func.all_bbs() {
+			let irbbid = bbid_to_irbbid[&bbid];
+
+			self.bb_successors_in_function(bbid, |succ| {
+				let irsucc = bbid_to_irbbid[&succ];
+				cfg.add_edge(irbbid, irsucc, ());
+			});
+		}
+
+		let irfunc = IrFunction::new(fid, bbs, cfg);
+		println!("{:?}", irfunc);
 	}
 
 	// ---------------------------------------------------------------------------------------------

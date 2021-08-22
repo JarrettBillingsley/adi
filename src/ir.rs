@@ -1,6 +1,7 @@
 
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 use crate::memory::{ EA };
+use crate::program::{ BBId, FuncId };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -752,7 +753,183 @@ impl IrInst {
 // IrPhi
 // ------------------------------------------------------------------------------------------------
 
-// #[derive(PartialEq, Eq, Clone, Copy)]
-// pub struct IrPhi {
-// 	dst:
-// }
+#[derive(PartialEq, Eq, Clone)]
+pub struct IrPhi {
+	dst:  IrReg,
+	args: Vec<IrReg>,
+}
+
+impl IrPhi {
+	fn new(reg: IrReg, num_args: usize) -> Self {
+		assert!(matches!(reg.kind, IrRegKind::Bare(..)));
+
+		Self {
+			dst:  reg,
+			args: vec![reg; num_args],
+		}
+	}
+
+	fn assigns(&self, reg: u16) -> bool {
+		match &self.dst.kind {
+			IrRegKind::Bare(dst) => *dst == reg,
+			_                    => false,
+		}
+	}
+
+	fn dst_reg(&self) -> &IrReg {
+		&self.dst
+	}
+
+	fn dst_reg_mut(&mut self) -> &mut IrReg {
+		&mut self.dst
+	}
+
+	fn args(&self) -> &[IrReg] {
+		&self.args
+	}
+
+	fn args_mut(&mut self) -> &mut [IrReg] {
+		&mut self.args
+	}
+}
+
+impl Debug for IrPhi {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{:?} = φ", self.dst)?;
+		write!(f, "(")?;
+
+		let mut args = self.args.iter();
+
+		if let Some(arg) = args.next() {
+			write!(f, "{:?}", arg)?;
+
+			for arg in args {
+				write!(f, ", {:?}", arg)?;
+			}
+		}
+
+		write!(f, ")")
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// IrBasicBlock
+// ------------------------------------------------------------------------------------------------
+
+pub type IrBBId = usize;
+
+pub struct IrBasicBlock {
+	id:        IrBBId,
+	real_bbid: BBId,
+	phis:      Vec<IrPhi>,
+	insts:     Vec<IrInst>,
+}
+
+impl IrBasicBlock {
+	pub(crate) fn new(id: IrBBId, real_bbid: BBId, insts: Vec<IrInst>) -> Self {
+		Self {
+			id,
+			real_bbid,
+			phis: vec![],
+			insts,
+		}
+	}
+
+	pub(crate) fn phis(&self) -> impl Iterator<Item = &IrPhi> {
+		self.phis.iter()
+	}
+
+	fn phis_mut(&mut self) -> impl Iterator<Item = &mut IrPhi> {
+		self.phis.iter_mut()
+	}
+
+	fn add_phi(&mut self, reg: IrReg, num_preds: usize) {
+		self.phis.push(IrPhi::new(reg, num_preds));
+	}
+
+	fn phi_for_reg(&self, reg: &IrReg) -> Option<&IrPhi> {
+		// TODO: this is linear time. is that a problem? (how many phi funcs are there likely
+		// to be at the start of a BB?)
+		// since phis execute conceptually in parallel, and since we need to look them up by
+		// what reg they define, might make sense to use a map { reg => phi }.
+		for phi in self.phis() {
+			if phi.dst_reg() == reg {
+				return Some(phi);
+			}
+		}
+
+		None
+	}
+
+	fn retain_phis(&mut self, p: impl Fn(&IrReg) -> bool) {
+		self.phis.retain(|phi| p(phi.dst_reg()))
+	}
+
+	fn insts_mut(&mut self) -> impl Iterator<Item = &mut IrInst> {
+		self.insts.iter_mut()
+	}
+}
+
+impl Debug for IrBasicBlock {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		writeln!(f, "bb{}: (real BB: {:?})", self.id, self.real_bbid)?;
+
+		for p in self.phis.iter() {
+			writeln!(f, "    {:?}", p)?;
+		}
+
+		if !self.phis.is_empty() {
+			writeln!(f, "    ---")?;
+		}
+
+		for i in self.insts.iter() {
+			writeln!(f, "    {:?}", i)?;
+		}
+
+		Ok(())
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// IrFunction
+// ------------------------------------------------------------------------------------------------
+
+use petgraph::{
+	// Direction,
+	graphmap::{ DiGraphMap },
+	// algo::dominators::{ self },
+	dot::{ Dot, Config as DotConfig },
+};
+
+pub(crate) type IrCfg = DiGraphMap<IrBBId, ()>;
+
+pub struct IrFunction {
+	real_fid: FuncId,
+	bbs:      Vec<IrBasicBlock>,
+	cfg:      IrCfg,
+}
+
+impl IrFunction {
+	pub(crate) fn new(real_fid: FuncId, bbs: Vec<IrBasicBlock>, cfg: IrCfg) -> Self {
+		Self {
+			real_fid,
+			bbs,
+			cfg,
+		}
+	}
+}
+
+impl Debug for IrFunction {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		writeln!(f, "-------------------------------------------------------")?;
+		writeln!(f, "IR for {:?}", self.real_fid)?;
+		writeln!(f, "\nCFG:\n")?;
+		writeln!(f, "{:?}", Dot::with_config(&self.cfg, &[DotConfig::EdgeNoLabel]))?;
+
+		for bb in &self.bbs {
+			Debug::fmt(&bb, f)?;
+		}
+
+		Ok(())
+	}
+}
