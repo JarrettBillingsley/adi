@@ -163,3 +163,30 @@ One, it adds entries to the **references map** (or "refmap"), a global bidirecti
 Two, it finds *new things to analyze.* For example if it sees a call instruction, that's a good indication that the thing it refers to is the beginning of a function, so that referent can be scheduled for pass 1 analysis.
 
 After pass 3, the function is officially Done Being Analyzed!
+
+---
+
+## Architectures and Platforms
+
+The function analysis can't just read arbitrary blobs of bytes and understand them. To do that translation, the analysis uses an **architecture** to disassemble binaries into the platform-agnostic **instruction** objects.
+
+Each architecture has (currently) three important parts:
+
+1. **Disassembler**
+    - This is given raw byte slices and is expected to produce `Instruction` objects from them. It's a very simple interface, but the implementation can be pretty complex - see some of the implemented architectures in the `arch/` directory.
+2. **Printer**
+    - This is used to pretty-print disassembled instructions in a human-readable way.
+3. **Interpreter**
+    - This is given a basic block, and is expected to interpret the instructions within in order to extract information that cannot be determined statically. However I think it's going away and being replaced by the IR compiler soon.
+
+But an architecture only describes the behavior of the *CPU.* Software executes within a larger system involving ROM, RAM, MMIO, and so on. And the same CPU architecture can be used in multiple systems with totally different configurations!
+
+A **platform** describes the system as a whole. There are again three parts, but they're not all bundled together in a single object like architectures:
+
+1. **Platform**
+    - This is extremely simple right now - it just gives the architecture for this platform.
+2. **Loader**
+    - Given a binary image, decides whether or not this is a binary for this platform.
+    - When an image is loaded, the loaders for all platforms are asked if they can load the image until one is found.
+3. **MMU**
+    - Each platform has its own MMU.
