@@ -9,16 +9,18 @@ use crate::program::{ BBId, FuncId };
 
 pub mod builder;
 pub mod interp;
+pub mod ssa;
 
 pub use builder::*;
 pub use interp::*;
+// pub use ssa::*;
 
 // ------------------------------------------------------------------------------------------------
 // ValSize
 // ------------------------------------------------------------------------------------------------
 
 /// Possible sizes of values used in the IR, measured in bits.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum ValSize {
 	_8  = 8,
 	_16 = 16,
@@ -61,12 +63,20 @@ impl ValSize {
 // ------------------------------------------------------------------------------------------------
 
 /// What kinds of [`Reg`]s there are.
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum IrRegKind {
 	/// An un-renumbered register. The field is its offset within the register "segment."
 	Bare(u16),
 	/// An SSA renumbered register. The second field is its "generation."
 	Sub(u16, u32),
+}
+
+impl IrRegKind {
+	fn offset(&self) -> u16 {
+		match self {
+			IrRegKind::Bare(o) | IrRegKind::Sub(o, _) => *o,
+		}
+	}
 }
 
 impl Debug for IrRegKind {
@@ -83,7 +93,7 @@ impl Debug for IrRegKind {
 // ------------------------------------------------------------------------------------------------
 
 /// A location where a value can be stored. Can appear as the destination/LHS of IR instructions.
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct IrReg {
 	size: ValSize,
 	kind: IrRegKind,
@@ -126,6 +136,12 @@ impl IrReg {
 	#[inline]
 	pub fn kind(&self) -> IrRegKind {
 		self.kind
+	}
+
+	/// Its offset into the registers "segment."
+	#[inline]
+	pub fn offset(&self) -> u16 {
+		self.kind.offset()
 	}
 
 	/// If this is a `IrRegKind::Bare`, returns a new `IrReg` subscripted with the given index.
@@ -226,6 +242,19 @@ impl Src {
 		match self {
 			Src::Reg(IrReg { size, .. }) |
 			Src::Const(Const { size, .. }) => *size,
+		}
+	}
+
+	/// Callback iterator over regs (well, reg) represented by this source.
+	pub fn regs(&self, f: &mut impl FnMut(&IrReg)) {
+		if let Src::Reg(r) = self {
+			f(r);
+		}
+	}
+
+	pub fn visit_use_mut(&mut self, mut f: impl FnMut(&mut IrReg)) {
+		if let Src::Reg(r) = self {
+			f(r);
 		}
 	}
 }
@@ -397,47 +426,145 @@ impl IrInstKind {
 	/// Gets ths size of the source value(s).
 	/// Panics if called on an instruction that has no source.
 	pub fn src_size(&self) -> ValSize {
-		match self {
-			IrInstKind::Nop
-			// | IrInstKind::IrBranch { .. }
-			| IrInstKind::Branch { .. }
-			| IrInstKind::IBranch { .. }
-			| IrInstKind::Call { .. }
-			| IrInstKind::ICall { .. }
-			| IrInstKind::Ret { .. } => panic!("no source"),
+		use IrInstKind::*;
 
-			IrInstKind::Assign    { src, .. }  => src.size(),
-			IrInstKind::Load      { dst, .. }  => dst.size(), // yes, it's weird
-			IrInstKind::Store     { src, .. }  => src.size(),
-			// IrInstKind::IrCBranch { cond, .. } => cond.size(),
-			IrInstKind::CBranch   { cond, .. } => cond.size(),
-			IrInstKind::Unary     { src, .. }  => src.size(),
-			IrInstKind::Binary    { src1, .. } => src1.size(),
-			IrInstKind::Ternary   { src1, .. } => src1.size(),
+		match self {
+			Nop
+			// | IrBranch { .. }
+			| Branch { .. }
+			| IBranch { .. }
+			| Call { .. }
+			| ICall { .. }
+			| Ret { .. } => panic!("no source"),
+
+			Assign    { src, .. }  => src.size(),
+			Load      { dst, .. }  => dst.size(), // yes, it's weird
+			Store     { src, .. }  => src.size(),
+			// IrCBranch { cond, .. } => cond.size(),
+			CBranch   { cond, .. } => cond.size(),
+			Unary     { src, .. }  => src.size(),
+			Binary    { src1, .. } => src1.size(),
+			Ternary   { src1, .. } => src1.size(),
 		}
 	}
 
 	/// Gets ths size of the destination place.
 	/// Panics if called on an instruction that has no destination.
 	pub fn dst_size(&self) -> ValSize {
-		match self {
-			IrInstKind::Nop
-			// | IrInstKind::IrBranch { .. }
-			| IrInstKind::Branch { .. }
-			| IrInstKind::IBranch { .. }
-			| IrInstKind::Call { .. }
-			| IrInstKind::ICall { .. }
-			| IrInstKind::Ret { .. }
-			// | IrInstKind::IrCBranch { .. }
-			| IrInstKind::CBranch { .. } => panic!("no destination"),
+		use IrInstKind::*;
 
-			IrInstKind::Assign  { dst, .. } => dst.size(),
-			IrInstKind::Load    { dst, .. } => dst.size(),
-			IrInstKind::Store   { src, .. } => src.size(), // yes, it's weird
-			IrInstKind::Unary   { dst, .. } => dst.size(),
-			IrInstKind::Binary  { dst, .. } => dst.size(),
-			IrInstKind::Ternary { dst, .. } => dst.size(),
+		match self {
+			Nop
+			// | IrBranch { .. }
+			| Branch { .. }
+			| IBranch { .. }
+			| Call { .. }
+			| ICall { .. }
+			| Ret { .. }
+			// | IrCBranch { .. }
+			| CBranch { .. } => panic!("no destination"),
+
+			Assign  { dst, .. } => dst.size(),
+			Load    { dst, .. } => dst.size(),
+			Store   { src, .. } => src.size(), // yes, it's weird
+			Unary   { dst, .. } => dst.size(),
+			Binary  { dst, .. } => dst.size(),
+			Ternary { dst, .. } => dst.size(),
 		}
+	}
+
+	/// Callback iterator over all regs used by this instruction.
+	pub fn regs(&self, mut f: impl FnMut(&IrReg)) {
+		use IrInstKind::*;
+
+		match &self {
+			Nop
+			| Branch { .. }
+			| IBranch { .. }
+			| Call { .. } => {}
+
+			Assign { dst, src }    => { f(dst); src.regs(&mut f); }
+			Load { dst, addr }     => { f(dst); addr.regs(&mut f); }
+			Store { addr,  src }   => { addr.regs(&mut f); src.regs(&mut f); }
+			CBranch { cond, .. }   => { cond.regs(&mut f); }
+			ICall { target }       => { target.regs(&mut f); }
+			Ret { target }         => { target.regs(&mut f); }
+			Unary { dst, src, .. } => { f(dst); src.regs(&mut f); }
+
+			Binary { dst, src1, src2, .. } => {
+				f(dst);
+				src1.regs(&mut f);
+				src2.regs(&mut f);
+			}
+			Ternary { dst, src1, src2, src3, .. } => {
+				f(dst);
+				src1.regs(&mut f);
+				src2.regs(&mut f);
+				src3.regs(&mut f);
+			}
+		}
+	}
+
+	fn assigns(&self, reg: IrReg) -> bool {
+		use IrInstKind::*;
+
+		match &self {
+			Nop | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. } | IBranch { .. }
+			| Store { .. } | Call { .. } => false,
+
+			Assign { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
+			| Ternary { dst, .. } => *dst == reg,
+		}
+	}
+
+	fn visit_uses_mut(&mut self, mut f: impl FnMut(&mut IrReg)) {
+		use IrInstKind::*;
+
+		match self {
+			Nop
+			| Branch { .. }
+			| Call { .. } => {}
+
+			Assign { src, .. } => { src.visit_use_mut(&mut f); }
+			Load { addr, .. } => { addr.visit_use_mut(&mut f); }
+			Store { addr, src } => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
+			CBranch { cond, .. } => { cond.visit_use_mut(&mut f); }
+			IBranch { target } => { target.visit_use_mut(&mut f); }
+			ICall { target } => { target.visit_use_mut(&mut f); }
+			Ret { target } => { target.visit_use_mut(&mut f); }
+			Unary { src, .. } => { src.visit_use_mut(&mut f); }
+			Binary { src1, src2, .. } => {
+				src1.visit_use_mut(&mut f);
+				src2.visit_use_mut(&mut f);
+			}
+			Ternary { src1, src2, src3, .. } => {
+				src1.visit_use_mut(&mut f);
+				src2.visit_use_mut(&mut f);
+				src3.visit_use_mut(&mut f);
+			}
+		}
+	}
+
+	fn dst_reg_mut(&mut self) -> Option<&mut IrReg> {
+		use IrInstKind::*;
+
+		match self {
+			Nop
+			| Branch { .. }
+			| IBranch { .. }
+			| Call { .. }
+			| ICall { .. }
+			| Ret { .. }
+			| Store { .. }
+			| CBranch { .. } => None,
+
+			Assign  { dst, .. }
+			| Load    { dst, .. }
+			| Unary   { dst, .. }
+			| Binary  { dst, .. }
+			| Ternary { dst, .. } => Some(dst),
+		}
+
 	}
 }
 
@@ -747,6 +874,24 @@ impl IrInst {
 	pub fn kind(&self) -> IrInstKind {
 		self.kind
 	}
+
+	/// Callback iterator over all regs used by this instruction.
+	pub fn regs(&self, f: impl FnMut(&IrReg)) {
+		self.kind.regs(f);
+	}
+
+	/// Does this instruction assign to the given reg?
+	pub fn assigns(&self, reg: IrReg) -> bool {
+		self.kind.assigns(reg)
+	}
+
+	pub fn visit_uses_mut(&mut self, f: impl FnMut(&mut IrReg)) {
+		self.kind.visit_uses_mut(f);
+	}
+
+	fn dst_reg_mut(&mut self) -> Option<&mut IrReg> {
+		self.kind.dst_reg_mut()
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -769,11 +914,8 @@ impl IrPhi {
 		}
 	}
 
-	fn assigns(&self, reg: u16) -> bool {
-		match &self.dst.kind {
-			IrRegKind::Bare(dst) => *dst == reg,
-			_                    => false,
-		}
+	fn assigns(&self, reg: IrReg) -> bool {
+		self.dst == reg
 	}
 
 	fn dst_reg(&self) -> &IrReg {
@@ -835,6 +977,11 @@ impl IrBasicBlock {
 		}
 	}
 
+	fn has_assignment_to(&self, reg: IrReg) -> bool {
+		self.phis.iter().any(|p| p.assigns(reg)) ||
+		self.insts.iter().any(|i| i.assigns(reg))
+	}
+
 	pub(crate) fn phis(&self) -> impl Iterator<Item = &IrPhi> {
 		self.phis.iter()
 	}
@@ -863,6 +1010,10 @@ impl IrBasicBlock {
 
 	fn retain_phis(&mut self, p: impl Fn(&IrReg) -> bool) {
 		self.phis.retain(|phi| p(phi.dst_reg()))
+	}
+
+	fn insts(&self) -> impl Iterator<Item = &IrInst> {
+		self.insts.iter()
 	}
 
 	fn insts_mut(&mut self) -> impl Iterator<Item = &mut IrInst> {
@@ -910,7 +1061,24 @@ pub struct IrFunction {
 }
 
 impl IrFunction {
-	pub(crate) fn new(real_fid: FuncId, bbs: Vec<IrBasicBlock>, cfg: IrCfg) -> Self {
+	pub(crate) fn new(real_fid: FuncId, mut bbs: Vec<IrBasicBlock>, cfg: IrCfg) -> Self {
+		use ssa::{
+			DomTree,
+			compute_dominance_frontiers,
+			find_all_regs,
+			insert_phis,
+			rename_regs,
+			prune_phis,
+		};
+
+		let dom_tree = DomTree::new(&cfg);
+		let df = compute_dominance_frontiers(&cfg, &dom_tree);
+		let all_regs = find_all_regs(&bbs);
+		insert_phis(&mut bbs, &cfg, &df, all_regs.iter().copied());
+		// for bb in bbs.iter() { println!("{:?}", bb); }
+		rename_regs(&mut bbs, &cfg, &dom_tree, all_regs.iter().copied());
+		prune_phis(&mut bbs, &dom_tree);
+
 		Self {
 			real_fid,
 			bbs,
