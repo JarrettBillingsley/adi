@@ -15,7 +15,7 @@ impl IIrCompiler for ToyIrCompiler {
 
 mod ir {
 	use super::*;
-	use crate::ir::{ IrReg, Const, Src, IrBuilder };
+	use crate::ir::{ IrReg, IrConst, IrSrc, IrBuilder };
 
 	const REG_A:     IrReg = IrReg::reg8(Reg::A.offset());
 	const REG_B:     IrReg = IrReg::reg8(Reg::B.offset());
@@ -42,11 +42,11 @@ mod ir {
 	}
 
 	impl InstDesc {
-		fn r1(&self, i: &Instruction) -> Src {
+		fn r1(&self, i: &Instruction) -> IrSrc {
 			match self.addr_mode {
 				AddrMode::RR   => reg_to_ir_reg(inst_reg(i, 1)).into(),
-				AddrMode::RI8  => Const::_8(inst_imm(i)).into(),
-				AddrMode::RI16 => Const::_16(inst_addr(i, 1).0 as u16).into(),
+				AddrMode::RI8  => IrConst::_8(inst_imm(i)).into(),
+				AddrMode::RI16 => IrConst::_16(inst_addr(i, 1).0 as u16).into(),
 				_ => panic!(),
 			}
 		}
@@ -121,8 +121,8 @@ mod ir {
 					b.assign(i.ea(),    REG_TMPCF, REG_CF);
 					b.isborrowc(i.ea(), REG_CF,    s1, s2, REG_CF);
 					b.iusubb(i.ea(),    REG_TMP,   s1, s2, REG_TMPCF);
-					b.ieq(i.ea(),       REG_ZF, REG_TMP, Const::ZERO_8);
-					b.islt(i.ea(),      REG_NF, REG_TMP, Const::ZERO_8);
+					b.ieq(i.ea(),       REG_ZF, REG_TMP, IrConst::ZERO_8);
+					b.islt(i.ea(),      REG_NF, REG_TMP, IrConst::ZERO_8);
 				}
 				BLT => {
 					b.cbranch(i.ea(), REG_NF, target.unwrap());
@@ -142,13 +142,13 @@ mod ir {
 					b.branch(i.ea(), target.unwrap());
 				}
 				CAL => {
-					b.iusub(i.ea(), REG_SP, REG_SP, Const::_16(2));
-					b.store(i.ea(), REG_SP, Const::_16(i.next_va().0 as u16));
+					b.iusub(i.ea(), REG_SP, REG_SP, IrConst::_16(2));
+					b.store(i.ea(), REG_SP, IrConst::_16(i.next_va().0 as u16));
 					b.call(i.ea(), target.unwrap());
 				}
 				RET => {
 					b.load(i.ea(),  REG_TMP16, REG_SP);
-					b.iuadd(i.ea(), REG_SP, REG_SP, Const::_16(2));
+					b.iuadd(i.ea(), REG_SP, REG_SP, IrConst::_16(2));
 					b.ret(i.ea(),   REG_TMP16);
 				}
 				LD => {

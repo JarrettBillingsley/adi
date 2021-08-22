@@ -71,21 +71,21 @@ pub(crate) enum IrTernOp {
 pub(crate) enum IrInstKind {
 	Nop,
 
-	Assign  { dst: IrReg, src: Src },  // dst = src
-	Load    { dst: IrReg, addr: Src }, // dst = *addr
-	Store   { addr: Src,  src: Src },  // *addr = src
+	Assign  { dst: IrReg, src: IrSrc },  // dst = src
+	Load    { dst: IrReg, addr: IrSrc }, // dst = *addr
+	Store   { addr: IrSrc,  src: IrSrc },  // *addr = src
 
 	Branch  { target: EA },            // pc = target
-	CBranch { cond: Src, target: EA }, // if(cond) pc = target
-	IBranch { target: Src },           // pc = src
+	CBranch { cond: IrSrc, target: EA }, // if(cond) pc = target
+	IBranch { target: IrSrc },           // pc = src
 
 	Call    { target: EA },  // pc = target (but it's a call)
-	ICall   { target: Src }, // pc = src (but it's a call)
-	Ret     { target: Src }, // pc = src (but it's a return)
+	ICall   { target: IrSrc }, // pc = src (but it's a call)
+	Ret     { target: IrSrc }, // pc = src (but it's a return)
 
-	Unary   { dst: IrReg, op: IrUnOp, src: Src },                          // dst = op src
-	Binary  { dst: IrReg, src1: Src, op: IrBinOp, src2: Src },             // dst = src1 op src2
-	Ternary { dst: IrReg, src1: Src, op: IrTernOp, src2: Src, src3: Src }, // dst = ...yeah
+	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc },                          // dst = op src
+	Binary  { dst: IrReg, src1: IrSrc, op: IrBinOp, src2: IrSrc },             // dst = src1 op src2
+	Ternary { dst: IrReg, src1: IrSrc, op: IrTernOp, src2: IrSrc, src3: IrSrc }, // dst = ...yeah
 }
 
 impl Debug for IrInstKind {
@@ -175,235 +175,235 @@ impl IrInst {
 	}
 
 	///
-	pub(crate) fn assign(ea: EA, dst: IrReg, src: Src) -> Self {
+	pub(crate) fn assign(ea: EA, dst: IrReg, src: IrSrc) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Assign { dst, src } }
 	}
 
 	///
-	pub(crate) fn izxt(ea: EA, dst: IrReg, src: Src) -> Self {
+	pub(crate) fn izxt(ea: EA, dst: IrReg, src: IrSrc) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntZxt, src } }
 	}
 
 	///
-	pub(crate) fn isxt(ea: EA, dst: IrReg, src: Src) -> Self {
+	pub(crate) fn isxt(ea: EA, dst: IrReg, src: IrSrc) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntSxt, src } }
 	}
 
 	///
-	pub(crate) fn ineg(ea: EA, dst: IrReg, src: Src) -> Self {
+	pub(crate) fn ineg(ea: EA, dst: IrReg, src: IrSrc) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNeg, src } }
 	}
 
 	///
-	pub(crate) fn inot(ea: EA, dst: IrReg, src: Src) -> Self {
+	pub(crate) fn inot(ea: EA, dst: IrReg, src: IrSrc) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNot, src } }
 	}
 
 	///
-	pub(crate) fn bnot(ea: EA, dst: IrReg, src: Src) -> Self {
+	pub(crate) fn bnot(ea: EA, dst: IrReg, src: IrSrc) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::BoolNot, src } }
 	}
 
 	///
-	pub(crate) fn ieq(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ieq(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntEq, src2 } }
 	}
 
 	///
-	pub(crate) fn ine(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ine(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntNe, src2 } }
 	}
 
 	///
-	pub(crate) fn islt(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn islt(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSlt, src2 } }
 	}
 
 	///
-	pub(crate) fn isle(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn isle(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSle, src2 } }
 	}
 
 	///
-	pub(crate) fn iult(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iult(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUlt, src2 } }
 	}
 
 	///
-	pub(crate) fn iule(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iule(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUle, src2 } }
 	}
 
 	///
-	pub(crate) fn iuadd(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iuadd(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUAdd, src2 } }
 	}
 
 	///
-	pub(crate) fn iuaddc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
+	pub(crate) fn iuaddc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntUAddC, src2, src3 } }
 	}
 
 	///
-	pub(crate) fn iusub(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iusub(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUSub, src2 } }
 	}
 
 	///
-	pub(crate) fn iusubb(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
+	pub(crate) fn iusubb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntUSubB, src2, src3 } }
 	}
 
 	///
-	pub(crate) fn icarry(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn icarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntCarry, src2 } }
 	}
 
 	///
-	pub(crate) fn icarryc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
+	pub(crate) fn icarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntCarryC, src2, src3 } }
 	}
 
 	///
-	pub(crate) fn iscarry(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iscarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSCarry, src2 } }
 	}
 
 	///
-	pub(crate) fn iscarryc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
+	pub(crate) fn iscarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntSCarryC, src2, src3 } }
 	}
 
 	///
-	pub(crate) fn isborrow(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn isborrow(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSBorrow, src2 } }
 	}
 
 	///
-	pub(crate) fn isborrowc(ea: EA, dst: IrReg, src1: Src, src2: Src, src3: Src) -> Self {
+	pub(crate) fn isborrowc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary { dst, src1, op: IrTernOp::IntSBorrowC, src2, src3 } }
 	}
 
 	///
-	pub(crate) fn imul(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn imul(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntMul, src2 } }
 	}
 
 	///
-	pub(crate) fn iudiv(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iudiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUDiv, src2 } }
 	}
 
 	///
-	pub(crate) fn isdiv(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn isdiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSDiv, src2 } }
 	}
 
 	///
-	pub(crate) fn iumod(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iumod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUMod, src2 } }
 	}
 
 	///
-	pub(crate) fn ismod(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ismod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSMod, src2 } }
 	}
 
 	///
-	pub(crate) fn ixor(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ixor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntXor, src2 } }
 	}
 
 	///
-	pub(crate) fn iand(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iand(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntAnd, src2 } }
 	}
 
 	///
-	pub(crate) fn ior(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ior(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntOr, src2 } }
 	}
 
 	///
-	pub(crate) fn ishl(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ishl(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntShl, src2 } }
 	}
 
 	///
-	pub(crate) fn iushr(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn iushr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntUShr, src2 } }
 	}
 
 	///
-	pub(crate) fn isshr(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn isshr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntSShr, src2 } }
 	}
 
 	///
-	pub(crate) fn ipair(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn ipair(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		assert!(dst.size().is_twice(src1.size()));
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::IntPair, src2 } }
 	}
 
 	///
-	pub(crate) fn bxor(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn bxor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::BoolXor, src2 } }
 	}
 
 	///
-	pub(crate) fn band(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn band(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::BoolAnd, src2 } }
 	}
 
 	///
-	pub(crate) fn bor(ea: EA, dst: IrReg, src1: Src, src2: Src) -> Self {
+	pub(crate) fn bor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary { dst, src1, op: IrBinOp::BoolOr, src2 } }
 	}
 
 	///
-	pub(crate) fn load(ea: EA, dst: IrReg, addr: Src) -> Self {
+	pub(crate) fn load(ea: EA, dst: IrReg, addr: IrSrc) -> Self {
 		Self { ea, kind: IrInstKind::Load { dst, addr } }
 	}
 
 	///
-	pub(crate) fn store(ea: EA, addr: Src, src: Src) -> Self {
+	pub(crate) fn store(ea: EA, addr: IrSrc, src: IrSrc) -> Self {
 		Self { ea, kind: IrInstKind::Store { addr, src } }
 	}
 
@@ -413,7 +413,7 @@ impl IrInst {
 	// }
 
 	// ///
-	// pub(crate) fn ircbranch(ea: EA, cond: Src, offs: i32) -> Self {
+	// pub(crate) fn ircbranch(ea: EA, cond: IrSrc, offs: i32) -> Self {
 	// 	Self { ea, kind: IrInstKind::IrCBranch { cond, offs } }
 	// }
 
@@ -423,12 +423,12 @@ impl IrInst {
 	}
 
 	///
-	pub(crate) fn cbranch(ea: EA, cond: Src, target: EA) -> Self {
+	pub(crate) fn cbranch(ea: EA, cond: IrSrc, target: EA) -> Self {
 		Self { ea, kind: IrInstKind::CBranch { cond, target } }
 	}
 
 	///
-	pub(crate) fn ibranch(ea: EA, target: Src) -> Self {
+	pub(crate) fn ibranch(ea: EA, target: IrSrc) -> Self {
 		Self { ea, kind: IrInstKind::IBranch { target } }
 	}
 
@@ -438,12 +438,12 @@ impl IrInst {
 	}
 
 	///
-	pub(crate) fn icall(ea: EA, target: Src) -> Self {
+	pub(crate) fn icall(ea: EA, target: IrSrc) -> Self {
 		Self { ea, kind: IrInstKind::ICall { target } }
 	}
 
 	///
-	pub(crate) fn ret(ea: EA, target: Src) -> Self {
+	pub(crate) fn ret(ea: EA, target: IrSrc) -> Self {
 		Self { ea, kind: IrInstKind::Ret { target } }
 	}
 

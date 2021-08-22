@@ -132,17 +132,17 @@ impl IrReg {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Const
+// IrConst
 // ------------------------------------------------------------------------------------------------
 
 /// A constant value.
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub(crate) struct Const {
+pub(crate) struct IrConst {
 	size: ValSize,
 	val:  u64,
 }
 
-impl Debug for Const {
+impl Debug for IrConst {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self.size {
 			ValSize::_8  => write!(f, "const 0x{:02X}", self.val),
@@ -153,23 +153,23 @@ impl Debug for Const {
 	}
 }
 
-impl Const {
+impl IrConst {
 	/// 8-bit constant 0.
-	pub(crate) const ZERO_8:  Const = Self::_8(0);
+	pub(crate) const ZERO_8:  IrConst = Self::_8(0);
 	/// 16-bit constant 0.
-	pub(crate) const ZERO_16: Const = Self::_16(0);
+	pub(crate) const ZERO_16: IrConst = Self::_16(0);
 	/// 32-bit constant 0.
-	pub(crate) const ZERO_32: Const = Self::_32(0);
+	pub(crate) const ZERO_32: IrConst = Self::_32(0);
 	/// 64-bit constant 0.
-	pub(crate) const ZERO_64: Const = Self::_64(0);
+	pub(crate) const ZERO_64: IrConst = Self::_64(0);
 	/// 8-bit constant 1.
-	pub(crate) const ONE_8:   Const = Self::_8(1);
+	pub(crate) const ONE_8:   IrConst = Self::_8(1);
 	/// 16-bit constant 1.
-	pub(crate) const ONE_16:  Const = Self::_16(1);
+	pub(crate) const ONE_16:  IrConst = Self::_16(1);
 	/// 32-bit constant 1.
-	pub(crate) const ONE_32:  Const = Self::_32(1);
+	pub(crate) const ONE_32:  IrConst = Self::_32(1);
 	/// 64-bit constant 1.
-	pub(crate) const ONE_64:  Const = Self::_64(1);
+	pub(crate) const ONE_64:  IrConst = Self::_64(1);
 
 	/// Constructs an 8-bit constant.
 	pub(crate) const fn _8(val: u8) -> Self {
@@ -193,58 +193,58 @@ impl Const {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Src
+// IrSrc
 // ------------------------------------------------------------------------------------------------
 
-/// The source of a value. Can be either a [`IrReg`] or a [`Const`].
+/// The source of a value. Can be either an [`IrReg`] or an [`IrConst`].
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub(crate) enum Src {
+pub(crate) enum IrSrc {
 	Reg(IrReg),
-	Const(Const),
+	Const(IrConst),
 }
 
-impl Debug for Src {
+impl Debug for IrSrc {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self {
-			Src::Reg(p) => write!(f, "{:?}", p),
-			Src::Const(c) => write!(f, "{:?}", c),
+			IrSrc::Reg(p) => write!(f, "{:?}", p),
+			IrSrc::Const(c) => write!(f, "{:?}", c),
 		}
 	}
 }
 
-impl Src {
+impl IrSrc {
 	/// The size of this value.
 	#[inline]
 	pub(crate) fn size(&self) -> ValSize {
 		match self {
-			Src::Reg(IrReg { size, .. }) |
-			Src::Const(Const { size, .. }) => *size,
+			IrSrc::Reg(IrReg { size, .. }) |
+			IrSrc::Const(IrConst { size, .. }) => *size,
 		}
 	}
 
 	/// Callback iterator over regs (well, reg) represented by this source.
 	pub(crate) fn regs(&self, f: &mut impl FnMut(&IrReg)) {
-		if let Src::Reg(r) = self {
+		if let IrSrc::Reg(r) = self {
 			f(r);
 		}
 	}
 
 	pub(crate) fn visit_use_mut(&mut self, mut f: impl FnMut(&mut IrReg)) {
-		if let Src::Reg(r) = self {
+		if let IrSrc::Reg(r) = self {
 			f(r);
 		}
 	}
 }
 
-impl From<IrReg> for Src {
+impl From<IrReg> for IrSrc {
 	fn from(p: IrReg) -> Self {
-		Src::Reg(p)
+		IrSrc::Reg(p)
 	}
 }
 
-impl From<Const> for Src {
-	fn from(c: Const) -> Self {
-		Src::Const(c)
+impl From<IrConst> for IrSrc {
+	fn from(c: IrConst) -> Self {
+		IrSrc::Const(c)
 	}
 }
 
