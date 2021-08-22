@@ -3,7 +3,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use enum_dispatch::enum_dispatch;
 
-use crate::ir::{ IrBuilder };
+use crate::ir::{ IrBuilder, IrReg };
 use crate::memory::{ Endian, Memory, MmuState, EA, VA };
 use crate::program::{ Instruction, BasicBlock };
 
@@ -287,6 +287,9 @@ pub(crate) enum IrCompiler {
 #[enum_dispatch(IrCompiler)]
 pub(crate) trait IIrCompiler: Sized + Sync + Send {
 	fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder);
+	fn arg_regs(&self) -> &'static [IrReg];
+	fn return_regs(&self) -> &'static [IrReg];
+	fn stack_ptr_reg(&self) -> IrReg;
 }
 
 // ------------------------------------------------------------------------------------------------

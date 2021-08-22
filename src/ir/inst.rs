@@ -554,6 +554,34 @@ impl IrInst {
 		}
 	}
 
+	pub(crate) fn visit_uses(&self, mut f: impl FnMut(IrReg)) {
+		use IrInstKind::*;
+
+		match &self.kind {
+			Nop
+			| Branch { .. }
+			| Call { .. } => {}
+
+			Assign { src, .. }   => { src.visit_use(&mut f); }
+			Load { addr, .. }    => { addr.visit_use(&mut f); }
+			Store { addr, src }  => { addr.visit_use(&mut f); src.visit_use(&mut f); }
+			CBranch { cond, .. } => { cond.visit_use(&mut f); }
+			IBranch { target }   => { target.visit_use(&mut f); }
+			ICall { target }     => { target.visit_use(&mut f); }
+			Ret { target }       => { target.visit_use(&mut f); }
+			Unary { src, .. }    => { src.visit_use(&mut f); }
+			Binary { src1, src2, .. } => {
+				src1.visit_use(&mut f);
+				src2.visit_use(&mut f);
+			}
+			Ternary { src1, src2, src3, .. } => {
+				src1.visit_use(&mut f);
+				src2.visit_use(&mut f);
+				src3.visit_use(&mut f);
+			}
+		}
+	}
+
 	pub(crate) fn visit_uses_mut(&mut self, mut f: impl FnMut(&mut IrReg)) {
 		use IrInstKind::*;
 
@@ -579,6 +607,27 @@ impl IrInst {
 				src2.visit_use_mut(&mut f);
 				src3.visit_use_mut(&mut f);
 			}
+		}
+	}
+
+	pub(crate) fn dst_reg(&self) -> Option<IrReg> {
+		use IrInstKind::*;
+
+		match &self.kind {
+			Nop
+			| Branch { .. }
+			| IBranch { .. }
+			| Call { .. }
+			| ICall { .. }
+			| Ret { .. }
+			| Store { .. }
+			| CBranch { .. } => None,
+
+			Assign  { dst, .. }
+			| Load    { dst, .. }
+			| Unary   { dst, .. }
+			| Binary  { dst, .. }
+			| Ternary { dst, .. } => Some(*dst),
 		}
 	}
 

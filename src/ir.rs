@@ -227,6 +227,12 @@ impl IrSrc {
 		}
 	}
 
+	pub(crate) fn visit_use(&self, mut f: impl FnMut(IrReg)) {
+		if let IrSrc::Reg(r) = self {
+			f(*r);
+		}
+	}
+
 	pub(crate) fn visit_use_mut(&mut self, mut f: impl FnMut(&mut IrReg)) {
 		if let IrSrc::Reg(r) = self {
 			f(r);
