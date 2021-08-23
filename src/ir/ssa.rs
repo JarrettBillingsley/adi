@@ -22,6 +22,13 @@ pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
 	rename_regs(bbs, cfg, &dom_tree, all_regs.iter().copied());
 	prune_phis(bbs, &dom_tree);
 
+	// for testing
+	println!("------------------------------------------------------------------");
+	println!("Constants:");
+	for (reg, val) in propagate_constants(bbs, &cfg) {
+		println!("{:?} = {:08X}", reg, val);
+	}
+
 	// not suuuure about this yet
 	// elim_dead_stores(bbs);
 }
@@ -31,12 +38,12 @@ pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
 // ------------------------------------------------------------------------------------------------
 
 // TODO: implement this directly rather than in terms of a DiGraphMap?
-struct DomTree {
+pub(crate) struct DomTree {
 	g: DiGraphMap<IrBBId, ()>,
 }
 
 impl DomTree {
-	fn new(cfg: &IrCfg) -> Self {
+	pub(crate) fn new(cfg: &IrCfg) -> Self {
 		let doms = dominators::simple_fast(&cfg, 0);
 		let mut g = DiGraphMap::<IrBBId, ()>::new();
 
@@ -65,23 +72,23 @@ impl DomTree {
 		Self { g }
 	}
 
-	fn show(&self) {
+	pub(crate) fn show(&self) {
 		println!("Dominators");
 		println!("-------------");
 		println!();
 		println!("{:?}", Dot::with_config(&self.g, &[DotConfig::EdgeNoLabel]));
 	}
 
-	fn idom(&self, node: IrBBId) -> Option<IrBBId> {
+	pub(crate) fn idom(&self, node: IrBBId) -> Option<IrBBId> {
 		self.g.edges_directed(node, Direction::Incoming).map(|(d, _, _)| d).next()
 	}
 
-	fn immediately_dominated_by(&self, node: IrBBId) -> impl Iterator<Item = IrBBId> + '_ {
+	pub(crate) fn immediately_dominated_by(&self, node: IrBBId) -> impl Iterator<Item = IrBBId> + '_ {
 		self.g.edges_directed(node, Direction::Outgoing).map(|(_, c, _)| c)
 	}
 
 	/// `true` if `x` strictly dominates `b` (directly or indirectly).
-	fn strictly_dominates(&self, x: IrBBId, mut b: IrBBId) -> bool {
+	pub(crate) fn strictly_dominates(&self, x: IrBBId, mut b: IrBBId) -> bool {
 		while let Some(dom) = self.idom(b) {
 			if x == dom {
 				return true;
@@ -133,11 +140,19 @@ fn show_df(df: &DomFrontiers) {
 // Reg finder
 // ------------------------------------------------------------------------------------------------
 
-fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
+pub(crate) fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
 	let mut ret = BTreeSet::new();
 
 	for bb in bbs.iter() {
-		// this is done before phi-insertion, so we don't have to check them.
+		// this function can be used before or after phi-insertion.
+		for phi in bb.phis() {
+			ret.insert(*phi.dst_reg());
+
+			for &arg in phi.args() {
+				ret.insert(arg);
+			}
+		}
+
 		for inst in bb.insts() {
 			inst.regs(|&r| {
 				ret.insert(r);

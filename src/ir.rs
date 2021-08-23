@@ -11,10 +11,12 @@ use crate::program::{ BBId, FuncId };
 pub mod builder;
 pub mod inst;
 pub mod ssa;
+pub mod constprop;
 
 pub(crate) use builder::*;
 pub(crate) use inst::*;
-// pub use ssa::*;
+pub(crate) use ssa::*;
+pub(crate) use constprop::*;
 
 // ------------------------------------------------------------------------------------------------
 // ValSize
@@ -188,6 +190,16 @@ impl IrConst {
 	/// Constructs a 64-bit constant.
 	pub(crate) const fn _64(val: u64) -> Self {
 		Self { size: ValSize::_64, val }
+	}
+
+	/// Get the value.
+	pub(crate) fn val(&self) -> u64 {
+		self.val
+	}
+
+	/// Get the size.
+	pub(crate) fn size(&self) -> ValSize {
+		self.size
 	}
 }
 

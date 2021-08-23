@@ -149,6 +149,16 @@ fn toy_test_const_prop() -> Vec<u8> {
 	b.mov(C, B);
 	b.mov(D, A);
 	b.ld(A, DC);
+
+	b.movi(A, 0x10);
+	b.addi(A, 0x20);
+	b.movi(B, 0x01);
+	b.addi(B, 0x02);
+	b.mov(C, A);
+	b.or(C, B);
+	b.mov(D, C);
+	b.ld(A, DC);
+
 	b.ret();
 
 	b.finish()
@@ -171,15 +181,23 @@ fn toy_test_calls() -> Vec<u8> {
 	b.finish()
 }
 
-fn toy_test_dse() -> Vec<u8> {
+fn toy_test_loop() -> Vec<u8> {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
 	let mut b = ToyBuilder::new();
-	b.movi(A, 0x10);
-	b.movi(A, 0x20);
-	b.movi(A, 0x30);
-	b.movi(A, 0x40);
+	b.movi(B, 10);
+	b.movi(C, 13);
+
+	let loop_top = b.cmpi(B, 0);
+	let loop_cond = b.beq();
+		b.movi(C, 13);
+
+		b.subi(B, 1);
+		b.jmp_to(loop_top);
+	b.branch_here(loop_cond);
+
+	b.mov(A, C);
 	b.ret();
 
 	b.finish()
@@ -187,10 +205,10 @@ fn toy_test_dse() -> Vec<u8> {
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let img_data = toy_test_all_instructions();
-	let img_data = toy_test_ssa();
+	// let img_data = toy_test_ssa();
 	// let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
-	// let img_data = toy_test_dse();
+	let img_data = toy_test_loop();
 
 	let img = Image::new("<toy test>", &img_data);
 	let mut prog = program_from_image(img)?;
