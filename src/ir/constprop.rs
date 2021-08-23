@@ -205,18 +205,13 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 		Nop | Use { .. } | Store { .. } | Branch { .. } | CBranch { .. } | IBranch { .. }
 		| Call { .. } | ICall { .. } | Ret { .. } => None,
 
-		Assign { dst, src } => {
-			Some((dst, src_to_info(src, state)))
-		}
-
-		Load { dst, .. } => {
-			Some((dst, Info::Any))
-		}
+		Assign { dst, src } => Some((dst, src_to_info(src, state))),
+		Load   { dst, .. }  => Some((dst, Info::Any)),
 
 		Unary { dst, op, src } => {
 			let src_info = src_to_info(src, state);
 			let new_info = match src_info {
-				Info::Some(val) => Info::Some(do_unop(op, val)),
+				Info::Some(val) => Info::Some(do_unop(op, val, src.size(), dst.size())),
 				_               => Info::Any,
 			};
 
@@ -265,14 +260,43 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 	}
 }
 
-fn do_unop(op: IrUnOp, val: u64) -> u64 {
+fn do_unop(op: IrUnOp, val: u64, src_size: ValSize, dst_size: ValSize) -> u64 {
 	use IrUnOp::*;
 
 	match op {
-		IntZxt | IntSxt => val,
-		IntNeg          => !val + 1, // unsigned...
-		IntNot          => !val,
-		BoolNot         => if val == 0 { 1 } else { 0 },
+		IntZxt => val,
+		// IrInst::isxt ensures that src_size < dst_size
+		IntSxt => match src_size {
+			ValSize::_8 =>  match dst_size {
+				ValSize::_16 => val as u8 as i8 as i16 as u64,
+				ValSize::_32 => val as u8 as i8 as i32 as u64,
+				ValSize::_64 => val as u8 as i8 as i64 as u64,
+				_ => unreachable!(),
+			}
+			ValSize::_16 => match dst_size {
+				ValSize::_32 => val as u16 as i16 as i32 as u64,
+				ValSize::_64 => val as u16 as i16 as i64 as u64,
+				_ => unreachable!(),
+			}
+			ValSize::_32 => match dst_size {
+				ValSize::_64 => val as u32 as i32 as i64 as u64,
+				_ => unreachable!(),
+			}
+			ValSize::_64 => unreachable!(),
+		},
+		IntNeg => match src_size {
+			ValSize::_8 =>  (-(val as i8 )) as u8 as u64,
+			ValSize::_16 => (-(val as i16)) as u16 as u64,
+			ValSize::_32 => (-(val as i32)) as u32 as u64,
+			ValSize::_64 => (-(val as i64)) as u64,
+		},
+		IntNot => match src_size {
+			ValSize::_8 =>  (!(val as i8 )) as u8 as u64,
+			ValSize::_16 => (!(val as i16)) as u16 as u64,
+			ValSize::_32 => (!(val as i32)) as u32 as u64,
+			ValSize::_64 => (!(val as i64)) as u64,
+		},
+		BoolNot => (val == 0) as u64,
 	}
 }
 
@@ -280,12 +304,12 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 	use IrBinOp::*;
 
 	let val = match op {
-		IntEq  => if val1 == val2 { 1 } else { 0 },
-		IntNe  => if val1 != val2 { 1 } else { 0 },
-		IntSlt => if (val1 as i64) < val2 as i64 { 1 } else { 0 },
-		IntSle => if val1 as i64 <= val2 as i64 { 1 } else { 0 },
-		IntUlt => if val1 < val2 { 1 } else { 0 },
-		IntUle => if val1 <= val2 { 1 } else { 0 },
+		IntEq  => (val1 == val2) as u64,
+		IntNe  => (val1 != val2) as u64,
+		IntSlt => ((val1 as i64) < val2 as i64) as u64,
+		IntSle => (val1 as i64 <= val2 as i64) as u64,
+		IntUlt => (val1 < val2) as u64,
+		IntUle => (val1 <= val2) as u64,
 
 		IntUAdd => match size {
 			ValSize::_8  => (val1 as u8).wrapping_add(val2 as u8) as u64,
@@ -400,9 +424,9 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 		}
 
 		IntPair => (val1 << size as u32) | val2,
-		BoolXor => if val1 != val2 { 1 } else { 0 },
-		BoolAnd => if val1 != 0 && val2 != 0 { 1 } else { 0 },
-		BoolOr =>  if val1 != 0 || val2 != 0 { 1 } else { 0 },
+		BoolXor => (val1 != val2) as u64,
+		BoolAnd => (val1 != 0 && val2 != 0) as u64,
+		BoolOr =>  (val1 != 0 || val2 != 0) as u64,
 	};
 
 	Some(val)
