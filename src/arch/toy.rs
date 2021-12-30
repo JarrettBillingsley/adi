@@ -69,8 +69,7 @@ impl Reg {
 			Reg::B     => 1,
 			Reg::C     => 2,
 			Reg::D     => 3,
-			Reg::DC    => u16::MAX, // TODO: when const panics are stabilized...
-			// Reg::DC    => panic!(),
+			Reg::DC    => panic!(),
 			Reg::SP    => 4,
 			Reg::NF    => 6,
 			Reg::ZF    => 7,

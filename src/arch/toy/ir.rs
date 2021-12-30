@@ -31,7 +31,6 @@ const REG_A:     IrReg = IrReg::reg8(Reg::A.offset());
 const REG_B:     IrReg = IrReg::reg8(Reg::B.offset());
 const REG_C:     IrReg = IrReg::reg8(Reg::C.offset());
 const REG_D:     IrReg = IrReg::reg8(Reg::D.offset());
-const REG_DC:    IrReg = IrReg::reg16(Reg::DC.offset());
 const REG_NF:    IrReg = IrReg::reg8(Reg::NF.offset());
 const REG_ZF:    IrReg = IrReg::reg8(Reg::ZF.offset());
 const REG_CF:    IrReg = IrReg::reg8(Reg::CF.offset());
@@ -49,7 +48,6 @@ fn reg_to_ir_reg(reg: Reg) -> IrReg {
 		Reg::B  => REG_B,
 		Reg::C  => REG_C,
 		Reg::D  => REG_D,
-		Reg::DC => REG_DC,
 		_       => panic!(),
 	}
 }
