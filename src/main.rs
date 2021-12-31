@@ -204,8 +204,8 @@ fn toy_test_loop() -> Vec<u8> {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	let img_data = toy_test_all_instructions();
-	// let img_data = toy_test_ssa();
+	// let img_data = toy_test_all_instructions();
+	let img_data = toy_test_ssa();
 	// let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
 	// let img_data = toy_test_loop();
