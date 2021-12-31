@@ -200,33 +200,6 @@ impl Program {
 		}
 	}
 
-	pub fn interp(&self, func: FuncId, iters: usize) {
-		use crate::arch::IInterpreter;
-		let mut interpreter = self.plat.arch().new_interpreter();
-		let func = self.funcs.get(func);
-		let head = func.head_id();
-
-		let mut bb = self.bbidx.get(head);
-		for _ in 0 .. iters {
-			match interpreter.interpret_bb(&self.mem, bb, None) {
-				Some(ea) => {
-					if let Some(next_bb) = self.span_at_ea(ea).bb() {
-						bb = self.bbidx.get(next_bb);
-						continue;
-					} else {
-						println!("invalid next EA: {}", ea);
-					}
-				}
-
-				None => {}
-			}
-
-			break;
-		}
-
-		println!("done.");
-	}
-
 	/// Iterator over all functions in the program, in arbitrary order.
 	pub fn all_funcs(&self) -> impl Iterator<Item = &Function> + '_ {
 		self.funcs.all_funcs().map(|(_, func)| func)

@@ -16,7 +16,6 @@ use crate::arch::{
 	DisasError, DisasResult,
 	Printer, IPrinter,
 	Disassembler, IDisassembler,
-	Interpreter,
 	INameLookup,
 	IArchitecture,
 };
@@ -27,12 +26,10 @@ use crate::memory::{ MmuState, Endian, EA, VA };
 // ------------------------------------------------------------------------------------------------
 
 mod descs;
-mod interp;
 #[cfg(test)]
 mod tests;
 
 use descs::{ lookup_desc, lookup_desc_cb, Reg, GBOpKind, InstDesc };
-pub use interp::{ GBInterpreter };
 
 #[cfg(test)]
 use descs::{ MetaOp };
@@ -223,5 +220,4 @@ impl IArchitecture for GBArchitecture {
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { GBDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { GBPrinter::new().into() }
-	fn new_interpreter (&self) -> Interpreter  { GBInterpreter::new().into() }
 }

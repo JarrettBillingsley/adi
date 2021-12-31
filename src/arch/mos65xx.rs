@@ -13,7 +13,6 @@ use crate::arch::{
 	DisasError, DisasResult,
 	Printer, IPrinter,
 	Disassembler, IDisassembler,
-	Interpreter,
 	INameLookup,
 	IArchitecture,
 };
@@ -24,13 +23,11 @@ use crate::memory::{ MmuState, Endian, EA, VA };
 // ------------------------------------------------------------------------------------------------
 
 mod descs;
-mod interp;
 mod opcodes;
 #[cfg(test)]
 mod tests;
 
 use descs::{ lookup_desc };
-pub use interp::{ Mos65xxInterpreter };
 use opcodes::{ Opcode };
 
 // ------------------------------------------------------------------------------------------------
@@ -441,5 +438,4 @@ impl IArchitecture for Mos65xxArchitecture {
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
-	fn new_interpreter (&self) -> Interpreter  { Mos65xxInterpreter::new().into() }
 }
