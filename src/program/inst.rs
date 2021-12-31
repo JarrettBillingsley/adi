@@ -216,6 +216,9 @@ pub struct Instruction {
 	kind:      InstructionKind,
 	target:    Option<VA>,
 	ops:       [Operand; MAX_OPS],
+	// you might think, "why not have this be a slice into the image?" but
+	// on a 64-bit platform a slice would be *twice the size*, and you'd
+	// get all the annoyances of slice lifetimes... so nah
 	bytes:     [u8; MAX_BYTES],
 	num_ops:   u8,
 	num_bytes: u8,

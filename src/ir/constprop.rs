@@ -3,6 +3,9 @@ use std::collections::{ BTreeMap, VecDeque, HashSet };
 
 use super::*;
 
+// TODO: abstract some of this stuff (JoinSemiLattice, WorkList, some of Propagator) out into
+// a separate library for use by other passes
+
 // ------------------------------------------------------------------------------------------------
 // JoinSemiLattice
 // ------------------------------------------------------------------------------------------------
