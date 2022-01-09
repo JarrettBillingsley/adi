@@ -192,7 +192,8 @@ impl IPrinter for GBPrinter {
 			SImm8 =>
 				templ.replace("{}", &self.fmt_simm(i.ops().first().unwrap().simm())),
 			Rel | Add16(..) | AddHi(..) =>
-				templ.replace("{}", &self.fmt_addr(i.ops().first().unwrap().addr().0 as u64, state, l)),
+				templ.replace("{}",
+					&self.fmt_addr(i.ops().first().unwrap().addr().0 as u64, state, l)),
 			SPImm => {
 				let disp = match i.ops().first().unwrap() {
 					Operand::Indir(MemIndir::RegDisp { disp, .. }, ..) => *disp,

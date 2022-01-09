@@ -785,10 +785,10 @@ impl StructDesc {
 	pub fn add_field(&mut self, new_field: StructField) {
 		// TODO: detect & reject recursive data types
 
-		assert!(new_field.size().is_fixed(), "trying to add variable-size field '{}' to struct '{}'",
-			new_field.name, self.name);
-		assert!(!self.has_field_named(&new_field.name), "duplicate named field '{}' in struct '{}'",
-			new_field.name, self.name);
+		assert!(new_field.size().is_fixed(),
+			"trying to add variable-size field '{}' to struct '{}'", new_field.name, self.name);
+		assert!(!self.has_field_named(&new_field.name),
+			"duplicate named field '{}' in struct '{}'", new_field.name, self.name);
 
 		// find the index of the first field that comes *after* the new one
 		let next_idx = match self.fields.iter().position(|f| f.offset >= new_field.offset) {
@@ -840,7 +840,8 @@ impl StructDesc {
 			let len_field = &self.fields[len_idx];
 
 			assert!(len_field.ty.is_strict_unsigned_integer(),
-				"struct '{}' VLA length field is a {:?}, not an unsigned int", self.name, len_field.ty);
+				"struct '{}' VLA length field is a {:?}, not an unsigned int",
+				self.name, len_field.ty);
 
 			self.vla = VlaField::WithLen(new_field, len_idx);
 		} else {
@@ -862,7 +863,8 @@ impl StructDesc {
 		match self.fields.iter().position(|field| field.name == name) {
 			Some(idx) => {
 				if let Some(len_idx) = self.vla.get_len_mut() {
-					assert!(*len_idx != idx, "trying to remove VLA index from struct '{}'", self.name);
+					assert!(*len_idx != idx,
+						"trying to remove VLA index from struct '{}'", self.name);
 
 					if *len_idx > idx {
 						*len_idx -= 1;
