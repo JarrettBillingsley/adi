@@ -8,6 +8,7 @@ use crate::program::{
 	MemIndir,
 	Instruction,
 	InstructionKind,
+	Radix,
 };
 use crate::arch::{
 	DisasError, DisasResult,
@@ -333,7 +334,7 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 			(Some(operand_ctor(addr as u64)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
-			(Some(Operand::UImm(img[0] as u64)), None)
+			(Some(Operand::UImm(img[0] as u64, None)), None)
 		}
 	} else {
 		(None, None)
@@ -355,12 +356,24 @@ impl Mos65xxPrinter {
 		Self { flavor }
 	}
 
-	fn fmt_imm(self, imm: u64) -> String {
+	fn fmt_imm(self, imm: u64, radix: Option<Radix>) -> String {
+		let radix = radix.unwrap_or_else(|| if imm < 0x10 { Radix::Dec } else { Radix::Hex });
+
 		match self.flavor {
-			SyntaxFlavor::Old =>
-				if imm < 0x10 { format!("#{}", imm) } else { format!("#${:X}", imm) },
-			SyntaxFlavor::New =>
-				if imm < 0x10 { format!("{}",  imm) } else { format!("0x{:X}", imm) },
+			SyntaxFlavor::Old => {
+				match radix {
+					Radix::Dec => format!("#{}", imm),
+					Radix::Hex => format!("#${:X}", imm),
+					Radix::Bin => format!("#%{:b}", imm),
+				}
+			}
+			SyntaxFlavor::New => {
+				match radix {
+					Radix::Dec => format!("{}",  imm),
+					Radix::Hex => format!("0x{:X}", imm),
+					Radix::Bin => format!("0b{:b}", imm),
+				}
+			}
 		}
 	}
 
@@ -403,7 +416,7 @@ impl IPrinter for Mos65xxPrinter {
 		if i.num_ops() > 0 {
 			let operand = match i.ops().first().unwrap() {
 				Operand::Reg(..)       => unreachable!(),
-				Operand::UImm(imm)     => self.fmt_imm(*imm),
+				Operand::UImm(imm, r)  => self.fmt_imm(*imm, *r),
 				Operand::Mem(addr, ..) => {
 					match l.lookup(state, VA(*addr as usize)) {
 						Some(name) => name,

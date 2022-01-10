@@ -2,6 +2,7 @@
 use parse_display::Display;
 
 use crate::memory::{ EA, VA };
+use crate::program::{ Radix };
 
 // ------------------------------------------------------------------------------------------------
 // MemAccess
@@ -81,10 +82,11 @@ impl MemIndir {
 pub enum Operand {
 	/// A register. The interpretation of the number is up to the architecture.
 	Reg(u64),
-	/// An unsigned immediate.
-	UImm(u64),
-	/// A signed immediate.
-	SImm(i64),
+	/// An unsigned immediate. If the radix is `None`, its value will be displayed in either
+	/// decimal (for small values) or hex (for larger ones).
+	UImm(u64, Option<Radix>),
+	/// A signed immediate. The same radix rules apply.
+	SImm(i64, Option<Radix>),
 	/// A memory address, along with what kind of access it is.
 	Mem(u64, MemAccess),
 	/// An indirect memory access, where the address is not part of the instruction.
@@ -138,7 +140,7 @@ impl Operand {
 	/// If this is an unsigned immediate value, get it as an unsigned number; panics otherwise.
 	pub fn uimm(&self) -> u64 {
 		match self {
-			Operand::UImm(i) => *i,
+			Operand::UImm(i, ..) => *i,
 			_ => panic!("not an immediate operand"),
 		}
 	}
@@ -146,7 +148,7 @@ impl Operand {
 	/// If this is a signed immediate value, get it as a signed number; panics otherwise.
 	pub fn simm(&self) -> i64 {
 		match self {
-			Operand::SImm(i) => *i,
+			Operand::SImm(i, ..) => *i,
 			_ => panic!("not an immediate operand"),
 		}
 	}
