@@ -81,7 +81,7 @@ impl MemIndir {
 #[display("{:?}")]
 pub enum Operand {
 	/// A register. The interpretation of the number is up to the architecture.
-	Reg(u64),
+	Reg(u8),
 	/// An unsigned immediate. If the radix is `None`, its value will be displayed in either
 	/// decimal (for small values) or hex (for larger ones).
 	UImm(u64, Option<Radix>),
@@ -154,10 +154,10 @@ impl Operand {
 	}
 
 	/// If this is register, get it; panics otherwise.
-	pub fn reg(&self) -> u64 {
+	pub fn reg(&self) -> u8 {
 		match self {
 			Operand::Reg(r) => *r,
-			Operand::Indir(MemIndir::Reg { reg: r }, ..) => *r as u64,
+			Operand::Indir(MemIndir::Reg { reg: r }, ..) => *r,
 			_ => panic!("not a register operand"),
 		}
 	}

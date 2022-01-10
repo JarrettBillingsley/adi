@@ -34,6 +34,7 @@ pub(crate) use ir::*;
 // Reg
 // ------------------------------------------------------------------------------------------------
 
+#[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Reg {
 	A, B, C, D, // data regs
@@ -92,6 +93,10 @@ impl Reg {
 			Reg::Tmp16 => "tmp16",
 			Reg::TmpCF => "tmpcf",
 		}
+	}
+
+	fn register_names() -> &'static [&'static str] {
+		&["a", "b", "c", "d", "dc", "sp", "nf", "zf", "cf", "tmp", "tmp16", "tmpcf"]
 	}
 }
 
@@ -327,7 +332,7 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 -> (usize, Option<VA>) {
 	use AddrMode::*;
 
-	let opcode_reg = Operand::Reg(decode_reg(img[0] >> OPCODE_SHIFT) as u64);
+	let opcode_reg = Operand::Reg(decode_reg(img[0] >> OPCODE_SHIFT) as u8);
 
 	match desc.addr_mode {
 		IMP => {
@@ -339,7 +344,7 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 			ops[1] = if let Some(access) = desc.meta_op.access() {
 				Operand::Indir(MemIndir::Reg { reg: decode_reg(img[1]) as u8 }, access)
 			} else {
-				let r1 = decode_reg(img[1]) as u64;
+				let r1 = decode_reg(img[1]) as u8;
 				assert!(r1 < 4); // can't use dc as a second operand
 				Operand::Reg(r1)
 			};
@@ -469,6 +474,7 @@ pub struct ToyArchitecture;
 impl IArchitecture for ToyArchitecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
+	fn register_names  (&self) -> &'static [&'static str] { Reg::register_names() }
 	fn new_disassembler(&self) -> Disassembler { ToyDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { ToyPrinter::new().into() }
 }

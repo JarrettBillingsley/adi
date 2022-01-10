@@ -61,7 +61,7 @@ pub trait IDisassembler : Sized {
 /// }
 ///
 /// if let Some(err) = iter.err() {
-///     // do stuff with err and iter.err_offs()
+///     // do stuff with err and iter.err_offset()/err_va()/err_ea()
 /// }
 /// ```
 pub struct DisasAll<'dis, 'img> {
@@ -235,6 +235,8 @@ pub(crate) trait IArchitecture: Sized + Sync + Send {
 	fn endianness(&self) -> Endian;
 	/// How many bits in an address.
 	fn addr_bits(&self) -> usize;
+	/// The names of the registers, in the order that the architecture numbers them in operands.
+	fn register_names(&self) -> &'static [&'static str];
 	/// Construct a new disassembler.
 	fn new_disassembler(&self) -> Disassembler;
 	/// Construct a new printer.

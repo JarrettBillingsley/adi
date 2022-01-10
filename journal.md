@@ -87,8 +87,6 @@ Well now that the interpreter is gone, really the only issue is the awkwardness 
 
 SSsssssssoooooooooooooooo
 
-Really `IDisassembler`, `IPrinter`, and `IIrCompiler` could be merged into `IArchitecture`... I'm not sure what the point of creating objects for those tasks is.
-
 I suppose it doesn't really matter if all operands are filled in or not - the analysis will skip the ones it doesn't care about and the arch can choose to implement printing any way it likes. If it's easier to do that by filling in all operands, it can do it. If not, it won't.
 
 ...how do we handle the results of const prop, though? Say we have code like:

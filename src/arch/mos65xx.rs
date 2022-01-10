@@ -236,6 +236,7 @@ impl MetaOp {
 // ------------------------------------------------------------------------------------------------
 
 /// 65xx registers.
+#[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Reg {
 	A, X, Y, S, P
@@ -243,6 +244,12 @@ pub enum Reg {
 
 impl Default for Reg {
 	fn default() -> Reg { Reg::A }
+}
+
+impl Reg {
+	fn register_names() -> &'static [&'static str] {
+		&["a", "x", "y", "s", "p"]
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -449,6 +456,7 @@ pub struct Mos65xxArchitecture;
 impl IArchitecture for Mos65xxArchitecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
+	fn register_names  (&self) -> &'static [&'static str] { Reg::register_names() }
 	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
 }

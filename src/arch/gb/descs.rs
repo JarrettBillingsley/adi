@@ -5,6 +5,7 @@ use crate::program::{ MemAccess, InstructionKind };
 // Reg
 // ------------------------------------------------------------------------------------------------
 
+#[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(super) enum Reg {
 	A, F, B, C, D, E, H, L,
@@ -13,6 +14,13 @@ pub(super) enum Reg {
 
 impl Default for Reg {
 	fn default() -> Reg { Reg::A }
+}
+
+impl Reg {
+	pub(super) fn register_names() -> &'static [&'static str] {
+		&["a", "f", "b", "c", "d", "e", "h", "l",
+		"bc", "de", "hl", "sp"]
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

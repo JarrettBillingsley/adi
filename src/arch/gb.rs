@@ -219,6 +219,7 @@ pub struct GBArchitecture;
 impl IArchitecture for GBArchitecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
+	fn register_names  (&self) -> &'static [&'static str] { Reg::register_names() }
 	fn new_disassembler(&self) -> Disassembler { GBDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { GBPrinter::new().into() }
 }
