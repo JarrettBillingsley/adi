@@ -113,7 +113,9 @@ impl WorkList {
 // Propagator
 // ------------------------------------------------------------------------------------------------
 
-pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> BTreeMap<IrReg, u64> {
+pub(crate) type ConstPropResults = BTreeMap<IrReg, u64>;
+
+pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
 	// since each variable is only assigned once, there's no need to track changing state -
 	// the state of a variable is determined at its def.
 	let mut prop = Propagator::new(bbs, cfg);

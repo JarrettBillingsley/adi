@@ -4,10 +4,11 @@ use std::iter::IntoIterator;
 
 use log::*;
 
-use crate::arch::{ IArchitecture };
+use crate::arch::{ IArchitecture, IIrCompiler };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, StateChange, SegId };
+use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg };
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer
@@ -280,6 +281,23 @@ impl Program {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin func state change analysis at {}", func.ea());
 
+		// part 1: construct IR, do constant propagation, and record addresses
+
+		// 1.
+		let irfunc = self.func_to_ir(fid);
+		let consts = irfunc.constants();
+		println!("------------------------------------------------------------------");
+		println!("Constants:");
+		for (reg, val) in consts {
+			println!("{:?} = {:08X}", reg, val);
+		}
+		println!("{:?}", irfunc);
+
+		// TODO: FINISH THIS LOL
+
+		// --------------------------------------------------------
+		// part 2: determine and propagate state changes
+
 		// 1. make a list of "new states" for each bb.
 		let mut new_states = BBStateChanger::new(func);
 
@@ -331,6 +349,46 @@ impl Program {
 
 		// 6. And set this function up for its refs pass.
 		self.enqueue_func_refs(fid);
+	}
+
+	fn func_to_ir(&self, fid: FuncId) -> IrFunction {
+		// 1. compile BBs (and build a map from BBIds to IrBBIds)
+		let compiler = self.plat.arch().new_ir_compiler();
+		let func = self.funcs.get(fid);
+		let mut bbs = vec![];
+		let mut bbid_to_irbbid = HashMap::new();
+
+		for (irbbid, bbid) in func.all_bbs().enumerate() {
+			let bb = self.get_bb(bbid);
+			let mut b = IrBuilder::new();
+
+			for inst in bb.insts() {
+				// TODO: this is weird.
+				let t = if std::ptr::eq(inst, bb.term_inst()) { bb.control_target() } else { None };
+				compiler.to_ir(inst, t, &mut b);
+			}
+
+			let insts = b.finish();
+			bbs.push(IrBasicBlock::new(irbbid, bbid, insts));
+			bbid_to_irbbid.insert(bbid, irbbid);
+		}
+
+		// 2. create the IrFunction
+		// TODO: this code is very similar to `func_begin_analysis` but has the additional
+		// complication of mapping from bbid -> irbbid so it's not a straightforward copy
+		let mut cfg = IrCfg::new();
+
+		cfg.add_node(bbid_to_irbbid[&func.head_id()]);
+
+		for bbid in func.all_bbs() {
+			let irbbid = bbid_to_irbbid[&bbid];
+
+			self.bb_successors_in_function(bbid, |succ| {
+				cfg.add_edge(irbbid, bbid_to_irbbid[&succ], ());
+			});
+		}
+
+		IrFunction::new(&compiler, fid, bbs, cfg)
 	}
 }
 

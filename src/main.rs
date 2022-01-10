@@ -159,6 +159,9 @@ fn toy_test_const_prop() -> Vec<u8> {
 	b.mov(D, C);
 	b.ld(A, DC);
 
+	b.ldi(A, 0x8000);
+	b.sti(A, 0x8001);
+
 	b.ret();
 
 	b.finish()
@@ -205,8 +208,8 @@ fn toy_test_loop() -> Vec<u8> {
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let img_data = toy_test_all_instructions();
-	let img_data = toy_test_ssa();
-	// let img_data = toy_test_const_prop();
+	// let img_data = toy_test_ssa();
+	let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
 	// let img_data = toy_test_loop();
 
@@ -224,10 +227,6 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 
 	for segid in prog.all_image_segs() {
 		show_segment(&prog, segid);
-	}
-
-	for func in prog.all_funcs() {
-		prog.func_to_ir(func.id());
 	}
 
 	Ok(())

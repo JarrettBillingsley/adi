@@ -55,13 +55,63 @@ Well the `Instruction` type stuck around as a sort of "architecture-neutral" rep
 		- is it really worth coming up with a per-arch specialized operand type and figuring out how to store that in each `Instruction` upon first disassembling?
 		- Or is it fine to just re-disassemble for printing and such, especially since we know it will succeed and might be able to fast-path it?
 
-**SO:** maybe a plan would be:
+- **Immediates** are an additional complication...
+	- if we think about IDA, the markup rules decide how an immediate is displayed
+	- it might be displayed as a decimal integer, signed or unsigned; hex; binary; some enumeration value (or bitwise OR of multiple values)...
+	- or it might be a memory address!
+	- `IPrinter` deals with this by taking an `INameLookup` as an argument to `fmt_operands`
+		- but that will quickly get out of hand once we have other kinds of markup like above
+	- *does markup go on the instructions, then?*
+		- and who's responsible for actually displaying it?
+		- maybe the `IPrinter` interface is the wrong abstraction
+		- maybe the program asks the arch for an instruction's format template string, and does the markup/formatting itself?
+		- ew strings tho
+		- and that also doesn't account for assembly syntaxes where the kind of operand dictates the syntax (like 6502 `#$05` for immediates vs `$05` for addresses) - meaning the arch is doing some of the formatting work itself
+		- aaaaaaaaaaaaaaaa
 
-- each `Instruction` has *addresses* instead of operands
-	- since that's all the analysis cares about anyway
-	- these addresses can be added to during analysis (e.g. after const prop)
-	- the addresses are ordered in the same order they are accessed by the instruction
-		- this way e.g. double-indirect addressing modes can list *both* addresses
-- each `Instruction` also has a single "custom" field, maybe just a `u32` or something
-	- which is usable per-arch as a way to keep track of what instruction it is
-	- e.g. stores index of instruction template, so that subsequent printing etc. can fast-path
+- What does IDA (seem to) do?
+	- seems like...... pretty much exactly what I'm doing now lol
+	- instruction has array of operands
+		- operands know if they're regs, immediates, etc.
+		- just line mine, seems like not all arches fill in all operands ;P
+		- it also has - you guessed it - some custom fields that arches can use for whatever
+	- printer ("out") method is passed a useful context object
+		- you can tell it to output strings, symbols, values (which it interprets in the right base/as an offset etc.)
+		- you can even tell it to change colors
+		- so like the `INameLookup` but way more
+		- that moves a lot of the boilerplate out of the arch code
+	- operand markup seems to be handled entirely by the operand types
+		- I see `num(10)`, `num(16)`, `char`, `OFFSET` etc.
+
+Well now that the interpreter is gone, really the only issue is the awkwardness around *printing* instructions - and that seems to mostly be because of the poorly defined interface there. `INameLookup` is only one tiny piece of what needs to be done.
+
+SSsssssssoooooooooooooooo
+
+Really `IDisassembler`, `IPrinter`, and `IIrCompiler` could be merged into `IArchitecture`... I'm not sure what the point of creating objects for those tasks is.
+
+I suppose it doesn't really matter if all operands are filled in or not - the analysis will skip the ones it doesn't care about and the arch can choose to implement printing any way it likes. If it's easier to do that by filling in all operands, it can do it. If not, it won't.
+
+...how do we handle the results of const prop, though? Say we have code like:
+
+```
+	ld h, $C4     ; 1
+	ld l, $08     ; 2
+	ld [hl], 3    ; 3
+```
+
+Const prop will determine that `hl = 0xC408` on line 3. But we can't just rewrite the instruction's operand to say it's an immediate `0xC408` now. Instead, **we should display something like "`hl` is constant `0xC408` here".** Furthermore, the information that `h` and `l` are parts of an address needs to be back-propagated to lines 1 and 2 so they can be displayed as something like...
+
+```
+	ld h, hi(loc_C408)
+	ld l, lo(loc_C408)
+	ld [hl], 3 ; hl = loc_C408
+```
+
+(or whatever syntax is appropriate for the architecture's assembler)
+
+That comment on line 3 is optional, but we **do still need to remember that info internally** even if we don't display it.
+
+...
+
+Wait so, what if we kept track of *both* operands *and* addresses? like, the arch fills in the operands, and then based on IR analysis, we can extract the addresses from that. That also opens up the option for the user to manually add dependencies/references in places where the automatic analysis can't figure it out.
+

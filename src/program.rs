@@ -256,69 +256,6 @@ impl Program {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// IR
-
-	/// TESTING
-	pub fn func_to_ir(&self, fid: FuncId) {
-		use crate::arch::{ IIrCompiler };
-		use crate::ir::{ IrBuilder, IrBasicBlock, IrFunction, IrCfg };
-
-		// 1. compile BBs (and build a map from BBIds to IrBBIds)
-		let compiler = self.plat.arch().new_ir_compiler();
-		let func = self.funcs.get(fid);
-		let mut bbs = vec![];
-		let mut bbid_to_irbbid = std::collections::HashMap::new();
-
-		for (irbbid, bbid) in func.all_bbs().enumerate() {
-			let bb = self.get_bb(bbid);
-			// TODO: make this a BB method?
-			let target = match bb.term() {
-				BBTerm::DeadEnd
-				| BBTerm::Halt
-				| BBTerm::Return
-				| BBTerm::FallThru(..)
-				| BBTerm::BankChange(..) => None,
-
-				BBTerm::Jump(dst)
-				| BBTerm::Call { dst, .. }
-				| BBTerm::Cond { t: dst, .. } => Some(*dst),
-
-				BBTerm::JumpTbl(_targets) => unimplemented!(),
-			};
-
-			let mut b = IrBuilder::new();
-
-			for inst in bb.insts() {
-				// TODO: this is weird.
-				let t = if std::ptr::eq(inst, bb.term_inst()) { target } else { None };
-				compiler.to_ir(inst, t, &mut b);
-			}
-
-			let insts = b.finish();
-			bbs.push(IrBasicBlock::new(irbbid, bbid, insts));
-			bbid_to_irbbid.insert(bbid, irbbid);
-		}
-
-		// 2. create the IrFunction
-		// TODO: this code is very similar to `func_begin_analysis` but has the additional
-		// complication of mapping from bbid -> irbbid so it's not a straightforward copy
-		let mut cfg = IrCfg::new();
-
-		cfg.add_node(bbid_to_irbbid[&func.head_id()]);
-
-		for bbid in func.all_bbs() {
-			let irbbid = bbid_to_irbbid[&bbid];
-
-			self.bb_successors_in_function(bbid, |succ| {
-				cfg.add_edge(irbbid, bbid_to_irbbid[&succ], ());
-			});
-		}
-
-		let irfunc = IrFunction::new(&compiler, fid, bbs, cfg);
-		println!("{:?}", irfunc);
-	}
-
-	// ---------------------------------------------------------------------------------------------
 	// Data
 
 	delegate! {

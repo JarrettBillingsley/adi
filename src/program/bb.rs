@@ -78,8 +78,29 @@ impl BasicBlock {
 		self.func.unwrap()
 	}
 
+	/// Given an EA within this BB, find the instruction at that EA, or `None` if it doesn't exist.
+	/// WARNING: this is linear time.
 	pub fn inst_at_ea(&self, ea: EA) -> Option<&Instruction> {
 		self.insts.iter().find(|&inst| inst.ea() == ea)
+	}
+
+	/// If this BB ends in a jump, call, or conditional branch, returns the EA that it
+	/// jumps/calls/branches to; else, returns `None`.
+	pub fn control_target(&self) -> Option<EA> {
+		match self.term() {
+			BBTerm::DeadEnd
+			| BBTerm::Halt
+			| BBTerm::Return
+			| BBTerm::FallThru(..)
+			| BBTerm::BankChange(..) => None,
+
+			BBTerm::Jump(dst)
+			| BBTerm::Call { dst, .. }
+			| BBTerm::Cond { t: dst, .. } => Some(*dst),
+
+			// TODO: how would this even be implemented?
+			BBTerm::JumpTbl(_targets) => unimplemented!(),
+		}
 	}
 
 	pub(crate) fn last_instr_before(&self, ea: EA) -> Option<usize> {
@@ -115,7 +136,6 @@ impl BasicBlock {
 		self.func = Some(new_func);
 	}
 }
-
 
 // ------------------------------------------------------------------------------------------------
 // BBIndex

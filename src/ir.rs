@@ -1,5 +1,8 @@
 
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
+
+use lazycell::LazyCell;
+
 use crate::arch::{ IIrCompiler };
 use crate::memory::{ EA };
 use crate::program::{ BBId, FuncId };
@@ -437,6 +440,7 @@ pub(crate) struct IrFunction {
 	real_fid: FuncId,
 	bbs:      Vec<IrBasicBlock>,
 	cfg:      IrCfg,
+	consts:   LazyCell<ConstPropResults>,
 }
 
 impl IrFunction {
@@ -444,7 +448,24 @@ impl IrFunction {
 	mut cfg: IrCfg) -> Self {
 		rewrite_calls_and_rets(compiler, &mut bbs, &mut cfg);
 		ssa::to_ssa(&mut bbs, &cfg);
-		Self { real_fid, bbs, cfg, }
+		Self {
+			real_fid,
+			bbs,
+			cfg,
+			consts: LazyCell::new(),
+		}
+	}
+
+	/// Lazily performs constant propagation, and returns a map from SSA registers to their
+	/// determined constant values. If a register is not in the map, no constant value was able
+	/// to be determined for it.
+	pub(crate) fn constants(&self) -> &ConstPropResults {
+		if !self.consts.filled() {
+			let consts = propagate_constants(&self.bbs, &self.cfg);
+			self.consts.fill(consts).unwrap();
+		}
+
+		self.consts.borrow().unwrap()
 	}
 }
 
@@ -462,6 +483,89 @@ impl Debug for IrFunction {
 		Ok(())
 	}
 }
+
+// ------------------------------------------------------------------------------------------------
+// Finding loads/stores with constant addresses
+// ------------------------------------------------------------------------------------------------
+
+impl IrFunction {
+	/// Returns an iterator over all
+	pub(crate) fn constant_addresses(&self) -> ConstantAddressesIter<'_> {
+		ConstantAddressesIter {
+			bbidx:   0,
+			instidx: 0,
+			consts:  self.constants(),
+			func:    self,
+		}
+	}
+}
+
+pub(crate) struct ConstantAddressesIter<'func> {
+	bbidx:   usize,
+	instidx: usize,
+	consts:  &'func ConstPropResults,
+	func:    &'func IrFunction,
+}
+
+pub(crate) struct ConstantAddressLoc {
+	bbidx:   usize,
+	instidx: usize,
+}
+
+impl<'func> std::iter::Iterator for ConstantAddressesIter<'func> {
+	type Item = (ConstantAddressLoc, &'func IrInst);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		while let Some(inst) = self.next_instruction() {
+			match inst.kind() {
+				IrInstKind::Load { addr, .. } | IrInstKind::Store { addr, .. } => {
+					match addr {
+						IrSrc::Const(..) => {
+							return Some((
+								ConstantAddressLoc { bbidx: self.bbidx, instidx: self.instidx },
+								inst
+							));
+						}
+						IrSrc::Reg(r) if self.consts.contains_key(&r) => {
+							return Some((
+								ConstantAddressLoc { bbidx: self.bbidx, instidx: self.instidx },
+								inst
+							));
+						}
+						_ => {}
+					}
+				}
+
+				_ => {}
+			}
+		}
+
+		None
+	}
+}
+
+impl<'func> ConstantAddressesIter<'func> {
+	fn next_instruction(&mut self) -> Option<&'func IrInst> {
+		while self.bbidx < self.func.bbs.len() {
+			let insts = &self.func.bbs[self.bbidx].insts;
+
+			if self.instidx < insts.len() {
+				let ret = Some(&insts[self.instidx]);
+				self.instidx += 1;
+				return ret;
+			}
+
+			self.bbidx += 1;
+			self.instidx = 0;
+		}
+
+		None
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Call/return rewriting
+// ------------------------------------------------------------------------------------------------
 
 /// Rewrites each call instruction in two ways:
 /// 1. before, insert 'use' instructions to mark all argument registers as being used

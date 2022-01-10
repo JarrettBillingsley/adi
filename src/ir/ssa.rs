@@ -22,13 +22,6 @@ pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
 	rename_regs(bbs, cfg, &dom_tree, all_regs.iter().copied());
 	prune_phis(bbs, &dom_tree);
 
-	// for testing
-	println!("------------------------------------------------------------------");
-	println!("Constants:");
-	for (reg, val) in propagate_constants(bbs, &cfg) {
-		println!("{:?} = {:08X}", reg, val);
-	}
-
 	// not suuuure about this yet
 	// elim_dead_stores(bbs);
 }
