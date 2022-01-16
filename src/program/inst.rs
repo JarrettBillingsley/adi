@@ -260,7 +260,10 @@ impl Instruction {
 	/// How many operands it has.
 	pub fn num_ops(&self) -> usize { self.num_ops as usize }
 	/// Accessor for operands.
-	pub fn get_op(&self, i: usize) -> &Operand { &self.ops[i] }
+	pub fn get_op(&self, i: usize) -> &Operand {
+		assert!(i < self.num_ops as usize);
+		&self.ops[i]
+	}
 	/// The array of operands.
 	pub fn ops(&self) -> &[Operand] { &self.ops[..self.num_ops as usize] }
 	/// If this is a control instruction, the target address of that control, if it has one.
