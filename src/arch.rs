@@ -179,6 +179,16 @@ pub trait IPrintStyler {
 	fn begin_comment(&mut self, writer: &mut dyn FmtWrite);
 	///
 	fn end_comment(&mut self, writer: &mut dyn FmtWrite);
+
+	/// Begin outputting a referenced name (as in, a name appearing in operand position).
+	fn begin_refname(&mut self, writer: &mut dyn FmtWrite);
+	///
+	fn end_refname(&mut self, writer: &mut dyn FmtWrite);
+
+	/// Begin outputting a label (as in, a name being used to define something).
+	fn begin_label(&mut self, writer: &mut dyn FmtWrite);
+	///
+	fn end_label(&mut self, writer: &mut dyn FmtWrite);
 }
 
 /// Dummy print styler that ignores all styling commands.
@@ -197,6 +207,10 @@ impl IPrintStyler for NullPrintStyler {
 	fn end_string(&mut self, _writer: &mut dyn FmtWrite) {}
 	fn begin_comment(&mut self, _writer: &mut dyn FmtWrite) {}
 	fn end_comment(&mut self, _writer: &mut dyn FmtWrite) {}
+	fn begin_refname(&mut self, _writer: &mut dyn FmtWrite) {}
+	fn end_refname(&mut self, _writer: &mut dyn FmtWrite) {}
+	fn begin_label(&mut self, _writer: &mut dyn FmtWrite) {}
+	fn end_label(&mut self, _writer: &mut dyn FmtWrite) {}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -309,6 +323,20 @@ impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
 		self.styler.begin_comment(self.writer);
 		f(self)?;
 		self.styler.end_comment(self.writer);
+		Ok(())
+	}
+
+	pub fn style_refname(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
+		self.styler.begin_refname(self.writer);
+		f(self)?;
+		self.styler.end_refname(self.writer);
+		Ok(())
+	}
+
+	pub fn style_label(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
+		self.styler.begin_label(self.writer);
+		f(self)?;
+		self.styler.end_label(self.writer);
 		Ok(())
 	}
 
@@ -509,7 +537,7 @@ pub trait IPrinter {
 	/// associated with `ctx`.
 	fn print_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
 		if let Some(name) = ctx.name_of_va(va) {
-			ctx.write_str(&name)
+			ctx.style_refname(&|ctx| ctx.write_str(&name))
 		} else {
 			self.print_uint_hex(ctx, va.0 as u64)
 		}
