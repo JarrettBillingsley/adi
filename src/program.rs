@@ -224,8 +224,8 @@ impl Program {
 	}
 
 	/// Formats the given instruction's mnemonic into a string.
-	pub fn inst_fmt_mnemonic(&self, i: &Instruction) -> String {
-		self.print.fmt_mnemonic(i)
+	pub fn inst_get_mnemonic(&self, i: &Instruction) -> String {
+		self.print.get_mnemonic(i)
 	}
 
 	/// Formats the given instruction's operands into a string.

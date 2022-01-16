@@ -158,7 +158,7 @@ pub enum Printer {
 #[enum_dispatch(Printer)]
 pub trait IPrinter {
 	/// Give a string representation of an instruction's mnemonic.
-	fn fmt_mnemonic(&self, i: &Instruction) -> String;
+	fn get_mnemonic(&self, i: &Instruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
 	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String;
@@ -168,7 +168,8 @@ pub trait IPrinter {
 
 	/// Give a string representation of an instruction.
 	fn fmt_instr(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
-		format!("{} {}", self.fmt_mnemonic(i), self.fmt_operands(i, state, l))
+		format!("{} {}", self.get_mnemonic(i), self.fmt_operands(i, state, l))
+	}
 	}
 }
 
@@ -236,6 +237,8 @@ pub(crate) trait IArchitecture: Sized + Sync + Send {
 	/// How many bits in an address.
 	fn addr_bits(&self) -> usize;
 	/// The names of the registers, in the order that the architecture numbers them in operands.
+	/// The signature of this method more or less forces you to return a static/const array, which
+	/// you should do. This method should be very fast as it is called often.
 	fn register_names(&self) -> &'static [&'static str];
 	/// Construct a new disassembler.
 	fn new_disassembler(&self) -> Disassembler;

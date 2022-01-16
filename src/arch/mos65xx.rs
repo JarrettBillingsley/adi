@@ -395,7 +395,7 @@ impl Mos65xxPrinter {
 }
 
 impl IPrinter for Mos65xxPrinter {
-	fn fmt_mnemonic(&self, i: &Instruction) -> String {
+	fn get_mnemonic(&self, i: &Instruction) -> String {
 		let desc = lookup_desc(i.bytes()[0]);
 		desc.meta_op.mnemonic(self.flavor).into()
 	}

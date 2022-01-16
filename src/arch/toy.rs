@@ -425,7 +425,7 @@ fn inst_imm(i: &Instruction) -> u8 {
 }
 
 impl IPrinter for ToyPrinter {
-	fn fmt_mnemonic(&self, i: &Instruction) -> String {
+	fn get_mnemonic(&self, i: &Instruction) -> String {
 		self.lookup_desc(i.bytes()).mnemonic().into()
 	}
 
