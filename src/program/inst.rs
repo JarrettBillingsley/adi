@@ -49,8 +49,6 @@ pub enum MemIndir {
 	Reg        { reg: u8 },
 	/// The address is `reg + disp`.
 	RegDisp    { reg: u8, disp: i64 },
-	/// x86-style `reg1 + reg2*scale + disp`.
-	RegRegDisp { reg: u8, reg2: u8, scale: u8, disp: i64 },
 }
 
 impl MemIndir {
@@ -58,7 +56,7 @@ impl MemIndir {
 	pub fn base_reg(&self) -> u8 {
 		use MemIndir::*;
 		match self {
-			Reg { reg } | RegDisp { reg, .. } | RegRegDisp { reg, .. } => *reg
+			Reg { reg } | RegDisp { reg, .. } => *reg
 		}
 	}
 
@@ -67,7 +65,7 @@ impl MemIndir {
 		use MemIndir::*;
 		match self {
 			Reg { .. } => 0,
-			RegDisp { disp, .. } | RegRegDisp { disp, .. } => *disp
+			RegDisp { disp, .. } => *disp
 		}
 	}
 }
