@@ -570,7 +570,7 @@ impl IMmu for GBMmu {
 		for op in inst.ops() {
 			match op {
 				Operand::Mem(va, acc) if acc.writes_mem() => {
-					match self.mbc.state_change(state, VA(*va as usize)) {
+					match self.mbc.state_change(state, *va) {
 						StateChange::None => {},
 						something         => return something,
 					}

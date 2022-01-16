@@ -86,7 +86,7 @@ pub enum Operand {
 	/// A signed immediate. The same radix rules apply.
 	SImm(i64, Option<Radix>),
 	/// A memory address, along with what kind of access it is.
-	Mem(u64, MemAccess),
+	Mem(VA, MemAccess),
 	/// An indirect memory access, where the address is not part of the instruction.
 	Indir(MemIndir, MemAccess),
 }
@@ -130,7 +130,7 @@ impl Operand {
 	/// If `access` is Some (`is_mem` returns true), get the address it refers to; panics otherwise.
 	pub fn addr(&self) -> VA {
 		match self {
-			Operand::Mem(a, _) => VA(*a as usize),
+			Operand::Mem(va, _) => *va,
 			_ => panic!("not a memory operand"),
 		}
 	}

@@ -357,19 +357,19 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 			(2, None)
 		}
 		S8 => {
-			let target = ((va.0 as isize) + (img[1] as i8 as isize) + 2) as usize;
-			ops[0] = Operand::Mem(target as u64, MemAccess::Target);
-			(1, Some(VA(target)))
+			let target = VA(((va.0 as isize) + (img[1] as i8 as isize) + 2) as usize);
+			ops[0] = Operand::Mem(target, MemAccess::Target);
+			(1, Some(target))
 		}
 		I16 => {
-			let target = u16::from_le_bytes(img[1..].try_into().unwrap());
-			ops[0] = Operand::Mem(target as u64, MemAccess::Target);
-			(1, Some(VA(target as usize)))
+			let target = VA(u16::from_le_bytes(img[1..].try_into().unwrap()) as usize);
+			ops[0] = Operand::Mem(target, MemAccess::Target);
+			(1, Some(target))
 		}
 		RI16 => {
-			let addr = u16::from_le_bytes(img[1..].try_into().unwrap());
+			let addr = VA(u16::from_le_bytes(img[1..].try_into().unwrap()) as usize);
 			ops[0] = opcode_reg;
-			ops[1] = Operand::Mem(addr as u64, desc.meta_op.access().unwrap());
+			ops[1] = Operand::Mem(addr, desc.meta_op.access().unwrap());
 			(2, None)
 		}
 	}

@@ -325,7 +325,7 @@ impl IMmu for NesMmu {
 
 			match op {
 				Operand::Mem(va, acc) if acc.writes_mem() => {
-					match self.mapper.state_change(state, VA(*va as usize)) {
+					match self.mapper.state_change(state, *va) {
 						StateChange::None => {},
 						something         => return something,
 					}

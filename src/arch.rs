@@ -414,7 +414,7 @@ pub trait IPrinter {
 			SImm(imm, Some(Radix::Bin))     => self.print_int_bin(ctx, *imm),
 			SImm(imm, Some(Radix::Dec))     => self.print_int_dec(ctx, *imm),
 			SImm(imm, Some(Radix::Hex))     => self.print_int_hex(ctx, *imm),
-			Mem(addr, _)                    => self.print_va(ctx, VA(*addr as usize)),
+			Mem(addr, _)                    => self.print_va(ctx, *addr),
 			Indir(MemIndir::Reg { reg }, _) => self.print_indir_reg(ctx, *reg),
 			Indir(RegDisp { reg, disp }, _) => self.print_indir_reg_disp(ctx, *reg, *disp),
 		}

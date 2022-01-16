@@ -384,7 +384,7 @@ impl Mos65xxPrinter {
 		}
 	}
 
-	fn fmt_addr(self, addr: u64, zpg: bool) -> String {
+	fn fmt_addr(self, addr: VA, zpg: bool) -> String {
 		match self.flavor {
 			SyntaxFlavor::Old =>
 				if zpg { format!("${:02X}", addr) } else { format!("${:04X}", addr) },
@@ -425,15 +425,17 @@ impl IPrinter for Mos65xxPrinter {
 				Operand::Reg(..)       => unreachable!(),
 				Operand::UImm(imm, r)  => self.fmt_imm(*imm, *r),
 				Operand::Mem(addr, ..) => {
-					match l.lookup(state, VA(*addr as usize)) {
+					match l.lookup(state, *addr) {
 						Some(name) => name,
 						None       => self.fmt_addr(*addr, desc.addr_mode.is_zero_page()),
 					}
 				}
 				Operand::Indir(MemIndir::RegDisp { disp, .. }, ..) => {
-					match l.lookup(state, VA(*disp as usize)) {
+					let addr = VA(*disp as usize);
+
+					match l.lookup(state, addr) {
 						Some(name) => name,
-						None       => self.fmt_addr(*disp as u64, desc.addr_mode.is_zero_page()),
+						None       => self.fmt_addr(addr, desc.addr_mode.is_zero_page()),
 					}
 				}
 				_ => unreachable!()

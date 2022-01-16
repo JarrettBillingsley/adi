@@ -90,8 +90,9 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 	match desc.op_kind() {
 		Imp => {
 			if let Some(addr) = desc.rst_target() {
-				ops[0] = Mem(addr as u64, Target);
-				(1, Some(VA(addr as usize)))
+				let addr = VA(addr as usize);
+				ops[0] = Mem(addr, Target);
+				(1, Some(addr))
 			} else {
 				(0, None)
 			}
@@ -101,7 +102,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		Imm16     => { ops[0] = UImm((img[2] as u64) << 8 | (img[1] as u64), None); (1, None) }
 		SImm8     => { ops[0] = SImm(img[1] as i8 as i64, None);                    (1, None) }
 		SPImm     => { ops[0] = Indir(rdisp(Reg::SP, img[1] as i8 as i64), R);      (1, None) }
-		AddHi(a)  => { ops[0] = Mem(0xFF00 + (img[1] as u64), a);                   (1, None) }
+		AddHi(a)  => { ops[0] = Mem(VA(0xFF00 + (img[1] as usize)), a);             (1, None) }
 		IndHi(a)  => { ops[0] = Indir(rdisp(Reg::C, 0xFF00), a);                    (1, None) }
 		Ind(r, a) => { ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);           (1, None) }
 
@@ -113,16 +114,18 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 
 		Rel => {
 			let addr = 2 + (va.0 as isize) + (img[1] as i8 as isize);
-			ops[0] = Mem(addr as u64, Target);
-			(1, Some(VA(addr as usize)))
+			let addr = VA(addr as usize);
+			ops[0] = Mem(addr, Target);
+			(1, Some(addr))
 		}
 
 		Add16(a) => {
-			let addr = (img[2] as u64) << 8 | (img[1] as u64);
+			let addr = (img[2] as usize) << 8 | (img[1] as usize);
+			let addr = VA(addr as usize);
 			ops[0] = Mem(addr, a);
 
 			if a == Target {
-				(1, Some(VA(addr as usize)))
+				(1, Some(addr))
 			} else {
 				(1, None)
 			}
