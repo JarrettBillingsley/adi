@@ -313,7 +313,9 @@ impl Program {
 		for bbid in changers {
 			let bb = self.bbidx.get(bbid);
 			// it's possible this BB's state was changed on a previous iteration.
-			let state = new_states.new_state_for(bbid);
+
+			// TODO: this is commented out just for now. eventually it will be used again?
+			// let state = new_states.new_state_for(bbid);
 
 			// See if we get a new state...
 			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
