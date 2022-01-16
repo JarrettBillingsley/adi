@@ -1,11 +1,13 @@
 
-use std::fmt::{ Write as FmtWrite, Error as FmtError, Arguments as FmtArguments };
+use std::fmt::{
+	Write as FmtWrite,
+	Error as FmtError,
+	Arguments as FmtArguments,
+};
 
 use enum_dispatch::enum_dispatch;
 
-use crate::memory::{ MmuState, VA };
-use crate::program::{ Instruction };
-use crate::{ Radix, Operand };
+use crate::{ MmuState, VA, Instruction, Radix, Operand };
 
 // ------------------------------------------------------------------------------------------------
 // IPrintStyler, NullPrintStyler
@@ -60,7 +62,7 @@ pub trait IPrintStyler {
 }
 
 /// Dummy print styler that ignores all styling commands.
-struct NullPrintStyler;
+pub struct NullPrintStyler;
 
 impl IPrintStyler for NullPrintStyler {
 	fn begin_mnemonic(&mut self, _writer: &mut dyn FmtWrite) {}
