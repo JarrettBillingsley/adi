@@ -140,6 +140,69 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 }
 
 // ------------------------------------------------------------------------------------------------
+// PrinterCtx
+// ------------------------------------------------------------------------------------------------
+
+use std::fmt::{ Write as FmtWrite, Error as FmtError, Arguments as FmtArguments };
+
+use crate::{ Program, IPlatform, Radix, Operand };
+
+pub struct PrinterCtx<'p, 'i, 'w> {
+	prog:      &'p Program,
+	inst:      &'i Instruction,
+	mmu_state: MmuState,
+	writer:    &'w mut dyn FmtWrite,
+}
+
+impl<'p, 'i, 'w> PrinterCtx<'p, 'i, 'w> {
+	pub fn new(
+		prog: &'p Program,
+		inst: &'i Instruction,
+		mmu_state: MmuState,
+		writer: &'w mut dyn FmtWrite
+	) -> Self {
+		Self { prog, inst, mmu_state, writer }
+	}
+
+	pub fn num_ops(&self) -> usize {
+		self.inst.num_ops()
+	}
+
+	// the 'i on the return value is C R U C I A L for borrow checking; otherwise,
+	// you cannot get an operand and use the write_ methods simultaneously.
+	pub fn get_op(&self, i: usize) -> &'i Operand {
+		self.inst.get_op(i)
+	}
+
+	// again with the return value lifetime
+	pub fn get_inst(&self) -> &'i Instruction {
+		self.inst
+	}
+
+	pub fn register_name(&self, r: u8) -> &'static str {
+		self.prog.plat().arch().register_names()[r as usize]
+	}
+
+	pub fn name_of_va(&self, va: VA) -> String {
+		self.prog.name_of_va(self.mmu_state, va)
+	}
+
+	pub fn write_str(&mut self, s: &str) -> Result<(), FmtError> {
+		self.writer.write_str(s)
+	}
+
+	pub fn write_char(&mut self, c: char) -> Result<(), FmtError> {
+		self.writer.write_char(c)
+	}
+
+	/// Because of this method, you can use Rust's built-in `write!()` macro on a `PrinterCtx`
+	/// object, like `write!(ctx, "x {}", y)`.
+	pub fn write_fmt(&mut self, args: FmtArguments<'_>) -> Result<(), FmtError> {
+		self.writer.write_fmt(args)
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // IPrinter
 // ------------------------------------------------------------------------------------------------
 
@@ -157,11 +220,37 @@ pub enum Printer {
 /// Trait for instruction printers.
 #[enum_dispatch(Printer)]
 pub trait IPrinter {
+	/// The length (in characters) of the *longest* instruction mnemonic for this architecture.
+	/// This is used to output padding spaces to align operands. Defaults to 8. If set to less
+	/// than the actual longest mnemonic, operands will be misaligned in the output.
+	/// DO NOT IMPLEMENT THIS METHOD IN ANYTHING OTHER THAN CONSTANT TIME.
+	// This is not an associated constant because enum_dispatch doesn't support those.
+	fn mnemonic_max_len(&self) -> usize {
+		8
+	}
+
 	/// Give a string representation of an instruction's mnemonic.
 	fn get_mnemonic(&self, i: &Instruction) -> String;
 
 	/// Give a string representation of an instruction's operands.
 	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String;
+
+	/// Prints an indirect memory access where the address is specified by a register.
+	/// It's up to the architecture what this will look like.
+	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> Result<(), FmtError> {
+		// TODO: these should be implemented by implementors
+		let _ = (ctx, reg);
+		Ok(())
+	}
+
+	/// Prints an indirect memory access where the address is specified by a register plus a
+	/// displacement. It's up to the architecture what this will look like.
+	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, reg: u8, disp: i64)
+		-> Result<(), FmtError> {
+		// TODO: these should be implemented by implementors
+		let _ = (ctx, reg, disp);
+		Ok(())
+	}
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
@@ -170,6 +259,121 @@ pub trait IPrinter {
 	fn fmt_instr(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
 		format!("{} {}", self.get_mnemonic(i), self.fmt_operands(i, state, l))
 	}
+
+	/// Prints the instruction associated with `ctx`. Inserts whitespace padding after
+	/// the mnemonic based on what [`mnemonic_max_len`] returns.
+	fn print_instr(&self, ctx: &mut PrinterCtx) -> Result<(), FmtError> {
+		let width = self.mnemonic_max_len();
+		let mnem = self.get_mnemonic(ctx.get_inst());
+
+		write!(ctx, "{mnem:width$} ")?;
+		self.print_operands(ctx)
+	}
+
+	/// Prints all operands of the instruction associated with `ctx`, comma-separated.
+	/// This is only called by [`print_instr`], so if you override that method (maybe
+	/// because your architecture does not fill in all operands), this may go unused.
+	fn print_operands(&self, ctx: &mut PrinterCtx) -> Result<(), FmtError> {
+		for i in 0 .. ctx.num_ops() {
+			if i > 0 {
+				ctx.write_str(", ")?;
+			}
+
+			self.print_operand(ctx, i)?;
+		}
+
+		Ok(())
+	}
+
+	/// Prints the `i`th operand of the instruction associated with `ctx`. This dispatches
+	/// to the appropriate `print_` method based on the operand's type.
+	fn print_operand(&self, ctx: &mut PrinterCtx, i: usize) -> Result<(), FmtError> {
+		use crate::Operand::*;
+		use crate::MemIndir::{ self, RegDisp };
+
+		match ctx.get_op(i) {
+			Reg(r)                          => self.print_register(ctx, *r),
+			UImm(imm, None)                 => self.print_uint_no_radix(ctx, *imm),
+			UImm(imm, Some(Radix::Bin))     => self.print_uint_bin(ctx, *imm),
+			UImm(imm, Some(Radix::Dec))     => self.print_uint_dec(ctx, *imm),
+			UImm(imm, Some(Radix::Hex))     => self.print_uint_hex(ctx, *imm),
+			SImm(imm, None)                 => self.print_int_no_radix(ctx, *imm),
+			SImm(imm, Some(Radix::Bin))     => self.print_int_bin(ctx, *imm),
+			SImm(imm, Some(Radix::Dec))     => self.print_int_dec(ctx, *imm),
+			SImm(imm, Some(Radix::Hex))     => self.print_int_hex(ctx, *imm),
+			Mem(addr, _)                    => self.print_va(ctx, VA(*addr as usize)),
+			Indir(MemIndir::Reg { reg }, _) => self.print_indir_reg(ctx, *reg),
+			Indir(RegDisp { reg, disp }, _) => self.print_indir_reg_disp(ctx, *reg, *disp),
+		}
+	}
+
+	/// Prints the name of a register.
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> Result<(), FmtError> {
+		ctx.write_str(ctx.register_name(r))
+	}
+
+	/// Prints an unsigned integer in decimal (base 10).
+	fn print_uint_dec(&self, ctx: &mut PrinterCtx, val: u64) -> Result<(), FmtError> {
+		write!(ctx, "{}", val)
+	}
+
+	/// Prints an unsigned integer in hexadecimal (base 16). Defaults to prepending
+	/// the value with `0x` and uses uppercase hex digits.
+	fn print_uint_hex(&self, ctx: &mut PrinterCtx, val: u64) -> Result<(), FmtError> {
+		write!(ctx, "0x{:X}", val)
+	}
+
+	/// Prints an unsigned integer in binary (base 2). Defaults to prepending the
+	/// value with `0b`.
+	fn print_uint_bin(&self, ctx: &mut PrinterCtx, val: u64) -> Result<(), FmtError> {
+		write!(ctx, "0b{:b}", val)
+	}
+
+	/// Prints an unsigned integer with no specified radix. Defaults to using decimal for
+	/// numbers under 16, and hexadecimal otherwise.
+	fn print_uint_no_radix(&self, ctx: &mut PrinterCtx, val: u64) -> Result<(), FmtError> {
+		if val < 0x10 {
+			self.print_uint_dec(ctx, val)
+		} else {
+			self.print_uint_hex(ctx, val)
+		}
+	}
+
+	/// Prints a signed integer in decimal (base 10).
+	fn print_int_dec(&self, ctx: &mut PrinterCtx, val: i64) -> Result<(), FmtError> {
+		write!(ctx, "{}", val)
+	}
+
+	/// Prints a signed integer in hexadecimal (base 16). Defaults to prepending
+	/// the value with `0x` and uses uppercase hex digits. Negative numbers are displayed
+	/// like `-0x12` for `-18`, rather than in 2's complement.
+	fn print_int_hex(&self, ctx: &mut PrinterCtx, val: i64) -> Result<(), FmtError> {
+		let sign = if val < 0 { "-" } else { "" };
+		write!(ctx, "{}0x{:X}", sign, val.abs())
+	}
+
+	/// Prints a signed integer in binary (base 2). Defaults to prepending the
+	/// value with `0b`. Negative numbers are displayed like `-0b101` for `-5`, rather than
+	/// in 2's complement.
+	fn print_int_bin(&self, ctx: &mut PrinterCtx, val: i64) -> Result<(), FmtError> {
+		let sign = if val < 0 { "-" } else { "" };
+		write!(ctx, "{}0b{:b}", sign, val.abs())
+	}
+
+	/// Prints a signed integer with no specified radix. Defaults to using decimal for
+	/// numbers under 16, and hexadecimal otherwise.
+	fn print_int_no_radix(&self, ctx: &mut PrinterCtx, val: i64) -> Result<(), FmtError> {
+		if val.abs() < 0x10 {
+			self.print_int_dec(ctx, val)
+		} else {
+			self.print_int_hex(ctx, val)
+		}
+	}
+
+	/// Prints the name of thing to which a virtual address refers, based on the MMU state
+	/// associated with `ctx`.
+	fn print_va(&self, ctx: &mut PrinterCtx, va: VA) -> Result<(), FmtError> {
+		ctx.write_str(&ctx.name_of_va(va))
 	}
 }
 
