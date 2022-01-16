@@ -200,31 +200,49 @@ impl IPrintStyler for NullPrintStyler {
 }
 
 // ------------------------------------------------------------------------------------------------
+// INameLookup
+// ------------------------------------------------------------------------------------------------
+
+/// Trait to abstract the process of looking up names of addresses.
+pub trait INameLookup {
+	fn lookup(&self, state: MmuState, addr: VA) -> Option<String>;
+}
+
+/// A dummy struct that implements `INameLookup` whose `lookup` method always returns `None`.
+pub struct NullLookup;
+
+impl INameLookup for NullLookup {
+	fn lookup(&self, _state: MmuState, _addr: VA) -> Option<String> {
+		None
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // PrinterCtx
 // ------------------------------------------------------------------------------------------------
 
 use std::fmt::{ Write as FmtWrite, Error as FmtError, Arguments as FmtArguments };
 pub type FmtResult = Result<(), FmtError>;
 
-use crate::{ Program, Radix, Operand };
+use crate::{ Radix, Operand };
 
-pub struct PrinterCtx<'p, 'i, 'w, 's> {
-	prog:      &'p Program,
+pub struct PrinterCtx<'i, 'l, 'w, 's> {
 	inst:      &'i Instruction,
 	mmu_state: MmuState,
+	lookup:    &'l dyn INameLookup,
 	writer:    &'w mut dyn FmtWrite,
 	styler:    &'s mut dyn IPrintStyler,
 }
 
-impl<'p, 'i, 'w, 's> PrinterCtx<'p, 'i, 'w, 's> {
+impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
 	pub fn new(
-		prog: &'p Program,
 		inst: &'i Instruction,
 		mmu_state: MmuState,
+		lookup: &'l dyn INameLookup,
 		writer: &'w mut dyn FmtWrite,
 		styler: &'s mut dyn IPrintStyler,
 	) -> Self {
-		Self { prog, inst, mmu_state, writer, styler }
+		Self { inst, mmu_state, lookup, writer, styler }
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -245,8 +263,8 @@ impl<'p, 'i, 'w, 's> PrinterCtx<'p, 'i, 'w, 's> {
 		self.inst
 	}
 
-	pub fn name_of_va(&self, va: VA) -> String {
-		self.prog.name_of_va(self.mmu_state, va)
+	pub fn name_of_va(&self, va: VA) -> Option<String> {
+		self.lookup.lookup(self.mmu_state, va)
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -490,21 +508,11 @@ pub trait IPrinter {
 	/// Prints the name of thing to which a virtual address refers, based on the MMU state
 	/// associated with `ctx`.
 	fn print_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
-		ctx.write_str(&ctx.name_of_va(va))
-	}
-}
-
-/// Trait to abstract the process of looking up names of addresses.
-pub trait INameLookup {
-	fn lookup(&self, state: MmuState, addr: VA) -> Option<String>;
-}
-
-/// A dummy struct that implements `INameLookup` whose `lookup` method always returns `None`.
-pub struct NullLookup;
-
-impl INameLookup for NullLookup {
-	fn lookup(&self, _state: MmuState, _addr: VA) -> Option<String> {
-		None
+		if let Some(name) = ctx.name_of_va(va) {
+			ctx.write_str(&name)
+		} else {
+			self.print_uint_hex(ctx, va.0 as u64)
+		}
 	}
 }
 
