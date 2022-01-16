@@ -458,7 +458,6 @@ pub struct Mos65xxArchitecture;
 impl IArchitecture for Mos65xxArchitecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
-	fn register_names  (&self) -> &'static [&'static str] { Reg::register_names() }
 	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
 }

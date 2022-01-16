@@ -206,7 +206,7 @@ impl IPrintStyler for NullPrintStyler {
 use std::fmt::{ Write as FmtWrite, Error as FmtError, Arguments as FmtArguments };
 pub type FmtResult = Result<(), FmtError>;
 
-use crate::{ Program, IPlatform, Radix, Operand };
+use crate::{ Program, Radix, Operand };
 
 pub struct PrinterCtx<'p, 'i, 'w, 's> {
 	prog:      &'p Program,
@@ -243,10 +243,6 @@ impl<'p, 'i, 'w, 's> PrinterCtx<'p, 'i, 'w, 's> {
 	// again with the return value lifetime
 	pub fn get_inst(&self) -> &'i Instruction {
 		self.inst
-	}
-
-	pub fn register_name(&self, r: u8) -> &'static str {
-		self.prog.plat().arch().register_names()[r as usize]
 	}
 
 	pub fn name_of_va(&self, va: VA) -> String {
@@ -349,6 +345,13 @@ pub trait IPrinter {
 	/// Give a string representation of an instruction's operands.
 	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String;
 
+	/// Prints the name of a register. Be sure to use `ctx.style_register` for proper
+	/// output styling.
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
+		// TODO: these should be implemented by implementors
+		ctx.style_register(&|ctx| write!(ctx, "r{}", r))
+	}
+
 	/// Prints an indirect memory access where the address is specified by a register.
 	/// It's up to the architecture what this will look like.
 	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> FmtResult {
@@ -418,11 +421,6 @@ pub trait IPrinter {
 			Indir(MemIndir::Reg { reg }, _) => self.print_indir_reg(ctx, *reg),
 			Indir(RegDisp { reg, disp }, _) => self.print_indir_reg_disp(ctx, *reg, *disp),
 		}
-	}
-
-	/// Prints the name of a register.
-	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
-		ctx.style_register(&|ctx| ctx.write_str(ctx.register_name(r)))
 	}
 
 	/// Prints an unsigned integer in decimal (base 10).
@@ -559,10 +557,6 @@ pub(crate) trait IArchitecture: Sized + Sync + Send {
 	fn endianness(&self) -> Endian;
 	/// How many bits in an address.
 	fn addr_bits(&self) -> usize;
-	/// The names of the registers, in the order that the architecture numbers them in operands.
-	/// The signature of this method more or less forces you to return a static/const array, which
-	/// you should do. This method should be very fast as it is called often.
-	fn register_names(&self) -> &'static [&'static str];
 	/// Construct a new disassembler.
 	fn new_disassembler(&self) -> Disassembler;
 	/// Construct a new printer.
