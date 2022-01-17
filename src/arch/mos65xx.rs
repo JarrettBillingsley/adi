@@ -12,7 +12,7 @@ use crate::program::{
 };
 use crate::arch::{
 	DisasError, DisasResult,
-	Printer, IPrinter,
+	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
 	INameLookup,
 	IArchitecture,
@@ -395,6 +395,10 @@ impl Mos65xxPrinter {
 }
 
 impl IPrinter for Mos65xxPrinter {
+	fn mnemonic_max_len(&self) -> usize {
+		3
+	}
+
 	fn get_mnemonic(&self, i: &Instruction) -> String {
 		let desc = lookup_desc(i.bytes()[0]);
 		desc.meta_op.mnemonic(self.flavor).into()
@@ -446,6 +450,10 @@ impl IPrinter for Mos65xxPrinter {
 		}
 
 		ret
+	}
+
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
+		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
 }
 

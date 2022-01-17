@@ -12,7 +12,7 @@ use crate::program::{
 };
 use crate::arch::{
 	DisasError, DisasResult,
-	Printer, IPrinter,
+	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
 	INameLookup,
 	IArchitecture,
@@ -425,6 +425,10 @@ fn inst_imm(i: &Instruction) -> u8 {
 }
 
 impl IPrinter for ToyPrinter {
+	fn mnemonic_max_len(&self) -> usize {
+		3
+	}
+
 	fn get_mnemonic(&self, i: &Instruction) -> String {
 		self.lookup_desc(i.bytes()).mnemonic().into()
 	}
@@ -462,6 +466,10 @@ impl IPrinter for ToyPrinter {
 				templ.replace("{0}", r0).replace("{1}", &imm)
 			}
 		}
+	}
+
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
+		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
 }
 

@@ -59,6 +59,11 @@ pub trait IPrintStyler {
 	fn begin_label(&mut self, writer: &mut dyn FmtWrite);
 	///
 	fn end_label(&mut self, writer: &mut dyn FmtWrite);
+
+	/// Begin outputting the `i`th operand of the instruction.
+	fn begin_operand(&mut self, i: usize, writer: &mut dyn FmtWrite);
+	///
+	fn end_operand(&mut self, i: usize, writer: &mut dyn FmtWrite);
 }
 
 /// Dummy print styler that ignores all styling commands.
@@ -81,6 +86,8 @@ impl IPrintStyler for NullPrintStyler {
 	fn end_refname(&mut self, _writer: &mut dyn FmtWrite) {}
 	fn begin_label(&mut self, _writer: &mut dyn FmtWrite) {}
 	fn end_label(&mut self, _writer: &mut dyn FmtWrite) {}
+	fn begin_operand(&mut self, _i: usize, _writer: &mut dyn FmtWrite) {}
+	fn end_operand(&mut self, _i: usize, _writer: &mut dyn FmtWrite) {}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -207,6 +214,14 @@ impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
 		Ok(())
 	}
 
+	pub fn style_operand(&mut self, i: usize, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
+	-> FmtResult {
+		self.styler.begin_operand(i, self.writer);
+		f(self)?;
+		self.styler.end_operand(i, self.writer);
+		Ok(())
+	}
+
 	// --------------------------------------------------------------------------------------------
 	// std::fmt::Write methods
 
@@ -243,15 +258,6 @@ pub enum Printer {
 /// Trait for instruction printers.
 #[enum_dispatch(Printer)]
 pub trait IPrinter {
-	/// The length (in characters) of the *longest* instruction mnemonic for this architecture.
-	/// This is used to output padding spaces to align operands. Defaults to 8. If set to less
-	/// than the actual longest mnemonic, operands will be misaligned in the output.
-	/// DO NOT IMPLEMENT THIS METHOD IN ANYTHING OTHER THAN CONSTANT TIME.
-	/// (This is not an associated constant because `enum_dispatch` doesn't support those.)
-	fn mnemonic_max_len(&self) -> usize {
-		8
-	}
-
 	/// Give a string representation of an instruction's mnemonic.
 	fn get_mnemonic(&self, i: &Instruction) -> String;
 
@@ -260,10 +266,7 @@ pub trait IPrinter {
 
 	/// Prints the name of a register. Be sure to use `ctx.style_register` for proper
 	/// output styling.
-	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
-		// TODO: these should be implemented by implementors
-		ctx.style_register(&|ctx| write!(ctx, "r{}", r))
-	}
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult;
 
 	/// Prints an indirect memory access where the address is specified by a register.
 	/// It's up to the architecture what this will look like.
@@ -283,6 +286,16 @@ pub trait IPrinter {
 
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
+
+	/// The length (in characters) of the *longest* instruction mnemonic for this architecture.
+	/// This is used to output padding spaces to align operands. Defaults to 8. If set to less
+	/// than the actual longest mnemonic, operands will be misaligned in the output.
+	///
+	/// **DO NOT IMPLEMENT THIS METHOD IN ANYTHING OTHER THAN CONSTANT TIME.**
+	/// This would be an associated constant, but `enum_dispatch` doesn't support those.
+	fn mnemonic_max_len(&self) -> usize {
+		8
+	}
 
 	/// Give a string representation of an instruction.
 	fn fmt_instr(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
@@ -315,25 +328,27 @@ pub trait IPrinter {
 	}
 
 	/// Prints the `i`th operand of the instruction associated with `ctx`. This dispatches
-	/// to the appropriate `print_` method based on the operand's type.
+	/// to the appropriate `print_` method based on the operand's type. It also calls
+	/// `ctx.style_operand` around everything.
 	fn print_operand(&self, ctx: &mut PrinterCtx, i: usize) -> FmtResult {
-		use crate::Operand::*;
-		use crate::MemIndir::{ self, RegDisp };
-
-		match ctx.get_op(i) {
-			Reg(r)                          => self.print_register(ctx, *r),
-			UImm(imm, None)                 => self.print_uint_no_radix(ctx, *imm),
-			UImm(imm, Some(Radix::Bin))     => self.print_uint_bin(ctx, *imm),
-			UImm(imm, Some(Radix::Dec))     => self.print_uint_dec(ctx, *imm),
-			UImm(imm, Some(Radix::Hex))     => self.print_uint_hex(ctx, *imm),
-			SImm(imm, None)                 => self.print_int_no_radix(ctx, *imm),
-			SImm(imm, Some(Radix::Bin))     => self.print_int_bin(ctx, *imm),
-			SImm(imm, Some(Radix::Dec))     => self.print_int_dec(ctx, *imm),
-			SImm(imm, Some(Radix::Hex))     => self.print_int_hex(ctx, *imm),
-			Mem(addr, _)                    => self.print_va(ctx, *addr),
-			Indir(MemIndir::Reg { reg }, _) => self.print_indir_reg(ctx, *reg),
-			Indir(RegDisp { reg, disp }, _) => self.print_indir_reg_disp(ctx, *reg, *disp),
-		}
+		ctx.style_operand(i, &|ctx| {
+			use crate::Operand::*;
+			use crate::MemIndir::{ self, RegDisp };
+			match ctx.get_op(i) {
+				Reg(r)                          => self.print_register(ctx, *r),
+				UImm(imm, None)                 => self.print_uint_no_radix(ctx, *imm),
+				UImm(imm, Some(Radix::Bin))     => self.print_uint_bin(ctx, *imm),
+				UImm(imm, Some(Radix::Dec))     => self.print_uint_dec(ctx, *imm),
+				UImm(imm, Some(Radix::Hex))     => self.print_uint_hex(ctx, *imm),
+				SImm(imm, None)                 => self.print_int_no_radix(ctx, *imm),
+				SImm(imm, Some(Radix::Bin))     => self.print_int_bin(ctx, *imm),
+				SImm(imm, Some(Radix::Dec))     => self.print_int_dec(ctx, *imm),
+				SImm(imm, Some(Radix::Hex))     => self.print_int_hex(ctx, *imm),
+				Mem(addr, _)                    => self.print_va(ctx, *addr),
+				Indir(MemIndir::Reg { reg }, _) => self.print_indir_reg(ctx, *reg),
+				Indir(RegDisp { reg, disp }, _) => self.print_indir_reg_disp(ctx, *reg, *disp),
+			}
+		})
 	}
 
 	/// Prints an unsigned integer in decimal (base 10).

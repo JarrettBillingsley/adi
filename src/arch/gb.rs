@@ -14,7 +14,7 @@ use crate::program::{
 };
 use crate::arch::{
 	DisasError, DisasResult,
-	Printer, IPrinter,
+	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
 	INameLookup,
 	IArchitecture,
@@ -175,6 +175,10 @@ impl GBPrinter {
 }
 
 impl IPrinter for GBPrinter {
+	fn mnemonic_max_len(&self) -> usize {
+		3
+	}
+
 	fn get_mnemonic(&self, i: &Instruction) -> String {
 		self.lookup_desc(i.bytes()).mnemonic().into()
 	}
@@ -210,6 +214,10 @@ impl IPrinter for GBPrinter {
 				}
 			}
 		}
+	}
+
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
+		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
 }
 
