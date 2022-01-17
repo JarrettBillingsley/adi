@@ -10,6 +10,26 @@ use enum_dispatch::enum_dispatch;
 use crate::{ MmuState, VA, Instruction, Radix, Operand };
 
 // ------------------------------------------------------------------------------------------------
+// PrintStyle
+// ------------------------------------------------------------------------------------------------
+
+/// Styles used when outputting instructions. This enum is marked non-exhaustive as more
+/// styles may be added in the future.
+#[non_exhaustive]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum PrintStyle {
+	Mnemonic,
+	Register,
+	Number,
+	Symbol,
+	String,
+	Comment,
+	Refname,
+	Label,
+	Operand(usize),
+}
+
+// ------------------------------------------------------------------------------------------------
 // IPrintStyler
 // ------------------------------------------------------------------------------------------------
 
@@ -19,51 +39,10 @@ use crate::{ MmuState, VA, Instruction, Radix, Operand };
 /// an HTML styler might write HTML tags to it), or they may ignore it completely and do styling
 /// some other way (e.g. a GUI may create widgets for each style or something).
 pub trait IPrintStyler {
-	/// Begin outputting an instruction mnemonic.
-	fn begin_mnemonic(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_mnemonic(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a register name.
-	fn begin_register(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_register(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a number literal.
-	fn begin_number(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_number(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a meaningful symbol (e.g. braces around address calculations, arithmetic
-	/// operators).
-	fn begin_symbol(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_symbol(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a string or character literal.
-	fn begin_string(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_string(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a comment.
-	fn begin_comment(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_comment(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a referenced name (as in, a name appearing in operand position).
-	fn begin_refname(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_refname(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting a label (as in, a name being used to define something).
-	fn begin_label(&mut self, writer: &mut dyn FmtWrite);
-	///
-	fn end_label(&mut self, writer: &mut dyn FmtWrite);
-
-	/// Begin outputting the `i`th operand of the instruction.
-	fn begin_operand(&mut self, i: usize, writer: &mut dyn FmtWrite);
-	///
-	fn end_operand(&mut self, i: usize, writer: &mut dyn FmtWrite);
+	/// Begin some style of text.
+	fn begin(&mut self, style: PrintStyle, writer: &mut dyn FmtWrite);
+	/// End some style of text.
+	fn end(&mut self, style: PrintStyle, writer: &mut dyn FmtWrite);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -74,24 +53,8 @@ pub trait IPrintStyler {
 pub struct NullPrintStyler;
 
 impl IPrintStyler for NullPrintStyler {
-	fn begin_mnemonic(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_mnemonic(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_register(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_register(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_number(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_number(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_symbol(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_symbol(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_string(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_string(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_comment(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_comment(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_refname(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_refname(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_label(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn end_label(&mut self, _writer: &mut dyn FmtWrite) {}
-	fn begin_operand(&mut self, _i: usize, _writer: &mut dyn FmtWrite) {}
-	fn end_operand(&mut self, _i: usize, _writer: &mut dyn FmtWrite) {}
+	fn begin(&mut self, _style: PrintStyle, _writer: &mut dyn FmtWrite) {}
+	fn end(&mut self, _style: PrintStyle, _writer: &mut dyn FmtWrite) {}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -162,68 +125,67 @@ impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
 	// --------------------------------------------------------------------------------------------
 	// Style methods
 
+	/// General-purpose method for styling some output. Use like:
+	///
+	/// ```ignore
+	/// ctx.style(PrintStyle::Number, &|ctx| {
+	///     // output stuff with ctx here
+	/// })
+	/// ```
+	///
+	/// There are shortcut methods for various styles as well.
+	pub fn style(&mut self, style: PrintStyle, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
+	-> FmtResult {
+		self.styler.begin(style, self.writer);
+		f(self)?;
+		self.styler.end(style, self.writer);
+		Ok(())
+	}
+
+	/// Short for `ctx.style(PrintStyle::Mnemonic, &whatever)`. Same goes for the rest.
 	pub fn style_mnemonic(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_mnemonic(self.writer);
-		f(self)?;
-		self.styler.end_mnemonic(self.writer);
-		Ok(())
+		self.style(PrintStyle::Mnemonic, f)
 	}
 
+	///
 	pub fn style_register(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_register(self.writer);
-		f(self)?;
-		self.styler.end_register(self.writer);
-		Ok(())
+		self.style(PrintStyle::Register, f)
 	}
 
+	///
 	pub fn style_number(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_number(self.writer);
-		f(self)?;
-		self.styler.end_number(self.writer);
-		Ok(())
+		self.style(PrintStyle::Number, f)
 	}
 
+	///
 	pub fn style_symbol(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_symbol(self.writer);
-		f(self)?;
-		self.styler.end_symbol(self.writer);
-		Ok(())
+		self.style(PrintStyle::Symbol, f)
 	}
 
+	///
 	pub fn style_string(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_string(self.writer);
-		f(self)?;
-		self.styler.end_string(self.writer);
-		Ok(())
+		self.style(PrintStyle::String, f)
 	}
 
+	///
 	pub fn style_comment(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_comment(self.writer);
-		f(self)?;
-		self.styler.end_comment(self.writer);
-		Ok(())
+		self.style(PrintStyle::Comment, f)
 	}
 
+	///
 	pub fn style_refname(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_refname(self.writer);
-		f(self)?;
-		self.styler.end_refname(self.writer);
-		Ok(())
+		self.style(PrintStyle::Refname, f)
 	}
 
+	///
 	pub fn style_label(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
-		self.styler.begin_label(self.writer);
-		f(self)?;
-		self.styler.end_label(self.writer);
-		Ok(())
+		self.style(PrintStyle::Label, f)
 	}
 
+	///
 	pub fn style_operand(&mut self, i: usize, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
 	-> FmtResult {
-		self.styler.begin_operand(i, self.writer);
-		f(self)?;
-		self.styler.end_operand(i, self.writer);
-		Ok(())
+		self.style(PrintStyle::Operand(i), f)
 	}
 
 	// --------------------------------------------------------------------------------------------
