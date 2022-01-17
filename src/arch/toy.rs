@@ -475,6 +475,12 @@ impl IPrinter for ToyPrinter {
 	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
 		ctx.style_number(&|ctx| write!(ctx, "0x{:04X}", va))
 	}
+
+	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> FmtResult {
+		ctx.style_symbol(&|ctx| ctx.write_char('['))?;
+		self.print_register(ctx, reg)?;
+		ctx.style_symbol(&|ctx| ctx.write_char(']'))
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

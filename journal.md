@@ -113,3 +113,25 @@ That comment on line 3 is optional, but we **do still need to remember that info
 
 Wait so, what if we kept track of *both* operands *and* addresses? like, the arch fills in the operands, and then based on IR analysis, we can extract the addresses from that. That also opens up the option for the user to manually add dependencies/references in places where the automatic analysis can't figure it out.
 
+---
+
+## Printing framework
+
+Right now, the printing takes references to two objects to do its work:
+
+- a `std::fmt::Write` trait object
+- an `IPrintStyler` trait object
+
+the idea being, the actual text goes to the `Write` object and the styling/metadata info goes to the `IPrintStyler`. That way, you can mix and match and e.g. produce a string without styling; a string of HTML; have it go directly to the console (with or without ANSI color sequences); have it go directly to a file; create GUI widgets on the boundaries of styling etc.
+
+I like the flexibility, but there are some practical issues with this:
+
+- it's a bit awkward to have to make two objects to print things out, instead of one
+- the text and the styling may need to go to the *same place* but...
+	- you have to have two *separate* objects to do the work of those two things (you can't have a single object that implements both `Write` and `IPrintStyler` because you can't have two mutable borrows of the same object simultaneously)
+- turns out `std::fmt::Write` isn't really implemented by a lot of things
+	- not even standard output or files!
+	- so if you want the stuff to go directly to the output you have to use a wrapper object
+	- so much for making it flexible :\
+
+What if the `Write` (or something like it) was composited *into* the `IPrintStyler` (which would now be renamed `IPrintOutput` or something)? Would that solve things?

@@ -10,7 +10,7 @@ use enum_dispatch::enum_dispatch;
 use crate::{ MmuState, VA, Instruction, Radix, Operand };
 
 // ------------------------------------------------------------------------------------------------
-// IPrintStyler, NullPrintStyler
+// IPrintStyler
 // ------------------------------------------------------------------------------------------------
 
 /// Trait for applying styling to the output of a [`Printer`]. There are multiple styles which
@@ -65,6 +65,10 @@ pub trait IPrintStyler {
 	///
 	fn end_operand(&mut self, i: usize, writer: &mut dyn FmtWrite);
 }
+
+// ------------------------------------------------------------------------------------------------
+// NullPrintStyler
+// ------------------------------------------------------------------------------------------------
 
 /// Dummy print styler that ignores all styling commands.
 pub struct NullPrintStyler;

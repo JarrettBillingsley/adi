@@ -16,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	// test_gb()?;
-	test_nes()?;
-	// test_toy()?;
+	// test_nes()?;
+	test_toy()?;
 	Ok(())
 }
 
@@ -207,9 +207,9 @@ fn toy_test_loop() -> Vec<u8> {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	// let img_data = toy_test_all_instructions();
+	let img_data = toy_test_all_instructions();
 	// let img_data = toy_test_ssa();
-	let img_data = toy_test_const_prop();
+	// let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
 	// let img_data = toy_test_loop();
 
@@ -656,6 +656,27 @@ fn show_func_header(prog: &Program, func: &Function) {
 	}
 }
 
+struct IoWriteWrapper<'w> {
+	writer: &'w mut dyn std::io::Write,
+}
+
+impl<'w> IoWriteWrapper<'w> {
+	pub fn new(writer: &'w mut dyn std::io::Write) -> Self {
+		Self { writer }
+	}
+}
+
+impl std::fmt::Write for IoWriteWrapper<'_> {
+	fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
+		// there is no From<> implemented to convert std::fmt::Result to std::io::Result
+		if self.writer.write_all(s.as_bytes()).is_ok() {
+			Ok(())
+		} else {
+			Err(std::fmt::Error)
+		}
+	}
+}
+
 fn show_bb(prog: &Program, bb: &BasicBlock) {
 	let bb_ea = bb.ea();
 	let seg = prog.segment_from_ea(bb_ea);
@@ -691,11 +712,18 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		}
 
 		let addr = prog.fmt_addr(inst.va().0);
-		let mnem = prog.inst_get_mnemonic(inst);
-		let ops  = prog.inst_fmt_operands(state, inst);
+		// let mnem = prog.inst_get_mnemonic(inst);
+		// let ops  = prog.inst_operands_to_string(inst, state);
 
-		println!("{:>4}:{}  {:8}      {:3} {:30}",
-			seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+		// println!("{:>4}:{}  {:8}      {:3} {:30}",
+		// 	seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+
+		print!("{:>4}:{}  {:8}      ", seg.name().yellow(), addr, bytes.truecolor(63, 63, 255));
+		let mut stdout = std::io::stdout();
+		let mut writer = IoWriteWrapper::new(&mut stdout);
+		let mut styler = NullPrintStyler;
+		prog.inst_print(inst, state, &mut writer, &mut styler).unwrap();
+		println!();
 	}
 
 	// Terminator
