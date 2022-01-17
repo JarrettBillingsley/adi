@@ -455,6 +455,15 @@ impl IPrinter for Mos65xxPrinter {
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
 		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
+
+	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "${:04X}", va),
+				SyntaxFlavor::New => write!(ctx, "0x{:04X}", va),
+			}
+		})
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

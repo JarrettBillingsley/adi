@@ -284,6 +284,10 @@ pub trait IPrinter {
 		Ok(())
 	}
 
+	/// This should print a virtual address in hexadecimal using `ctx.style_number`, with
+	/// however many digits are appropriate for this architecture.
+	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult;
+
 	// --------------------------------------------------------------------------------------------
 	// Provided methods
 
@@ -415,13 +419,13 @@ pub trait IPrinter {
 		}
 	}
 
-	/// Prints the name of thing to which a virtual address refers, based on the MMU state
-	/// associated with `ctx`.
+	/// If the referenced `va` has a name (which is discovered through `ctx`), prints that;
+	/// otherwise, prints the raw address (with [`print_raw_va`]).
 	fn print_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
 		if let Some(name) = ctx.name_of_va(va) {
 			ctx.style_refname(&|ctx| ctx.write_str(&name))
 		} else {
-			self.print_uint_hex(ctx, va.0 as u64)
+			self.print_raw_va(ctx, va)
 		}
 	}
 }
