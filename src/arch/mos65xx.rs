@@ -464,6 +464,135 @@ impl IPrinter for Mos65xxPrinter {
 			}
 		})
 	}
+
+	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
+		let desc = lookup_desc(ctx.get_inst().bytes()[0]);
+
+		// "extra operands" are always registers, as shown in the new-style syntax.
+		match desc.meta_op.extra_operands(self.flavor) {
+			[] => {},
+			[o1] => {
+				ctx.style_register(&|ctx| write!(ctx, "{}", o1))?;
+
+				if ctx.num_ops() != 0 {
+					ctx.write_str(", ")?;
+				}
+			}
+			// impossible to have more operands in this case (e.g. mov a, x)
+			[o1, o2] => {
+				ctx.style_register(&|ctx| write!(ctx, "{}", o1))?;
+				ctx.write_str(", ")?;
+				ctx.style_register(&|ctx| write!(ctx, "{}", o2))?;
+			}
+			_ => unreachable!()
+		}
+
+		if ctx.num_ops() > 0 {
+			use AddrMode::*;
+
+			match self.flavor {
+				SyntaxFlavor::Old => {
+					match desc.addr_mode {
+						ABS | ZPG | REL | LAB | IMM => {
+							// {}
+							self.print_operand(ctx, 0)?;
+						}
+						ABX | ZPX => {
+							// {},x
+							self.print_operand(ctx, 0)?;
+							ctx.write_char(',')?;
+							self.print_register(ctx, Reg::X as u8)?;
+						}
+						ABY | ZPY => {
+							// {},y
+							self.print_operand(ctx, 0)?;
+							ctx.write_char(',')?;
+							self.print_register(ctx, Reg::Y as u8)?;
+						}
+						IND => {
+							// ({})
+							ctx.write_char('(')?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_char(')')?;
+						}
+						IZX => {
+							// ({},x)
+							ctx.write_char('(')?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_char(',')?;
+							self.print_register(ctx, Reg::X as u8)?;
+							ctx.write_char(')')?;
+						}
+						IZY => {
+							// ({}),y
+							ctx.write_char('(')?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_char(')')?;
+							ctx.write_char(',')?;
+							self.print_register(ctx, Reg::Y as u8)?;
+						}
+						IMP => unreachable!(),
+					}
+				}
+
+				SyntaxFlavor::New => {
+					match desc.addr_mode {
+						REL | LAB | IMM => {
+							// {}
+							self.print_operand(ctx, 0)?;
+						}
+						ZPG | ABS | IND => {
+							// [{}]
+							ctx.write_char('[')?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_char(']')?;
+						}
+						ZPX | ABX => {
+							// [{} + x]
+							ctx.write_char('[')?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_str(" + ")?;
+							self.print_register(ctx, Reg::X as u8)?;
+							ctx.write_char(']')?;
+						}
+						ZPY | ABY => {
+							// [{} + y]
+							ctx.write_char('[')?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_str(" + ")?;
+							self.print_register(ctx, Reg::Y as u8)?;
+							ctx.write_char(']')?;
+						}
+						IZX => {
+							// [[{} + x]]
+							ctx.write_str("[[")?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_str(" + ")?;
+							self.print_register(ctx, Reg::X as u8)?;
+							ctx.write_str("]]")?;
+						}
+						IZY => {
+							// [[{}] + y]
+							ctx.write_str("[[")?;
+							self.print_operand(ctx, 0)?;
+							ctx.write_str("] + ")?;
+							self.print_register(ctx, Reg::Y as u8)?;
+							ctx.write_char(']')?;
+						}
+						IMP => unreachable!(),
+					}
+				}
+			}
+		}
+
+		Ok(())
+	}
+
+	// Most of the work is done print_operands above, including printing the register;
+	// here we just have to display the displacement as an address.
+	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, _reg: u8, disp: i64) -> FmtResult {
+		self.print_va(ctx, VA(disp as usize))
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

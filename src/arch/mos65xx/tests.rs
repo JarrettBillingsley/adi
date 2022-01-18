@@ -83,23 +83,30 @@ fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 	}
 }
 
+fn mem(addr: usize, acc: MemAccess) -> Operand {
+	Operand::Mem(VA(addr), acc)
+}
+
+fn uimm(val: usize) -> Operand {
+	Operand::UImm(val as u64, None)
+}
+
 #[test]
 fn disasm_success() {
 	use MetaOp::*;
-	use Operand::*;
 	use MemAccess::*;
 	use Opcode::*;
 
 	check_disas(0, &[BRK_IMP as u8],               BRK,  None);
-	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(UImm(0xEF)));
-	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(Mem(0x3456, R)));
-	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(Mem(0x0033, W)));
-	check_disas(0, &[ASL_ZPG as u8, 0x99],         ASL,  Some(Mem(0x0099, RW)));
-	check_disas(0, &[ROL_ABS as u8, 0xAA, 0x99],   ROL,  Some(Mem(0x99AA, RW)));
-	check_disas(0, &[JMP_LAB as u8, 0xFE, 0xFF],   JMP,  Some(Mem(0xFFFE, Target)));
-	check_disas(0, &[JMP_IND as u8, 0xFE, 0xFF],   JMP,  Some(Mem(0xFFFE, R)));
-	check_disas(3, &[BCC_REL as u8, 10],           BCC,  Some(Mem(3 + 10 + 2, Target)));
-	check_disas(8, &[BCC_REL as u8, (-5i8) as u8], BCC,  Some(Mem(8 - 5 + 2,  Target)));
+	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(uimm(0xEF)));
+	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(mem(0x3456, R)));
+	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(mem(0x0033, W)));
+	check_disas(0, &[ASL_ZPG as u8, 0x99],         ASL,  Some(mem(0x0099, RW)));
+	check_disas(0, &[ROL_ABS as u8, 0xAA, 0x99],   ROL,  Some(mem(0x99AA, RW)));
+	check_disas(0, &[JMP_LAB as u8, 0xFE, 0xFF],   JMP,  Some(mem(0xFFFE, Target)));
+	check_disas(0, &[JMP_IND as u8, 0xFE, 0xFF],   JMP,  Some(mem(0xFFFE, R)));
+	check_disas(3, &[BCC_REL as u8, 10],           BCC,  Some(mem(3 + 10 + 2, Target)));
+	check_disas(8, &[BCC_REL as u8, (-5i8) as u8], BCC,  Some(mem(8 - 5 + 2,  Target)));
 }
 
 #[test]

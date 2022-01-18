@@ -85,33 +85,44 @@ fn indrd(reg: Reg, disp: i64, acc: MemAccess) -> Operand {
 	Operand::Indir(MemIndir::RegDisp { reg: reg as u8, disp }, acc)
 }
 
+fn mem(addr: usize, acc: MemAccess) -> Operand {
+	Operand::Mem(VA(addr), acc)
+}
+
+fn uimm(val: usize) -> Operand {
+	Operand::UImm(val as u64, None)
+}
+
+fn simm(val: isize) -> Operand {
+	Operand::SImm(val as i64, None)
+}
+
 #[test]
 fn disasm_success() {
 	use MetaOp::*;
-	use Operand::{ UImm, SImm, Indir, Mem };
 	use MemAccess::*;
 
 	check_disas(0, &[0x00],               NOP,  &[]                            ); // Imp
-	check_disas(0, &[0xCF],               RST,  &[Mem(0x0008, Target)]         );
+	check_disas(0, &[0xCF],               RST,  &[mem(0x0008, Target)]         );
 	check_disas(0, &[0x10, 0x00],         STOP, &[]                            ); // Dummy
-	check_disas(0, &[0x16, 0xFE],         LD,   &[UImm(0xFE)]                  ); // UImm8
-	check_disas(0, &[0x01, 0xAD, 0xDE],   LD,   &[UImm(0xDEAD)]                ); // Imm16
-	check_disas(0, &[0xE8, 0x13],         ADD,  &[SImm(0x13)]                  ); // SImm8
-	check_disas(0, &[0xE8, 0xFE],         ADD,  &[SImm(-2)]                    );
+	check_disas(0, &[0x16, 0xFE],         LD,   &[uimm(0xFE)]                  ); // UImm8
+	check_disas(0, &[0x01, 0xAD, 0xDE],   LD,   &[uimm(0xDEAD)]                ); // Imm16
+	check_disas(0, &[0xE8, 0x13],         ADD,  &[simm(0x13)]                  ); // SImm8
+	check_disas(0, &[0xE8, 0xFE],         ADD,  &[simm(-2)]                    );
 	check_disas(0, &[0xF8, 0x13],         LD,   &[indrd(Reg::SP, 0x13, R)]     ); // SPImm
 	check_disas(0, &[0xF8, 0xFE],         LD,   &[indrd(Reg::SP,   -2, R)]     );
-	check_disas(0, &[0xF0, 0x34],         LDH,  &[Mem(0xFF34, R)]              ); // AddHi
-	check_disas(0, &[0xE0, 0x34],         LDH,  &[Mem(0xFF34, W)]              );
+	check_disas(0, &[0xF0, 0x34],         LDH,  &[mem(0xFF34, R)]              ); // AddHi
+	check_disas(0, &[0xE0, 0x34],         LDH,  &[mem(0xFF34, W)]              );
 	check_disas(0, &[0xF2],               LDH,  &[indrd(Reg::C, 0xFF00, R)]    ); // IndHi
 	check_disas(0, &[0xE2],               LDH,  &[indrd(Reg::C, 0xFF00, W)]    );
 	check_disas(0, &[0x02],               LD,   &[indr(Reg::BC, W)]            ); // Ind
-	check_disas(0, &[0x36, 0x69],         LD,   &[indr(Reg::HL, W), UImm(0x69)]); // LdHlImm
-	check_disas(0, &[0xC2, 0x34, 0x12],   JP,   &[Mem(0x1234, Target)]         ); // Rel
-	check_disas(3, &[0x18, 10],           JR,   &[Mem(3 + 10 + 2, Target)]     );
-	check_disas(8, &[0x20, (-5i8) as u8], JR,   &[Mem(8 - 5 + 2, Target)]      );
-	check_disas(0, &[0xFA, 0x34, 0x12],   LD,   &[Mem(0x1234, R)]              ); // Add16
-	check_disas(0, &[0x08, 0x34, 0x12],   LD,   &[Mem(0x1234, W)]              );
-	check_disas(0, &[0xCD, 0x34, 0x12],   CALL, &[Mem(0x1234, Target)]         );
+	check_disas(0, &[0x36, 0x69],         LD,   &[indr(Reg::HL, W), uimm(0x69)]); // LdHlImm
+	check_disas(0, &[0xC2, 0x34, 0x12],   JP,   &[mem(0x1234, Target)]         ); // Rel
+	check_disas(3, &[0x18, 10],           JR,   &[mem(3 + 10 + 2, Target)]     );
+	check_disas(8, &[0x20, (-5i8) as u8], JR,   &[mem(8 - 5 + 2, Target)]      );
+	check_disas(0, &[0xFA, 0x34, 0x12],   LD,   &[mem(0x1234, R)]              ); // Add16
+	check_disas(0, &[0x08, 0x34, 0x12],   LD,   &[mem(0x1234, W)]              );
+	check_disas(0, &[0xCD, 0x34, 0x12],   CALL, &[mem(0x1234, Target)]         );
 }
 
 #[test]
