@@ -8,12 +8,12 @@ use std::collections::{
 	VecDeque,
 };
 use std::ops::{ Bound, RangeBounds };
-use std::fmt::{ Display, Formatter, Result as FmtResult, Write as FmtWrite };
+use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use smallvec::{ SmallVec };
 use delegate::delegate;
 
-use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintStyler, NullPrintStyler,
+use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintOutput, FmtWritePrintOutput,
 	IArchitecture };
 use crate::memory::{ Memory, MmuState, StateChange, EA, VA, SegId, Span, SpanKind, Segment,
 	Endian };
@@ -234,19 +234,19 @@ impl Program {
 		self.print.fmt_operands(i, state, self)
 	}
 
-	/// "Raw" interface for printing instructions. Takes the `writer` and `styler` whose methods
-	/// will be called to output and style the given instruction.
-	pub fn inst_print(&self, i: &Instruction, state: MmuState, writer: &mut dyn FmtWrite,
-	styler: &mut dyn IPrintStyler) -> FmtResult {
-		let mut ctx = PrinterCtx::new(i, state, self, writer, styler);
+	/// "Raw" interface for printing instructions. Takes the `output` object whose methods will
+	/// be called to output the instruction.
+	pub fn inst_print(&self, i: &Instruction, state: MmuState, output: &mut dyn IPrintOutput)
+	-> FmtResult {
+		let mut ctx = PrinterCtx::new(i, state, self, output);
 		self.print.print_instr(&mut ctx)
 	}
 
 	/// Formats the given instruction into a string. No styling is included.
 	pub fn inst_to_string(&self, i: &Instruction, state: MmuState) -> String {
 		let mut ret    = String::new();
-		let mut styler = NullPrintStyler;
-		let mut ctx    = PrinterCtx::new(i, state, self, &mut ret, &mut styler);
+		let mut output = FmtWritePrintOutput(&mut ret);
+		let mut ctx    = PrinterCtx::new(i, state, self, &mut output);
 		self.print.print_instr(&mut ctx).expect("should never fail");
 		ret
 	}
@@ -254,8 +254,8 @@ impl Program {
 	/// Formats the given instruction's operands into a string. No styling is included.
 	pub fn inst_operands_to_string(&self, i: &Instruction, state: MmuState) -> String {
 		let mut ret    = String::new();
-		let mut styler = NullPrintStyler;
-		let mut ctx    = PrinterCtx::new(i, state, self, &mut ret, &mut styler);
+		let mut output = FmtWritePrintOutput(&mut ret);
+		let mut ctx    = PrinterCtx::new(i, state, self, &mut output);
 		self.print.print_operands(&mut ctx).expect("should never fail");
 		ret
 	}

@@ -656,24 +656,11 @@ fn show_func_header(prog: &Program, func: &Function) {
 	}
 }
 
-struct IoWriteWrapper<'w> {
-	writer: &'w mut dyn std::io::Write,
-}
-
-impl<'w> IoWriteWrapper<'w> {
-	pub fn new(writer: &'w mut dyn std::io::Write) -> Self {
-		Self { writer }
-	}
-}
+struct IoWriteWrapper<'w>(pub &'w mut dyn std::io::Write);
 
 impl std::fmt::Write for IoWriteWrapper<'_> {
 	fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
-		// there is no From<> implemented to convert std::fmt::Result to std::io::Result
-		if self.writer.write_all(s.as_bytes()).is_ok() {
-			Ok(())
-		} else {
-			Err(std::fmt::Error)
-		}
+		self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
 	}
 }
 
@@ -719,10 +706,8 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		// 	seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
 		print!("{:>4}:{}  {:8}      ", seg.name().yellow(), addr, bytes.truecolor(63, 63, 255));
-		let mut stdout = std::io::stdout();
-		let mut writer = IoWriteWrapper::new(&mut stdout);
-		let mut styler = NullPrintStyler;
-		prog.inst_print(inst, state, &mut writer, &mut styler).unwrap();
+		let mut output = AnsiConsolePrintOutput;
+		prog.inst_print(inst, state, &mut output).unwrap();
 		println!();
 	}
 

@@ -9,52 +9,131 @@ use enum_dispatch::enum_dispatch;
 
 use crate::{ MmuState, VA, Instruction, Radix, Operand };
 
+/// Convenient alias for the `Result` type used by `std::fmt::Write`'s methods, and by extension
+/// many of the printing methods in this library.
+pub type FmtResult = Result<(), FmtError>;
+
 // ------------------------------------------------------------------------------------------------
 // PrintStyle
 // ------------------------------------------------------------------------------------------------
 
 /// Styles used when outputting instructions. This enum is marked non-exhaustive as more
-/// styles may be added in the future.
+/// styles may be added in the future. What each kind is for is documented below.
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum PrintStyle {
+	/// Instruction mnemonic (name).
 	Mnemonic,
+	/// Register name.
 	Register,
+	/// Number literals (of any base).
 	Number,
+	/// Meaningful symbols, like arithmetic operators.
 	Symbol,
+	/// String and character literals.
 	String,
+	/// Comments.
 	Comment,
+	/// Names that reference something else; that is, names that appear as operands.
 	Refname,
+	/// Labels that define a new name.
 	Label,
+	/// An instruction operand; the `usize` is its index in the instruction, and can be used
+	/// in e.g. GUIs to make them interactive.
 	Operand(usize),
 }
 
 // ------------------------------------------------------------------------------------------------
-// IPrintStyler
+// IPrintOutput
 // ------------------------------------------------------------------------------------------------
 
-/// Trait for applying styling to the output of a [`Printer`]. There are multiple styles which
-/// each have `begin_` and `end_` methods; they all take a [`std::fmt::Write`] which is the
-/// writer associated with a [`PrinterCtx`]. Implementors *may* write things to the writer (e.g.
-/// an HTML styler might write HTML tags to it), or they may ignore it completely and do styling
-/// some other way (e.g. a GUI may create widgets for each style or something).
-pub trait IPrintStyler {
+/// Trait for objects that are used as the output of printing operations. This is a supertrait
+/// of [`std::fmt::Write`] meaning it inherits those three methods for outputting plain text.
+/// It also adds two more methods used for applying styling (and other interesting metadata) to
+/// the text being output.
+pub trait IPrintOutput: FmtWrite {
 	/// Begin some style of text.
-	fn begin(&mut self, style: PrintStyle, writer: &mut dyn FmtWrite);
+	fn begin(&mut self, style: PrintStyle) -> FmtResult;
 	/// End some style of text.
-	fn end(&mut self, style: PrintStyle, writer: &mut dyn FmtWrite);
+	fn end(&mut self, style: PrintStyle) -> FmtResult;
 }
 
 // ------------------------------------------------------------------------------------------------
-// NullPrintStyler
+// FmtWritePrintOutput
 // ------------------------------------------------------------------------------------------------
 
-/// Dummy print styler that ignores all styling commands.
-pub struct NullPrintStyler;
+/// Print output that wraps a [`std::fmt::Write`] trait object and ignores styling commands.
+/// Useful if you want to, say, output to a `String` (which implements that trait).
+pub struct FmtWritePrintOutput<'w>(pub &'w mut dyn FmtWrite);
 
-impl IPrintStyler for NullPrintStyler {
-	fn begin(&mut self, _style: PrintStyle, _writer: &mut dyn FmtWrite) {}
-	fn end(&mut self, _style: PrintStyle, _writer: &mut dyn FmtWrite) {}
+impl FmtWrite for FmtWritePrintOutput<'_> {
+	fn write_str(&mut self, s: &str) -> FmtResult {
+		self.0.write_str(s)
+	}
+}
+
+impl IPrintOutput for FmtWritePrintOutput<'_> {
+	fn begin(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
+	fn end(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ConsolePrintOutput
+// ------------------------------------------------------------------------------------------------
+
+/// Outputs to the console with `print!()`. Ignores styling. Not recommended for more than
+/// simple tests.
+pub struct ConsolePrintOutput;
+
+impl FmtWrite for ConsolePrintOutput {
+	fn write_str(&mut self, s: &str) -> FmtResult {
+		print!("{}", s);
+		Ok(())
+	}
+}
+
+impl IPrintOutput for ConsolePrintOutput {
+	fn begin(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
+	fn end(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
+}
+
+// ------------------------------------------------------------------------------------------------
+// AnsiConsolePrintOutput
+// ------------------------------------------------------------------------------------------------
+
+/// Outputs to the console with `print!()`. Does simple styling with hardcoded ANSI colors. Not
+/// recommended for more than simple tests.
+pub struct AnsiConsolePrintOutput;
+
+impl FmtWrite for AnsiConsolePrintOutput {
+	fn write_str(&mut self, s: &str) -> FmtResult { print!("{}", s); Ok(()) }
+	fn write_char(&mut self, c: char) -> FmtResult { print!("{}", c); Ok(()) }
+	fn write_fmt(&mut self, args: FmtArguments<'_>) -> FmtResult { print!("{}", args); Ok(()) }
+}
+
+impl IPrintOutput for AnsiConsolePrintOutput {
+	fn begin(&mut self, style: PrintStyle) -> FmtResult {
+		match style {
+			PrintStyle::Mnemonic => self.write_str("\x1b[31m"),
+			PrintStyle::Number   => self.write_str("\x1b[32m"),
+			PrintStyle::String   => self.write_str("\x1b[38;2;255;127;0m"),
+			PrintStyle::Comment  => self.write_str("\x1b[32m"),
+			PrintStyle::Label    => self.write_str("\x1b[38;2;127;63;0m"),
+			PrintStyle::Refname  => self.write_str("\x1b[4m"),
+			_ => Ok(()),
+		}
+	}
+	fn end(&mut self, style: PrintStyle) -> FmtResult {
+		match style {
+			PrintStyle::Mnemonic |
+			PrintStyle::Number |
+			PrintStyle::String |
+			PrintStyle::Comment |
+			PrintStyle::Label |
+			PrintStyle::Refname => self.write_str("\x1b[0m"),
+			_ => Ok(()),
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -79,45 +158,49 @@ impl INameLookup for NullLookup {
 // PrinterCtx
 // ------------------------------------------------------------------------------------------------
 
-pub type FmtResult = Result<(), FmtError>;
-
-pub struct PrinterCtx<'i, 'l, 'w, 's> {
+/// A `PrinterCtx` holds onto objects relevant for printing out a single instruction. This is
+/// passed as an argument to most methods of [`IPrinter`] and is how most instruction printing
+/// is accomplished.
+pub struct PrinterCtx<'i, 'l, 's> {
 	inst:      &'i Instruction,
 	mmu_state: MmuState,
 	lookup:    &'l dyn INameLookup,
-	writer:    &'w mut dyn FmtWrite,
-	styler:    &'s mut dyn IPrintStyler,
+	output:    &'s mut dyn IPrintOutput,
 }
 
-impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
+impl<'i, 'l, 's> PrinterCtx<'i, 'l, 's> {
 	pub fn new(
 		inst: &'i Instruction,
 		mmu_state: MmuState,
 		lookup: &'l dyn INameLookup,
-		writer: &'w mut dyn FmtWrite,
-		styler: &'s mut dyn IPrintStyler,
+		output: &'s mut dyn IPrintOutput,
 	) -> Self {
-		Self { inst, mmu_state, lookup, writer, styler }
+		Self { inst, mmu_state, lookup, output }
 	}
 
 	// --------------------------------------------------------------------------------------------
 	// Misc methods
 
+	/// How many operands the associated instruction has.
 	pub fn num_ops(&self) -> usize {
 		self.inst.num_ops()
 	}
 
+	/// Gets the `i`th operand of the associated instruction.
 	// the 'i on the return value is C R U C I A L for borrow checking; otherwise,
 	// you cannot get an operand and use the write_ methods simultaneously.
 	pub fn get_op(&self, i: usize) -> &'i Operand {
 		self.inst.get_op(i)
 	}
 
+	/// Gets the associated instruction.
 	// again with the return value lifetime
 	pub fn get_inst(&self) -> &'i Instruction {
 		self.inst
 	}
 
+	/// Given a virtual address, tries to get a name for it (using the associated MMU state).
+	/// If no useful name exists, returns `None`.
 	pub fn name_of_va(&self, va: VA) -> Option<String> {
 		self.lookup.lookup(self.mmu_state, va)
 	}
@@ -136,10 +219,9 @@ impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
 	/// There are shortcut methods for various styles as well.
 	pub fn style(&mut self, style: PrintStyle, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
 	-> FmtResult {
-		self.styler.begin(style, self.writer);
+		self.output.begin(style)?;
 		f(self)?;
-		self.styler.end(style, self.writer);
-		Ok(())
+		self.output.end(style)
 	}
 
 	/// Short for `ctx.style(PrintStyle::Mnemonic, &whatever)`. Same goes for the rest.
@@ -191,18 +273,22 @@ impl<'i, 'l, 'w, 's> PrinterCtx<'i, 'l, 'w, 's> {
 	// --------------------------------------------------------------------------------------------
 	// std::fmt::Write methods
 
+	/// Write a string.
 	pub fn write_str(&mut self, s: &str) -> FmtResult {
-		self.writer.write_str(s)
+		self.output.write_str(s)
 	}
 
+	/// Write a character.
 	pub fn write_char(&mut self, c: char) -> FmtResult {
-		self.writer.write_char(c)
+		self.output.write_char(c)
 	}
 
+	/// Write formatted text.
+	///
 	/// Because of this method, you can use Rust's built-in `write!()` macro on a `PrinterCtx`
 	/// object, like `write!(ctx, "x {}", y)`.
 	pub fn write_fmt(&mut self, args: FmtArguments<'_>) -> FmtResult {
-		self.writer.write_fmt(args)
+		self.output.write_fmt(args)
 	}
 }
 
@@ -278,7 +364,7 @@ pub trait IPrinter {
 		let width = self.mnemonic_max_len();
 		let mnem = self.get_mnemonic(ctx.get_inst());
 
-		write!(ctx, "{mnem:width$} ")?;
+		ctx.style_mnemonic(&|ctx| write!(ctx, "{mnem:width$} "))?;
 		self.print_operands(ctx)
 	}
 
