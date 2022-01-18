@@ -29,7 +29,7 @@ mod descs;
 #[cfg(test)]
 mod tests;
 
-use descs::{ lookup_desc, lookup_desc_cb, Reg, GBOpKind, InstDesc };
+use descs::{ lookup_desc, lookup_desc_cb, Reg, GBOpKind, InstDesc, SynOp, Cc };
 
 #[cfg(test)]
 use descs::{ MetaOp };
@@ -86,6 +86,11 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 	use GBOpKind::*;
 	use Operand::{ UImm, SImm, Indir, Mem };
 	use MemAccess::*;
+
+	if let Some(bit) = desc.bit_operand() {
+		ops[0] = UImm(bit, None);
+		return (1, None);
+	}
 
 	match desc.op_kind() {
 		Imp => {
@@ -176,7 +181,7 @@ impl GBPrinter {
 
 impl IPrinter for GBPrinter {
 	fn mnemonic_max_len(&self) -> usize {
-		3
+		4
 	}
 
 	fn get_mnemonic(&self, i: &Instruction) -> String {
@@ -214,6 +219,64 @@ impl IPrinter for GBPrinter {
 				}
 			}
 		}
+	}
+
+	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
+		let desc = self.lookup_desc(ctx.get_inst().bytes());
+
+		for (i, syn_op) in desc.syn_ops().iter().enumerate() {
+			if i > 0 {
+				ctx.write_str(", ")?;
+			}
+
+			match syn_op {
+				SynOp::Op => {
+					self.print_operand(ctx, 0)?;
+				}
+				SynOp::IndOp => {
+					ctx.write_char('[')?;
+					self.print_operand(ctx, 0)?;
+					ctx.write_char(']')?;
+				}
+				SynOp::SpPlusOp => {
+					ctx.write_char('[')?;
+					self.print_register(ctx, Reg::SP as u8)?;
+					ctx.write_str(" + ")?;
+					self.print_operand(ctx, 0)?;
+					ctx.write_char(']')?;
+				}
+				SynOp::Srg(r) => {
+					self.print_register(ctx, *r as u8)?;
+				}
+				SynOp::IndReg(r) => {
+					ctx.write_char('[')?;
+					self.print_register(ctx, *r as u8)?;
+					ctx.write_char(']')?;
+				}
+				SynOp::IndHlPlus => {
+					ctx.write_char('[')?;
+					self.print_register(ctx, Reg::HL as u8)?;
+					ctx.write_char('+')?;
+					ctx.write_char(']')?;
+				}
+				SynOp::IndHlMinus => {
+					ctx.write_char('[')?;
+					self.print_register(ctx, Reg::HL as u8)?;
+					ctx.write_char('-')?;
+					ctx.write_char(']')?;
+				}
+				SynOp::Cc(c) => {
+					match c {
+						Cc::C  => ctx.write_str("c")?,
+						Cc::NC => ctx.write_str("nc")?,
+						Cc::Z  => ctx.write_str("z")?,
+						Cc::NZ => ctx.write_str("nz")?,
+					}
+				}
+			}
+		}
+
+		Ok(())
 	}
 
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {

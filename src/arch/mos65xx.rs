@@ -404,6 +404,8 @@ impl IPrinter for Mos65xxPrinter {
 		desc.meta_op.mnemonic(self.flavor).into()
 	}
 
+	// TODO: customize print_[u]int_hex based on syntax
+
 	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
 		use std::fmt::Write;
 
@@ -495,6 +497,7 @@ impl IPrinter for Mos65xxPrinter {
 					match desc.addr_mode {
 						ABS | ZPG | REL | LAB | IMM => {
 							// {}
+							// TODO: IMM should put a # before its operand, right?
 							self.print_operand(ctx, 0)?;
 						}
 						ABX | ZPX => {

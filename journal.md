@@ -135,3 +135,7 @@ I like the flexibility, but there are some practical issues with this:
 	- so much for making it flexible :\
 
 What if the `Write` (or something like it) was composited *into* the `IPrintStyler` (which would now be renamed `IPrintOutput` or something)? Would that solve things?
+
+Yes, it would, and it did ;o
+
+Next is to rip out the old printing stuff (and update the arch tests!!).
