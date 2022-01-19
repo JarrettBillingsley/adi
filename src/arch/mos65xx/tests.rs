@@ -9,7 +9,8 @@ use super::{
 };
 
 use crate::memory::{ MmuState, SegId, EA, VA };
-use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter };
+use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter,
+	FmtWritePrintOutput, PrinterCtx };
 use crate::program::{ MemAccess, Instruction };
 
 #[test]
@@ -91,6 +92,14 @@ fn uimm(val: usize) -> Operand {
 	Operand::UImm(val as u64, None)
 }
 
+fn fmt_inst(p: &Mos65xxPrinter, i: &Instruction, state: MmuState) -> String {
+	let mut ret    = String::new();
+	let mut output = FmtWritePrintOutput(&mut ret);
+	let mut ctx    = PrinterCtx::new(i, state, &DummyLookup, &mut output);
+	p.print_inst(&mut ctx).expect("should never fail");
+	ret
+}
+
 #[test]
 fn disasm_success() {
 	use MetaOp::*;
@@ -158,7 +167,7 @@ fn disasm_range() {
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
-		output.push(p.fmt_instr(&inst, state, &DummyLookup));
+		output.push(fmt_inst(&p, &inst, state));
 	}
 
 	assert!(!iter.has_err());
@@ -222,11 +231,10 @@ fn printing() {
 
 	let old = Mos65xxPrinter::new(SyntaxFlavor::Old);
 	let new = Mos65xxPrinter::new(SyntaxFlavor::New);
-	let l = &DummyLookup;
 	let state = MmuState::default();
 
 	for (i, o, n) in tests {
-		assert_eq!(old.fmt_instr(&i, state, l), *o);
-		assert_eq!(new.fmt_instr(&i, state, l), *n);
+		assert_eq!(fmt_inst(&old, &i, state), *o);
+		assert_eq!(fmt_inst(&new, &i, state), *n);
 	}
 }

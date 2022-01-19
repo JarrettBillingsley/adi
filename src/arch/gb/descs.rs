@@ -124,6 +124,7 @@ const CC_NZ: SynOp = SynOp::Cc(Cc::NZ);
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(super) enum SynOp {
 	Op,
+	Op2,
 	IndOp,
 	SpPlusOp,
 	Srg(Reg), // not named Reg cause that name has enough meanings already
@@ -275,7 +276,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x33, INC,  &[Srg(SP)],                Other,  Imp),
 	InstDesc(   0x34, INC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 	InstDesc(   0x35, DEC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
-	InstDesc(   0x36, LD,   &[IndReg(HL), Op],         Other,  LdHlImm),
+	InstDesc(   0x36, LD,   &[IndReg(HL), Op2],        Other,  LdHlImm),
 	InstDesc(   0x37, SCF,  &[],                       Other,  Imp),
 	InstDesc(   0x38, JR,   &[CC_C, Op],               Cond,   Rel),
 	InstDesc(   0x39, ADD,  &[Srg(HL), Srg(SP)],       Other,  Imp),

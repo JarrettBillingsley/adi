@@ -110,7 +110,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		IndHi(a)  => { ops[0] = Indir(rdisp(Reg::C, 0xFF00), a);                    (1, None) }
 		Ind(r, a) => { ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);           (1, None) }
 
-		LdHlImm   => {
+		LdHlImm => {
 			ops[0] = Indir(MemIndir::Reg { reg: Reg::HL as u8 }, W);
 			ops[1] = UImm(img[1] as u64, None);
 			(2, None)
@@ -170,12 +170,25 @@ impl IPrinter for GBPrinter {
 		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
 
-	fn print_indir_reg(&self, _ctx: &mut PrinterCtx, _reg: u8) -> FmtResult {
-		unreachable!();
+	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> FmtResult {
+		ctx.write_char('[')?;
+		self.print_register(ctx, reg)?;
+		ctx.write_char(']')
 	}
 
-	fn print_indir_reg_disp(&self, _ctx: &mut PrinterCtx, _reg: u8, _disp: i64) -> FmtResult {
-		unreachable!();
+	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, reg: u8, disp: i64) -> FmtResult {
+		ctx.write_char('[')?;
+		self.print_register(ctx, reg)?;
+
+		if disp < 0 {
+			ctx.write_str(" - ")?;
+			self.print_int_no_radix(ctx, -disp)?;
+		} else {
+			ctx.write_str(" + ")?;
+			self.print_int_no_radix(ctx, disp)?;
+		}
+
+		ctx.write_char(']')
 	}
 
 	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
@@ -201,25 +214,23 @@ impl IPrinter for GBPrinter {
 				SynOp::Op => {
 					self.print_operand(ctx, 0)?;
 				}
+				SynOp::Op2 => {
+					self.print_operand(ctx, 1)?;
+				}
 				SynOp::IndOp => {
 					ctx.write_char('[')?;
 					self.print_operand(ctx, 0)?;
 					ctx.write_char(']')?;
 				}
 				SynOp::SpPlusOp => {
-					ctx.write_char('[')?;
-					self.print_register(ctx, Reg::SP as u8)?;
-					ctx.write_str(" + ")?;
+					// dispatches to print_indir_reg_disp
 					self.print_operand(ctx, 0)?;
-					ctx.write_char(']')?;
 				}
 				SynOp::Srg(r) => {
 					self.print_register(ctx, *r as u8)?;
 				}
 				SynOp::IndReg(r) => {
-					ctx.write_char('[')?;
-					self.print_register(ctx, *r as u8)?;
-					ctx.write_char(']')?;
+					self.print_indir_reg(ctx, *r as u8)?;
 				}
 				SynOp::IndHlPlus => {
 					ctx.write_char('[')?;

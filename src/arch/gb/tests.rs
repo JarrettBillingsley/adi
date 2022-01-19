@@ -1,7 +1,8 @@
 #![allow(unused_imports)]
 
 use crate::memory::{ MmuState, SegId, EA, VA };
-use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter };
+use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter,
+	FmtWritePrintOutput, PrinterCtx };
 use crate::program::{ MemAccess, MemIndir, Instruction, Operand };
 
 use super::{
@@ -31,6 +32,7 @@ fn mnemonics() {
 	assert_eq!(MetaOp::UNK.mnemonic(),  "???");
 }
 
+#[track_caller]
 fn disas(va: usize, img: &[u8]) -> Instruction {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
@@ -41,6 +43,7 @@ fn disas(va: usize, img: &[u8]) -> Instruction {
 	}
 }
 
+#[track_caller]
 fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
@@ -62,6 +65,7 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
 	}
 }
 
+#[track_caller]
 fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
@@ -95,6 +99,14 @@ fn uimm(val: usize) -> Operand {
 
 fn simm(val: isize) -> Operand {
 	Operand::SImm(val as i64, None)
+}
+
+fn fmt_inst(p: &GBPrinter, i: &Instruction, state: MmuState) -> String {
+	let mut ret    = String::new();
+	let mut output = FmtWritePrintOutput(&mut ret);
+	let mut ctx    = PrinterCtx::new(i, state, &DummyLookup, &mut output);
+	p.print_inst(&mut ctx).expect("should never fail");
+	ret
 }
 
 #[test]
@@ -154,36 +166,35 @@ impl INameLookup for DummyLookup {
 #[test]
 fn printing() {
 	let tests: &[(Instruction, &str)] = &[
-		(disas(0, &[0xFB]),             "ei "),             // Imp
-		(disas(0, &[0x03]),             "inc bc"),
-		(disas(0, &[0x0D]),             "dec c"),
-		(disas(0, &[0xCF]),             "rst 0x08"),
-		(disas(0, &[0x10, 0x00]),       "stop "),           // Dummy
-		(disas(0, &[0x02]),             "ld [bc], a"),      // Ind
-		(disas(0, &[0x32]),             "ld [hl-], a"),
-		(disas(0, &[0xE2]),             "ldh [c], a"),      // IndHi
-		(disas(0, &[0x36, 7]),          "ld [hl], 7"),      // LdHlImm
-		(disas(0, &[0x06, 0xEF]),       "ld b, 0xEF"),      // UImm8
-		(disas(0, &[0x01, 0x0D, 0xF0]), "ld bc, 0xF00D"),   // Imm16
-		(disas(0, &[0xE8, 0x04]),       "add sp, 4"),       // SImm8
-		(disas(0, &[0xE8, 0xFC]),       "add sp, -4"),
-		(disas(0, &[0xE8, 0x7F]),       "add sp, 0x7F"),
-		(disas(0, &[0xE8, 0x80]),       "add sp, -0x80"),
-		(disas(0xCE, &[0x18, 0x30]),    "jr CartHeader"),   // Rel
-		(disas(0, &[0x18, 0x30]),       "jr 0x0032"),
-		(disas(0, &[0x20, 0x30]),       "jr nz, 0x0032"),
-		(disas(0, &[0x08, 0xFC, 0xFF]), "ld [v_hram], sp"), // Add16
-		(disas(0, &[0x08, 0xFD, 0xFF]), "ld [0xFFFD], sp"),
+		(disas(0, &[0xFB]),             "ei   "),             // Imp
+		(disas(0, &[0x03]),             "inc  bc"),
+		(disas(0, &[0x0D]),             "dec  c"),
+		(disas(0, &[0xCF]),             "rst  0x0008"),
+		(disas(0, &[0x10, 0x00]),       "stop "),             // Dummy
+		(disas(0, &[0x02]),             "ld   [bc], a"),      // Ind
+		(disas(0, &[0x32]),             "ld   [hl-], a"),
+		(disas(0, &[0xE2]),             "ldh  [c], a"),       // IndHi
+		(disas(0, &[0x36, 7]),          "ld   [hl], 7"),      // LdHlImm
+		(disas(0, &[0x06, 0xEF]),       "ld   b, 0xEF"),      // UImm8
+		(disas(0, &[0x01, 0x0D, 0xF0]), "ld   bc, 0xF00D"),   // Imm16
+		(disas(0, &[0xE8, 0x04]),       "add  sp, 4"),        // SImm8
+		(disas(0, &[0xE8, 0xFC]),       "add  sp, -4"),
+		(disas(0, &[0xE8, 0x7F]),       "add  sp, 0x7F"),
+		(disas(0, &[0xE8, 0x80]),       "add  sp, -0x80"),
+		(disas(0xCE, &[0x18, 0x30]),    "jr   CartHeader"),   // Rel
+		(disas(0, &[0x18, 0x30]),       "jr   0x0032"),
+		(disas(0, &[0x20, 0x30]),       "jr   nz, 0x0032"),
+		(disas(0, &[0x08, 0xFC, 0xFF]), "ld   [v_hram], sp"), // Add16
+		(disas(0, &[0x08, 0xFD, 0xFF]), "ld   [0xFFFD], sp"),
 		(disas(0, &[0xCD, 0xEF, 0xBE]), "call beefmaster"),
 
 	];
 
 	let print = GBPrinter::new();
-	let l = &DummyLookup;
 	let state = MmuState::default();
 
 	for (i, exp) in tests {
-		assert_eq!(print.fmt_instr(&i, state, l), *exp);
+		assert_eq!(fmt_inst(&print, &i, state), *exp);
 	}
 }
 
@@ -214,26 +225,26 @@ fn disasm_range() {
 	];
 
 	let expected = &[
-		"ei ",
-		"inc bc",
-		"dec c",
-		"rst 0x08",
+		"ei   ",
+		"inc  bc",
+		"dec  c",
+		"rst  0x0008",
 		"stop ",
-		"ld [bc], a",
-		"ld [hl-], a",
-		"ldh [c], a",
-		"ld [hl], 7",
-		"ld b, 0xEF",
-		"ld bc, 0xF00D",
-		"add sp, 4",
-		"add sp, -4",
-		"add sp, 0x7F",
-		"add sp, -0x80",
-		"jr 0x004A",
-		"jr 0x004C",
-		"jr nz, 0x004E",
-		"ld [v_hram], sp",
-		"ld [0xFFFD], sp",
+		"ld   [bc], a",
+		"ld   [hl-], a",
+		"ldh  [c], a",
+		"ld   [hl], 7",
+		"ld   b, 0xEF",
+		"ld   bc, 0xF00D",
+		"add  sp, 4",
+		"add  sp, -4",
+		"add  sp, 0x7F",
+		"add  sp, -0x80",
+		"jr   0x004A",
+		"jr   0x004C",
+		"jr   nz, 0x004E",
+		"ld   [v_hram], sp",
+		"ld   [0xFFFD], sp",
 		"call beefmaster",
 	];
 
@@ -244,7 +255,7 @@ fn disasm_range() {
 	let mut output = Vec::new();
 
 	for inst in &mut iter {
-		output.push(p.fmt_instr(&inst, state, &DummyLookup));
+		output.push(fmt_inst(&p, &inst, state));
 	}
 
 	assert!(!iter.has_err());
