@@ -150,7 +150,6 @@ pub(super) struct InstDesc (
 impl InstDesc {
 	#[inline] pub(super) fn opcode  (&self) -> u16             { self.0 }
 	#[inline] pub(super) fn meta_op (&self) -> MetaOp          { self.1 }
-	#[inline] pub(super) fn op_templ(&self) -> &'static str    { "" }
 	#[inline] pub(super) fn syn_ops(&self) -> &'static [SynOp] { self.2 }
 	#[inline] pub(super) fn kind    (&self) -> InstructionKind { self.3 }
 	#[inline] pub(super) fn op_kind (&self) -> GBOpKind        { self.4 }

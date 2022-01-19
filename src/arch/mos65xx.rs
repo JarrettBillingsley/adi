@@ -7,7 +7,6 @@ use crate::program::{
 	Operand,
 	Instruction,
 	InstructionKind,
-	Radix,
 };
 use crate::arch::{
 	DisasError, DisasResult,
@@ -335,36 +334,6 @@ impl Mos65xxPrinter {
 	pub fn new(flavor: SyntaxFlavor) -> Self {
 		Self { flavor }
 	}
-
-	fn fmt_imm(self, imm: u64, radix: Option<Radix>) -> String {
-		let radix = radix.unwrap_or_else(|| if imm < 0x10 { Radix::Dec } else { Radix::Hex });
-
-		match self.flavor {
-			SyntaxFlavor::Old => {
-				match radix {
-					Radix::Dec => format!("#{}", imm),
-					Radix::Hex => format!("#${:X}", imm),
-					Radix::Bin => format!("#%{:b}", imm),
-				}
-			}
-			SyntaxFlavor::New => {
-				match radix {
-					Radix::Dec => format!("{}",  imm),
-					Radix::Hex => format!("0x{:X}", imm),
-					Radix::Bin => format!("0b{:b}", imm),
-				}
-			}
-		}
-	}
-
-	fn fmt_addr(self, addr: VA, zpg: bool) -> String {
-		match self.flavor {
-			SyntaxFlavor::Old =>
-				if zpg { format!("${:02X}", addr) } else { format!("${:04X}", addr) },
-			SyntaxFlavor::New =>
-				if zpg { format!("0x{:02X}", addr)} else { format!("0x{:04X}", addr) },
-		}
-	}
 }
 
 impl IPrinter for Mos65xxPrinter {
@@ -374,8 +343,6 @@ impl IPrinter for Mos65xxPrinter {
 	fn get_mnemonic(&self, i: &Instruction) -> String {
 		lookup_desc(i.bytes()[0]).meta_op.mnemonic(self.flavor).into()
 	}
-
-	// TODO: customize print_[u]int_hex based on syntax (see self.fmt_imm)
 
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
 		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
@@ -395,10 +362,15 @@ impl IPrinter for Mos65xxPrinter {
 	// use a different syntax to select zero page addressing. self.fmt_addr is partway there
 
 	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
+		let desc = lookup_desc(ctx.get_inst().bytes()[0]);
+		let zpg = desc.addr_mode.is_zero_page();
+
 		ctx.style_number(&|ctx| {
 			match self.flavor {
-				SyntaxFlavor::Old => write!(ctx, "${:04X}", va),
-				SyntaxFlavor::New => write!(ctx, "0x{:04X}", va),
+				SyntaxFlavor::Old =>
+					if zpg { write!(ctx, "${:02X}", va) } else { write!(ctx, "${:04X}", va) },
+				SyntaxFlavor::New =>
+					if zpg { write!(ctx, "0x{:02X}", va)} else { write!(ctx, "0x{:04X}", va) },
 			}
 		})
 	}
@@ -408,6 +380,50 @@ impl IPrinter for Mos65xxPrinter {
 
 	fn mnemonic_max_len(&self) -> usize {
 		3
+	}
+
+	fn print_uint_hex(&self, ctx: &mut PrinterCtx, val: u64) -> FmtResult {
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "#${:X}", val),
+				SyntaxFlavor::New => write!(ctx, "0x{:X}", val),
+			}
+		})
+	}
+
+	fn print_uint_bin(&self, ctx: &mut PrinterCtx, val: u64) -> FmtResult {
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "#%{:b}", val),
+				SyntaxFlavor::New => write!(ctx, "0b{:b}", val),
+			}
+		})
+	}
+
+	fn print_int_hex(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
+		if val < 0 {
+			ctx.style_symbol(&|ctx| ctx.write_char('-'))?;
+		}
+
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "#${:X}", val.abs()),
+				SyntaxFlavor::New => write!(ctx, "0x{:X}", val.abs()),
+			}
+		})
+	}
+
+	fn print_int_bin(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
+		if val < 0 {
+			ctx.style_symbol(&|ctx| ctx.write_char('-'))?;
+		}
+
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "#%{:b}", val.abs()),
+				SyntaxFlavor::New => write!(ctx, "0b{:b}", val.abs()),
+			}
+		})
 	}
 
 	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
