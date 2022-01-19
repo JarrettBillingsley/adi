@@ -16,7 +16,6 @@ use crate::arch::{
 	DisasError, DisasResult,
 	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
-	INameLookup,
 	IArchitecture,
 };
 use crate::memory::{ MmuState, Endian, EA, VA };
@@ -150,26 +149,6 @@ impl GBPrinter {
 		Self { }
 	}
 
-	fn fmt_uimm(self, imm: u64) -> String {
-		if imm < 0x10 { format!("{}",  imm) } else { format!("0x{:X}", imm) }
-	}
-
-	fn fmt_simm(self, imm: i64) -> String {
-		if imm.abs() < 0x10 {
-			format!("{}",  imm)
-		} else {
-			let sign = if imm < 0 { "-" } else { "" };
-			format!("{}0x{:X}", sign, imm.abs())
-		}
-	}
-
-	fn fmt_addr(self, addr: u64, state: MmuState, l: &impl INameLookup) -> String {
-		match l.lookup(state, VA(addr as usize)) {
-			Some(name) => name,
-			None       => format!("0x{:04X}", addr),
-		}
-	}
-
 	fn lookup_desc(self, bytes: &[u8]) -> InstDesc {
 		if bytes[0] == 0xCB {
 			lookup_desc_cb(bytes[1])
@@ -180,12 +159,34 @@ impl GBPrinter {
 }
 
 impl IPrinter for GBPrinter {
-	fn mnemonic_max_len(&self) -> usize {
-		4
-	}
+	// --------------------------------------------------------------------------------------------
+	// Required methods
 
 	fn get_mnemonic(&self, i: &Instruction) -> String {
 		self.lookup_desc(i.bytes()).mnemonic().into()
+	}
+
+	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
+		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
+	}
+
+	fn print_indir_reg(&self, _ctx: &mut PrinterCtx, _reg: u8) -> FmtResult {
+		unreachable!();
+	}
+
+	fn print_indir_reg_disp(&self, _ctx: &mut PrinterCtx, _reg: u8, _disp: i64) -> FmtResult {
+		unreachable!();
+	}
+
+	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
+		ctx.style_number(&|ctx| write!(ctx, "0x{:04X}", va))
+	}
+
+	// --------------------------------------------------------------------------------------------
+	// Provided method overrides
+
+	fn mnemonic_max_len(&self) -> usize {
+		4
 	}
 
 	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
@@ -244,14 +245,6 @@ impl IPrinter for GBPrinter {
 		}
 
 		Ok(())
-	}
-
-	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
-		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
-	}
-
-	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
-		ctx.style_number(&|ctx| write!(ctx, "0x{:04X}", va))
 	}
 }
 

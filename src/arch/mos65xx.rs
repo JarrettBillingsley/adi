@@ -368,23 +368,32 @@ impl Mos65xxPrinter {
 }
 
 impl IPrinter for Mos65xxPrinter {
-	fn mnemonic_max_len(&self) -> usize {
-		3
-	}
+	// --------------------------------------------------------------------------------------------
+	// Required methods
 
 	fn get_mnemonic(&self, i: &Instruction) -> String {
-		let desc = lookup_desc(i.bytes()[0]);
-		desc.meta_op.mnemonic(self.flavor).into()
+		lookup_desc(i.bytes()[0]).meta_op.mnemonic(self.flavor).into()
 	}
 
-	// TODO: customize print_[u]int_hex based on syntax
+	// TODO: customize print_[u]int_hex based on syntax (see self.fmt_imm)
 
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
 		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
 
+	fn print_indir_reg(&self, _ctx: &mut PrinterCtx, _reg: u8) -> FmtResult {
+		unreachable!();
+	}
+
+	// Most of the work is done print_operands, including printing the register;
+	// here we just have to display the displacement as an address.
+	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, _reg: u8, disp: i64) -> FmtResult {
+		self.print_va(ctx, VA(disp as usize))
+	}
+
 	// TODO: use is_zero_page to customize address display? I think 6502 assemblers
-	// use a different syntax to select zero page addressing
+	// use a different syntax to select zero page addressing. self.fmt_addr is partway there
+
 	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
 		ctx.style_number(&|ctx| {
 			match self.flavor {
@@ -392,6 +401,13 @@ impl IPrinter for Mos65xxPrinter {
 				SyntaxFlavor::New => write!(ctx, "0x{:04X}", va),
 			}
 		})
+	}
+
+	// --------------------------------------------------------------------------------------------
+	// Provided method overrides
+
+	fn mnemonic_max_len(&self) -> usize {
+		3
 	}
 
 	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
@@ -516,12 +532,6 @@ impl IPrinter for Mos65xxPrinter {
 		}
 
 		Ok(())
-	}
-
-	// Most of the work is done print_operands above, including printing the register;
-	// here we just have to display the displacement as an address.
-	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, _reg: u8, disp: i64) -> FmtResult {
-		self.print_va(ctx, VA(disp as usize))
 	}
 }
 

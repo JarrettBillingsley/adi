@@ -319,19 +319,11 @@ pub trait IPrinter {
 
 	/// Prints an indirect memory access where the address is specified by a register.
 	/// It's up to the architecture what this will look like.
-	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> FmtResult {
-		// TODO: these should be implemented by implementors
-		let _ = (ctx, reg);
-		Ok(())
-	}
+	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> FmtResult;
 
 	/// Prints an indirect memory access where the address is specified by a register plus a
 	/// displacement. It's up to the architecture what this will look like.
-	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, reg: u8, disp: i64) -> FmtResult {
-		// TODO: these should be implemented by implementors
-		let _ = (ctx, reg, disp);
-		Ok(())
-	}
+	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, reg: u8, disp: i64) -> FmtResult;
 
 	/// This should print a virtual address in hexadecimal using `ctx.style_number`, with
 	/// however many digits are appropriate for this architecture.
