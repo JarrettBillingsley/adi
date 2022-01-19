@@ -139,3 +139,6 @@ What if the `Write` (or something like it) was composited *into* the `IPrintStyl
 Yes, it would, and it did ;o
 
 Next is to rip out the old printing stuff (and update the arch tests!!).
+
+And that is DONE.
+

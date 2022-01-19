@@ -48,9 +48,6 @@ pub enum Reg {
 }
 
 impl Reg {
-	/// how many bytes are needed to represent all regs
-	const ALL_BYTES: usize = 13;
-
 	/// how many bytes each register takes up
 	const fn byte_size(&self) -> usize {
 		match self {

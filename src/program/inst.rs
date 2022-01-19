@@ -51,25 +51,6 @@ pub enum MemIndir {
 	RegDisp    { reg: u8, disp: i64 },
 }
 
-impl MemIndir {
-	/// The base (first) register.
-	pub fn base_reg(&self) -> u8 {
-		use MemIndir::*;
-		match self {
-			Reg { reg } | RegDisp { reg, .. } => *reg
-		}
-	}
-
-	/// The displacement. `MemIndir::Reg` has a displacement of 0.
-	pub fn disp(&self) -> i64 {
-		use MemIndir::*;
-		match self {
-			Reg { .. } => 0,
-			RegDisp { disp, .. } => *disp
-		}
-	}
-}
-
 // ------------------------------------------------------------------------------------------------
 // Operand
 // ------------------------------------------------------------------------------------------------
