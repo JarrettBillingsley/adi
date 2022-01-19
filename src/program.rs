@@ -229,11 +229,6 @@ impl Program {
 		self.print.get_mnemonic(i)
 	}
 
-	/// Formats the given instruction's operands into a string.
-	pub fn inst_fmt_operands(&self, state: MmuState, i: &Instruction) -> String {
-		self.print.fmt_operands(i, state, self)
-	}
-
 	/// "Raw" interface for printing instructions. Takes the `output` object whose methods will
 	/// be called to output the instruction.
 	pub fn inst_print(&self, i: &Instruction, state: MmuState, output: &mut dyn IPrintOutput)

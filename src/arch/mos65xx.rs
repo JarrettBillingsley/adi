@@ -5,7 +5,6 @@ use std::convert::TryInto;
 
 use crate::program::{
 	Operand,
-	MemIndir,
 	Instruction,
 	InstructionKind,
 	Radix,
@@ -14,7 +13,6 @@ use crate::arch::{
 	DisasError, DisasResult,
 	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
-	INameLookup,
 	IArchitecture,
 };
 use crate::memory::{ MmuState, Endian, EA, VA };
@@ -51,7 +49,7 @@ pub enum SyntaxFlavor {
 
 /// All 65xx addressing modes.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum AddrMode {
+enum AddrMode {
 	/// Implied (no operand bytes), e.g. `rol`.
 	IMP,
 	/// Immediate (1 byte), e.g. `lda #$30`.
@@ -89,7 +87,7 @@ pub enum AddrMode {
 
 impl AddrMode {
 	/// How many operand bytes are needed for this mode?
-	pub fn op_bytes(self) -> usize {
+	fn op_bytes(self) -> usize {
 		use AddrMode::*;
 		match self {
 			IMP => 0,
@@ -99,38 +97,9 @@ impl AddrMode {
 	}
 
 	/// Is this a zero-page addressing mode?
-	pub fn is_zero_page(self) -> bool {
+	fn is_zero_page(self) -> bool {
 		use AddrMode::*;
 		matches!(self, ZPG | ZPX | ZPY | IZX | IZY)
-	}
-
-	/// Operand printing template
-	pub fn operand_template(self, flavor: SyntaxFlavor) -> &'static str {
-		use AddrMode::*;
-
-		match flavor {
-			SyntaxFlavor::Old =>
-				match self {
-					ABS | ZPG | REL | LAB | IMM => "{}",
-					ABX | ZPX                   => "{},x",
-					ABY | ZPY                   => "{},y",
-					IND                         => "({})",
-					IZX                         => "({},x)",
-					IZY                         => "({}),y",
-					IMP                         => unreachable!(),
-				},
-
-			SyntaxFlavor::New =>
-				match self {
-					REL | LAB | IMM => "{}",
-					ZPG | ABS | IND => "[{}]",
-					ZPX | ABX       => "[{} + x]",
-					ZPY | ABY       => "[{} + y]",
-					IZX             => "[[{} + x]]",
-					IZY             => "[[{}] + y]",
-					IMP             => unreachable!(),
-				},
-		}
 	}
 }
 
@@ -147,7 +116,7 @@ impl AddrMode {
 /// "load immediate" instructions and look like `li`, while `LSRA/ROLA/RORA` have an implied
 /// `a` operand.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum MetaOp {
+enum MetaOp {
 	UNK,
 	ADC, AND,  ASLA, ASL,  BCC,  BCS,  BEQ,  BIT, BMI, BNE,
 	BPL, BRK,  BVC,  BVS,  CLC,  CLD,  CLI,  CLV, CMP, CPX,
@@ -162,7 +131,7 @@ pub enum MetaOp {
 
 impl MetaOp {
 	/// Instruction mnemonics
-	pub fn mnemonic(&self, flavor: SyntaxFlavor) -> &'static str {
+	fn mnemonic(&self, flavor: SyntaxFlavor) -> &'static str {
 		use MetaOp::*;
 		match flavor {
 			SyntaxFlavor::Old =>
@@ -238,7 +207,7 @@ impl MetaOp {
 /// 65xx registers.
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum Reg {
+enum Reg {
 	A, X, Y, S, P
 }
 
@@ -258,7 +227,7 @@ impl Reg {
 
 /// A 65xx instruction desc.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct InstDesc {
+struct InstDesc {
 	/// The actual opcode byte.
 	opcode:    Opcode,
 	/// Which meta-op this is.
@@ -337,7 +306,11 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 				_ => unreachable!()
 			};
 
-			let target = if desc.kind().has_control_target() { Some(VA(addr as usize)) } else { None };
+			let target = if desc.kind().has_control_target() {
+				Some(VA(addr as usize))
+			} else {
+				None
+			};
 			(Some(operand_ctor(addr as u64)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
@@ -406,58 +379,12 @@ impl IPrinter for Mos65xxPrinter {
 
 	// TODO: customize print_[u]int_hex based on syntax
 
-	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
-		use std::fmt::Write;
-
-		let mut ret = String::new();
-		let desc = lookup_desc(i.bytes()[0]);
-
-		match desc.meta_op.extra_operands(self.flavor) {
-			[]       => {},
-			[o1]     => {
-				if i.num_ops() == 0 {
-					write!(ret, "{}", o1).unwrap();
-				} else {
-					write!(ret, "{}, ", o1).unwrap();
-				}
-			}
-			// impossible to have more operands in this case (e.g. mov a, x)
-			[o1, o2] => write!(ret, "{}, {}", o1, o2).unwrap(),
-			_        => unreachable!()
-		}
-
-		if i.num_ops() > 0 {
-			let operand = match i.ops().first().unwrap() {
-				Operand::Reg(..)       => unreachable!(),
-				Operand::UImm(imm, r)  => self.fmt_imm(*imm, *r),
-				Operand::Mem(addr, ..) => {
-					match l.lookup(state, *addr) {
-						Some(name) => name,
-						None       => self.fmt_addr(*addr, desc.addr_mode.is_zero_page()),
-					}
-				}
-				Operand::Indir(MemIndir::RegDisp { disp, .. }, ..) => {
-					let addr = VA(*disp as usize);
-
-					match l.lookup(state, addr) {
-						Some(name) => name,
-						None       => self.fmt_addr(addr, desc.addr_mode.is_zero_page()),
-					}
-				}
-				_ => unreachable!()
-			};
-
-			let template = desc.addr_mode.operand_template(self.flavor);
-			ret += &template.replace("{}", &operand);
-		}
-
-		ret
-	}
-
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
 		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}
 
+	// TODO: use is_zero_page to customize address display? I think 6502 assemblers
+	// use a different syntax to select zero page addressing
 	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
 		ctx.style_number(&|ctx| {
 			match self.flavor {

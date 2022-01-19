@@ -313,9 +313,6 @@ pub trait IPrinter {
 	/// Give a string representation of an instruction's mnemonic.
 	fn get_mnemonic(&self, i: &Instruction) -> String;
 
-	/// Give a string representation of an instruction's operands.
-	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String;
-
 	/// Prints the name of a register. Be sure to use `ctx.style_register` for proper
 	/// output styling.
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult;
@@ -351,11 +348,6 @@ pub trait IPrinter {
 	/// This would be an associated constant, but `enum_dispatch` doesn't support those.
 	fn mnemonic_max_len(&self) -> usize {
 		8
-	}
-
-	/// Give a string representation of an instruction.
-	fn fmt_instr(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
-		format!("{} {}", self.get_mnemonic(i), self.fmt_operands(i, state, l))
 	}
 
 	/// Prints the instruction associated with `ctx`. Inserts whitespace padding after

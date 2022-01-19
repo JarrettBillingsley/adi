@@ -433,41 +433,6 @@ impl IPrinter for ToyPrinter {
 		self.lookup_desc(i.bytes()).mnemonic().into()
 	}
 
-	fn fmt_operands(&self, i: &Instruction, state: MmuState, l: &impl INameLookup) -> String {
-		let desc = self.lookup_desc(i.bytes());
-		let templ = desc.op_templ;
-
-		use AddrMode::*;
-
-		match desc.addr_mode {
-			IMP => templ.into(),
-			RR => {
-				let r0 = inst_reg(i, 0).name();
-				let r1 = inst_reg(i, 1).name();
-				templ.replace("{0}", r0).replace("{1}", r1)
-			}
-			RI8 => {
-				let r0 = inst_reg(i, 0).name();
-				if desc.meta_op.access().is_some() {
-					templ.replace("{0}", r0)
-						.replace("{1}", &self.fmt_addr(inst_addr(i, 1), state, l))
-				} else {
-					templ.replace("{0}", r0)
-						.replace("{1}", &self.fmt_uimm(inst_imm(i) as u64))
-				}
-			}
-			S8 | I16 => {
-				let imm = self.fmt_addr(inst_addr(i, 0), state, l);
-				templ.replace("{0}", &imm)
-			}
-			RI16 => {
-				let r0 = inst_reg(i, 0).name();
-				let imm = self.fmt_addr(inst_addr(i, 1), state, l);
-				templ.replace("{0}", r0).replace("{1}", &imm)
-			}
-		}
-	}
-
 	fn print_register(&self, ctx: &mut PrinterCtx, r: u8) -> FmtResult {
 		ctx.style_register(&|ctx| ctx.write_str(Reg::register_names()[r as usize]))
 	}

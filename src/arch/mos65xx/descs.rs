@@ -7,7 +7,7 @@ use super::{ InstDesc, Opcode, MetaOp, AddrMode, Reg };
 // InstDesc table
 // ------------------------------------------------------------------------------------------------
 
-pub fn lookup_desc(opcode: u8) -> InstDesc {
+pub(super) fn lookup_desc(opcode: u8) -> InstDesc {
 	INST_DESCS[opcode as usize]
 }
 
