@@ -29,9 +29,9 @@ pub enum DisasErrorKind {
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 #[display("disassembly error at VA 0x{va:08X}: {kind}")]
 pub struct DisasError {
-	/// VA passed to `disas_instr`.
+	/// VA passed to `disas_inst`.
 	pub va:   VA,
-	/// EA passed to `disas_instr`.
+	/// EA passed to `disas_inst`.
 	pub ea:   EA,
 	/// kind of error.
 	pub kind: DisasErrorKind,

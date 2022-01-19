@@ -234,7 +234,7 @@ impl Program {
 	pub fn inst_print(&self, i: &Instruction, state: MmuState, output: &mut dyn IPrintOutput)
 	-> FmtResult {
 		let mut ctx = PrinterCtx::new(i, state, self, output);
-		self.print.print_instr(&mut ctx)
+		self.print.print_inst(&mut ctx)
 	}
 
 	/// Formats the given instruction into a string. No styling is included.
@@ -242,7 +242,7 @@ impl Program {
 		let mut ret    = String::new();
 		let mut output = FmtWritePrintOutput(&mut ret);
 		let mut ctx    = PrinterCtx::new(i, state, self, &mut output);
-		self.print.print_instr(&mut ctx).expect("should never fail");
+		self.print.print_inst(&mut ctx).expect("should never fail");
 		ret
 	}
 

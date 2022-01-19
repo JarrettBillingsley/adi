@@ -47,7 +47,7 @@ pub trait IDisassembler : Sized {
 	/// Disassemble a single instruction from `img` with the given VA and EA.
 	/// Returns the disassembled instruction and the new MMU state (which will be in effect
 	/// on the *next* instruction).
-	fn disas_instr(&self, img: &[u8], state: MmuState, va: VA, ea: EA)
+	fn disas_inst(&self, img: &[u8], state: MmuState, va: VA, ea: EA)
 	-> DisasResult<Instruction>;
 
 	// --------------------------------------------------------------------------------------------
@@ -123,7 +123,7 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 			// don't want to produce an error when successfully disassembling all instructions
 			None
 		} else {
-			match self.disas.disas_instr(&self.img[self.offs ..], self.state, self.va, self.ea) {
+			match self.disas.disas_inst(&self.img[self.offs ..], self.state, self.va, self.ea) {
 				Ok(inst) => {
 					let size = inst.size();
 					self.va += size;

@@ -259,7 +259,7 @@ impl InstDesc {
 pub struct Mos65xxDisassembler;
 
 impl IDisassembler for Mos65xxDisassembler {
-	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, ea: EA)
+	fn disas_inst(&self, img: &[u8], _state: MmuState, va: VA, ea: EA)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {

@@ -40,7 +40,7 @@ use descs::{ MetaOp };
 pub struct GBDisassembler;
 
 impl IDisassembler for GBDisassembler {
-	fn disas_instr(&self, img: &[u8], _state: MmuState, va: VA, ea: EA)
+	fn disas_inst(&self, img: &[u8], _state: MmuState, va: VA, ea: EA)
 	-> DisasResult<Instruction> {
 		// do we have enough bytes?
 		if img.is_empty() {

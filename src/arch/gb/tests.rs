@@ -35,7 +35,7 @@ fn disas(va: usize, img: &[u8]) -> Instruction {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match GBDisassembler.disas_instr(img, state, va, ea) {
+	match GBDisassembler.disas_inst(img, state, va, ea) {
 		Ok(inst) => inst,
 		Err(..)  => panic!()
 	}
@@ -45,7 +45,7 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, ops: &[Operand]) {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match GBDisassembler.disas_instr(img, state, va, ea) {
+	match GBDisassembler.disas_inst(img, state, va, ea) {
 		Ok(inst) => {
 			assert_eq!(inst.va(), va);
 			assert_eq!(lookup_desc(inst.bytes()[0]).unwrap().meta_op(), meta_op);
@@ -66,7 +66,7 @@ fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
-	match GBDisassembler.disas_instr(img, state, va, ea) {
+	match GBDisassembler.disas_inst(img, state, va, ea) {
 		Ok(inst) => {
 			panic!("should have failed disassembling {:?}, but got {:?}", img, inst);
 		}

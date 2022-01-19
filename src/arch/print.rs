@@ -344,7 +344,7 @@ pub trait IPrinter {
 
 	/// Prints the instruction associated with `ctx`. Inserts whitespace padding after
 	/// the mnemonic based on what [`mnemonic_max_len`] returns.
-	fn print_instr(&self, ctx: &mut PrinterCtx) -> FmtResult {
+	fn print_inst(&self, ctx: &mut PrinterCtx) -> FmtResult {
 		let width = self.mnemonic_max_len();
 		let mnem = self.get_mnemonic(ctx.get_inst());
 
@@ -353,7 +353,7 @@ pub trait IPrinter {
 	}
 
 	/// Prints all operands of the instruction associated with `ctx`, comma-separated.
-	/// This is only called by [`print_instr`], so if you override that method (maybe
+	/// This is only called by [`print_inst`], so if you override that method (maybe
 	/// because your architecture does not fill in all operands), this may go unused.
 	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
 		for i in 0 .. ctx.num_ops() {
