@@ -37,13 +37,17 @@ pub enum Mmu {
 /// How an instruction can possibly change the state of an MMU.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum StateChange {
-	/// No change.
+	/// Definitely does not/cannot change the state.
 	None,
 
-	/// Might change it, but not enough info to know yet.
+	/// Might change it, but not enough info to know yet. For example, if `0x1000` is an address
+	/// that changes MMU state, and an instruction writes to `0xFF0 + X` for some register X, it
+	/// may change the state if `X == 16`.
 	Maybe,
 
-	/// Definitely changes it, but in a way that cannot be statically determined.
+	/// Definitely changes it, but in a way that cannot be statically determined. For example,
+	/// if `0x1000` is an address that changes MMU state, and an instruction writes into `0x1000`,
+	/// but the value it writes was loaded from a global variable.
 	Dynamic,
 
 	/// Changes it to the given state, statically determinable.
