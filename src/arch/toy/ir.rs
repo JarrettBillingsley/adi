@@ -52,6 +52,18 @@ fn reg_to_ir_reg(reg: Reg) -> IrReg {
 	}
 }
 
+fn inst_reg(i: &Instruction, op: usize) -> Reg {
+	decode_reg(i.ops()[op].reg() as u8)
+}
+
+fn inst_addr(i: &Instruction, op: usize) -> VA {
+	i.ops()[op].addr()
+}
+
+fn inst_imm(i: &Instruction) -> u8 {
+	i.ops()[1].uimm() as u8
+}
+
 impl InstDesc {
 	fn r1(&self, i: &Instruction) -> IrSrc {
 		match self.addr_mode {
