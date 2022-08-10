@@ -103,7 +103,7 @@ fn fmt_inst(p: &Mos65xxPrinter, i: &Instruction, state: MmuState) -> String {
 #[test]
 fn disasm_success() {
 	use MetaOp::*;
-	use MemAccess::*;
+	use MemAccess::{ R, W, RW, Target };
 	use Opcode::*;
 
 	check_disas(0, &[BRK_IMP as u8],               BRK,  None);

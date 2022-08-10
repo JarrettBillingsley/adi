@@ -14,7 +14,7 @@ pub(super) fn lookup_desc(opcode: u8) -> InstDesc {
 use Opcode::*;
 use MetaOp::*;
 use AddrMode::*;
-use MemAccess::*;
+use MemAccess::{ R, W, RW, Target };
 use MemIndir::*;
 
 const OP_INVALID: InstDesc =

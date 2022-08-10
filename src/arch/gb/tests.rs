@@ -112,7 +112,7 @@ fn fmt_inst(p: &GBPrinter, i: &Instruction, state: MmuState) -> String {
 #[test]
 fn disasm_success() {
 	use MetaOp::*;
-	use MemAccess::*;
+	use MemAccess::{ R, W, Target };
 
 	check_disas(0, &[0x00],               NOP,  &[]                            ); // Imp
 	check_disas(0, &[0xCF],               RST,  &[mem(0x0008, Target)]         );

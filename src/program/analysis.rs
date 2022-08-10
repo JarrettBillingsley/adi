@@ -370,6 +370,9 @@ impl Program {
 				compiler.to_ir(inst, t, &mut b);
 			}
 
+			// TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually
+			// end with a terminator. is that an issue? the IR CFG encodes this info already...
+
 			let insts = b.finish();
 			bbs.push(IrBasicBlock::new(irbbid, bbid, insts));
 			bbid_to_irbbid.insert(bbid, irbbid);

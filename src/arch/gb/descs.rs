@@ -213,7 +213,7 @@ pub(super) fn lookup_desc_cb(opcode: u8) -> InstDesc {
 
 use GBOpKind::*;
 use InstructionKind::*;
-use MemAccess::*;
+use MemAccess::{ R, W, RW, Target };
 use MetaOp::*;
 use Reg::*;
 use SynOp::*;

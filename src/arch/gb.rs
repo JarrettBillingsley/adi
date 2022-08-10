@@ -84,7 +84,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 -> (usize, Option<VA>) {
 	use GBOpKind::*;
 	use Operand::{ UImm, SImm, Indir, Mem };
-	use MemAccess::*;
+	use MemAccess::{ R, W, Target };
 
 	if let Some(bit) = desc.bit_operand() {
 		ops[0] = UImm(bit, None);
