@@ -89,30 +89,6 @@ SSsssssssoooooooooooooooo
 
 I suppose it doesn't really matter if all operands are filled in or not - the analysis will skip the ones it doesn't care about and the arch can choose to implement printing any way it likes. If it's easier to do that by filling in all operands, it can do it. If not, it won't.
 
-...how do we handle the results of const prop, though? Say we have code like:
-
-```
-	ld h, $C4     ; 1
-	ld l, $08     ; 2
-	ld [hl], 3    ; 3
-```
-
-Const prop will determine that `hl = 0xC408` on line 3. But we can't just rewrite the instruction's operand to say it's an immediate `0xC408` now. Instead, **we should display something like "`hl` is constant `0xC408` here".** Furthermore, the information that `h` and `l` are parts of an address needs to be back-propagated to lines 1 and 2 so they can be displayed as something like...
-
-```
-	ld h, hi(loc_C408)
-	ld l, lo(loc_C408)
-	ld [hl], 3 ; hl = loc_C408
-```
-
-(or whatever syntax is appropriate for the architecture's assembler)
-
-That comment on line 3 is optional, but we **do still need to remember that info internally** even if we don't display it.
-
-...
-
-Wait so, what if we kept track of *both* operands *and* addresses? like, the arch fills in the operands, and then based on IR analysis, we can extract the addresses from that. That also opens up the option for the user to manually add dependencies/references in places where the automatic analysis can't figure it out.
-
 ---
 
 ## Printing framework
@@ -140,5 +116,100 @@ Yes, it would, and it did ;o
 
 Next is to rip out the old printing stuff (and update the arch tests!!).
 
-And that is DONE.
+**And that is DONE.**
 
+---
+
+## Applying results of IR analysis back to `Instruction`
+
+...how do we handle the results of const prop, though? Say we have code like:
+
+```
+	ld h, $C4     ; 1
+	ld l, $08     ; 2
+	ld [hl], 3    ; 3
+```
+
+Const prop will determine that `hl = 0xC408` on line 3. But we can't just rewrite the instruction's operand to say it's an immediate `0xC408` now. Instead, **we should display something like "`hl` is constant `0xC408` here".** Furthermore, the information that `h` and `l` are parts of an address needs to be back-propagated to lines 1 and 2 so they can be displayed as something like...
+
+```
+	ld h, hi(loc_C408)
+	ld l, lo(loc_C408)
+	ld [hl], 3 ; hl = loc_C408
+```
+
+(or whatever syntax is appropriate for the architecture's assembler)
+
+That comment on line 3 is optional, but we **do still need to remember that info internally** even if we don't display it. IDA seeeeeeems to keep track of this with its xrefs. Each data xref can be read/write/offset.
+
+Wait so, what if we kept track of *both* operands *and* addresses? like, the arch fills in the operands, and then based on IR analysis, we can extract the addresses from that. That also opens up the option for the user to manually add dependencies/references in places where the automatic analysis can't figure it out.
+
+What the fuck do we name this type? It's "an EA that an instruction refers to." `InstAddr`? `InstRefEa`? `InstEaRef`? `Whatever`?
+
+- as the above example shows, sometimes an address is associated with a non-`Mem` operand.
+- and sometimes, an address is associated with *no* operand, like if the user adds a manual ref, or possibly for some kind of implicit memory operand...? no examples now, but.
+- but that makes for an awkward situation for `Mem` and `Indir` operands, since we're duplicating info...
+	- well, the address is not - the operand holds the *VA* but the `Whatever` holds the *EA*
+	- but the access type is duplicated
+	- and it does mean we kind of have to check both operands *and* `Whatever`s to discover all the addresses an instruction accesses
+	- also for `Indir`, it's possible we don't have a `Whatever` that corresponds to it, since we may not have any idea statically what the address is
+	- well wait. maybe the `access` on `Operand::Mem` is... useless then. the disassembler fills in the operand to say "here one is!" and then it's up to the deeper IR analysis to determine what it *actually* accesses, and *how* it accesses it.
+		- so the operand *just* tells you the VA, and it's up to the `Whatever` to tell you what/how it accesses it.
+- so basically it's a nothing-to-nothing correspondence lol
+	- you can have `Indir` operands without corresponding `Whatever`s
+	- you can have `Whatever`s without a corresponding operand
+	- you can have both
+	- you can... technically have multiple `Whatever`s for one operand? is that? correct?
+	- like consider `ld a, [SomeAddr + x]` - *is SomeAddr being both used as an `Offset` and read from?* would that be two `Whatever`s with different access types?
+		- or `inc [SomeAddr + x]` - offset, read, and write? good god lol
+		- ...maybe MemAccess should be bitflags then?
+		- **now MemAccess is bitflags-esque.**
+
+**SO..................**
+
+It seems that I'm being a silliam william and maybe putting this info in the wrong place?
+
+- In IDA, all the "memory accesses" are instead tracked with the **xrefs.**
+- There are two kinds: code refs (crefs) and data refs (drefs).
+- crefs cover what I represent with `Target`, though they distinguish between jumps and calls.
+	- is that useful? probably? possibly? prossibly?
+- drefs cover what I represent with `R/W/Offset`.
+- Each ref is annotated with the kind of reference it is.
+
+What is not clear, is *how operands are matched up with references.*
+
+- When you create a reference in IDA, it's just from source EA to dest EA.
+- There's `out_name_expr` which takes the operand (which knows its index) and the EA
+	- And the EA seems to come from `map_ea` which seems like a super important function that has absolutely no documentation, of course.
+- If that fails, examples fall back to calling `out_value` with `OOF_ADDR`...
+	- But the documentation is such garbage that it doesn't describe what it does, how it decides to format the address, how it determines whether that operand is matched up with the reference etc.
+
+So it all seems rather ad-hoc and I'm not really sure how it works.
+
+If we put the reference info in the refmap, then we only need `Whatever`s for the operands which correspond to a reference. But how do you do the mapping? If you have 7 outrefs, which one does the operand correspond to? I mean I guess you could just do it by target EA, and do a linear search of the outrefs, since n is *very* unlikely to be more than 1 or 2.
+
+Yeah, I think that works.
+
+**Still....** how do you map from the IR back to the operands? Will each `IrInst` need sort of... "debug info" to do that mapping, provided by the arch's IR compiler?
+
+How does Ghidra do it? Well........ I'm not sure it uses pcode for anything other than decompilation. I haven't looked deeply though.
+
+Each `IrInst` has an `EA` of the instruction it came from. Could we delegate this task to the arch? `IrOperandMapper`? Takes the const prop info + instruction and does the dirty work of identifying the instruction and figuring out what to do with that info?
+
+Eghhhghhh..
+
+what am I doing
+
+this is starting to feel like this endless pit of complexity and bikeshedding and confusion and for what?
+
+it is a bottomless timepit
+
+this doesn't feel good.
+
+---
+
+when I first started doing this, it was fun, because I could see a lot of results really quickly. but that was because I was kind of tweaking the algorithm to fit the disassembly as it happened (coming up with things to disassemble jump tables etc)
+
+that could be an avenue to pursue...
+
+a semi-interactive disassembler, driven by a scripting language, which outputs commands in that language which drive subsequent runs of it.

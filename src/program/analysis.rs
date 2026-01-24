@@ -284,14 +284,14 @@ impl Program {
 		// part 1: construct IR, do constant propagation, and record addresses
 
 		// 1.
-		// let irfunc = self.func_to_ir(fid);
-		// let consts = irfunc.constants();
-		// println!("------------------------------------------------------------------");
-		// println!("Constants:");
-		// for (reg, val) in consts {
-		// 	println!("{:?} = {:08X}", reg, val);
-		// }
-		// println!("{:?}", irfunc);
+		let irfunc = self.func_to_ir(fid);
+		let consts = irfunc.constants();
+		println!("------------------------------------------------------------------");
+		println!("Constants:");
+		for (reg, val) in consts {
+			println!("{:?} = {:08X}", reg, val);
+		}
+		println!("{:?}", irfunc);
 
 		// TODO: FINISH THIS LOL
 
