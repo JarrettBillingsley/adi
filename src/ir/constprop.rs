@@ -22,16 +22,31 @@ trait JoinSemiLattice: Eq {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum Info {
 	Unk,       // ??? dunno
-	Some(u64), // some constant
+	Some {     // some constant, including where we got that value (up to 3 sources)
+		val: u64,
+		from: [Option<IrSrc>; 3],
+	},
 	Any,       // could be anything
 }
 
 impl Info {
 	fn to_option(&self) -> Option<u64> {
 		match self {
-			Info::Some(val) => Some(*val),
-			_               => None,
+			Info::Some { val, .. } => Some(*val),
+			_                      => None,
 		}
+	}
+
+	fn some1(val: u64, src1: IrSrc) -> Self {
+		Self::Some { val, from: [Some(src1), None, None] }
+	}
+
+	fn some2(val: u64, src1: IrSrc, src2: IrSrc) -> Self {
+		Self::Some { val, from: [Some(src1), Some(src2), None] }
+	}
+
+	fn some3(val: u64, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
+		Self::Some { val, from: [Some(src1), Some(src2), Some(src3)] }
 	}
 }
 
@@ -43,7 +58,11 @@ impl JoinSemiLattice for Info {
 			(Unk, x)                     => **x,
 			(x, Unk)                     => **x,
 			(Any, _) | (_, Any)          => Any,
-			(Some(a), Some(b)) if a == b => Some(*a),
+			(Some { val: a, from: from1 }, Some { val: b, from: _from2 }) if a == b => {
+				// TODO: uhhhh how DO we handle this? just pick from1 or from2 or merge
+				// them somehow?
+				Some { val: *a, from: *from1 }
+			}
 			_                            => Any,
 		};
 
@@ -113,7 +132,15 @@ impl WorkList {
 // Propagator
 // ------------------------------------------------------------------------------------------------
 
-pub(crate) type ConstPropResults = BTreeMap<IrReg, u64>;
+/// Results of constant propagation. It maps from IR Registers to a tuple of:
+///
+/// - The determined constant value for that register
+/// - A list of up to 3 sources from which that constant was computed
+///
+/// The sources can be used to propagate information backwards, such as in cases
+/// where a constant address is computed by combining two smaller pieces, and those
+/// smaller pieces need to be marked as references to that address.
+pub(crate) type ConstPropResults = BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])>;
 
 pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
 	// since each variable is only assigned once, there's no need to track changing state -
@@ -141,11 +168,14 @@ impl<'bb, 'cf> Propagator<'bb, 'cf> {
 		}
 	}
 
-	fn finish(self) -> BTreeMap<IrReg, u64> {
+	fn finish(self) -> BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])> {
 		self.state
 			.into_iter()
 			.filter_map(|(reg, info)|
-				info.to_option().map(|val| (reg, val)))
+				match info {
+					Info::Unk | Info::Any => None,
+					Info::Some { val, from } => Some((reg, (val, from))),
+				})
 			.collect()
 	}
 
@@ -200,7 +230,7 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 	let src_to_info = |src: IrSrc, state: &State| {
 		match src {
 			IrSrc::Reg(reg)   => state[&reg],
-			IrSrc::Const(c)   => Info::Some(c.val()),
+			IrSrc::Const(c)   => Info::some1(c.val(), src),
 			IrSrc::Return(..) => Info::Any,
 		}
 	};
@@ -216,8 +246,10 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 		Unary { dst, op, src } => {
 			let src_info = src_to_info(src, state);
 			let new_info = match src_info {
-				Info::Some(val) => Info::Some(do_unop(op, val, src.size(), dst.size())),
-				_               => Info::Any,
+				Info::Some { val, .. } => {
+					Info::some1(do_unop(op, val, src.size(), dst.size()), src)
+				},
+				_ => Info::Any,
 			};
 
 			Some((dst, new_info))
@@ -228,9 +260,9 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 			let src2_info = src_to_info(src2, state);
 
 			let new_info = match (src1_info, src2_info) {
-				(Info::Some(val1), Info::Some(val2)) => {
+				(Info::Some { val: val1, .. }, Info::Some { val: val2, .. }) => {
 					match do_binop(op, val1, val2, src1.size()) {
-						Some(new_val) => Info::Some(new_val),
+						Some(new_val) => Info::some2(new_val, src1, src2),
 						None          => Info::Any,
 					}
 				}
@@ -246,8 +278,11 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 			let src3_info = src_to_info(src3, state);
 
 			let new_info = match (src1_info, src2_info, src3_info) {
-				(Info::Some(val1), Info::Some(val2), Info::Some(val3)) =>
-					Info::Some(do_ternop(op, val1, val2, val3, src1.size())),
+				(	Info::Some{ val: val1, .. },
+					Info::Some{ val: val2, .. },
+					Info::Some{ val: val3, .. }) =>
+
+					Info::some3(do_ternop(op, val1, val2, val3, src1.size()), src1, src2, src3),
 				_ => Info::Any,
 			};
 

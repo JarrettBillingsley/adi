@@ -216,7 +216,7 @@ Assuming we associate the operand number with the accessed addr, I could see the
 
 In order to know that they really are parts of a full address, we'd have to know that the **later use of `C408` is a reference, and know that it was produced from those two earlier constants.**
 
-I'm thinking during const prop, rather than *just* doing the computation, we also keep a tree of how that constant was actually created. That way, we know that "constant 3 was computed by concatenating constants 1 and 2" and can go back to the instructions which used constants 1 and 2 and mark them as references too.
+I'm thinking during const prop, rather than *just* doing the computation, we also keep a tree of how that constant was actually created. That way, we know that "constant 3 was computed by concatenating constants 1 and 2" and can go back to the instructions which used constants 1 and 2 and mark them as references too. ***Done!***
 
 **Secondary issue:** I'm imagining the const prop results will be discarded after we back-apply this info to the original instructions. But that would mean that in the above, the first two `ld`s would no longer be "connected" either to each other or to the third `ld`. So if the user then changed one of them to be a constant rather than a memory reference, the other ones would not be updated...
 

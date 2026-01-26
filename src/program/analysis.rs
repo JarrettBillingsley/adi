@@ -288,8 +288,8 @@ impl Program {
 		let consts = irfunc.constants();
 		println!("------------------------------------------------------------------");
 		println!("Constants:");
-		for (reg, val) in consts {
-			println!("{:?} = {:08X}", reg, val);
+		for (reg, (val, from)) in consts {
+			println!("{:?} = {:08X} <from {:?}>", reg, val, from);
 		}
 		println!("{:?}", irfunc);
 
