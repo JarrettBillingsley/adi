@@ -67,14 +67,14 @@ AND THEN there's `opinfo_t` which is a union which can be one of
 
 and that `refinfo_t` contains:
 
-- target EA
-- base EA
-- tdelta (offset from target)
+- target EA (an explicitly specified expression target)
+- base EA (the offset base, a "linear address" - basically, the beginning of the address space where the target is pointing? I think?)
+- tdelta (a displacement from the target which will be displayed in the expression)
 - flags (MORE FUCKIN FLAGS which includes things like):
-	- what kind of reference it is (absolute, low/high 8/16 bits of an addr)
+	- what kind of reference it is ("offset" (which may be absolute, but "relative" to 0), or just the low/high 8/16 bits of an addr)
 
-`target` is calculated as `operandvalue - tdelta + base`
-and once we have `target`, the actual ea is calculated as `target + tdelta - base`
+`target = operandvalue - tdelta + base`
+and once we have `target`, the actual `EA = target + tdelta - base`
 
 so summing it up, the way memory references are handled is:
 

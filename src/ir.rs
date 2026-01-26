@@ -210,7 +210,7 @@ impl IrConst {
 // IrSrc
 // ------------------------------------------------------------------------------------------------
 
-/// The source of a value. Can an [`IrReg`], an [`IrConst`], or a special value indicating a
+/// The source of a value. Can be an [`IrReg`], an [`IrConst`], or a special value indicating a
 /// return value from a function call.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum IrSrc {

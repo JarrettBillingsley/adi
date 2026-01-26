@@ -191,3 +191,35 @@ Yeah, I think that works.
 **Still....** how do you map from the IR back to the operands? Will each `IrInst` need sort of... "debug info" to do that mapping, provided by the arch's IR compiler?
 
 I'm overthinking this: **the IR compiler can associate an optional "real instruction operand" index with each address operand** so that the back-mapping is trivial. duh.
+
+---
+
+## Const propagation back-mapping info
+
+With this example again:
+
+```
+	ld h, $C4     ; 1
+	ld l, $08     ; 2
+	ld [hl], 3    ; 3
+```
+
+which we'd like to display as something like:
+
+```
+	ld h, hi(loc_C408)
+	ld l, lo(loc_C408)
+	ld [hl], 3 ; hl = loc_C408
+```
+
+Assuming we associate the operand number with the accessed addr, I could see the final `ld` being easy to add a `RefInfo` to. But what about the first two?
+
+In order to know that they really are parts of a full address, we'd have to know that the **later use of `C408` is a reference, and know that it was produced from those two earlier constants.**
+
+I'm thinking during const prop, rather than *just* doing the computation, we also keep a tree of how that constant was actually created. That way, we know that "constant 3 was computed by concatenating constants 1 and 2" and can go back to the instructions which used constants 1 and 2 and mark them as references too.
+
+**Secondary issue:** I'm imagining the const prop results will be discarded after we back-apply this info to the original instructions. But that would mean that in the above, the first two `ld`s would no longer be "connected" either to each other or to the third `ld`. So if the user then changed one of them to be a constant rather than a memory reference, the other ones would not be updated...
+
+Is that a problem? Either they're doing it because they made a mistake (in which case an undo feature would save them) or they're doing it because the automatic analysis was wrong (in which case they'll probably change all three).
+
+I guess they could also manually retrigger a const prop after doing something like this. But what would the const prop algorithm do? Would it take user annotations into account? Give an "I tried unifying these constants into one but you annotated this as "not a reference" so idk what to do here" message?
