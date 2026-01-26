@@ -144,23 +144,23 @@ That comment on line 3 is optional, but we **do still need to remember that info
 
 Wait so, what if we kept track of *both* operands *and* addresses? like, the arch fills in the operands, and then based on IR analysis, we can extract the addresses from that. That also opens up the option for the user to manually add dependencies/references in places where the automatic analysis can't figure it out.
 
-What the fuck do we name this type? It's "an EA that an instruction refers to." `InstAddr`? `InstRefEa`? `InstEaRef`? `Whatever`?
+What the fuck do we name this type? It's "an EA that an instruction refers to." `InstAddr`? `InstRefEa`? `InstEaRef`? `Whatever`? IDA calls this `refinfo_t` so let's say `RefInfo`.
 
 - as the above example shows, sometimes an address is associated with a non-`Mem` operand.
 - and sometimes, an address is associated with *no* operand, like if the user adds a manual ref, or possibly for some kind of implicit memory operand...? no examples now, but.
 - but that makes for an awkward situation for `Mem` and `Indir` operands, since we're duplicating info...
-	- well, the address is not - the operand holds the *VA* but the `Whatever` holds the *EA*
+	- well, the address is not - the operand holds the *VA* but the `RefInfo` holds the *EA*
 	- but the access type is duplicated
-	- and it does mean we kind of have to check both operands *and* `Whatever`s to discover all the addresses an instruction accesses
-	- also for `Indir`, it's possible we don't have a `Whatever` that corresponds to it, since we may not have any idea statically what the address is
+	- and it does mean we kind of have to check both operands *and* `RefInfo`s to discover all the addresses an instruction accesses
+	- also for `Indir`, it's possible we don't have a `RefInfo` that corresponds to it, since we may not have any idea statically what the address is
 	- well wait. maybe the `access` on `Operand::Mem` is... useless then. the disassembler fills in the operand to say "here one is!" and then it's up to the deeper IR analysis to determine what it *actually* accesses, and *how* it accesses it.
-		- so the operand *just* tells you the VA, and it's up to the `Whatever` to tell you what/how it accesses it.
+		- so the operand *just* tells you the VA, and it's up to the `RefInfo` to tell you what/how it accesses it.
 - so basically it's a nothing-to-nothing correspondence lol
-	- you can have `Indir` operands without corresponding `Whatever`s
-	- you can have `Whatever`s without a corresponding operand
+	- you can have `Indir` operands without corresponding `RefInfo`s
+	- you can have `RefInfo`s without a corresponding operand
 	- you can have both
-	- you can... technically have multiple `Whatever`s for one operand? is that? correct?
-	- like consider `ld a, [SomeAddr + x]` - *is SomeAddr being both used as an `Offset` and read from?* would that be two `Whatever`s with different access types?
+	- you can... technically have multiple `RefInfo`s for one operand? is that? correct?
+	- like consider `ld a, [SomeAddr + x]` - *is SomeAddr being both used as an `Offset` and read from?* would that be two `RefInfo`s with different access types?
 		- or `inc [SomeAddr + x]` - offset, read, and write? good god lol
 		- ...maybe MemAccess should be bitflags then?
 		- **now MemAccess is bitflags-esque.**
@@ -184,32 +184,102 @@ What is not clear, is *how operands are matched up with references.*
 - If that fails, examples fall back to calling `out_value` with `OOF_ADDR`...
 	- But the documentation is such garbage that it doesn't describe what it does, how it decides to format the address, how it determines whether that operand is matched up with the reference etc.
 
+the way IDA works:
+
+- during initial analysis...
+	- each operand has a VA associated with it
+		- **according to docs:** The target virtual address is stored in `op_t::addr` and the full address is calculated as `to_ea(insn_t::cs, op_t::addr)`. For the processors with complex memory organization the final address can be calculated *using other segment registers.* For flat memories, `op_t::addr` is the final address and `insn_t::cs` is usually equal to zero. In any case, the address **within the segment** should be stored in `op_t::addr`.
+	- each instruction has 1 or more outrefs associated with it
+- then during output...
+	- each operand calls `out_name_expr` which takes the operand and its associated VA
+	- and **presumably, internally, it looks in the outrefs to determine how to output it (as a label or raw address or whatever)** - this is what I didn't understand before
+	- and if `out_name_expr` fails, it falls back on the implementor to output a value with `out_value` which just prints it out as a raw address or something
+
+	`out_name_expr` calls...
+		`get_name_expr`, which calls...
+			`get_name_base_ea` which accounts for fixups
+			then it calls `get_name_nodisp`, which calls...
+				`get_colored_demangled_name`, which calls...
+					`get_demangled_name`, which calls...
+						`get_true_name`, which...
+							1. tries to find a function-local name for it first
+							2. then looks in the database using `netnode_name`
+							3. then if the debugger is enabled I'm *guessing* it looks up some kind of temporary name that might be set in the debugger?
+							4. finally it falls back on `generate_default_name?`
+				or if that failed, calls `generate_default_name?` as a fallback
+			and finally calls `print_disp` which prints the `+ 0x14` or whatever if applicable
+
+
+	`ea get_name_base_ea(ea from, ea to)` - Get address of the name used in the expression for the address. Returns address of the name used to represent the operand.
+		- ?????? what the fuck does any of this mean?
+		- a **name expression** is a "name with a displacement."
+			- ahhh. that's like, `loc_0840 + 0x14` or whatever.
+
+	`ea_t ida_export map_code_ea(const insn_t &insn, ea_t addr, int opnum)` calls...
+		`get_refinfo` !!!!!
+		how does `set_refinfo` work?
+			you're not supposed to call it - it's called by `set_opinfo`, which itself is a low-level function called by the kernel
+			so the kernel is determining this...?
+			a few processor modules do call it but only really in special situations
+
+	so yeah it seems like the operand has an addr (VA), BUT THEN each operand has a refinfo
+	that can be associated with it which holds the ACTUAL reference. or something.
+
+
 So it all seems rather ad-hoc and I'm not really sure how it works.
 
-If we put the reference info in the refmap, then we only need `Whatever`s for the operands which correspond to a reference. But how do you do the mapping? If you have 7 outrefs, which one does the operand correspond to? I mean I guess you could just do it by target EA, and do a linear search of the outrefs, since n is *very* unlikely to be more than 1 or 2.
+If we put the reference info in the refmap, then we only need `RefInfo`s for the operands which correspond to a reference. But how do you do the mapping? If you have 7 outrefs, which one does the operand correspond to? I mean I guess you could just do it by target EA, and do a linear search of the outrefs, since n is *very* unlikely to be more than 1 or 2.
 
 Yeah, I think that works.
 
 **Still....** how do you map from the IR back to the operands? Will each `IrInst` need sort of... "debug info" to do that mapping, provided by the arch's IR compiler?
 
-How does Ghidra do it? Well........ I'm not sure it uses pcode for anything other than decompilation. I haven't looked deeply though.
-
-Each `IrInst` has an `EA` of the instruction it came from. Could we delegate this task to the arch? `IrOperandMapper`? Takes the const prop info + instruction and does the dirty work of identifying the instruction and figuring out what to do with that info?
-
-Eghhhghhh..
-
-what am I doing
-
-this is starting to feel like this endless pit of complexity and bikeshedding and confusion and for what?
-
-it is a bottomless timepit
-
-this doesn't feel good.
+I'm overthinking this: **the IR compiler can associate an optional "real instruction operand" index with each address operand** so that the back-mapping is trivial. duh.
 
 ---
 
-when I first started doing this, it was fun, because I could see a lot of results really quickly. but that was because I was kind of tweaking the algorithm to fit the disassembly as it happened (coming up with things to disassemble jump tables etc)
+Okay. So here's how IDA handles instruction operands. `op_t` has:
 
-that could be an avenue to pursue...
+- n (index of operand)
+- type (type of operand)
+- offb (number of bytes from start of instr)
+- offo (something else)
+- flags (8b, miscellaneous stuff)
+- dtype (type of the value that the operand gives within the instruction)
+- reg/phrase (which reg(s) it represents)
+- value (the actual value, like for immediates)
+- addr (VA)
+- specval (for user-defined value)
+- specflag1~4 (for user-defined flags)
 
-a semi-interactive disassembler, driven by a scripting language, which outputs commands in that language which drive subsequent runs of it.
+BUT THEN THERE'S MORE SHIT
+
+each ea can have flags, and the flags associated with the ea of an instruction has multiple nybbles representing the operands.. these flags seem to control the representation, how it shows up in the disassembly view and has options like hex, dec, char, segment, offset, enum, struct offset, stack var, custom repr etc.
+
+AND THEN there's `opinfo_t` which is a union which can be one of
+
+- `refinfo_t` for offset members
+- `tid_t` for struct, etc. members
+- `strpath_t` for stroff
+- `int32` for strings (\ref STRTYPE_)
+- `enum_const_t` for enums
+- `custom_data_type_ids_t` for custom data
+
+and that `refinfo_t` contains:
+
+- target EA
+- base EA
+- tdelta (offset from target)
+- flags (MORE FUCKIN FLAGS which includes things like):
+	- what kind of reference it is (absolute, low/high 8/16 bits of an addr)
+
+`target` is calculated as `operandvalue - tdelta + base`
+and once we have `target`, the actual ea is calculated as `target + tdelta - base`
+
+so summing it up, the way memory references are handled is:
+
+- each operand can hold a VA
+- each operand has an associated nybble in flags64_t to encode how it's represented in the listing
+- each operand can have associated refinfo, which holds the target EA (operand - delta + base)
+
+and the kernel is what fills that refinfo in.
