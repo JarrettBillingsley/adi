@@ -91,7 +91,7 @@ impl ToyBuilder {
 	pub fn jump_here(&mut self, from: usize) {
 		assert!(from < self.bytes.len(), "bad source address {:X}", from);
 		let opc = self.bytes[from];
-		if opc != Opcode::JMP_I16 as u8 && opc != Opcode::CAL_I16 as u8 {
+		if opc != Opcode::JMP_I16 as u8 && opc != Opcode::CALL_I16 as u8 {
 			panic!("patching something that isn't a jump/call at {:X}", from);
 		}
 
@@ -229,17 +229,21 @@ impl ToyBuilder {
 		self.append(&[encode_op(Opcode::JMP_I16), target[0], target[1]])
 	}
 
-	pub fn jmi(&mut self) -> usize {
-		self.append(&[encode_op(Opcode::JMI_IMPDC)])
+	pub fn jmpi(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::JMPI_IMPDC)])
 	}
 
-	pub fn cal(&mut self) -> usize {
-		self.append(&[encode_op(Opcode::CAL_I16), 0, 0])
+	pub fn call(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::CALL_I16), 0, 0])
 	}
 
-	pub fn cal_to(&mut self, target: usize) -> usize {
+	pub fn cali(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::CALI_IMPDC)])
+	}
+
+	pub fn call_to(&mut self, target: usize) -> usize {
 		let target = encode_16bit_addr(target);
-		self.append(&[encode_op(Opcode::CAL_I16), target[0], target[1]])
+		self.append(&[encode_op(Opcode::CALL_I16), target[0], target[1]])
 	}
 
 	pub fn ret(&mut self) -> usize {

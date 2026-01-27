@@ -106,13 +106,14 @@ impl Default for Reg {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum MetaOp {
-	MOV,                // copy reg/imm into reg
-	ADD, ADC, SUB, SBC, // math(s)
-	AND, OR,  XOR, NOT, // bitwise
-	CMP, CMC,           // compare (and with carry)
-	BLT, BLE, BEQ, BNE, // branch on flags
-	JMP, JMI, CAL, RET, // control flow
-	LD,  ST,            // memory
+	MOV,                 // copy reg/imm into reg
+	ADD,  ADC, SUB, SBC, // math(s)
+	AND,  OR,  XOR, NOT, // bitwise
+	CMP,  CMC,           // compare (and with carry)
+	BLT,  BLE, BEQ, BNE, // branch on flags
+	JMP,  JMPI,          // jumps
+	CALL, CALI, RET,     // function calls
+	LD,   ST,            // memory
 }
 
 impl MetaOp {
@@ -120,23 +121,25 @@ impl MetaOp {
 	fn mnemonic(&self) -> &'static str {
 		use MetaOp::*;
 		match self {
-			MOV => "mov",
-			ADD => "add", ADC => "adc", SUB => "sub", SBC => "sbc",
-			AND => "and", OR  => "or",  XOR => "xor", NOT => "not",
-			CMP => "cmp", CMC => "cmc",
-			BLT => "blt", BLE => "ble", BEQ => "beq", BNE => "bne",
-			JMP => "jmp", JMI => "jmi", CAL => "cal", RET => "ret",
-			LD  => "ld",  ST  => "st",
+			MOV  => "mov",
+			ADD  => "add",  ADC  => "adc",  SUB => "sub", SBC => "sbc",
+			AND  => "and",  OR   => "or",   XOR => "xor", NOT => "not",
+			CMP  => "cmp",  CMC  => "cmc",
+			BLT  => "blt",  BLE  => "ble",  BEQ => "beq", BNE => "bne",
+			JMP  => "jmp",  JMPI => "jmpi",
+			CALL => "call", CALI => "cali", RET => "ret",
+			LD   => "ld",   ST   => "st",
 		}
 	}
 
 	fn access(&self) -> Option<MemAccess> {
 		use MetaOp::*;
 		match self {
-			LD                                      => Some(MemAccess::R),
-			ST                                      => Some(MemAccess::W),
-			BLT | BLE | BEQ | BNE | JMP | JMI | CAL => Some(MemAccess::Target),
-			_                                       => None,
+			LD => Some(MemAccess::R),
+			ST => Some(MemAccess::W),
+			BLT | BLE | BEQ | BNE | JMP | JMPI | CALL | CALI =>
+				Some(MemAccess::Target),
+			_ => None,
 		}
 	}
 }
@@ -181,7 +184,8 @@ pub enum Opcode {
 	AND_RR, AND_RI8, OR_RR,  OR_RI8,  XOR_RR, XOR_RI8, NOT_RR, NOT_RI8,
 	CMP_RR, CMP_RI8, CMC_RR, CMC_RI8,
 	BLT_S8, BLE_S8, BEQ_S8, BNE_S8,
-	JMP_I16, JMI_IMPDC, CAL_I16, RET_IMP,
+	JMP_I16, JMPI_IMPDC,
+	CALL_I16, CALI_IMPDC, RET_IMP,
 	LD_RI16, LD_RR, ST_RI16, ST_RR,
 }
 
@@ -235,40 +239,41 @@ mod descs {
 
 	// IMPORTANT: MUST STAY IN SAME ORDER AS Opcode ENUM
 	pub(super) const INST_DESCS: &[InstDesc] = &[
-		InstDesc(MOV_RR,    MOV, RR,      "{0}, {1}",   Other),
-		InstDesc(MOV_RI8,   MOV, RI8,     "{0}, {1}",   Other),
-		InstDesc(ADD_RR,    ADD, RR,      "{0}, {1}",   Other),
-		InstDesc(ADD_RI8,   ADD, RI8,     "{0}, {1}",   Other),
-		InstDesc(ADC_RR,    ADC, RR,      "{0}, {1}",   Other),
-		InstDesc(ADC_RI8,   ADC, RI8,     "{0}, {1}",   Other),
-		InstDesc(SUB_RR,    SUB, RR,      "{0}, {1}",   Other),
-		InstDesc(SUB_RI8,   SUB, RI8,     "{0}, {1}",   Other),
-		InstDesc(SBC_RR,    SBC, RR,      "{0}, {1}",   Other),
-		InstDesc(SBC_RI8,   SBC, RI8,     "{0}, {1}",   Other),
-		InstDesc(AND_RR,    AND, RR,      "{0}, {1}",   Other),
-		InstDesc(AND_RI8,   AND, RI8,     "{0}, {1}",   Other),
-		InstDesc(OR_RR,     OR,  RR,      "{0}, {1}",   Other),
-		InstDesc(OR_RI8,    OR,  RI8,     "{0}, {1}",   Other),
-		InstDesc(XOR_RR,    XOR, RR,      "{0}, {1}",   Other),
-		InstDesc(XOR_RI8,   XOR, RI8,     "{0}, {1}",   Other),
-		InstDesc(NOT_RR,    NOT, RR,      "{0}, {1}",   Other),
-		InstDesc(NOT_RI8,   NOT, RI8,     "{0}, {1}",   Other),
-		InstDesc(CMP_RR,    CMP, RR,      "{0}, {1}",   Other),
-		InstDesc(CMP_RI8,   CMP, RI8,     "{0}, {1}",   Other),
-		InstDesc(CMC_RR,    CMC, RR,      "{0}, {1}",   Other),
-		InstDesc(CMC_RI8,   CMC, RI8,     "{0}, {1}",   Other),
-		InstDesc(BLT_S8,    BLT, S8,      "{0}",        Cond),
-		InstDesc(BLE_S8,    BLE, S8,      "{0}",        Cond),
-		InstDesc(BEQ_S8,    BEQ, S8,      "{0}",        Cond),
-		InstDesc(BNE_S8,    BNE, S8,      "{0}",        Cond),
-		InstDesc(JMP_I16,   JMP, I16,     "{0}",        Uncond),
-		InstDesc(JMI_IMPDC, JMI, IMPDC,   "[dc]",       Indir),
-		InstDesc(CAL_I16,   CAL, I16,     "{0}",        Call),
-		InstDesc(RET_IMP,   RET, IMP,     "",           Ret),
-		InstDesc(LD_RI16,   LD,  RI16,    "{0}, [{1}]", Other),
-		InstDesc(LD_RR,     LD,  RR,      "{0}, [{1}]", Other),
-		InstDesc(ST_RI16,   ST,  RI16,    "{0}, [{1}]", Other),
-		InstDesc(ST_RR,     ST,  RR,      "{0}, [{1}]", Other),
+		InstDesc(MOV_RR,     MOV,  RR,     "{0}, {1}",   Other),
+		InstDesc(MOV_RI8,    MOV,  RI8,    "{0}, {1}",   Other),
+		InstDesc(ADD_RR,     ADD,  RR,     "{0}, {1}",   Other),
+		InstDesc(ADD_RI8,    ADD,  RI8,    "{0}, {1}",   Other),
+		InstDesc(ADC_RR,     ADC,  RR,     "{0}, {1}",   Other),
+		InstDesc(ADC_RI8,    ADC,  RI8,    "{0}, {1}",   Other),
+		InstDesc(SUB_RR,     SUB,  RR,     "{0}, {1}",   Other),
+		InstDesc(SUB_RI8,    SUB,  RI8,    "{0}, {1}",   Other),
+		InstDesc(SBC_RR,     SBC,  RR,     "{0}, {1}",   Other),
+		InstDesc(SBC_RI8,    SBC,  RI8,    "{0}, {1}",   Other),
+		InstDesc(AND_RR,     AND,  RR,     "{0}, {1}",   Other),
+		InstDesc(AND_RI8,    AND,  RI8,    "{0}, {1}",   Other),
+		InstDesc(OR_RR,      OR,   RR,     "{0}, {1}",   Other),
+		InstDesc(OR_RI8,     OR,   RI8,    "{0}, {1}",   Other),
+		InstDesc(XOR_RR,     XOR,  RR,     "{0}, {1}",   Other),
+		InstDesc(XOR_RI8,    XOR,  RI8,    "{0}, {1}",   Other),
+		InstDesc(NOT_RR,     NOT,  RR,     "{0}, {1}",   Other),
+		InstDesc(NOT_RI8,    NOT,  RI8,    "{0}, {1}",   Other),
+		InstDesc(CMP_RR,     CMP,  RR,     "{0}, {1}",   Other),
+		InstDesc(CMP_RI8,    CMP,  RI8,    "{0}, {1}",   Other),
+		InstDesc(CMC_RR,     CMC,  RR,     "{0}, {1}",   Other),
+		InstDesc(CMC_RI8,    CMC,  RI8,    "{0}, {1}",   Other),
+		InstDesc(BLT_S8,     BLT,  S8,     "{0}",        Cond),
+		InstDesc(BLE_S8,     BLE,  S8,     "{0}",        Cond),
+		InstDesc(BEQ_S8,     BEQ,  S8,     "{0}",        Cond),
+		InstDesc(BNE_S8,     BNE,  S8,     "{0}",        Cond),
+		InstDesc(JMP_I16,    JMP,  I16,    "{0}",        Uncond),
+		InstDesc(JMPI_IMPDC, JMPI, IMPDC,  "{0}",        Indir),
+		InstDesc(CALL_I16,   CALL, I16,    "{0}",        Call),
+		InstDesc(CALI_IMPDC, CALI, IMPDC,  "{0}",        IndirCall),
+		InstDesc(RET_IMP,    RET,  IMP,    "",           Ret),
+		InstDesc(LD_RI16,    LD,   RI16,   "{0}, [{1}]", Other),
+		InstDesc(LD_RR,      LD,   RR,     "{0}, [{1}]", Other),
+		InstDesc(ST_RI16,    ST,   RI16,   "{0}, [{1}]", Other),
+		InstDesc(ST_RR,      ST,   RR,     "{0}, [{1}]", Other),
 	];
 }
 
@@ -338,8 +343,8 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 			(0, None)
 		}
 		IMPDC => {
-			// only IMPDC instruction is jmi.
-			ops[0] = Operand::Reg(Reg::DC as u8);
+			// jmpi and cali (hard-coded to use [dc])
+			ops[0] = Operand::Indir(MemIndir::Reg { reg: Reg::DC as u8 }, MemAccess::R);
 			(1, None)
 		}
 		RR => {
@@ -425,7 +430,7 @@ impl IPrinter for ToyPrinter {
 	// Provided method overrides
 
 	fn mnemonic_max_len(&self) -> usize {
-		3
+		4
 	}
 }
 

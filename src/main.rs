@@ -77,7 +77,7 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	b.bne_to(branch_dest);
 	let jmp = b.jmp();
 	b.jump_here(jmp);
-	b.cal_to(0x7FFE);
+	b.call_to(0x7FFE);
 	b.ldi(C, 0x8000);
 	b.ld(A, DC);
 	b.sti(C, 0x8000);
@@ -85,7 +85,7 @@ fn toy_test_all_instructions() -> Vec<u8> {
 
 	b.movi(C, 0x34);
 	b.movi(D, 0x12);
-	b.jmi();
+	b.cali();
 
 
 	b.ret();
@@ -127,7 +127,7 @@ fn toy_test_ssa() -> Vec<u8> {
 	b.jump_here(bb2_jump);
 	b.sti(A, 0x8000);
 	b.sti(B, 0x8001);
-	let bb4_cal = b.cal();
+	let bb4_cal = b.call();
 	b.ldi(A, 0x8002);
 	b.cmpi(A, 1);
 	b.beq_to(bb1);
@@ -179,7 +179,7 @@ fn toy_test_calls() -> Vec<u8> {
 
 	let mut b = ToyBuilder::new();
 	b.movi(A, 0x30);
-	b.cal_to(0x10);
+	b.call_to(0x10);
 	b.sti(A, 0x8000);
 	b.ret();
 
