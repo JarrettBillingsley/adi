@@ -87,7 +87,6 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	b.movi(D, 0x12);
 	b.cali();
 
-
 	b.ret();
 
 	b.org(0x7FFE);

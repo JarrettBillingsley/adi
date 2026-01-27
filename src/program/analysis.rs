@@ -374,11 +374,11 @@ impl Program {
 			let bb = self.get_bb(bbid);
 			let mut b = IrBuilder::new();
 
-			for inst in bb.insts() {
-				// TODO: this is weird.
-				let t = if std::ptr::eq(inst, bb.term_inst()) { bb.control_target() } else { None };
-				compiler.to_ir(inst, t, &mut b);
-			}
+			// unwrap is ok here because BasicBlock::new asserts that insts is non-empty
+			let (last, rest) = bb.insts().split_last().unwrap();
+			rest.iter().for_each(|inst|
+				compiler.to_ir(inst, None, &mut b));
+			compiler.to_ir(last, bb.control_target(), &mut b);
 
 			// TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually
 			// end with a terminator. is that an issue? the IR CFG encodes this info already...
