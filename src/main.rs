@@ -730,7 +730,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		Jump(ea) => {
 			thinger(prog, bb_ea, *ea, "Tailcall", Color::Yellow);
 		}
-		Call { ret, .. } => {
+		Call { ret, .. } | IndirCall { ret, .. } => {
 			thinger(prog, bb_ea, *ret, "Fall through", Color::Yellow);
 		}
 		Cond { t, f } => {

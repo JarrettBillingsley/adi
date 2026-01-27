@@ -186,6 +186,8 @@ pub enum InstructionKind {
 	Uncond,
 	/// Control flow - indirect jump/branch.
 	Indir,
+	/// Control flow - indirect call.
+	IndirCall,
 	/// Control flow - halt/stop.
 	Halt,
 }
@@ -202,8 +204,8 @@ impl InstructionKind {
 	pub fn has_control_target(&self) -> bool {
 		use InstructionKind::*;
 		match self {
-			Call | Cond | Uncond | Indir  => true,
-			Ret | Halt | Other            => false,
+			Call | Cond | Uncond | Indir | IndirCall => true,
+			Ret | Halt | Other                       => false,
 		}
 	}
 }
@@ -290,6 +292,8 @@ impl Instruction {
 	pub fn is_uncond(&self) -> bool { matches!(self.kind(), InstructionKind::Uncond) }
 	/// Is this an indirect jump/branch (i.e. through a register)?
 	pub fn is_indir(&self) -> bool { matches!(self.kind(), InstructionKind::Indir) }
+	/// Is this an indirect call (i.e. through a register)?
+	pub fn is_indir_call(&self) -> bool { matches!(self.kind(), InstructionKind::IndirCall) }
 	/// Is this some kind of halt instruction from which there is no recovery?
 	pub fn is_halt(&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
 }

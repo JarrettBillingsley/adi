@@ -98,8 +98,9 @@ impl BasicBlock {
 			| BBTerm::Call { dst, .. }
 			| BBTerm::Cond { t: dst, .. } => Some(*dst),
 
-			// TODO: how would this even be implemented?
-			BBTerm::JumpTbl(_targets) => None, // unimplemented!(),
+			// TODO: how would these even be implemented?
+			BBTerm::JumpTbl(_targets)        => None, // unimplemented!(),
+			BBTerm::IndirCall { dst: _, .. } => None, // unimplemented!(),
 		}
 	}
 
@@ -201,6 +202,9 @@ pub enum BBTerm {
 	Jump(EA),
 	/// Function call (dst = function called, ret = return location).
 	Call { dst: EA, ret: EA },
+	/// Indirect function call (dst = any number of destinations, empty for unknown;
+	/// ret = return location).
+	IndirCall { dst: Vec<EA>, ret: EA },
 	/// Conditional branch within a function.
 	Cond { t: EA, f: EA },
 	/// Jump table with any number of destinations.
@@ -227,6 +231,7 @@ impl BBTerm {
 			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(eas)            => None     .into_iter().chain(eas),
+			IndirCall { dst, ret }  => Some(ret).into_iter().chain(dst),
 		}
 	}
 
@@ -241,6 +246,7 @@ impl BBTerm {
 			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
 			JumpTbl(eas)            => None     .into_iter().chain(eas.iter_mut()),
+			IndirCall { dst, ret }  => Some(ret).into_iter().chain(dst),
 		}
 	}
 
@@ -251,7 +257,7 @@ impl BBTerm {
 
 		match self {
 			DeadEnd | Return | Halt | FallThru(..) |
-			BankChange(..)                           => None     .into_iter().chain(&[]),
+			BankChange(..) | IndirCall { .. }        => None     .into_iter().chain(&[]),
 			Jump(ea)                                 => Some(ea) .into_iter().chain(&[]),
 			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),

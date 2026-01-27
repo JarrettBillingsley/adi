@@ -134,7 +134,15 @@ impl Program {
 						term = Some(BBTerm::Halt);
 					}
 					Indir => {
+						// the target EAs are filled in later
 						term = Some(BBTerm::JumpTbl(vec![]));
+					}
+					IndirCall => {
+						let next = inst.next_ea();
+						potential_bbs.push_back(next);
+
+						// the destination EAs are filled in later
+						term = Some(BBTerm::IndirCall { dst: vec![], ret: next });
 					}
 					Call => {
 						let target_va = inst.control_target().expect("should have control target");
@@ -530,6 +538,7 @@ impl Program {
 				use InstructionKind::*;
 				match inst.kind() {
 					Indir => jumptables.push(inst.ea()),
+					// TODO: IndirCall: is it a jumptable? not usually...
 					Call | Cond | Uncond => {
 						let target_ea = self.resolve_target(state, inst.control_target().unwrap());
 
