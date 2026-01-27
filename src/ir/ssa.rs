@@ -23,7 +23,7 @@ pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
 	prune_phis(bbs, &dom_tree);
 
 	// not suuuure about this yet
-	// elim_dead_stores(bbs);
+	elim_dead_stores(bbs);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -76,7 +76,8 @@ impl DomTree {
 		self.g.edges_directed(node, Direction::Incoming).map(|(d, _, _)| d).next()
 	}
 
-	pub(crate) fn immediately_dominated_by(&self, node: IrBBId) -> impl Iterator<Item = IrBBId> + '_ {
+	pub(crate) fn immediately_dominated_by(&self, node: IrBBId)
+		-> impl Iterator<Item = IrBBId> + '_ {
 		self.g.edges_directed(node, Direction::Outgoing).map(|(_, c, _)| c)
 	}
 
@@ -366,7 +367,8 @@ impl PhiPruner {
 				// if arg is marked as useless, mark it as useful and push it to the stack.
 				if let Some(arg_info) = self.use_map.get_mut(arg) {
 					if !arg_info.used() {
-						// println!("propagation: marking reg {} as used in bb {}", arg, arg_info.bb());
+						// println!("propagation: marking reg {} as used in bb {}",
+						// 	arg, arg_info.bb());
 						arg_info.mark_used();
 						self.stack.push(arg.clone());
 					}
@@ -427,7 +429,6 @@ impl PhiPruner {
 // Dead store elimination
 // ------------------------------------------------------------------------------------------------
 
-/*
 struct DefInfo {
 	used: bool,
 	bbid: IrBBId,
@@ -499,4 +500,3 @@ fn elim_dead_stores(bbs: &mut [IrBasicBlock]) {
 		}
 	}
 }
-*/

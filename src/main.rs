@@ -82,6 +82,12 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	b.ld(A, DC);
 	b.sti(C, 0x8000);
 	b.st(A, A);
+
+	b.movi(C, 0x34);
+	b.movi(D, 0x12);
+	b.jmi();
+
+
 	b.ret();
 
 	b.org(0x7FFE);
@@ -207,9 +213,9 @@ fn toy_test_loop() -> Vec<u8> {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	// let img_data = toy_test_all_instructions();
+	let img_data = toy_test_all_instructions();
 	// let img_data = toy_test_ssa();
-	let img_data = toy_test_const_prop();
+	// let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
 	// let img_data = toy_test_loop();
 

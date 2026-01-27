@@ -8,7 +8,7 @@ use crate::arch::{ IArchitecture, IIrCompiler };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm, Function, FuncId };
 use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, StateChange, SegId };
-use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg };
+use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg, ConstAddr };
 
 // ------------------------------------------------------------------------------------------------
 // Analyzer
@@ -285,13 +285,17 @@ impl Program {
 
 		// 1.
 		let irfunc = self.func_to_ir(fid);
-		let consts = irfunc.constants();
 		println!("------------------------------------------------------------------");
-		println!("Constants:");
-		for (reg, (val, from)) in consts {
-			println!("{:?} = {:08X} <from {:?}>", reg, val, from);
+		// println!("Constants:");
+		// let consts = irfunc.constants();
+		// for (reg, (val, from)) in consts {
+		// 	println!("{:?} = {:08X} <from {:?}>", reg, val, from);
+		// }
+		// println!("{:?}", irfunc);
+
+		for ConstAddr { inst, opn, val, .. } in irfunc.const_addrs() {
+			println!("{:?} operand {} is a constant 0x{:08X}", inst.ea(), opn, val);
 		}
-		println!("{:?}", irfunc);
 
 		// TODO: FINISH THIS LOL
 
@@ -303,10 +307,7 @@ impl Program {
 
 		// 2. gather all the BBs that change banks.
 		let changers = func.all_bbs()
-			.filter(|&b| {
-				let b = self.bbidx.get(b);
-				matches!(b.term(), BBTerm::BankChange(..))
-			})
+			.filter(|&b| matches!(self.bbidx.get(b).term(), BBTerm::BankChange(..)))
 			.collect::<Vec<_>>();
 
 		// 3. for each one, try a few techniques to determine the new state.
@@ -315,6 +316,7 @@ impl Program {
 			// it's possible this BB's state was changed on a previous iteration.
 
 			// TODO: this is commented out just for now. eventually it will be used again?
+			// it was once used in the StateChange::Dynamic case...
 			// let state = new_states.new_state_for(bbid);
 
 			// See if we get a new state...

@@ -490,8 +490,8 @@ impl Debug for IrFunction {
 
 impl IrFunction {
 	/// Returns an iterator over all
-	pub(crate) fn constant_addresses(&self) -> ConstantAddressesIter<'_> {
-		ConstantAddressesIter {
+	pub(crate) fn const_addrs(&self) -> ConstAddrsIter<'_> {
+		ConstAddrsIter {
 			bbidx:   0,
 			instidx: 0,
 			consts:  self.constants(),
@@ -500,37 +500,58 @@ impl IrFunction {
 	}
 }
 
-pub(crate) struct ConstantAddressesIter<'func> {
+pub(crate) struct ConstAddrsIter<'func> {
 	bbidx:   usize,
 	instidx: usize,
 	consts:  &'func ConstPropResults,
 	func:    &'func IrFunction,
 }
 
-pub(crate) struct ConstantAddressLoc {
-	bbidx:   usize,
-	instidx: usize,
+pub(crate) struct ConstAddr<'func> {
+	pub bbidx:   usize,
+	pub instidx: usize,
+	pub inst:    &'func IrInst,
+	pub opn:     i8,
+	pub val:     u64,
+	pub srcs:    [Option<IrSrc>; 3],
 }
 
-impl<'func> std::iter::Iterator for ConstantAddressesIter<'func> {
-	type Item = (ConstantAddressLoc, &'func IrInst);
+impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
+	type Item = ConstAddr<'func>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(inst) = self.next_instruction() {
 			match inst.kind() {
-				IrInstKind::Load { addr, .. } | IrInstKind::Store { addr, .. } => {
+				// TODO: these use EAs instead
+				// IrInstKind::Branch { target: addr, targetn: addrn, .. }
+				// IrInstKind::CBranch { target: addr, targetn: addrn, .. }
+				// IrInstKind::Call { target: addr, targetn: addrn, .. }
+				IrInstKind::Load { addr, addrn, .. } |
+				IrInstKind::Store { addr, addrn, .. } |
+				IrInstKind::IBranch { target: addr, targetn: addrn, .. } |
+				IrInstKind::ICall { target: addr, targetn: addrn, .. }  if addrn >= 0 => {
 					match addr {
-						IrSrc::Const(..) => {
-							return Some((
-								ConstantAddressLoc { bbidx: self.bbidx, instidx: self.instidx },
-								inst
-							));
+						IrSrc::Const(IrConst { val, .. }) => {
+							return Some(ConstAddr {
+								bbidx: self.bbidx,
+								instidx: self.instidx,
+								inst,
+								opn: addrn,
+								val,
+								srcs: [None, None, None],
+							});
 						}
 						IrSrc::Reg(r) if self.consts.contains_key(&r) => {
-							return Some((
-								ConstantAddressLoc { bbidx: self.bbidx, instidx: self.instidx },
-								inst
-							));
+							// safe because of check above
+							let (val, srcs) = *self.consts.get(&r).unwrap();
+							return Some(ConstAddr {
+								bbidx: self.bbidx,
+								instidx: self.instidx,
+								inst,
+								opn: addrn,
+								val,
+								srcs,
+							});
 						}
 						_ => {}
 					}
@@ -544,7 +565,7 @@ impl<'func> std::iter::Iterator for ConstantAddressesIter<'func> {
 	}
 }
 
-impl<'func> ConstantAddressesIter<'func> {
+impl<'func> ConstAddrsIter<'func> {
 	fn next_instruction(&mut self) -> Option<&'func IrInst> {
 		while self.bbidx < self.func.bbs.len() {
 			let insts = &self.func.bbs[self.bbidx].insts;

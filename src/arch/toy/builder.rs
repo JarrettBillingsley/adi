@@ -229,6 +229,10 @@ impl ToyBuilder {
 		self.append(&[encode_op(Opcode::JMP_I16), target[0], target[1]])
 	}
 
+	pub fn jmi(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::JMI_IMPDC)])
+	}
+
 	pub fn cal(&mut self) -> usize {
 		self.append(&[encode_op(Opcode::CAL_I16), 0, 0])
 	}

@@ -111,7 +111,7 @@ enum MetaOp {
 	AND, OR,  XOR, NOT, // bitwise
 	CMP, CMC,           // compare (and with carry)
 	BLT, BLE, BEQ, BNE, // branch on flags
-	JMP, CAL, RET,      // control flow
+	JMP, JMI, CAL, RET, // control flow
 	LD,  ST,            // memory
 }
 
@@ -125,7 +125,7 @@ impl MetaOp {
 			AND => "and", OR  => "or",  XOR => "xor", NOT => "not",
 			CMP => "cmp", CMC => "cmc",
 			BLT => "blt", BLE => "ble", BEQ => "beq", BNE => "bne",
-			JMP => "jmp", CAL => "cal", RET => "ret",
+			JMP => "jmp", JMI => "jmi", CAL => "cal", RET => "ret",
 			LD  => "ld",  ST  => "st",
 		}
 	}
@@ -133,10 +133,10 @@ impl MetaOp {
 	fn access(&self) -> Option<MemAccess> {
 		use MetaOp::*;
 		match self {
-			LD                                => Some(MemAccess::R),
-			ST                                => Some(MemAccess::W),
-			BLT | BLE | BEQ | BNE | JMP | CAL => Some(MemAccess::Target),
-			_                                 => None,
+			LD                                      => Some(MemAccess::R),
+			ST                                      => Some(MemAccess::W),
+			BLT | BLE | BEQ | BNE | JMP | JMI | CAL => Some(MemAccess::Target),
+			_                                       => None,
 		}
 	}
 }
@@ -147,12 +147,13 @@ impl MetaOp {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum AddrMode {
-	IMP,  // no operands
-	RR,   // (dst, src)
-	RI8,  // (dst, imm8)
-	S8,   // (-, simm8)
-	I16,  // (-, imm16)
-	RI16, // (reg, imm16)
+	IMP,   // no operands
+	IMPDC, // hard-coded to dc
+	RR,    // (dst, src)
+	RI8,   // (dst, imm8)
+	S8,    // (  -, simm8)
+	I16,   // (  -, imm16)
+	RI16,  // (reg, imm16)
 }
 
 impl AddrMode {
@@ -160,7 +161,7 @@ impl AddrMode {
 		use AddrMode::*;
 
 		match self {
-			IMP           => 0,
+			IMP | IMPDC   => 0,
 			RR | RI8 | S8 => 1,
 			I16 | RI16    => 2,
 		}
@@ -180,7 +181,7 @@ pub enum Opcode {
 	AND_RR, AND_RI8, OR_RR,  OR_RI8,  XOR_RR, XOR_RI8, NOT_RR, NOT_RI8,
 	CMP_RR, CMP_RI8, CMC_RR, CMC_RI8,
 	BLT_S8, BLE_S8, BEQ_S8, BNE_S8,
-	JMP_I16, CAL_I16, RET_IMP,
+	JMP_I16, JMI_IMPDC, CAL_I16, RET_IMP,
 	LD_RI16, LD_RR, ST_RI16, ST_RR,
 }
 
@@ -234,39 +235,40 @@ mod descs {
 
 	// IMPORTANT: MUST STAY IN SAME ORDER AS Opcode ENUM
 	pub(super) const INST_DESCS: &[InstDesc] = &[
-		InstDesc(MOV_RR,  MOV, RR,   "{0}, {1}",   Other),
-		InstDesc(MOV_RI8, MOV, RI8,  "{0}, {1}",   Other),
-		InstDesc(ADD_RR,  ADD, RR,   "{0}, {1}",   Other),
-		InstDesc(ADD_RI8, ADD, RI8,  "{0}, {1}",   Other),
-		InstDesc(ADC_RR,  ADC, RR,   "{0}, {1}",   Other),
-		InstDesc(ADC_RI8, ADC, RI8,  "{0}, {1}",   Other),
-		InstDesc(SUB_RR,  SUB, RR,   "{0}, {1}",   Other),
-		InstDesc(SUB_RI8, SUB, RI8,  "{0}, {1}",   Other),
-		InstDesc(SBC_RR,  SBC, RR,   "{0}, {1}",   Other),
-		InstDesc(SBC_RI8, SBC, RI8,  "{0}, {1}",   Other),
-		InstDesc(AND_RR,  AND, RR,   "{0}, {1}",   Other),
-		InstDesc(AND_RI8, AND, RI8,  "{0}, {1}",   Other),
-		InstDesc(OR_RR,   OR,  RR,   "{0}, {1}",   Other),
-		InstDesc(OR_RI8,  OR,  RI8,  "{0}, {1}",   Other),
-		InstDesc(XOR_RR,  XOR, RR,   "{0}, {1}",   Other),
-		InstDesc(XOR_RI8, XOR, RI8,  "{0}, {1}",   Other),
-		InstDesc(NOT_RR,  NOT, RR,   "{0}, {1}",   Other),
-		InstDesc(NOT_RI8, NOT, RI8,  "{0}, {1}",   Other),
-		InstDesc(CMP_RR,  CMP, RR,   "{0}, {1}",   Other),
-		InstDesc(CMP_RI8, CMP, RI8,  "{0}, {1}",   Other),
-		InstDesc(CMC_RR,  CMC, RR,   "{0}, {1}",   Other),
-		InstDesc(CMC_RI8, CMC, RI8,  "{0}, {1}",   Other),
-		InstDesc(BLT_S8,  BLT, S8,   "{0}",        Cond),
-		InstDesc(BLE_S8,  BLE, S8,   "{0}",        Cond),
-		InstDesc(BEQ_S8,  BEQ, S8,   "{0}",        Cond),
-		InstDesc(BNE_S8,  BNE, S8,   "{0}",        Cond),
-		InstDesc(JMP_I16, JMP, I16,  "{0}",        Uncond),
-		InstDesc(CAL_I16, CAL, I16,  "{0}",        Call),
-		InstDesc(RET_IMP, RET, IMP,  "",           Ret),
-		InstDesc(LD_RI16, LD,  RI16, "{0}, [{1}]", Other),
-		InstDesc(LD_RR,   LD,  RR,   "{0}, [{1}]", Other),
-		InstDesc(ST_RI16, ST,  RI16, "{0}, [{1}]", Other),
-		InstDesc(ST_RR,   ST,  RR,   "{0}, [{1}]", Other),
+		InstDesc(MOV_RR,    MOV, RR,      "{0}, {1}",   Other),
+		InstDesc(MOV_RI8,   MOV, RI8,     "{0}, {1}",   Other),
+		InstDesc(ADD_RR,    ADD, RR,      "{0}, {1}",   Other),
+		InstDesc(ADD_RI8,   ADD, RI8,     "{0}, {1}",   Other),
+		InstDesc(ADC_RR,    ADC, RR,      "{0}, {1}",   Other),
+		InstDesc(ADC_RI8,   ADC, RI8,     "{0}, {1}",   Other),
+		InstDesc(SUB_RR,    SUB, RR,      "{0}, {1}",   Other),
+		InstDesc(SUB_RI8,   SUB, RI8,     "{0}, {1}",   Other),
+		InstDesc(SBC_RR,    SBC, RR,      "{0}, {1}",   Other),
+		InstDesc(SBC_RI8,   SBC, RI8,     "{0}, {1}",   Other),
+		InstDesc(AND_RR,    AND, RR,      "{0}, {1}",   Other),
+		InstDesc(AND_RI8,   AND, RI8,     "{0}, {1}",   Other),
+		InstDesc(OR_RR,     OR,  RR,      "{0}, {1}",   Other),
+		InstDesc(OR_RI8,    OR,  RI8,     "{0}, {1}",   Other),
+		InstDesc(XOR_RR,    XOR, RR,      "{0}, {1}",   Other),
+		InstDesc(XOR_RI8,   XOR, RI8,     "{0}, {1}",   Other),
+		InstDesc(NOT_RR,    NOT, RR,      "{0}, {1}",   Other),
+		InstDesc(NOT_RI8,   NOT, RI8,     "{0}, {1}",   Other),
+		InstDesc(CMP_RR,    CMP, RR,      "{0}, {1}",   Other),
+		InstDesc(CMP_RI8,   CMP, RI8,     "{0}, {1}",   Other),
+		InstDesc(CMC_RR,    CMC, RR,      "{0}, {1}",   Other),
+		InstDesc(CMC_RI8,   CMC, RI8,     "{0}, {1}",   Other),
+		InstDesc(BLT_S8,    BLT, S8,      "{0}",        Cond),
+		InstDesc(BLE_S8,    BLE, S8,      "{0}",        Cond),
+		InstDesc(BEQ_S8,    BEQ, S8,      "{0}",        Cond),
+		InstDesc(BNE_S8,    BNE, S8,      "{0}",        Cond),
+		InstDesc(JMP_I16,   JMP, I16,     "{0}",        Uncond),
+		InstDesc(JMI_IMPDC, JMI, IMPDC,   "[dc]",       Indir),
+		InstDesc(CAL_I16,   CAL, I16,     "{0}",        Call),
+		InstDesc(RET_IMP,   RET, IMP,     "",           Ret),
+		InstDesc(LD_RI16,   LD,  RI16,    "{0}, [{1}]", Other),
+		InstDesc(LD_RR,     LD,  RR,      "{0}, [{1}]", Other),
+		InstDesc(ST_RI16,   ST,  RI16,    "{0}, [{1}]", Other),
+		InstDesc(ST_RR,     ST,  RR,      "{0}, [{1}]", Other),
 	];
 }
 
@@ -334,6 +336,11 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		IMP => {
 			// only IMP instruction is ret.
 			(0, None)
+		}
+		IMPDC => {
+			// only IMPDC instruction is jmi.
+			ops[0] = Operand::Reg(Reg::DC as u8);
+			(1, None)
 		}
 		RR => {
 			ops[0] = opcode_reg;

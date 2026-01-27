@@ -99,7 +99,7 @@ impl BasicBlock {
 			| BBTerm::Cond { t: dst, .. } => Some(*dst),
 
 			// TODO: how would this even be implemented?
-			BBTerm::JumpTbl(_targets) => unimplemented!(),
+			BBTerm::JumpTbl(_targets) => None, // unimplemented!(),
 		}
 	}
 

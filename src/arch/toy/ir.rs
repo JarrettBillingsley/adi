@@ -170,6 +170,10 @@ impl InstDesc {
 			JMP => {
 				b.branch(ea, target.unwrap(), 0);
 			}
+			JMI => {
+				b.ipair(ea,   REG_TMP16, REG_D, REG_C, -1, -1, -1);
+				b.ibranch(ea, REG_TMP16, 0);
+			}
 			CAL => {
 				b.iusub(ea, REG_SP, REG_SP, IrConst::_16(2),             -1, -1, -1);
 				b.store(ea, REG_SP, IrConst::_16(i.next_va().0 as u16),  -1, -1);
