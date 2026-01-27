@@ -602,7 +602,7 @@ cfg: &mut IrCfg) {
 			let mut b = IrBuilder::new();
 
 			for &reg in ret_regs.iter() {
-				b.assign(ea, reg, IrSrc::Return(reg.size()));
+				b.assign(ea, reg, IrSrc::Return(reg.size()), -1, -1);
 			}
 
 			let new_bb = IrBasicBlock::new(new_bbid, bb.real_bbid, b.finish());

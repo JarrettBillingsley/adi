@@ -240,10 +240,10 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 		Nop | Use { .. } | Store { .. } | Branch { .. } | CBranch { .. } | IBranch { .. }
 		| Call { .. } | ICall { .. } | Ret { .. } => None,
 
-		Assign { dst, src } => Some((dst, src_to_info(src, state))),
-		Load   { dst, .. }  => Some((dst, Info::Any)),
+		Assign { dst, src, .. } => Some((dst, src_to_info(src, state))),
+		Load   { dst, .. }      => Some((dst, Info::Any)),
 
-		Unary { dst, op, src } => {
+		Unary { dst, op, src, .. } => {
 			let src_info = src_to_info(src, state);
 			let new_info = match src_info {
 				Info::Some { val, .. } => {
@@ -255,7 +255,7 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 			Some((dst, new_info))
 		}
 
-		Binary { dst, src1, op, src2 } => {
+		Binary { dst, src1, op, src2, .. } => {
 			let src1_info = src_to_info(src1, state);
 			let src2_info = src_to_info(src2, state);
 
@@ -272,7 +272,7 @@ fn transfer(inst: &IrInst, state: &mut State) -> bool {
 			Some((dst, new_info))
 		}
 
-		Ternary { dst, src1, op, src2, src3 } => {
+		Ternary { dst, src1, op, src2, src3, .. } => {
 			let src1_info = src_to_info(src1, state);
 			let src2_info = src_to_info(src2, state);
 			let src3_info = src_to_info(src3, state);

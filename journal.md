@@ -190,7 +190,27 @@ Yeah, I think that works.
 
 **Still....** how do you map from the IR back to the operands? Will each `IrInst` need sort of... "debug info" to do that mapping, provided by the arch's IR compiler?
 
-I'm overthinking this: **the IR compiler can associate an optional "real instruction operand" index with each address operand** so that the back-mapping is trivial. duh.
+I'm overthinking this: **the IR compiler can associate an optional "real instruction operand" index with each address operand** so that the back-mapping is trivial. duh. Then that opens the question: **where** is that information attached?
+
+If we put it in the `IrInstKind` members, we could either:
+
+- add more field(s) to encode the operand indices
+	- like for:
+		`Assign  { dst: IrReg, src: IrSrc },`
+		it could become
+		`Assign  { dst: (IrReg, Option<u8>), src: (IrSrc, Option<u8>) },`
+	which keeps the mappings right next to the fields, but makes it really awkward to use them...
+
+	- or it could become
+		`Assign  { dst: IrReg, src: IrSrc, dstn: Option<u8>, srcn: Option<u8> },`
+	which makes it easier to use (just `..` the operand nums in patterns) and the mappings are easy to get (`field` vs `fieldn`), but disconnects the mappings from the fields
+		- ***Done!***
+- or add the mappings to the `IrInst`
+	- add an `opn: [Option<u8>; 4]` field
+		- least intrusive, but it's a very awkward mapping from the `IrInstKind` fields to items of this array
+		- unless you
+	- or add `srcn`, `src1n`, `src2n`, `src3n`, `addrn`, `targetn`, `condn`
+		- makes the mapping more obvious but blows up the size of `IrInst` unnecessarily because each instruction can have at most 4 mappings
 
 ---
 
