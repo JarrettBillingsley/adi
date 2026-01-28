@@ -1,12 +1,15 @@
 
 # Yak stack
 
-finish writing IR analysis
-...to replace what used to be done by the interpreter (like dynamic bank change analysis)
+make const prop build ASTs for constant provenance
+...to finish writing IR analysis
+...to replace what used to be done by the interpreter (dynamic bank change analysis)
 
 AND THEN
 
 write IR compilers for the real arches (oof)
+
+**FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough?
 
 # Tasks!
 

@@ -294,7 +294,7 @@ impl Program {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin func state change analysis at {}", func.ea());
 
-		// part 1: construct IR, do constant propagation, and record addresses
+		// part 1: construct IR, do constant propagation, and determine *where* state changes are
 
 		let irfunc = self.func_to_ir(fid);
 		println!("------------------------------------------------------------------");
@@ -306,18 +306,20 @@ impl Program {
 		// println!("{:?}", irfunc);
 
 		for ConstAddr { bbidx, instidx, inst, opn, val, srcs } in irfunc.const_addrs() {
+			// TODO: add OpInfo::VARef to each constant operand
 			println!("{:?} ({},{}) operand {} is a constant 0x{:08X} <from {:?}>",
 				inst.ea(),
 				bbidx, instidx,
 				opn,
 				val,
 				srcs);
+			// TODO: recursively visit instructions based on `srcs` (after constprop makes AST)
+			// TODO: detect instruction state changes *here*, not down there in the loop
+			// TODO: split BBs at state change instructions
 		}
 
-		// TODO: FINISH THIS LOL
-
 		// --------------------------------------------------------
-		// part 2: determine and propagate state changes
+		// part 2: propagate state changes determined above
 
 		// 1. make a list of "new states" for each bb.
 		let mut new_states = BBStateChanger::new(func);
@@ -334,7 +336,9 @@ impl Program {
 
 			// TODO: this is commented out just for now. eventually it will be used again?
 			// it was once used in the StateChange::Dynamic case, where it'd interpret the
-			// BB to find out the new state.
+			// BB to find out the new state, because earlier iterations of this loop
+			// might have come up with a new state for this BB that is out of sync with
+			// the state currently stored in the BB (that's what the comment above means)
 			// let state = new_states.new_state_for(bbid);
 
 			// See if we get a new state...
@@ -539,6 +543,12 @@ impl Program {
 				for i in 0 .. inst.num_ops() {
 					let op = inst.get_op(i);
 
+					// TODO: use OpInfo first here (look for VARefs); then fall
+					// back on has_addr()
+					// TODO: what if the operand already has an OpInfo::Ref? I could see
+					// that happening if this pass is re-run on a function. I guess it'd be
+					// harmless to push the ref anyway, since adding a ref to the refmap
+					// that already exists is a no-op.
 					if op.has_addr() {
 						let dst = self.ea_from_va(state, op.addr());
 						refs.push((src, dst));

@@ -475,6 +475,11 @@ impl IrFunction {
 
 		self.consts.borrow().unwrap()
 	}
+
+	/// Eliminate any dead stores from the IR.
+	pub(crate) fn elim_dead_stores(&mut self) {
+		elim_dead_stores(&mut self.bbs);
+	}
 }
 
 impl Debug for IrFunction {

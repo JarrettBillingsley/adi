@@ -608,6 +608,7 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 	}
 }
 
+// TODO: move these to a separate file
 #[cfg(test)]
 mod tests {
 	use super::*;

@@ -243,3 +243,36 @@ I'm thinking during const prop, rather than *just* doing the computation, we als
 Is that a problem? Either they're doing it because they made a mistake (in which case an undo feature would save them) or they're doing it because the automatic analysis was wrong (in which case they'll probably change all three).
 
 I guess they could also manually retrigger a const prop after doing something like this. But what would the const prop algorithm do? Would it take user annotations into account? Give an "I tried unifying these constants into one but you annotated this as "not a reference" so idk what to do here" message?
+
+---
+
+## When do we resolve references?
+
+First, the instructions are decoded. Some instructions are known to access/reference memory statically. This is encoded in `Operand`; it has a `has_addr` method.
+
+But that's not the whole story, because **some instructions which don't "have an address" refer to one anyway.** That's what constant propagation can discover - not only which addresses indirect references refer to, but also that earlier instructions which were just e.g. loading an immediate were actually **putting together pieces of an address.**
+
+However, **this is still a VA,** and mapping from VA to EA can't be done until state change analysis has been done.
+
+So `OpInfo::Ref` can't be created on instructions until *after* state change analysis...
+
+But state change analysis can't be done until doing const prop and determining potential state change locations.....
+
+AAAAAAA so it's like:
+
+Initial instruction (finds statically-known VAs)
+-> const prop (finds more VAs)
+	- **we need to pass this info to the state change pass WITHOUT using `OpInfo::Ref`??**
+	- add another `OpInfo` variant? `VARef`? sort of an "unresolved" reference?
+-> state change pass (STILL VAs)
+-> references pass (can finally map from VAs to EAs and add an `OpInfo::Ref`)
+
+---
+
+## Ah shit, const prop srcs prob does need to be some kind of AST...
+
+Right now the srcs are just listed saying "this const was made from these other const(s)" without saying *how* but that information is needed to determine e.g. on earlier instructions, was that the "high half" or "low half" of an address, or if it was "base + offset."
+
+The only way to know that is by representing the provenance of each constant as an AST.
+
+Right now the way the const prop algo works is by computing the value (`val`) and remembering where it came from (`srcs`). But it could be instead changed to **having a parallel AST where each `Info::Some` just holds an AST node index;** the node would then contain the computed `val` and its children represent how that value was calculated.

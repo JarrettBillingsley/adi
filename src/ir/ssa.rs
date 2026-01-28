@@ -9,6 +9,9 @@ use super::*;
 // Conversion to SSA
 // ------------------------------------------------------------------------------------------------
 
+/// Given a list of `IrBasicBlock` and an `IrCfg` which describes their connection, convert
+/// the IR instructions inside to SSA form. This inserts phi functions where needed and
+/// renames registers to have generation numbers.
 pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
 	let dom_tree = DomTree::new(cfg);
 	let df = compute_dominance_frontiers(cfg, &dom_tree);
@@ -16,10 +19,6 @@ pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
 	insert_phis(bbs, cfg, &df, all_regs.iter().copied());
 	rename_regs(bbs, cfg, &dom_tree, all_regs.iter().copied());
 	prune_phis(bbs, &dom_tree);
-
-	// not suuuure about this yet... might be better to do this
-	// later, after doing arg/ret/clobber analysis
-	elim_dead_stores(bbs);
 }
 
 // ------------------------------------------------------------------------------------------------
