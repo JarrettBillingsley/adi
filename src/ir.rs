@@ -16,12 +16,16 @@ pub mod inst;
 pub mod ssa;
 pub mod constprop;
 pub mod defuse;
+pub mod dom;
+pub mod dse;
 
 pub(crate) use builder::*;
 pub(crate) use inst::*;
 pub(crate) use ssa::*;
 pub(crate) use constprop::*;
 pub(crate) use defuse::*;
+pub(crate) use dom::*;
+pub(crate) use dse::*;
 
 // ------------------------------------------------------------------------------------------------
 // ValSize
@@ -642,8 +646,7 @@ cfg: &mut IrCfg) {
 impl IrBasicBlock {
 	/// Inserts dummy uses of the arg/return regs before call and return instructions.
 	/// Returns true if a call was rewritten, so the caller can then insert the dummy BB.
-	fn rewrite_call_or_ret(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg])
-	-> bool {
+	fn rewrite_call_or_ret(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg]) -> bool {
 		if self.insts.is_empty() {
 			return false;
 		}
