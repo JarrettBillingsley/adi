@@ -180,27 +180,16 @@ pub enum OpInfo {
 	/// No special info associated with it
 	None,
 
-	/// An unresolved memory reference. Refers to a virtual address `target`, but the EA it refers
+	/// An unresolved memory reference. Refers to a virtual address, but the EA it refers
 	/// to has not yet been determined. Converting this to a `Ref` is done using MMU state info
-	/// determined by the state change pass. See `Ref` for explanations of the `kind`, `size`, and
-	/// `part` fields.
-	VARef { target: VA, kind: RefKind, size: RefSize, part: RefPart },
+	/// determined by the state change pass.
+	VARef { target: VA, info: RefInfo },
 
 	/// A memory reference. The actual address it points to is `target + delta`.
 	/// `target` is the base address of the thing being pointed to. This way, a memory reference
 	/// can point e.g. into the middle of an array, but be displayed as `arrayname + offset`, where
 	/// `offset` comes from the `delta` field.
-	///
-	/// `kind` says what kind of reference it is (absolute or relative - relative addresses have
-	/// an additional `base` which is factored into the address calculation).
-	///
-	/// `size` is the number of bits in the underlying instruction operand or data item. This may
-	/// be less than the number of bits in an address for this architecture.
-	///
-	/// `part` is which part of the address the underlying instruction operand or data item
-	/// represents. It might be a full value (like, the full absolute address or the full offset
-	/// of a relative address), or it might be the high or low half of the address.
-	Ref { target: EA, delta: isize, kind: RefKind, size: RefSize, part: RefPart },
+	Ref { target: EA, delta: isize, info: RefInfo },
 
 	// TODO: more options here for enum values, struct fields, strings...
 }
@@ -209,6 +198,24 @@ impl Default for OpInfo {
 	fn default() -> Self {
 		OpInfo::None
 	}
+}
+
+/// Details associated with a reference.
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[display("{:?}")]
+pub struct RefInfo {
+	/// what kind of reference it is (absolute or relative - relative addresses have an additional
+	/// `base` which is factored into the address calculation).
+	pub kind: RefKind,
+
+	/// the number of bits in the underlying instruction operand or data item. This may be less than
+	/// the number of bits in an address for this architecture.
+	pub size: RefSize,
+
+	/// which part of the address the underlying instruction operand or data item represents. It
+	/// might be a full value (like, the full absolute address or the full offset of a relative
+	/// address), or it might be the high or low half of the address.
+	pub part: RefPart,
 }
 
 /// The kind of reference.

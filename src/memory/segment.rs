@@ -145,7 +145,7 @@ impl Segment {
 
 	/// Convenience method to get a slice of the whole image, since
 	/// `image_slice` is overloaded so `image_slice(..)` is ambiguous.
-	pub fn image_slice_all(&self) -> ImageSlice {
+	pub fn image_slice_all(&'_ self) -> ImageSlice<'_> {
 		self.image_slice(0..)
 	}
 
@@ -271,14 +271,14 @@ impl Segment {
 
 impl ImageSliceable<usize> for Segment {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
+	fn image_slice(&'_ self, range: impl RangeBounds<usize>) -> ImageSlice<'_> {
 		self.image.as_ref().expect("trying to slice a fake segment").image_slice(range)
 	}
 }
 
 impl ImageSliceable<EA> for Segment {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<EA>) -> ImageSlice {
+	fn image_slice(&'_ self, range: impl RangeBounds<EA>) -> ImageSlice<'_> {
 		self.image_slice(self.offset_bounds_from_ea_bounds(range))
 	}
 }

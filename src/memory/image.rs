@@ -47,7 +47,7 @@ pub trait ImageRead<Index> {
 
 /// Trait for getting `ImageSlice`s from things.
 pub trait ImageSliceable<Index> {
-	fn image_slice(&self, bounds: impl RangeBounds<Index>) -> ImageSlice;
+	fn image_slice(&'_ self, bounds: impl RangeBounds<Index>) -> ImageSlice<'_>;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ impl ImageRead<usize> for ImageSlice<'_> {
 
 impl ImageSliceable<usize> for ImageSlice<'_> {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
+	fn image_slice(&'_ self, range: impl RangeBounds<usize>) -> ImageSlice<'_> {
 		let start = match range.start_bound() {
 			Bound::Included(&s) => s,
 			Bound::Excluded(&s) => s + 1,
@@ -215,7 +215,7 @@ impl Image {
 
 impl ImageSliceable<usize> for Image {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&self, range: impl RangeBounds<usize>) -> ImageSlice {
+	fn image_slice(&'_ self, range: impl RangeBounds<usize>) -> ImageSlice<'_> {
 		let start = match range.start_bound() {
 			Bound::Included(&s) => s,
 			Bound::Excluded(&s) => s + 1,

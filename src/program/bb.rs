@@ -64,12 +64,12 @@ impl BasicBlock {
 	pub fn mmu_state(&self) -> MmuState { self.state }
 
 	/// An iterator over this block's successors.
-	pub fn successors(&self) -> Successors {
+	pub fn successors(&'_ self) -> Successors<'_> {
 		self.term.successors()
 	}
 
 	/// An iterator over this block's explicit successors (those written in the terminator).
-	pub fn explicit_successors(&self) -> Successors {
+	pub fn explicit_successors(&'_ self) -> Successors<'_> {
 		self.term.explicit_successors()
 	}
 
@@ -221,7 +221,7 @@ pub type SuccessorsMut<'a> = Chain<option::IntoIter<&'a mut EA>, slice::IterMut<
 
 impl BBTerm {
 	/// An iterator over the owning block's successors.
-	pub fn successors(&self) -> Successors {
+	pub fn successors(&'_ self) -> Successors<'_> {
 		use BBTerm::*;
 
 		match self {
@@ -236,7 +236,7 @@ impl BBTerm {
 	}
 
 	/// Same as above, but mutable.
-	pub fn successors_mut(&mut self) -> SuccessorsMut {
+	pub fn successors_mut(&'_ mut self) -> SuccessorsMut<'_> {
 		use BBTerm::*;
 
 		match self {
@@ -252,7 +252,7 @@ impl BBTerm {
 
 	/// An iterator over the owning block's *explicit* successors (those which are written
 	/// in the terminating instruction).
-	pub fn explicit_successors(&self) -> Successors {
+	pub fn explicit_successors(&'_ self) -> Successors<'_> {
 		use BBTerm::*;
 
 		match self {

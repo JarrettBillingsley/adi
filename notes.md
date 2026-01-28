@@ -9,7 +9,7 @@ AND THEN
 
 write IR compilers for the real arches (oof)
 
-**FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough?
+**FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
 
 # Tasks!
 

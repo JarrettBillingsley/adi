@@ -224,8 +224,11 @@ impl Reg {
 // InstDesc
 // ------------------------------------------------------------------------------------------------
 
+// no longer PartialEq/Eq because of warn(unpredictable_function_pointer_comparisons) -
+// the `access` field has a function pointer which makes equality questionable. but it's
+// fine, it doesn't need to be PartialEq/Eq.
 /// A 65xx instruction desc.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct InstDesc {
 	/// The actual opcode byte.
 	opcode:    Opcode,
