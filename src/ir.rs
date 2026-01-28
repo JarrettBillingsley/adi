@@ -15,11 +15,13 @@ pub mod builder;
 pub mod inst;
 pub mod ssa;
 pub mod constprop;
+pub mod defuse;
 
 pub(crate) use builder::*;
 pub(crate) use inst::*;
 pub(crate) use ssa::*;
 pub(crate) use constprop::*;
+pub(crate) use defuse::*;
 
 // ------------------------------------------------------------------------------------------------
 // ValSize
@@ -440,6 +442,8 @@ pub(crate) struct IrFunction {
 	real_fid: FuncId,
 	bbs:      Vec<IrBasicBlock>,
 	cfg:      IrCfg,
+
+	// TODO: any time the bbs/cfg are modified, this needs to be invalidated...
 	consts:   LazyCell<ConstPropResults>,
 }
 

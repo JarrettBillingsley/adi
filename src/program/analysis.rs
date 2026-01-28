@@ -296,7 +296,6 @@ impl Program {
 
 		// part 1: construct IR, do constant propagation, and record addresses
 
-		// 1.
 		let irfunc = self.func_to_ir(fid);
 		println!("------------------------------------------------------------------");
 		// println!("Constants:");

@@ -429,73 +429,14 @@ impl PhiPruner {
 // Dead store elimination
 // ------------------------------------------------------------------------------------------------
 
-struct DefInfo {
-	used: bool,
-	bbid: IrBBId,
-	inst: usize,
-}
-
-impl DefInfo {
-	fn new(bbid: IrBBId, inst: usize) -> Self {
-		Self { used: false, bbid, inst }
-	}
-
-	fn used(&self) -> bool {
-		self.used
-	}
-
-	fn bb(&self) -> IrBBId {
-		self.bbid
-	}
-
-	fn inst(&self) -> usize {
-		self.inst
-	}
-
-	fn mark_used(&mut self) {
-		self.used = true;
-	}
-}
-
-type DefMap = HashMap<IrReg, DefInfo>;
-
 // This runs after phi pruning, so anything def'ed by a phi is definitely used, so we don't
 // check those, only vars def'ed by instructions.
 fn elim_dead_stores(bbs: &mut [IrBasicBlock]) {
-	let mut defs = DefMap::new();
+	let defs = find_defs_and_uses(bbs);
 
-	// 1. find all defs.
-	for bb in bbs.iter() {
-		for (i, inst) in bb.insts().enumerate() {
-			if let Some(reg) = inst.dst_reg() {
-				defs.insert(reg, DefInfo::new(bb.id, i));
-			}
-		}
-	}
-
-	// 2. find all uses.
-	for bb in bbs.iter() {
-		for phi in bb.phis() {
-			for arg in phi.args() {
-				// _0 vars aren't gonna be in the defs map, hence this check.
-				if let Some(def) = defs.get_mut(&arg) {
-					def.mark_used();
-				}
-			}
-		}
-
-		for inst in bb.insts() {
-			inst.visit_uses(|reg| {
-				if let Some(def) = defs.get_mut(&reg) {
-					def.mark_used();
-				}
-			});
-		}
-	}
-
-	// 3. prune the unused ones.
 	for (reg, def) in defs.iter() {
 		if !def.used() {
+			// TODO: uhhhhhhh actually eliminate the dead stores lmao
 			println!("{:?} is dead", reg);
 		}
 	}
