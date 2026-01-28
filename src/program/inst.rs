@@ -168,6 +168,57 @@ impl Operand {
 }
 
 // ------------------------------------------------------------------------------------------------
+// OpInfo
+// ------------------------------------------------------------------------------------------------
+
+/// Additional information about operands. This information is either extracted automatically
+/// by analysis passes or applied manually by the user. You can think of this as the higher-level
+/// "interpretation" of each operand.
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[display("{:?}")]
+pub enum OpInfo {
+	/// No special info associated with it
+	None,
+	/// A memory reference. The actual address it points to is `target + delta`. `target` is the
+	/// base address of the thing being pointed to. This way, a memory reference can point e.g.
+	/// into the middle of an array, but be displayed as `arrayname + offset`. The `kind` says what
+	/// size and kind of reference it is.
+	Ref { target: EA, delta: isize, kind: RefKind },
+
+	// TODO: more options here for enum values, struct fields, strings...
+}
+
+impl Default for OpInfo {
+	fn default() -> Self {
+		OpInfo::None
+	}
+}
+
+/// The kind of reference.
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[display("{:?}")]
+pub enum RefKind {
+	/// Absolute address. `size` is how many bits the underlying operand value is.
+	Abs { size: RefSize },
+	/// Relative address. `size` is how many bits the underlying operand value is. `base` is the
+	/// base address to which the relative address (the actual underlying operand value) is added
+	/// to compute `OpInfo::target`.
+	Rel { size: RefSize, base: EA },
+}
+
+/// The size of a reference. That is, how many bits were used to store the reference itself -
+/// it's common for a reference to be a small number of bits, but it refers indirectly to a
+/// larger address space.
+#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
+#[display("{:?}")]
+pub enum RefSize {
+	_8  = 8,
+	_16 = 16,
+	_32 = 32,
+	_64 = 64,
+}
+
+// ------------------------------------------------------------------------------------------------
 // InstructionKind
 // ------------------------------------------------------------------------------------------------
 
@@ -224,6 +275,7 @@ pub struct Instruction {
 	kind:      InstructionKind,
 	target:    Option<VA>,
 	ops:       [Operand; MAX_OPS],
+	opinfo:    [OpInfo;  MAX_OPS],
 	// you might think, "why not have this be a slice into the image?" but
 	// on a 64-bit platform a slice would be *twice the size*, and you'd
 	// get all the annoyances of slice lifetimes... so nah
@@ -242,6 +294,7 @@ impl Instruction {
 			kind,
 			target,
 			ops:       Default::default(),
+			opinfo:    Default::default(),
 			bytes:     Default::default(),
 			num_ops:   ops.len() as u8,
 			num_bytes: bytes.len() as u8,
@@ -296,5 +349,20 @@ impl Instruction {
 	pub fn is_indir_call(&self) -> bool { matches!(self.kind(), InstructionKind::IndirCall) }
 	/// Is this some kind of halt instruction from which there is no recovery?
 	pub fn is_halt(&self) -> bool { matches!(self.kind(), InstructionKind::Halt) }
+
+	/// Accessor for operand info.
+	pub fn get_opinfo(&self, i: usize) -> &OpInfo {
+		assert!(i < self.num_ops as usize);
+		&self.opinfo[i]
+	}
+	/// Mutable accessor for operand info.
+	pub fn get_opinfo_mut(&mut self, i: usize) -> &mut OpInfo {
+		assert!(i < self.num_ops as usize);
+		&mut self.opinfo[i]
+	}
+	/// The array of operand infos.
+	pub fn opinfo(&self) -> &[OpInfo] { &self.opinfo[..self.num_ops as usize] }
+	/// Mutable array of operand infos.
+	pub fn opinfo_mut(&mut self) -> &mut [OpInfo] { &mut self.opinfo[..self.num_ops as usize] }
 }
 

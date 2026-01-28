@@ -19,11 +19,11 @@ use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg, ConstAddr };
 pub(crate) enum AnalysisItem {
 	/// Explore an unexplored function.
 	NewFunc(EA, MmuState),
-	/// This function changes MMU state somehow; we have to figure out how.
+	/// Determine if/how this function changes MMU state and propagate state changes to its BBs.
 	StateChange(FuncId),
-	/// Any MMU state changes have been propagated; now to resolve references outside the function.
+	/// Resolve references outside the function.
 	FuncRefs(FuncId),
-	/// A jump table. The EA points to the jump instruction.
+	/// A jump table to be analyzed. The EA points to the jump instruction.
 	JumpTable(EA),
 	/// Split an existing function (another function called/jumped to the given EA).
 	SplitFunc(EA),
@@ -61,11 +61,11 @@ impl Program {
 		while let Some(item) = self.queue.pop_front() {
 			use AnalysisItem::*;
 			match item {
-				NewFunc(ea, state) => self.func_first_pass(ea, state),
-				StateChange(fid)   => self.determine_state_change(fid),
-				FuncRefs(fid)      => self.func_refs(fid),
-				JumpTable(ea)      => self.analyze_jump_table(ea),
-				SplitFunc(ea)      => self.split_func(ea),
+				NewFunc(ea, state) => self.new_func_pass(ea, state),
+				StateChange(fid)   => self.state_change_pass(fid),
+				FuncRefs(fid)      => self.func_refs_pass(fid),
+				JumpTable(ea)      => self.jump_table_pass(ea),
+				SplitFunc(ea)      => self.split_func_pass(ea),
 			}
 		}
 	}
@@ -76,7 +76,7 @@ impl Program {
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	fn func_first_pass(&mut self, ea: EA, state: MmuState) {
+	fn new_func_pass(&mut self, ea: EA, state: MmuState) {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function 1st pass at {}", ea);
 
@@ -116,6 +116,11 @@ impl Program {
 			'instloop: for inst in &mut iter {
 				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
 				end_ea = inst.next_ea();
+
+				// the Old Way checked for bank changes here using self.mem.inst_state_change
+				// on each instruction, and ending the BB if so. but now we're checking for
+				// bank changes later, when we have the whole function and can do const prop
+				// on it and stuff, in state_change_pass.
 
 				use InstructionKind::*;
 				match inst.kind() {
@@ -283,7 +288,7 @@ impl Program {
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	fn determine_state_change(&mut self, fid: FuncId) {
+	fn state_change_pass(&mut self, fid: FuncId) {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
@@ -301,8 +306,13 @@ impl Program {
 		// }
 		// println!("{:?}", irfunc);
 
-		for ConstAddr { inst, opn, val, .. } in irfunc.const_addrs() {
-			println!("{:?} operand {} is a constant 0x{:08X}", inst.ea(), opn, val);
+		for ConstAddr { bbidx, instidx, inst, opn, val, srcs } in irfunc.const_addrs() {
+			println!("{:?} ({},{}) operand {} is a constant 0x{:08X} <from {:?}>",
+				inst.ea(),
+				bbidx, instidx,
+				opn,
+				val,
+				srcs);
 		}
 
 		// TODO: FINISH THIS LOL
@@ -324,7 +334,8 @@ impl Program {
 			// it's possible this BB's state was changed on a previous iteration.
 
 			// TODO: this is commented out just for now. eventually it will be used again?
-			// it was once used in the StateChange::Dynamic case...
+			// it was once used in the StateChange::Dynamic case, where it'd interpret the
+			// BB to find out the new state.
 			// let state = new_states.new_state_for(bbid);
 
 			// See if we get a new state...
@@ -509,7 +520,7 @@ impl BBStateChanger {
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	fn func_refs(&mut self, fid: FuncId) {
+	fn func_refs_pass(&mut self, fid: FuncId) {
 		let func = self.get_func(fid);
 
 		trace!("------------------------------------------------------------------------");
@@ -575,7 +586,7 @@ impl Program {
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	fn analyze_jump_table(&mut self, ea: EA) {
+	fn jump_table_pass(&mut self, ea: EA) {
 		trace!("there's a jumptable at {}", ea);
 		// todo!()
 	}
@@ -586,7 +597,7 @@ impl Program {
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	fn split_func(&mut self, ea: EA) {
+	fn split_func_pass(&mut self, ea: EA) {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin function splitting at {}", ea);
 

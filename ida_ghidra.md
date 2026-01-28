@@ -59,8 +59,8 @@ each ea can have flags, and the flags associated with the ea of an instruction h
 AND THEN there's `opinfo_t` which is a union which can be one of
 
 - `refinfo_t` for offset members
-- `tid_t` for struct, etc. members
-- `strpath_t` for stroff
+- `tid_t` for struct, etc. members (or possibly enums? not clear)
+- `strpath_t` for stroff (struct offset) - `strpath_t` == "struct path"
 - `int32` for strings (\ref STRTYPE_)
 - `enum_const_t` for enums
 - `custom_data_type_ids_t` for custom data
@@ -68,13 +68,16 @@ AND THEN there's `opinfo_t` which is a union which can be one of
 and that `refinfo_t` contains:
 
 - target EA (an explicitly specified expression target)
-- base EA (the offset base, a "linear address" - basically, the beginning of the address space where the target is pointing? I think?)
+- base EA (the offset base, a "linear address")
+	- I think what it is, is **for relative references, it's the base address from which the reference is calculated.** like, is the the EA of the referring instruction? or the EA of the instruction after? that kinda thing.
+	- not sure if it's needed for absolute addresses? it can be `BADADDR` so I'm assuming no
 - tdelta (a displacement from the target which will be displayed in the expression)
 - flags (MORE FUCKIN FLAGS which includes things like):
 	- what kind of reference it is ("offset" (which may be absolute, but "relative" to 0), or just the low/high 8/16 bits of an addr)
 
 `target = operandvalue - tdelta + base`
-and once we have `target`, the actual `EA = target + tdelta - base`
+
+- that is, `operandvalue + base` gives the *actual* address accessed; subtracting `tdelta` gives the *start* of the Thing Being Referenced
 
 so summing it up, the way memory references are handled is:
 
