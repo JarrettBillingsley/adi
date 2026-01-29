@@ -167,6 +167,9 @@ fn toy_test_const_prop() -> Vec<u8> {
 	b.ldi(A, 0x8000);
 	b.sti(A, 0x8001);
 
+	b.movi(B, 0x69);
+	b.sti(B, 0x8002);
+
 	b.ret();
 
 	b.finish()
@@ -212,9 +215,9 @@ fn toy_test_loop() -> Vec<u8> {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	let img_data = toy_test_all_instructions();
+	// let img_data = toy_test_all_instructions();
 	// let img_data = toy_test_ssa();
-	// let img_data = toy_test_const_prop();
+	let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
 	// let img_data = toy_test_loop();
 

@@ -5,7 +5,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::toy::{ ToyArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId,
 	EA };
-use crate::program::{ Program, Instruction };
+use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // ToyPlatform
@@ -126,11 +126,8 @@ impl IMmu for ToyMmu {
 		}
 	}
 
-	fn inst_state_change(&self, _state: MmuState, _inst: &Instruction) -> StateChange {
+	fn state_change(&self, _state: MmuState, _va: VA, _val: Option<u64>, _load: bool)
+	-> StateChange {
 		StateChange::None
-	}
-
-	fn write(&self, old: MmuState, _addr: VA, _val: usize) -> MmuState {
-		old
 	}
 }

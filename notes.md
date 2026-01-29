@@ -1,6 +1,10 @@
 
 # Yak stack
 
+brainstorming how `const_addrs` should work/what info it should report
+
+AND ALSO
+
 make const prop build ASTs for constant provenance
 ...to finish writing IR analysis
 ...to replace what used to be done by the interpreter (dynamic bank change analysis)
@@ -10,6 +14,8 @@ AND THEN
 write IR compilers for the real arches (oof)
 
 **FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
+**am I converting to EAs too early???** first pass of function analysis is already trying to find EAs for like control flow targets. seems premature. is it even necessary? intra-function control flow is almost certainly (but not necessarily) going to stay within the same segment...
+**evaluate uses of `usize`** - I think I should be using `u64` instead in some places
 
 # Tasks!
 
@@ -21,6 +27,11 @@ write IR compilers for the real arches (oof)
 	- IDA implements it by having a different queue for each phase, and (presumably) taking the next action item from the highest-priority queue first
 - IR stuff
 	- apply results of const prop to the IR? rewrite it?
+		- would definitely simplify some things like the `const_addrs` iteration - rather than having to double-check that a register is constant, just... have a constant there.
+		- should `IrConst` have a field for provenance AST reference?
+		- **questions:**
+			- could this trigger another round of const prop? I mean yes it could
+			- how would this interact with the constant provenance AST?
 	- IR DSE (dead store elim - eyyy there's some commented-out code at the bottom of `ssa.rs`!), which kinda also depends on:
 	- bottom-up function argument/return value/clobber list determination to prune down the number of `use()` and `= <return>` IR instructions around `call` and `ret` IR instructions
 		- use of SSA gen 0 vars indicate arguments

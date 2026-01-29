@@ -30,17 +30,27 @@ impl Program {
 		// }
 		// println!("{:?}", irfunc);
 
-		for ConstAddr { bbidx, instidx, inst, opn, val, srcs } in irfunc.const_addrs() {
+		for ConstAddr { bbidx, instidx, inst, opn, addr, val, load, srcs } in irfunc.const_addrs() {
 			// TODO: add OpInfo::VARef to each constant operand
-			println!("{:?} ({},{}) operand {} is a constant 0x{:08X} <from {:?}>",
+
+			println!("{:?} ({},{}) operand {} is a {} address 0x{:08X} <from {:?}>",
 				inst.ea(),
 				bbidx, instidx,
 				opn,
-				val,
+				if load {
+					"load from".into()
+				} else if let Some(val) = val {
+					format!("store of constant value 0x{:08X} to", val)
+				} else {
+					"store to".into()
+				},
+				addr,
 				srcs);
-			// TODO: recursively visit instructions based on `srcs` (after constprop makes AST)
+			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
 			// TODO: detect instruction state changes *here*, not down there in the loop
 			// TODO: split BBs at state change instructions
+			// TODO: need to detect the unlikely but very confusing possibility of a piece
+			// of code swapping out the bank of the segment currently executing!!!
 		}
 
 		// --------------------------------------------------------
@@ -56,23 +66,25 @@ impl Program {
 
 		// 3. for each one, try a few techniques to determine the new state.
 		for bbid in changers {
-			let bb = self.bbidx.get(bbid);
-			// it's possible this BB's state was changed on a previous iteration.
-
+			let _bb = self.bbidx.get(bbid);
 			// TODO: this is commented out just for now. eventually it will be used again?
 			// it was once used in the StateChange::Dynamic case, where it'd interpret the
 			// BB to find out the new state, because earlier iterations of this loop
 			// might have come up with a new state for this BB that is out of sync with
-			// the state currently stored in the BB (that's what the comment above means)
+			// the state currently stored in the BB (that's what the comment below means)
+
+			// it's possible this BB's state was changed on a previous iteration.
 			// let state = new_states.new_state_for(bbid);
 
 			// See if we get a new state...
-			let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
-				StateChange::None              => unreachable!(),
-				StateChange::Maybe             => None, // TODO: log this!
-				StateChange::Dynamic           => None, // TODO: uhhh
-				StateChange::Static(new_state) => Some(new_state),
-			};
+			// let new_state = match self.mem.inst_state_change(bb.mmu_state(), bb.term_inst()) {
+			// 	StateChange::None              => unreachable!(),
+			// 	StateChange::Maybe             => None, // TODO: log this!
+			// 	StateChange::Dynamic           => None, // TODO: uhhh
+			// 	StateChange::Static(new_state) => Some(new_state),
+			// };
+
+			let new_state = None;
 
 			// 4. now, propagate that state change to the successors.
 			if let Some(new_state) = new_state {
@@ -126,6 +138,10 @@ impl Program {
 		changed
 	}
 }
+
+// ------------------------------------------------------------------------------------------------
+// Helper object for tracking and propagating state changes through a function's BB CFG
+// ------------------------------------------------------------------------------------------------
 
 struct BBStateChangeStatus {
 	new_state: Option<MmuState>,

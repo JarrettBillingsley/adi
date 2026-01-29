@@ -91,8 +91,9 @@ impl Program {
 			pub fn endianness(&self) -> Endian;
 			/// The initial state of the MMU.
 			pub fn initial_mmu_state(&self) -> MmuState;
-			/// How this instruction changes the MMU state.
-			pub fn inst_state_change(&self, state: MmuState, i: &Instruction) -> StateChange;
+			/// How would the given memory access change the state?
+			pub fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool)
+			-> StateChange;
 			/// Given a VA, get the Segment which contains it (if any).
 			pub fn segment_for_va(&self, state: MmuState, va: VA) -> Option<&Segment>;
 			/// Same as above but mutable.

@@ -11,7 +11,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
 	SegId, EA };
-use crate::program::{ Program, Instruction, Operand, MemIndir };
+use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -267,8 +267,7 @@ trait IMapper {
 	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA>;
 	fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA>;
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
-	fn state_change(&self, state: MmuState, va: VA) -> StateChange;
-	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange;
 }
 
 #[derive(Debug)]
@@ -319,42 +318,8 @@ impl IMmu for NesMmu {
 		}
 	}
 
-	fn inst_state_change(&self, state: MmuState, inst: &Instruction) -> StateChange {
-		for op in inst.ops() {
-			use MemIndir::RegDisp;
-
-			match op {
-				Operand::Mem(va, acc) if acc.writes_mem() => {
-					match self.mapper.state_change(state, *va) {
-						StateChange::None => {},
-						something         => return something,
-					}
-				}
-
-				Operand::Indir(RegDisp { disp, .. }, acc) if acc.writes_mem() => {
-					// these instructions use X or Y as the register, which means it's impossible to
-					// access memory more than 255 bytes past `disp`.
-					let disp = *disp as usize;
-
-					match self.mapper.state_change(state, VA(disp)) {
-						StateChange::None => {
-							match self.mapper.state_change(state, VA((disp).wrapping_add(255))) {
-								StateChange::None => {},
-								something         => return something,
-							}
-						}
-						something => return something,
-					}
-				}
-				_ => {}
-			}
-		}
-
-		StateChange::None
-	}
-
-	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
-		self.mapper.write(old, addr, val)
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+		self.mapper.state_change(state, va, val, load)
 	}
 }
 
@@ -416,13 +381,9 @@ impl IMapper for NRom {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, _va: VA) -> StateChange {
+	fn state_change(&self, _state: MmuState, _va: VA, _val: Option<u64>, _load: bool)
+	-> StateChange {
 		StateChange::None
-	}
-
-	fn write(&self, old: MmuState, _addr: VA, _val: usize) -> MmuState {
-		// state... state never changes...
-		old
 	}
 }
 
@@ -494,19 +455,21 @@ impl IMapper for UXRom {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, va: VA) -> StateChange {
-		match va.0 {
-			0x8000 ..= 0xFFFF => StateChange::Dynamic,
-			_                 => StateChange::None,
+	fn state_change(&self, _state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+		if load {
+			return StateChange::None;
 		}
-	}
 
-	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
-		match addr.0 {
+		match va.0 {
 			0x8000 ..= 0xFFFF => {
-				MmuState::from_usize(val % self.all.len())
+				match val {
+					None =>
+						StateChange::Dynamic,
+					Some(val) =>
+						StateChange::Static(MmuState::from_u64(val % self.all.len() as u64)),
+				}
 			}
-			_ => old
+			_ => StateChange::None,
 		}
 	}
 }
@@ -583,19 +546,21 @@ impl IMapper for AXRom {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, va: VA) -> StateChange {
-		match va.0 {
-			0x8000 ..= 0xFFFF => StateChange::Dynamic,
-			_                 => StateChange::None,
+	fn state_change(&self, _state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+		if load {
+			return StateChange::None;
 		}
-	}
 
-	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
-		match addr.0 {
+		match va.0 {
 			0x8000 ..= 0xFFFF => {
-				MmuState::from_usize(val % self.all.len())
+				match val {
+					None =>
+						StateChange::Dynamic,
+					Some(val) =>
+						StateChange::Static(MmuState::from_u64(val % self.all.len() as u64)),
+				}
 			}
-			_ => old
+			_ => StateChange::None,
 		}
 	}
 }

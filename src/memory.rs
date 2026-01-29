@@ -4,8 +4,6 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use parse_display::Display;
 use delegate::delegate;
 
-use crate::program::{ Instruction };
-
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
@@ -196,12 +194,9 @@ impl Memory {
 			#[call(initial_state)]
 			pub fn initial_mmu_state(&self) -> MmuState;
 
-			/// How this instruction changes the MMU state.
-			pub fn inst_state_change(&self, state: MmuState, i: &Instruction) -> StateChange;
-
-			/// Simulate a write to the MMU to produce a new MMU state.
-			#[call(write)]
-			pub fn mmu_write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
+			/// How would the given memory access change the state?
+			pub fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool)
+			-> StateChange;
 		}
 	}
 

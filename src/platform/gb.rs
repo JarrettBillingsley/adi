@@ -6,9 +6,8 @@ use enum_dispatch::enum_dispatch;
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::gb::{ GBArchitecture };
-use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId,
-	EA };
-use crate::program::{ Program, Instruction, Operand };
+use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId, EA };
+use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // GBPlatform
@@ -566,29 +565,9 @@ impl IMmu for GBMmu {
 		}
 	}
 
-	fn inst_state_change(&self, state: MmuState, inst: &Instruction) -> StateChange {
-		for op in inst.ops() {
-			match op {
-				Operand::Mem(va, acc) if acc.writes_mem() => {
-					match self.mbc.state_change(state, *va) {
-						StateChange::None => {},
-						something         => return something,
-					}
-				}
-
-				// TODO: indirect mem accesses *could* change state, but they're so
-				// ridiculously common in this arch that saying "Maybe!" on every one
-				// is prohibitive
-
-				_ => {}
-			}
-		}
-
-		StateChange::None
-	}
-
-	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState {
-		self.mbc.write(old, addr, val)
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+		// TODO: are there any MBCs which change state in response to loads?
+		self.mbc.state_change(state, va, val, load)
 	}
 }
 
@@ -616,8 +595,7 @@ trait IMbc {
 	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA>;
 	fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA>;
 	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String;
-	fn state_change(&self, state: MmuState, va: VA) -> StateChange;
-	fn write(&self, old: MmuState, addr: VA, val: usize) -> MmuState;
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -665,12 +643,8 @@ impl IMbc for NoMbc {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, _va: VA) -> StateChange {
+	fn state_change(&self, _state: MmuState, _va: VA, _val: Option<u64>, _load: bool)
+	-> StateChange {
 		StateChange::None
-	}
-
-	fn write(&self, old: MmuState, _addr: VA, _val: usize) -> MmuState {
-		// state... state never changes...
-		old
 	}
 }
