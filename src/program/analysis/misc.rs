@@ -13,46 +13,56 @@ use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg };
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	pub(super) fn check_split_bb(&mut self, old_id: BBId, start: EA, owner: Option<FuncId>)
-	-> Option<BBId> {
-		let old_bb = self.bbidx.get(old_id);
+	/// Split a basic block `old_id` at address `start`. All instructions from `start` onward become
+	/// part of a new BB, and the old BB's terminator is set to fall through to the new BB.
+	///
+	/// Returns:
+	/// - `Ok(Some(new_bbid))` if the split succeeded; `new_bbid` is the ID of the newly-split-off
+	///   BB. **NOTE:** it is the *caller's* responsibility to add this to the function's BB list!
+	/// - `Ok(None)` if `start` points to the beginning of the old BB. No splitting happened, but
+	///   it's a harmless no-op.
+	/// - `Err(())` if `start` points into the middle of an instruction.
+	pub(super) fn split_bb(&mut self, old_bbid: BBId, start: EA, owner: Option<FuncId>)
+	-> Result<Option<BBId>, ()> {
+		let old_bb = self.bbidx.get(old_bbid);
 
-		if start != old_bb.ea {
-			// ooh, now we have to split the existing bb.
-			// first, let's make sure that `start` points to the beginning of an instruction,
-			// because otherwise we'd be jumping to an invalid EA.
-			let idx = match old_bb.last_instr_before(start) {
-				Some(idx) => idx,
-				None      => {
-					log::warn!("splitting bb at {} failed", old_bb.ea);
-					// todo!("have to flag referrer as being invalid somehow"),
-					return None;
-				}
-			};
-
-			// now we can split the existing BB...
-			let new_bb = self.split_bb(old_id, idx, start);
-
-			// ...and update the span map.
-			let span_kind = if let Some(fid) = owner {
-				// (oh and, fill in the owner)
-				self.bbidx.get_mut(new_bb).mark_complete(fid);
-				SpanKind::Code(new_bb)
-			} else {
-				SpanKind::AnaCode(new_bb)
-			};
-
-			self.segment_from_ea_mut(start).split_span(start, span_kind);
-
-			Some(new_bb)
-		} else {
-			None
+		// if the start address is the beginning of the BB, there's nothing to do, but it's harmless
+		// to call this function in this case.
+		if start == old_bb.ea {
+			return Ok(None);
 		}
+
+		// now we have to split the existing bb. first, let's make sure that `start` points to the
+		// beginning of an instruction, because otherwise we'd be jumping to an invalid EA.
+		let idx = match old_bb.last_instr_before(start) {
+			Some(idx) => idx,
+			None => {
+				log::warn!("splitting bb at {} failed", old_bb.ea);
+				return Err(());
+			}
+		};
+
+		// now we can split the existing BB...
+		let new_bbid = self.split_bb_worker(old_bbid, idx, start);
+
+		// ...fill in the owner...
+		let span_kind = match owner {
+			Some(fid) => {
+				self.bbidx.get_mut(new_bbid).mark_complete(fid);
+				SpanKind::Code(new_bbid)
+			}
+			None => SpanKind::AnaCode(new_bbid)
+		};
+
+		// ...and update the span map.
+		self.segment_from_ea_mut(start).split_span(start, span_kind);
+
+		Ok(Some(new_bbid))
 	}
 
-	// returns id of newly split-off BB
-	pub(super) fn split_bb(&mut self, old_id: BBId, inst_idx: usize, new_start: EA) -> BBId {
-		let old = self.bbidx.get_mut(old_id);
+	// returns id of newly split-off BB.
+	fn split_bb_worker(&mut self, old_bbid: BBId, inst_idx: usize, new_start: EA) -> BBId {
+		let old = self.bbidx.get_mut(old_bbid);
 		let term_ea = old.insts[inst_idx].ea();
 		let state = old.mmu_state();
 		let insts = old.insts.split_off(inst_idx + 1);
@@ -60,20 +70,22 @@ impl Program {
 		assert!(old.ea < new_start);
 		assert!(term_ea < new_start);
 
-		let new_id = self.bbidx.new_bb(
+		let new_bbid = self.bbidx.new_bb(
 			new_start,
 			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
 			insts,
 			state
 		);
 
-		let (old, new) = self.bbidx.get2_mut(old_id, new_id);
+		let (old, new) = self.bbidx.get2_mut(old_bbid, new_bbid);
 		std::mem::swap(&mut old.term, &mut new.term);
 
-		log::trace!("split bb new id: {:?} ea: {}, term: {:?}", new_id, new.ea, new.term);
-		new_id
+		log::trace!("split bb new id: {:?} ea: {}, term: {:?}", new_bbid, new.ea, new.term);
+		new_bbid
 	}
 
+	/// Given an MMU state and a target VA, return either the valid EA for it; or an invalid EA
+	/// with the target VA as its offset.
 	pub(super) fn resolve_target(&self, state: MmuState, target: VA) -> EA {
 		match self.ea_for_va(state, target) {
 			Some(l) => l,
@@ -81,6 +93,12 @@ impl Program {
 		}
 	}
 
+	/// Compile a function to IR and return it. **This is (probably) a slow function!**
+	///
+	/// As of now it's the caller's responsibility to drop the returned `IrFunction` if the
+	/// originating function is modified, or else the IR will be out of sync with it. This may
+	/// change in the future (e.g. by having `IrFunction` hold a reference to the original
+	/// function.)
 	pub(super) fn func_to_ir(&self, fid: FuncId) -> IrFunction {
 		// 1. compile BBs (and build a map from BBIds to IrBBIds)
 		let compiler = self.plat.arch().new_ir_compiler();

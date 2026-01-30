@@ -195,8 +195,12 @@ impl Program {
 			SpanKind::Code(..)    => false,   // fell through into another function.
 			SpanKind::AnaCode(id) => {
 				// oh, we've already analyzed this. we might have to split it though.
-				if let Some(bbid) = self.check_split_bb(id, start, None) {
-					bbs.push(bbid);
+				match self.split_bb(id, start, None) {
+					Ok(Some(bbid)) => bbs.push(bbid),
+					Ok(None) => {} // s'fine
+					Err(_) => {
+						// TODO: mark referrer as being invalid somehow.
+					}
 				}
 
 				false

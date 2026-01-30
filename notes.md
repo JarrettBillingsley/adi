@@ -1,23 +1,18 @@
 
 # Yak stack
 
-brainstorming how `const_addrs` should work/what info it should report
-
-AND ALSO
-
-make const prop build ASTs for constant provenance
-...to finish writing IR analysis
-...to replace what used to be done by the interpreter (dynamic bank change analysis)
+- rewriting `pass_statechange::BBStateChanger` to do a proper dataflow analysis so it's not dumb
+- ...to finish state change analysis
 
 AND THEN
 
-write IR compilers for the real arches (oof)
-
-**FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
-**evaluate uses of `usize`** - I think I should be using `u64` instead in some places
+- make const prop build ASTs for constant provenance
+- write IR compilers for the real arches (oof)
 
 # Tasks!
 
+- **FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
+- **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
 - Analysis priority
 	- it's something that bounced around in my head and then I saw that IDA explicitly does this
 	- diff analysis phases have priorities over others

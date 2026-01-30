@@ -47,19 +47,21 @@ impl BasicBlock {
 	}
 
 	/// Its globally-unique id.
-	pub fn id      (&self) -> BBId     { self.id }
+	pub fn id(&self) -> BBId     { self.id }
 	/// Its globally-unique EA.
-	pub fn ea     (&self) -> EA { self.ea }
+	pub fn ea(&self) -> EA { self.ea }
+	/// The first EA after it.
+	pub fn ea_after(&self) -> EA { self.term_inst().next_ea() }
 	/// Where its terminator (last instruction) is located.
 	pub fn term_ea(&self) -> EA { self.term_inst().ea() }
 	/// How it ends, and what its successors are.
-	pub fn term    (&self) -> &BBTerm  { &self.term }
+	pub fn term(&self) -> &BBTerm  { &self.term }
 	/// Same as above, but mutable.
 	pub fn term_mut(&mut self) -> &mut BBTerm { &mut self.term }
 	/// The terminating instruction.
 	pub fn term_inst(&self) -> &Instruction { &self.insts.last().unwrap() }
 	/// Its instructions.
-	pub fn insts   (&self) -> &[Instruction] { &self.insts }
+	pub fn insts(&self) -> &[Instruction] { &self.insts }
 	/// The MMU state at the beginning of this BB.
 	pub fn mmu_state(&self) -> MmuState { self.state }
 
@@ -110,7 +112,12 @@ impl BasicBlock {
 		}
 	}
 
+	/// Get the index into `insts()` of the last instruction before the given EA.
+	///
+	/// Panics if the given EA is out of the range of EAs that this BB covers.
 	pub(crate) fn last_instr_before(&self, ea: EA) -> Option<usize> {
+		assert!(ea >= self.ea() && ea < self.ea_after(), "wuh oh, invalid EA for this BB");
+
 		for (i, inst) in self.insts.iter().enumerate() {
 			if inst.ea() < ea {
 				let next = inst.next_ea();

@@ -9,7 +9,13 @@ use crate::memory::{ SegId };
 // EA
 // ------------------------------------------------------------------------------------------------
 
-/// A unique location consisting of Segment ID and an offset within that Segment.
+/// A unique location consisting of Segment ID and an offset within that Segment. EAs can be valid
+/// or invalid.
+///
+/// A **valid EA** consists of a segment ID and an offset into that segment.
+///
+/// An **invalid EA** has a segment ID of `SegId::invalid()`, and its offset may be a VA which could
+/// not be mapped to a valid EA.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct EA(u64);
 

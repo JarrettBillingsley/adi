@@ -726,7 +726,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		println!("{:20}{}:", "", prog.name_of_ea(bb_ea).truecolor(127, 63, 0));
 	}
 
-	// println!("{}", format!("; mmu state = {:?}", bb.mmu_state()).green());
+	println!("{}", format!("; mmu state = {:?}", bb.mmu_state()).green());
 
 	// Instructions
 

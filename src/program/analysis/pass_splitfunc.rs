@@ -18,12 +18,20 @@ impl Program {
 		let mut bbid = self.span_at_ea(ea).bb().expect("uh, there used to be a function here");
 		let fid = self.bbidx.get(bbid).func();
 
-		// first: do we have to split the target BB?
-		if let Some(new_bbid) = self.check_split_bb(bbid, ea, Some(fid)) {
-			// add it to the function's vec of BBs,
-			self.get_func_mut(fid).bbs.push(new_bbid);
-			// and now we're working with the new BB.
-			bbid = new_bbid;
+		// first: split target BB if needed
+		match self.split_bb(bbid, ea, Some(fid)) {
+			Ok(Some(new_bbid)) => {
+				// add it to the function's vec of BBs,
+				self.get_func_mut(fid).bbs.push(new_bbid);
+				// and now we're working with the new BB.
+				bbid = new_bbid;
+			}
+			Ok(None) => {} // didn't split, s'fine
+			Err(_) => {
+				// TODO: mark referrer as being invalid somehow.
+				warn!(" attempted to split function starting at {} at EA {}, but it failed",
+					self.get_func(fid).ea(), ea);
+			}
 		}
 
 		// TODO: technically, it *is* possible to split multi-entry functions, as long as
