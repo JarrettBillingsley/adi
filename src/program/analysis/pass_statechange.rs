@@ -4,11 +4,10 @@ use std::iter::{ IntoIterator} ;
 
 use log::*;
 
-use crate::program::{ Program, BBId, BBTerm, Function, FuncId, OpInfo, RefInfo, RefKind, RefPart,
-	Operand };
+use crate::program::{ Program, BBId, BBTerm, Function, FuncId, OpInfo, RefInfo, Operand };
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
-use crate::memory::{ MmuState, VA };
+use crate::memory::{ MmuState, VA, EA, MemAccess, StateChange };
 use crate::ir::{ ConstAddr };
 
 // ------------------------------------------------------------------------------------------------
@@ -20,10 +19,11 @@ impl Program {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin func state change analysis at {}", self.get_func(fid).ea());
 
-		// part 1: construct IR and do constant propagation, and determine *where* state changes are
+		// --------------------------------------------------------
+		// part 1: construct IR, do constant propagation, and determine *where* state changes are
 
 		let irfunc = self.func_to_ir(fid);
-		println!("------------------------------------------------------------------");
+		// println!("------------------------------------------------------------------");
 		// println!("Constants:");
 		// let consts = irfunc.constants();
 		// for (reg, (val, from)) in consts {
@@ -31,61 +31,80 @@ impl Program {
 		// }
 		// println!("{:?}", irfunc);
 
-		for ConstAddr { bbid, ea, opn, addr, val, access, srcs } in irfunc.const_addrs() {
-			/*println!("{:?} in {:?} operand {} is a {} address 0x{:08X} <from {:?}>",
-				ea,
-				bbid,
-				opn,
-				match access {
-					MemAccess::R => "load from".into(),
-					MemAccess::W => {
-						if let Some(val) = val {
-							format!("store of constant value 0x{:08X} to", val)
-						} else {
-							"store to".into()
-						}
-					},
-					MemAccess::Offset => "reference to".into(),
-					MemAccess::Target => "control flow target to".into(),
-					_ => unreachable!("const_addrs returned something bad"),
-				},
-				addr,
-				srcs);*/
+		let addr_bits = self.plat.arch().addr_bits();
+
+		// for tracking locations of MMU state changes.
+		let mut changes: Vec<(BBId, EA, MmuState)> = vec![];
+
+		for /*aaa@*/ ConstAddr { bbid, ea, opn, addr, val, access, srcs } in irfunc.const_addrs() {
+			// aaa.dump();
 
 			// 1. add OpInfo::VARef to each constant operand
 			let bb = self.bbidx.get_mut(bbid);
 			let inst = bb.inst_at_ea_mut(ea).expect("something went wrong with the IR EA mapping");
+
+			// let's double-check to make sure the arch is implemented properly.
 			let op = inst.get_op(opn);
-			let kind = match op {
+			match op {
+				Operand::Mem(_, _) | Operand::Indir(_, _) => {}
 				Operand::Reg(_) =>
 					panic!("this shouldn't be possible. should it be Operand::Indir?"),
 				Operand::UImm(_, _) | Operand::SImm(_, _) =>
 					panic!("this shouldn't be possible. should it be Operand::Mem?"),
-				// TODO: but I'm not totally confident that this is true...
-				Operand::Mem(_, _) | Operand::Indir(_, _) => RefKind::Abs,
 			};
 
 			*inst.get_opinfo_mut(opn) = OpInfo::VARef {
 				target: addr,
-				info: RefInfo {
-					kind,
-					size: self.plat.arch().addr_bits(),
-					// at least here, yeah, it's full. hi/lo come into play once we visit the
-					// instructions which computed this address
-					part: RefPart::Full,
-				}
+				// hi/lo come into play once we visit the instructions which computed this address.
+				// TODO: I'm not totally confident that this is always absolute...
+				info: RefInfo::abs(addr_bits),
 			};
 
 			// 2. detect instruction state changes
-			let _ = (val, access, srcs);
-			// TODO: need to detect the unlikely but very confusing possibility of a piece
-			// of code swapping out the bank of the segment currently executing!!!
-			// TODO: split BBs at state change instructions
+			match access {
+				MemAccess::R | MemAccess::W => {
+					let old_state = bb.mmu_state();
+					let load = access == MemAccess::R;
+					match self.mem.state_change(old_state, addr, val, load) {
+						StateChange::None              => {
+							trace!("no state change at {}", ea);
+
+						} // no change
+						StateChange::Maybe             => {
+							trace!("found a maybe state change at {}", ea);
+							// TODO: log this as a point of interest for user to investigate
+							// TOOD: also is this even possible in this new model? Maybe was for
+							// the old model where the state change looked at the macro-instruction.
+							// here, we know exactly what address is being used.
+						}
+						StateChange::Dynamic           => {
+							trace!("found a dynamic state change at {}", ea);
+							// TODO: log this as a point of interest for user to investigate
+						}
+						StateChange::Static(new_state) => {
+							trace!("found a static state change at {} to {:?}", ea, new_state);
+							changes.push((bbid, ea, new_state));
+						}
+					}
+				}
+
+				MemAccess::Target | MemAccess::Offset => {}
+				_ => unreachable!("const_addrs gave a bad access"),
+
+			}
+
 			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
+			let _ = srcs;
 		}
 
 		// --------------------------------------------------------
-		// part 2: propagate state changes determined above
+		// part 2: TODO: split BBs at state change instructions
+
+		// TODO: need to detect the unlikely but very confusing possibility of a piece
+		// of code swapping out the bank of the segment currently executing!!!
+
+		// --------------------------------------------------------
+		// part 3: propagate state changes determined above
 
 		// 1. make a list of "new states" for each bb.
 		let func = self.get_func(fid);

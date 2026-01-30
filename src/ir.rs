@@ -530,6 +530,31 @@ pub(crate) struct ConstAddr {
 	pub srcs:    [Option<IrSrc>; 3],
 }
 
+impl ConstAddr {
+	pub(crate) fn dump(&self) {
+		let ConstAddr { bbid, ea, opn, addr, val, access, srcs } = self;
+		println!("{:?} in {:?} operand {} is a {} address 0x{:08X} <from {:?}>",
+			ea,
+			bbid,
+			opn,
+			match access {
+				MemAccess::R => "load from".into(),
+				MemAccess::W => {
+					if let Some(val) = val {
+						format!("store of constant value 0x{:08X} to", val)
+					} else {
+						"store to".into()
+					}
+				},
+				MemAccess::Offset => "reference to".into(),
+				MemAccess::Target => "control flow target to".into(),
+				_ => unreachable!("const_addrs returned something bad"),
+			},
+			addr,
+			srcs);
+	}
+}
+
 impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 	type Item = ConstAddr;
 

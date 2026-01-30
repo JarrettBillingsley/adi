@@ -455,7 +455,7 @@ impl IMapper for UXRom {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
 		if load {
 			return StateChange::None;
 		}
@@ -465,8 +465,10 @@ impl IMapper for UXRom {
 				match val {
 					None =>
 						StateChange::Dynamic,
-					Some(val) =>
-						StateChange::Static(MmuState::from_u64(val % self.all.len() as u64)),
+					Some(val) => {
+						let new_state = MmuState::from_u64(val % (self.all.len() as u64));
+						state.change(new_state)
+					}
 				}
 			}
 			_ => StateChange::None,
@@ -546,7 +548,7 @@ impl IMapper for AXRom {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
 		if load {
 			return StateChange::None;
 		}
@@ -556,8 +558,10 @@ impl IMapper for AXRom {
 				match val {
 					None =>
 						StateChange::Dynamic,
-					Some(val) =>
-						StateChange::Static(MmuState::from_u64(val % self.all.len() as u64)),
+					Some(val) => {
+						let new_state = MmuState::from_u64(val % (self.all.len() as u64));
+						state.change(new_state)
+					}
 				}
 			}
 			_ => StateChange::None,

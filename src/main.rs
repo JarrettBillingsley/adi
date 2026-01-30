@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	// setup_logging(LevelFilter::Trace)?;
+	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 	// test_gb()?;
 	// test_nes()?;
@@ -214,12 +214,49 @@ fn toy_test_loop() -> Vec<u8> {
 	b.finish()
 }
 
+fn toy_test_state_change() -> Vec<u8> {
+	use adi::arch::toy::{ Reg, ToyBuilder };
+	use Reg::*;
+
+	let mut b = ToyBuilder::new();
+	const STATE_CHANGE_FUNC: usize = 0x50;
+
+	// ---------------------------------
+	// main
+	b.movi(D, 0xFF);
+	b.movi(C, 0xFF);
+	b.movi(A, 13);
+	b.st(A, DC);
+	b.ldi(A, 0x8000);
+	b.st(A, DC);
+
+	b.subi(C, 1);
+	b.ld(B, DC);
+	b.st(B, DC);
+
+	b.movi(A, 4);
+	b.call_to(STATE_CHANGE_FUNC);
+
+	b.ret();
+
+	// ---------------------------------
+	// state change function
+	b.org(STATE_CHANGE_FUNC);
+	b.andi(A, 31);
+	b.sti(A, 0xFFFF);
+	b.ret();
+
+
+	b.finish()
+}
+
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let img_data = toy_test_all_instructions();
 	// let img_data = toy_test_ssa();
-	let img_data = toy_test_const_prop();
+	// let img_data = toy_test_const_prop();
 	// let img_data = toy_test_calls();
 	// let img_data = toy_test_loop();
+	let img_data = toy_test_state_change();
 
 	let img = Image::new("<toy test>", &img_data);
 	let mut prog = program_from_image(img)?;

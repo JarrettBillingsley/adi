@@ -85,6 +85,12 @@ fn setup_mmu(segs: &mut SegCollection, rom_img: Image) -> ToyMmu {
 // ToyMmu
 // ------------------------------------------------------------------------------------------------
 
+// For now, just a very simple/stupid MMU. It has a "state" but the changing state doesn't actually
+// do anything/remap memory; it's just there to ensure the state change propagation algorithm is
+// working properly.
+//
+// The state is changed by writing to VA 0xFFFF, or by *reading* from VA 0xFFFE. Writing to 0xFFFE
+// causes a "Maybe" change, just to test that part.
 #[derive(Debug)]
 pub struct ToyMmu {
 	rom: SegId,
@@ -97,9 +103,13 @@ impl Display for ToyMmu {
 	}
 }
 
+const INITIAL_STATE: u128 = 0;
+const STATE_MASK: u64 = 31;
+const READ_FFFE_STATE: u128 = 69420;
+
 impl IMmu for ToyMmu {
 	fn initial_state(&self) -> MmuState {
-		MmuState::from_usize(0)
+		MmuState::new(INITIAL_STATE)
 	}
 
 	fn ea_for_va(&self, _state: MmuState, va: VA) -> Option<EA> {
@@ -126,8 +136,22 @@ impl IMmu for ToyMmu {
 		}
 	}
 
-	fn state_change(&self, _state: MmuState, _va: VA, _val: Option<u64>, _load: bool)
-	-> StateChange {
-		StateChange::None
+	// The state is changed by writing to VA 0xFFFF, or by *reading* from VA 0xFFFE. Writing to 0xFFFE
+	// causes a "Maybe" change, just to test that part.
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+		if load {
+			match va.0 {
+				0xFFFE => state.change(MmuState::new(READ_FFFE_STATE)),
+				_      => StateChange::None,
+			}
+		}
+		else {
+			match (va.0, val) {
+				(0xFFFE, _)         => StateChange::Maybe,
+				(0xFFFF, Some(val)) => state.change(MmuState::from_u64(val & STATE_MASK)),
+				(0xFFFF, None)      => StateChange::Dynamic,
+				_                   => StateChange::None,
+			}
+		}
 	}
 }

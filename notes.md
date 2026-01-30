@@ -14,7 +14,6 @@ AND THEN
 write IR compilers for the real arches (oof)
 
 **FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
-**am I converting to EAs too early???** first pass of function analysis is already trying to find EAs for like control flow targets. seems premature. is it even necessary? intra-function control flow is almost certainly (but not necessarily) going to stay within the same segment...
 **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
 
 # Tasks!

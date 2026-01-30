@@ -160,6 +160,32 @@ pub struct RefInfo {
 	pub part: RefPart,
 }
 
+impl RefInfo {
+	pub(crate) fn abs(size: usize) -> Self {
+		Self { kind: RefKind::Abs, size, part: RefPart::Full }
+	}
+
+	pub(crate) fn abs_hi(size: usize) -> Self {
+		Self { kind: RefKind::Abs, size, part: RefPart::Hi }
+	}
+
+	pub(crate) fn abs_lo(size: usize) -> Self {
+		Self { kind: RefKind::Abs, size, part: RefPart::Lo }
+	}
+
+	pub(crate) fn rel(size: usize, base: EA) -> Self {
+		Self { kind: RefKind::Rel { base }, size, part: RefPart::Full }
+	}
+
+	pub(crate) fn rel_hi(size: usize, base: EA) -> Self {
+		Self { kind: RefKind::Rel { base }, size, part: RefPart::Hi }
+	}
+
+	pub(crate) fn rel_lo(size: usize, base: EA) -> Self {
+		Self { kind: RefKind::Rel { base }, size, part: RefPart::Lo }
+	}
+}
+
 /// The kind of reference.
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 #[display("{:?}")]

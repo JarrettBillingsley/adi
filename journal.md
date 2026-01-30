@@ -254,6 +254,12 @@ But that's not the whole story, because **some instructions which don't "have an
 
 However, **this is still a VA,** and mapping from VA to EA can't be done until state change analysis has been done.
 
+> Although, some EAs *can* be determined early. Right now, the first pass of function analysis is trying to find EAs for control flow targets. But is it even necessary? Intra-function control flow is almost certainly (but not necessarily) going to stay within the same segment...
+>
+> WELLLLLL when we are first analyzing a function we *do* actually have its EA. We have to. The only way we were able to discover it is by knowing its EA! So maybe it's not so premature after all.
+>
+> So I think that's harmless. About the only thing that bugs me is the magical invalid EA value... though for ergonomics' sake, I think this is better than an Option<VA>. Hm.
+
 So `OpInfo::Ref` can't be created on instructions until *after* state change analysis...
 
 But state change analysis can't be done until doing const prop and determining potential state change locations.....
@@ -263,7 +269,7 @@ AAAAAAA so it's like:
 Initial instruction (finds statically-known VAs)
 -> const prop (finds more VAs)
 	- **we need to pass this info to the state change pass WITHOUT using `OpInfo::Ref`??**
-	- add another `OpInfo` variant? `VARef`? sort of an "unresolved" reference?
+	- add another `OpInfo` variant? `VARef`? sort of an "unresolved" reference? ***yes, Done***
 -> state change pass (STILL VAs)
 	- to distinguish between `StateChange::Dynamic` and `StateChange::Static(new_state)`, `inst_state_change` needs the const prop info!!! because if you're storing some register into an address, you have to know 1. if that address is constant and 2. if the reg value is constant.
 	- wait, this seems like a duplication of effort. why ask the arch to figure out if its instruction writes to memory? *we already KNOW if it does from the IR.*
@@ -271,7 +277,7 @@ Initial instruction (finds statically-known VAs)
 		- and we can give it an actual target VA and optional value being stored
 		- YEAHHHHHHHH.
 		- also apparently it's common for MMUs to respond to *reads* not just writes, so we gotta check both
--> references pass (can finally map from VAs to EAs and add an `OpInfo::Ref`)
+-> references pass (can finally map from VAs to EAs and convert `OpInfo::VARef`s to `OpInfo::Ref`s, as well as adding references from the statically-known VAs determined in the initial disassembly)
 
 ---
 
