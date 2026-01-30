@@ -4,8 +4,11 @@ use std::iter::{ IntoIterator} ;
 
 use log::*;
 
-use crate::program::{ Program, BBId, BBTerm, Function, FuncId };
-use crate::memory::{ MmuState, VA, StateChange };
+use crate::program::{ Program, BBId, BBTerm, Function, FuncId, OpInfo, RefInfo, RefKind, RefPart,
+	Operand };
+use crate::arch::{ IArchitecture };
+use crate::platform::{ IPlatform };
+use crate::memory::{ MmuState, VA };
 use crate::ir::{ ConstAddr };
 
 // ------------------------------------------------------------------------------------------------
@@ -14,12 +17,10 @@ use crate::ir::{ ConstAddr };
 
 impl Program {
 	pub(super) fn state_change_pass(&mut self, fid: FuncId) {
-		let func = self.get_func(fid);
-
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin func state change analysis at {}", func.ea());
+		trace!("- begin func state change analysis at {}", self.get_func(fid).ea());
 
-		// part 1: construct IR, do constant propagation, and determine *where* state changes are
+		// part 1: construct IR and do constant propagation, and determine *where* state changes are
 
 		let irfunc = self.func_to_ir(fid);
 		println!("------------------------------------------------------------------");
@@ -30,33 +31,64 @@ impl Program {
 		// }
 		// println!("{:?}", irfunc);
 
-		for ConstAddr { bbidx, instidx, inst, opn, addr, val, load, srcs } in irfunc.const_addrs() {
-			// TODO: add OpInfo::VARef to each constant operand
-
-			println!("{:?} ({},{}) operand {} is a {} address 0x{:08X} <from {:?}>",
-				inst.ea(),
-				bbidx, instidx,
+		for ConstAddr { bbid, ea, opn, addr, val, access, srcs } in irfunc.const_addrs() {
+			/*println!("{:?} in {:?} operand {} is a {} address 0x{:08X} <from {:?}>",
+				ea,
+				bbid,
 				opn,
-				if load {
-					"load from".into()
-				} else if let Some(val) = val {
-					format!("store of constant value 0x{:08X} to", val)
-				} else {
-					"store to".into()
+				match access {
+					MemAccess::R => "load from".into(),
+					MemAccess::W => {
+						if let Some(val) = val {
+							format!("store of constant value 0x{:08X} to", val)
+						} else {
+							"store to".into()
+						}
+					},
+					MemAccess::Offset => "reference to".into(),
+					MemAccess::Target => "control flow target to".into(),
+					_ => unreachable!("const_addrs returned something bad"),
 				},
 				addr,
-				srcs);
-			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
-			// TODO: detect instruction state changes *here*, not down there in the loop
-			// TODO: split BBs at state change instructions
+				srcs);*/
+
+			// 1. add OpInfo::VARef to each constant operand
+			let bb = self.bbidx.get_mut(bbid);
+			let inst = bb.inst_at_ea_mut(ea).expect("something went wrong with the IR EA mapping");
+			let op = inst.get_op(opn);
+			let kind = match op {
+				Operand::Reg(_) =>
+					panic!("this shouldn't be possible. should it be Operand::Indir?"),
+				Operand::UImm(_, _) | Operand::SImm(_, _) =>
+					panic!("this shouldn't be possible. should it be Operand::Mem?"),
+				// TODO: but I'm not totally confident that this is true...
+				Operand::Mem(_, _) | Operand::Indir(_, _) => RefKind::Abs,
+			};
+
+			*inst.get_opinfo_mut(opn) = OpInfo::VARef {
+				target: addr,
+				info: RefInfo {
+					kind,
+					size: self.plat.arch().addr_bits(),
+					// at least here, yeah, it's full. hi/lo come into play once we visit the
+					// instructions which computed this address
+					part: RefPart::Full,
+				}
+			};
+
+			// 2. detect instruction state changes
+			let _ = (val, access, srcs);
 			// TODO: need to detect the unlikely but very confusing possibility of a piece
 			// of code swapping out the bank of the segment currently executing!!!
+			// TODO: split BBs at state change instructions
+			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
 		}
 
 		// --------------------------------------------------------
 		// part 2: propagate state changes determined above
 
 		// 1. make a list of "new states" for each bb.
+		let func = self.get_func(fid);
 		let mut new_states = BBStateChanger::new(func);
 
 		// 2. gather all the BBs that change banks.

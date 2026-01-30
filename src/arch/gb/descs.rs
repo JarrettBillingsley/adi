@@ -1,5 +1,6 @@
 
-use crate::program::{ MemAccess, InstructionKind };
+use crate::program::{ InstructionKind };
+use crate::memory::{ MemAccess };
 
 // ------------------------------------------------------------------------------------------------
 // Reg

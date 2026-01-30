@@ -3,13 +3,7 @@
 
 use std::convert::TryInto;
 
-use crate::program::{
-	MemAccess,
-	MemIndir,
-	Operand,
-	Instruction,
-	InstructionKind,
-};
+use crate::program::{ MemIndir, Operand, Instruction, InstructionKind };
 use crate::arch::{
 	DisasError, DisasResult,
 	Printer, IPrinter, PrinterCtx, FmtResult,
@@ -17,7 +11,7 @@ use crate::arch::{
 	IArchitecture,
 	IIrCompiler,
 };
-use crate::memory::{ MmuState, Endian, EA, VA };
+use crate::memory::{ MemAccess, MmuState, Endian, EA, VA };
 
 // ------------------------------------------------------------------------------------------------
 // Submodules
@@ -201,7 +195,6 @@ struct InstDesc {
 	opcode:    u8,
 	meta_op:   MetaOp,
 	addr_mode: AddrMode,
-	op_templ:  &'static str,
 	kind:      InstructionKind,
 }
 
@@ -210,10 +203,9 @@ const fn InstDesc(
 	opcode:    Opcode,
 	meta_op:   MetaOp,
 	addr_mode: AddrMode,
-	op_templ:  &'static str,
 	kind:      InstructionKind,
 ) -> InstDesc {
-	InstDesc { opcode: opcode as u8, meta_op, addr_mode, op_templ, kind }
+	InstDesc { opcode: opcode as u8, meta_op, addr_mode, kind }
 }
 
 impl InstDesc {
@@ -239,41 +231,41 @@ mod descs {
 
 	// IMPORTANT: MUST STAY IN SAME ORDER AS Opcode ENUM
 	pub(super) const INST_DESCS: &[InstDesc] = &[
-		InstDesc(MOV_RR,     MOV,  RR,     "{0}, {1}",   Other),
-		InstDesc(MOV_RI8,    MOV,  RI8,    "{0}, {1}",   Other),
-		InstDesc(ADD_RR,     ADD,  RR,     "{0}, {1}",   Other),
-		InstDesc(ADD_RI8,    ADD,  RI8,    "{0}, {1}",   Other),
-		InstDesc(ADC_RR,     ADC,  RR,     "{0}, {1}",   Other),
-		InstDesc(ADC_RI8,    ADC,  RI8,    "{0}, {1}",   Other),
-		InstDesc(SUB_RR,     SUB,  RR,     "{0}, {1}",   Other),
-		InstDesc(SUB_RI8,    SUB,  RI8,    "{0}, {1}",   Other),
-		InstDesc(SBC_RR,     SBC,  RR,     "{0}, {1}",   Other),
-		InstDesc(SBC_RI8,    SBC,  RI8,    "{0}, {1}",   Other),
-		InstDesc(AND_RR,     AND,  RR,     "{0}, {1}",   Other),
-		InstDesc(AND_RI8,    AND,  RI8,    "{0}, {1}",   Other),
-		InstDesc(OR_RR,      OR,   RR,     "{0}, {1}",   Other),
-		InstDesc(OR_RI8,     OR,   RI8,    "{0}, {1}",   Other),
-		InstDesc(XOR_RR,     XOR,  RR,     "{0}, {1}",   Other),
-		InstDesc(XOR_RI8,    XOR,  RI8,    "{0}, {1}",   Other),
-		InstDesc(NOT_RR,     NOT,  RR,     "{0}, {1}",   Other),
-		InstDesc(NOT_RI8,    NOT,  RI8,    "{0}, {1}",   Other),
-		InstDesc(CMP_RR,     CMP,  RR,     "{0}, {1}",   Other),
-		InstDesc(CMP_RI8,    CMP,  RI8,    "{0}, {1}",   Other),
-		InstDesc(CMC_RR,     CMC,  RR,     "{0}, {1}",   Other),
-		InstDesc(CMC_RI8,    CMC,  RI8,    "{0}, {1}",   Other),
-		InstDesc(BLT_S8,     BLT,  S8,     "{0}",        Cond),
-		InstDesc(BLE_S8,     BLE,  S8,     "{0}",        Cond),
-		InstDesc(BEQ_S8,     BEQ,  S8,     "{0}",        Cond),
-		InstDesc(BNE_S8,     BNE,  S8,     "{0}",        Cond),
-		InstDesc(JMP_I16,    JMP,  I16,    "{0}",        Uncond),
-		InstDesc(JMPI_IMPDC, JMPI, IMPDC,  "{0}",        Indir),
-		InstDesc(CALL_I16,   CALL, I16,    "{0}",        Call),
-		InstDesc(CALI_IMPDC, CALI, IMPDC,  "{0}",        IndirCall),
-		InstDesc(RET_IMP,    RET,  IMP,    "",           Ret),
-		InstDesc(LD_RI16,    LD,   RI16,   "{0}, [{1}]", Other),
-		InstDesc(LD_RR,      LD,   RR,     "{0}, [{1}]", Other),
-		InstDesc(ST_RI16,    ST,   RI16,   "{0}, [{1}]", Other),
-		InstDesc(ST_RR,      ST,   RR,     "{0}, [{1}]", Other),
+		InstDesc(MOV_RR,     MOV,  RR,     Other),
+		InstDesc(MOV_RI8,    MOV,  RI8,    Other),
+		InstDesc(ADD_RR,     ADD,  RR,     Other),
+		InstDesc(ADD_RI8,    ADD,  RI8,    Other),
+		InstDesc(ADC_RR,     ADC,  RR,     Other),
+		InstDesc(ADC_RI8,    ADC,  RI8,    Other),
+		InstDesc(SUB_RR,     SUB,  RR,     Other),
+		InstDesc(SUB_RI8,    SUB,  RI8,    Other),
+		InstDesc(SBC_RR,     SBC,  RR,     Other),
+		InstDesc(SBC_RI8,    SBC,  RI8,    Other),
+		InstDesc(AND_RR,     AND,  RR,     Other),
+		InstDesc(AND_RI8,    AND,  RI8,    Other),
+		InstDesc(OR_RR,      OR,   RR,     Other),
+		InstDesc(OR_RI8,     OR,   RI8,    Other),
+		InstDesc(XOR_RR,     XOR,  RR,     Other),
+		InstDesc(XOR_RI8,    XOR,  RI8,    Other),
+		InstDesc(NOT_RR,     NOT,  RR,     Other),
+		InstDesc(NOT_RI8,    NOT,  RI8,    Other),
+		InstDesc(CMP_RR,     CMP,  RR,     Other),
+		InstDesc(CMP_RI8,    CMP,  RI8,    Other),
+		InstDesc(CMC_RR,     CMC,  RR,     Other),
+		InstDesc(CMC_RI8,    CMC,  RI8,    Other),
+		InstDesc(BLT_S8,     BLT,  S8,     Cond),
+		InstDesc(BLE_S8,     BLE,  S8,     Cond),
+		InstDesc(BEQ_S8,     BEQ,  S8,     Cond),
+		InstDesc(BNE_S8,     BNE,  S8,     Cond),
+		InstDesc(JMP_I16,    JMP,  I16,    Uncond),
+		InstDesc(JMPI_IMPDC, JMPI, IMPDC,  Indir),
+		InstDesc(CALL_I16,   CALL, I16,    Call),
+		InstDesc(CALI_IMPDC, CALI, IMPDC,  IndirCall),
+		InstDesc(RET_IMP,    RET,  IMP,    Ret),
+		InstDesc(LD_RI16,    LD,   RI16,   Other),
+		InstDesc(LD_RR,      LD,   RR,     Other),
+		InstDesc(ST_RI16,    ST,   RI16,   Other),
+		InstDesc(ST_RR,      ST,   RR,     Other),
 	];
 }
 
@@ -431,6 +423,12 @@ impl IPrinter for ToyPrinter {
 
 	fn mnemonic_max_len(&self) -> usize {
 		4
+	}
+
+	fn print_mem_addr(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
+		ctx.style_symbol(&|ctx| ctx.write_char('['))?;
+		self.print_va(ctx, va)?;
+		ctx.style_symbol(&|ctx| ctx.write_char(']'))
 	}
 }
 

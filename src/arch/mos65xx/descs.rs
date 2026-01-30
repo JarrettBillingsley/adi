@@ -1,6 +1,6 @@
 
-use crate::program::{ MemAccess, MemIndir, Operand };
-use crate::memory::{ VA };
+use crate::program::{ MemIndir, Operand };
+use crate::memory::{ MemAccess, VA };
 use super::{ InstDesc, Opcode, MetaOp, AddrMode, Reg };
 
 // ------------------------------------------------------------------------------------------------

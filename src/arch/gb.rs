@@ -7,7 +7,6 @@
 //! addressing mode for accessing `0xFF00..0xFFFF` where memory-mapped IO resides.
 
 use crate::program::{
-	MemAccess,
 	MemIndir,
 	Operand,
 	Instruction,
@@ -18,7 +17,7 @@ use crate::arch::{
 	Disassembler, IDisassembler,
 	IArchitecture,
 };
-use crate::memory::{ MmuState, Endian, EA, VA };
+use crate::memory::{ MmuState, Endian, EA, VA, MemAccess };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

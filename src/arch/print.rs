@@ -7,7 +7,7 @@ use std::fmt::{
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{ MmuState, VA, Instruction, Radix, Operand };
+use crate::{ MmuState, VA, Instruction, Radix, Operand, OpInfo };
 
 /// Convenient alias for the `Result` type used by `std::fmt::Write`'s methods, and by extension
 /// many of the printing methods in this library.
@@ -193,6 +193,12 @@ impl<'i, 'l, 's> PrinterCtx<'i, 'l, 's> {
 		self.inst.get_op(i)
 	}
 
+	/// Gets info of the `i`th operand of the associated instruction.
+	// again with the return value lifetime
+	pub fn get_opinfo(&self, i: usize) -> &'i OpInfo {
+		self.inst.get_opinfo(i)
+	}
+
 	/// Gets the associated instruction.
 	// again with the return value lifetime
 	pub fn get_inst(&self) -> &'i Instruction {
@@ -374,6 +380,7 @@ pub trait IPrinter {
 		ctx.style_operand(i, &|ctx| {
 			use crate::Operand::*;
 			use crate::MemIndir::{ self, RegDisp };
+
 			match ctx.get_op(i) {
 				Reg(r)                          => self.print_register(ctx, *r),
 				UImm(imm, None)                 => self.print_uint_no_radix(ctx, *imm),
@@ -384,11 +391,33 @@ pub trait IPrinter {
 				SImm(imm, Some(Radix::Bin))     => self.print_int_bin(ctx, *imm),
 				SImm(imm, Some(Radix::Dec))     => self.print_int_dec(ctx, *imm),
 				SImm(imm, Some(Radix::Hex))     => self.print_int_hex(ctx, *imm),
-				Mem(addr, _)                    => self.print_va(ctx, *addr),
-				Indir(MemIndir::Reg { reg }, _) => self.print_indir_reg(ctx, *reg),
-				Indir(RegDisp { reg, disp }, _) => self.print_indir_reg_disp(ctx, *reg, *disp),
+				Mem(va, _)                      => {
+					self.print_mem_addr(ctx, *va)?;
+					self.print_mem_opinfo(ctx, i)
+				}
+				Indir(MemIndir::Reg { reg }, _) => {
+					self.print_indir_reg(ctx, *reg)?;
+					self.print_mem_opinfo(ctx, i)
+				}
+				Indir(RegDisp { reg, disp }, _) => {
+					self.print_indir_reg_disp(ctx, *reg, *disp)?;
+					self.print_mem_opinfo(ctx, i)
+				}
 			}
 		})
+	}
+
+	fn print_mem_opinfo(&self, ctx: &mut PrinterCtx, i: usize) -> FmtResult {
+		match ctx.get_opinfo(i) {
+			OpInfo::None => Ok(()),
+			OpInfo::VARef { target, info: _ } => {
+				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
+				self.print_va(ctx, *target)
+			}
+			OpInfo::Ref { target: _, delta: _, info: _ } => {
+				ctx.style_symbol(&|ctx| write!(ctx, "TODO!!!"))
+			}
+		}
 	}
 
 	/// Prints an unsigned integer in decimal (base 10).
@@ -453,6 +482,12 @@ pub trait IPrinter {
 		} else {
 			self.print_int_hex(ctx, val)
 		}
+	}
+
+	/// Prints a memory address operand. By default, dispatches to [`print_va`], but you can
+	/// override this to e.g. print brackets around the address to match the asm syntax.
+	fn print_mem_addr(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
+		self.print_va(ctx, va)
 	}
 
 	/// If the referenced `va` has a name (which is discovered through `ctx`), prints that;

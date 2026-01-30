@@ -1,66 +1,8 @@
 
 use parse_display::Display;
 
-use crate::memory::{ EA, VA };
+use crate::memory::{ EA, VA, MemAccess };
 use crate::program::{ Radix };
-
-// ------------------------------------------------------------------------------------------------
-// MemAccess
-// ------------------------------------------------------------------------------------------------
-
-const R_BIT: u8 = 1;
-const W_BIT: u8 = 2;
-const O_BIT: u8 = 4;
-const T_BIT: u8 = 8;
-
-/// How a memory operand is accessed. This kind of looks/works like bitflags, but for reasons
-/// of ergonomics, `bitflags` is not used. (`bitflags` prevents `use`-ing the names within.)
-#[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum MemAccess {
-	/// A read (load).
-	R = R_BIT,
-	/// A write (store).
-	W = W_BIT,
-	/// Read and write.
-	RW = R_BIT | W_BIT,
-	/// Getting the address without accessing the data at it. (e.g. `lea`, `la`)
-	Offset = O_BIT,
-	/// Read and offset.
-	RO = R_BIT | O_BIT,
-	/// Write and offset.
-	WO = W_BIT | O_BIT,
-	/// Read, write, and offset.
-	RWO = R_BIT | W_BIT | O_BIT,
-	/// Used as the target of a jump or branch.
-	Target = T_BIT,
-	/// Read and target.
-	RT = R_BIT | T_BIT,
-	/// Write and target.
-	WT = W_BIT | T_BIT,
-	/// Read, write, and target.
-	RWT = R_BIT | W_BIT | T_BIT,
-	/// Offset and target.
-	OT = O_BIT | T_BIT,
-	/// Read, offset, and target.
-	ROT = R_BIT | O_BIT | T_BIT,
-	/// Write, offset, and target.
-	WOT = W_BIT | O_BIT | T_BIT,
-	/// Read, write, offset, and target.
-	RWOT = R_BIT | W_BIT | O_BIT | T_BIT,
-}
-
-impl MemAccess {
-	/// Does this read memory?
-	pub fn reads_mem(&self) -> bool {
-		((*self as u8) & R_BIT) != 0
-	}
-
-	/// Does this write memory?
-	pub fn writes_mem(&self) -> bool {
-		((*self as u8) & W_BIT) != 0
-	}
-}
 
 // ------------------------------------------------------------------------------------------------
 // MemIndir
@@ -210,7 +152,7 @@ pub struct RefInfo {
 
 	/// the number of bits in the underlying instruction operand or data item. This may be less than
 	/// the number of bits in an address for this architecture.
-	pub size: RefSize,
+	pub size: usize,
 
 	/// which part of the address the underlying instruction operand or data item represents. It
 	/// might be a full value (like, the full absolute address or the full offset of a relative
@@ -227,18 +169,6 @@ pub enum RefKind {
 	/// Relative address. `base` is the base address to which the relative address (the actual
 	/// underlying operand value) is added to compute `OpInfo::Ref.target`.
 	Rel { base: EA },
-}
-
-/// The size of a reference. That is, how many bits were used to store the reference itself.
-/// It's common for a reference to be a small number of bits, but it refers indirectly to a
-/// larger address space.
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
-#[display("{:?}")]
-pub enum RefSize {
-	_8  = 8,
-	_16 = 16,
-	_32 = 32,
-	_64 = 64,
 }
 
 /// Which part of the address the operand encodes - either the `Full` address, or just the `Hi` or

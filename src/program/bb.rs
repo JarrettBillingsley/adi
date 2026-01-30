@@ -84,6 +84,12 @@ impl BasicBlock {
 		self.insts.iter().find(|&inst| inst.ea() == ea)
 	}
 
+	/// Same as above but mutable.
+	/// WARNING: this is linear time.
+	pub fn inst_at_ea_mut(&mut self, ea: EA) -> Option<&mut Instruction> {
+		self.insts.iter_mut().find(|inst| inst.ea() == ea)
+	}
+
 	/// If this BB ends in a jump, call, or conditional branch, returns the EA that it
 	/// jumps/calls/branches to; else, returns `None`.
 	pub fn control_target(&self) -> Option<EA> {

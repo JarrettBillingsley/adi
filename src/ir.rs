@@ -4,7 +4,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 use lazycell::LazyCell;
 
 use crate::arch::{ IIrCompiler };
-use crate::memory::{ EA, VA };
+use crate::memory::{ EA, VA, MemAccess };
 use crate::program::{ BBId, FuncId };
 
 // ------------------------------------------------------------------------------------------------
@@ -520,78 +520,61 @@ pub(crate) struct ConstAddrsIter<'func> {
 	func:    &'func IrFunction,
 }
 
-pub(crate) struct ConstAddr<'func> {
-	pub bbidx:   usize,
-	pub instidx: usize,
-	pub inst:    &'func IrInst,
-	pub opn:     i8,
+pub(crate) struct ConstAddr {
+	pub bbid:    BBId,
+	pub ea:      EA,
+	pub opn:     usize,
 	pub addr:    VA,
 	pub val:     Option<u64>,
-	pub load:    bool, // TODO: should really be load, store, offset, target... MemAccess!!!
+	pub access:  MemAccess,
 	pub srcs:    [Option<IrSrc>; 3],
 }
 
 impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
-	type Item = ConstAddr<'func>;
+	type Item = ConstAddr;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(inst) = self.next_instruction() {
-			// is this a load?
-			let load = matches!(inst.kind(), IrInstKind::Load { .. });
-
 			// if this is a store, is it *also* storing a constant value?
 			let val = match inst.kind() {
 				IrInstKind::Store { src, .. } => {
 					match src {
 						IrSrc::Const(IrConst { val, .. }) => Some(val),
-						IrSrc::Reg(r) if self.consts.contains_key(&r) => {
-							// safe because of check above
-							let (val, _) = *self.consts.get(&r).unwrap();
-							Some(val)
-						}
+						IrSrc::Reg(r) => self.consts.get(&r).map(|(val, _)| *val),
 						_ => None,
 					}
 				},
 				_ => None,
 			};
 
+			// it's not necessarily Offset, but the match below will only let through
+			// instructions it has deemed "memory-accessing".
+			let access = inst.mem_access().unwrap_or(MemAccess::Offset);
+
 			match inst.kind() {
-				// TODO: these use EAs instead
-				// IrInstKind::Branch { target: addr, targetn: addrn, .. }
-				// IrInstKind::CBranch { target: addr, targetn: addrn, .. }
-				// IrInstKind::Call { target: addr, targetn: addrn, .. }
-				IrInstKind::Load { addr, addrn, .. } |
-				IrInstKind::Store { addr, addrn, .. } |
-				IrInstKind::IBranch { target: addr, targetn: addrn, .. } |
-				IrInstKind::ICall { target: addr, targetn: addrn, .. }  if addrn >= 0 => {
-					match addr {
-						IrSrc::Const(IrConst { val: addr, .. }) => {
-							return Some(ConstAddr {
-								bbidx: self.bbidx,
-								instidx: self.instidx,
-								inst,
-								opn: addrn,
-								addr: VA(addr as usize),
-								val,
-								load,
-								srcs: [None, None, None],
-							});
-						}
-						IrSrc::Reg(r) if self.consts.contains_key(&r) => {
-							// safe because of check above
-							let (addr, srcs) = *self.consts.get(&r).unwrap();
-							return Some(ConstAddr {
-								bbidx: self.bbidx,
-								instidx: self.instidx,
-								inst,
-								opn: addrn,
-								addr: VA(addr as usize),
-								val,
-								load,
-								srcs,
-							});
-						}
-						_ => {}
+				// IrInstKind::{Branch,CBranch,Call} already had their addresses determined before
+				// the IR was even built, so we don't handle those here.
+
+				IrInstKind::Load { addr, addrn: opn, .. } |
+				IrInstKind::Store { addr, addrn: opn, .. } |
+				IrInstKind::IBranch { target: addr, targetn: opn, .. } |
+				IrInstKind::ICall { target: addr, targetn: opn, .. }  if opn >= 0 => {
+					let addr = match addr {
+						IrSrc::Const(IrConst { val, .. }) => Some((val, [None, None, None])),
+						IrSrc::Reg(r)                     => self.consts.get(&r).copied(),
+						_                                 => None,
+					};
+
+					if let Some((addr, srcs)) = addr {
+						return Some(ConstAddr {
+							bbid: self.func.bbs[self.bbidx].real_bbid,
+							ea: inst.ea(),
+							opn: opn as usize,
+							addr: VA(addr as usize),
+							val,
+							access,
+							srcs,
+						});
 					}
 				}
 

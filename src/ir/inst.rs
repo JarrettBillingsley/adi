@@ -1,4 +1,6 @@
 
+use crate::memory::{ MemAccess };
+
 use super::*;
 
 // ------------------------------------------------------------------------------------------------
@@ -696,6 +698,7 @@ impl IrInst {
 		}
 	}
 
+	/// Callback iterator over all uses in this instruction.
 	pub(crate) fn visit_uses(&self, mut f: impl FnMut(IrReg)) {
 		use IrInstKind::*;
 
@@ -725,6 +728,7 @@ impl IrInst {
 		}
 	}
 
+	/// Same as above but mutable.
 	pub(crate) fn visit_uses_mut(&mut self, mut f: impl FnMut(&mut IrReg)) {
 		use IrInstKind::*;
 
@@ -754,6 +758,7 @@ impl IrInst {
 		}
 	}
 
+	/// The destination register of this instruction, if it has one.
 	pub(crate) fn dst_reg(&self) -> Option<IrReg> {
 		use IrInstKind::*;
 
@@ -776,6 +781,7 @@ impl IrInst {
 		}
 	}
 
+	/// Same as above but mutable.
 	pub(crate) fn dst_reg_mut(&mut self) -> Option<&mut IrReg> {
 		use IrInstKind::*;
 
@@ -795,6 +801,22 @@ impl IrInst {
 			| Unary   { dst, .. }
 			| Binary  { dst, .. }
 			| Ternary { dst, .. } => Some(dst),
+		}
+	}
+
+	/// What kind of memory access this instruction does, if any.
+	pub(crate) fn mem_access(&self) -> Option<MemAccess> {
+		use IrInstKind::*;
+
+		match self.kind {
+			Load { .. } => Some(MemAccess::R),
+			Store { .. } => Some(MemAccess::W),
+			Branch { .. }
+			| CBranch { .. }
+			| IBranch { .. }
+			| Call { .. }
+			| ICall { .. } => Some(MemAccess::Target),
+			_ => None,
 		}
 	}
 }

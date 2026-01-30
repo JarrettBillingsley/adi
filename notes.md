@@ -30,7 +30,7 @@ write IR compilers for the real arches (oof)
 		- would definitely simplify some things like the `const_addrs` iteration - rather than having to double-check that a register is constant, just... have a constant there.
 		- should `IrConst` have a field for provenance AST reference?
 		- **questions:**
-			- could this trigger another round of const prop? I mean yes it could
+			- could this trigger another round of const prop? hmmmm
 			- how would this interact with the constant provenance AST?
 	- IR DSE (dead store elim - eyyy there's some commented-out code at the bottom of `ssa.rs`!), which kinda also depends on:
 	- bottom-up function argument/return value/clobber list determination to prune down the number of `use()` and `= <return>` IR instructions around `call` and `ret` IR instructions
