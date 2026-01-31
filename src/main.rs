@@ -220,6 +220,7 @@ fn toy_test_state_change() -> Vec<u8> {
 
 	let mut b = ToyBuilder::new();
 	const FUNC2: usize = 0x50;
+	const FUNC3: usize = 0x90;
 	const STATE_CHANGE_FUNC: usize = 0x150;
 
 	// ---------------------------------
@@ -238,6 +239,7 @@ fn toy_test_state_change() -> Vec<u8> {
 	b.movi(A, 4);
 	b.call_to(STATE_CHANGE_FUNC);
 	b.call_to(FUNC2);
+	b.call_to(FUNC3);
 
 	b.ret();
 
@@ -273,6 +275,43 @@ fn toy_test_state_change() -> Vec<u8> {
 	// this block should see 11 as the state no matter what
 	b.ldi(A, 0x8000);
 	b.sti(A, 0x8001);
+
+	// for good measure, let's call the state change function so it sees a new state
+	b.call_to(STATE_CHANGE_FUNC);
+
+	b.ret();
+
+	// ---------------------------------
+	// func3 - tests an if-else where both sides change state to *different* values.
+	// final block will currently be incorrectly analyzed as a single state, but
+	// in the future it will be represented as a multi-state block.
+	b.org(FUNC3);
+
+	// set state to 20
+	b.movi(D, 0xFF);
+	b.movi(C, 0xFF);
+	b.movi(A, 20);
+	b.st(A, DC);
+
+	// branch on B
+	b.ldi(B, 0x8000);
+	b.movi(A, 10);
+	b.cmp(B, A);
+	let func3_branch = b.beq();
+		// then side
+		b.movi(A, 21);
+		b.st(A, DC);
+	let func3_jmp = b.jmp();
+	b.branch_here(func3_branch);
+		// else side
+		b.movi(A, 22);
+		b.st(A, DC);
+	b.jump_here(func3_jmp);
+
+	// this block *should* have Multi(21, 22) but currently it will pick one of them.
+	b.ldi(A, 0x8000);
+	b.sti(A, 0x8001);
+
 	b.ret();
 
 	// ---------------------------------

@@ -177,8 +177,20 @@ impl Program {
 					}
 				}
 				StateInfo::Multi(states) => {
-					trace!("multiple possible states found for BB {:?}: {:?}", bbid, states);
+					let new_state = *states.iter().next().unwrap();
+					warn!("multiple possible states found for BB {:?} at {}: {:?}; picking \
+						state {:?} for it arbitrarily",
+						bbid, self.bbidx.get(bbid).ea(), states, new_state);
 					// TODO: point of interest for user to investigate
+
+					// TODO: this is just temporary code!!!!!!
+					self.bbidx.get_mut(bbid).set_mmu_state(new_state);
+					// we might be able to resolve unresolved EAs in the terminator.
+					let changed = self.resolve_unresolved_terminator(new_state, bbid);
+
+					if changed {
+						trace!("changed terminator of {:?}", bbid);
+					}
 				}
 			}
 		}

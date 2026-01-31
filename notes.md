@@ -3,6 +3,10 @@
 
 - test state change analysis!
 
+ALSO
+
+- BBs should allow *multiple* states
+
 # Tasks!
 
 - refactor `Analysis` cause it really seems to be more like "a function's CFG"
