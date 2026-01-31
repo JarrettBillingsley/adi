@@ -111,7 +111,7 @@ impl Program {
 		// outdated IR
 		drop(irfunc);
 
-		// vector of BBs which now end in a `BBTerm::BankChange`, and the new MMU state that its
+		// vector of BBs which now end in a `BBTerm::StateChange`, and the new MMU state that its
 		// terminating instruction produced, to be propagated to its successors (note: NOT the new
 		// MMU state for the BEGINNING of that BB!!)
 		let mut to_propagate: Vec<(BBId, MmuState)> = vec![];
@@ -141,7 +141,7 @@ impl Program {
 					or the original unsplit BB should have been a FallThru.")
 			};
 
-			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::BankChange(target, new_state);
+			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::StateChange(target, new_state);
 			to_propagate.push((bbid, new_state));
 		}
 

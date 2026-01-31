@@ -1,7 +1,6 @@
 
 # Yak stack
 
-- Rename BankChange to StateChange
 - BBs should allow *multiple* states
 
 # Tasks!

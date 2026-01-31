@@ -64,10 +64,10 @@ impl BasicBlock {
 	pub fn insts(&self) -> &[Instruction] { &self.insts }
 	/// The MMU state at the beginning of this BB.
 	pub fn mmu_state(&self) -> MmuState { self.state }
-	/// The MMU state after running this BB. If this BB ends in a `BBTerm::BankChange`, it
+	/// The MMU state after running this BB. If this BB ends in a `BBTerm::StateChange`, it
 	/// may be different!
 	pub fn mmu_state_after(&self) -> MmuState {
-		if let BBTerm::BankChange(_, state) = self.term {
+		if let BBTerm::StateChange(_, state) = self.term {
 			state
 		} else {
 			self.state
@@ -109,7 +109,7 @@ impl BasicBlock {
 			| BBTerm::Halt
 			| BBTerm::Return
 			| BBTerm::FallThru(..)
-			| BBTerm::BankChange(..) => None,
+			| BBTerm::StateChange(..) => None,
 
 			BBTerm::Jump(dst)
 			| BBTerm::Call { dst, .. }
@@ -231,8 +231,8 @@ pub enum BBTerm {
 	Cond { t: EA, f: EA },
 	/// Jump table with any number of destinations.
 	JumpTbl(Vec<EA>),
-	/// Like FallThru, but perform a bank change as well.
-	BankChange(EA, MmuState),
+	/// Like FallThru, but perform an MMU state change as well.
+	StateChange(EA, MmuState),
 }
 
 /// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
@@ -249,7 +249,7 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt => None     .into_iter().chain(&[]),
 			FallThru(ea) | Jump(ea) |
-			BankChange(ea, _)       => Some(ea) .into_iter().chain(&[]),
+			StateChange(ea, _)      => Some(ea) .into_iter().chain(&[]),
 			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(eas)            => None     .into_iter().chain(eas),
@@ -264,7 +264,7 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt => None     .into_iter().chain([].iter_mut()),
 			FallThru(ea) | Jump(ea) |
-			BankChange(ea, _)       => Some(ea) .into_iter().chain([].iter_mut()),
+			StateChange(ea, _)      => Some(ea) .into_iter().chain([].iter_mut()),
 			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
 			JumpTbl(eas)            => None     .into_iter().chain(eas.iter_mut()),
@@ -279,7 +279,7 @@ impl BBTerm {
 
 		match self {
 			DeadEnd | Return | Halt | FallThru(..) |
-			BankChange(..) | IndirCall { .. }        => None     .into_iter().chain(&[]),
+			StateChange(..) | IndirCall { .. }       => None     .into_iter().chain(&[]),
 			Jump(ea)                                 => Some(ea) .into_iter().chain(&[]),
 			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),

@@ -888,7 +888,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 	use BBTerm::*;
 	match bb.term() {
 		DeadEnd => println!("{}", "---------- DEAD END ----------".red().bold()),
-		BankChange(_, new_state) => {
+		StateChange(_, new_state) => {
 			println!("{}",
 				format!("---------- STATE CHANGE {:?} ----------", new_state)
 				.cyan().bold());
