@@ -13,8 +13,8 @@ use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg };
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	/// Split a basic block `old_id` at address `start`. All instructions from `start` onward become
-	/// part of a new BB, and the old BB's terminator is set to fall through to the new BB.
+	/// Split a basic block `old_bbid` at address `start`. All instructions from `start` onward
+	/// become part of a new BB, and the old BB's terminator is set to fall through to the new BB.
 	///
 	/// Returns:
 	/// - `Ok(Some(new_bbid))` if the split succeeded; `new_bbid` is the ID of the newly-split-off

@@ -13,6 +13,7 @@ AND THEN
 
 - **FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
 - **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
+- **get rid of older "analysis" methods on `Operand`?** shouldn't really be using them for that stuff anymore...
 - Analysis priority
 	- it's something that bounced around in my head and then I saw that IDA explicitly does this
 	- diff analysis phases have priorities over others

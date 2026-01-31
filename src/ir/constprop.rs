@@ -3,7 +3,7 @@ use std::collections::{ BTreeMap, VecDeque, HashSet };
 
 use super::*;
 
-// TODO: abstract some of this stuff (JoinSemiLattice, WorkList, some of Propagator) out into
+// TODO: abstract some of this stuff (JoinSemiLattice, WorkQueue, some of Propagator) out into
 // a separate library for use by other passes
 
 // ------------------------------------------------------------------------------------------------
@@ -86,15 +86,17 @@ fn new_state(regs: impl Iterator<Item = IrReg>) -> State {
 }
 
 // ------------------------------------------------------------------------------------------------
-// WorkList
+// WorkQueue
 // ------------------------------------------------------------------------------------------------
 
-struct WorkList {
+/// Shamelessly ripped from `rustc_data_structures::WorkQueue`.
+struct WorkQueue {
 	list: VecDeque<IrBBId>,
+	// the set is here to avoid enqueueing items which are already in the queue.
 	set:  HashSet<IrBBId>,
 }
 
-impl WorkList {
+impl WorkQueue {
 	fn new() -> Self {
 		Self {
 			list: VecDeque::new(),
@@ -154,7 +156,7 @@ struct Propagator<'bb, 'cf> {
 	bbs:   &'bb [IrBasicBlock],
 	cfg:   &'cf IrCfg,
 	state: State,
-	work:  WorkList,
+	work:  WorkQueue,
 }
 
 impl<'bb, 'cf> Propagator<'bb, 'cf> {
@@ -164,7 +166,7 @@ impl<'bb, 'cf> Propagator<'bb, 'cf> {
 			bbs,
 			cfg,
 			// TODO: seeding it with RPO would give faster iteration to fixpoint.
-			work: WorkList::new_filled(bbs.len()),
+			work: WorkQueue::new_filled(bbs.len()),
 		}
 	}
 

@@ -9,7 +9,7 @@ use crate::memory::{ SegId };
 // EA
 // ------------------------------------------------------------------------------------------------
 
-/// A unique location consisting of Segment ID and an offset within that Segment. EAs can be valid
+/// A unique location consisting of segment ID and an offset within that Segment. EAs can be valid
 /// or invalid.
 ///
 /// A **valid EA** consists of a segment ID and an offset into that segment.
@@ -30,29 +30,38 @@ const OFFS_MASK: u64 = 0x0000FFFF_FFFFFFFF;
 const SEG_SHIFT: usize = 48;
 
 impl EA {
+	/// Make a new EA from a segment ID and offset.
+	///
+	/// Panics if the offset is too big (more than 48 bits).
 	pub fn new(seg: SegId, offs: usize) -> Self {
 		assert!((offs as u64) & SEG_MASK == 0);
 		Self(((seg.0 as u64) << SEG_SHIFT) | (offs as u64))
 	}
 
+	/// Make a new invalid EA with the given offset embedded in it. Usually this is a VA.
 	pub fn invalid(offs: usize) -> Self {
 		Self::new(SegId::invalid(), offs)
 	}
 
+	/// Is this EA invalid?
 	pub fn is_invalid(&self) -> bool {
 		self.seg().is_invalid()
 	}
 
+	/// Is this EA valid?
 	pub fn is_valid(&self) -> bool {
 		!self.seg().is_invalid()
 	}
 
+	/// The segment ID of this EA.
 	#[inline]
 	pub fn seg(&self) -> SegId { SegId((self.0 >> SEG_SHIFT) as u16) }
 
+	/// The offset of this EA.
 	#[inline]
 	pub fn offs(&self) -> usize { (self.0 & OFFS_MASK) as usize }
 
+	/// Set the offset of this EA.
 	#[inline]
 	fn set_offs(&mut self, new_offs: usize) {
 		assert!((new_offs as u64) & SEG_MASK == 0);
