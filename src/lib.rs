@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod arch;
+mod dataflow;
 mod ir;
 mod memory;
 mod platform;

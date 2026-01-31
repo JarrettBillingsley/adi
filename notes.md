@@ -1,7 +1,8 @@
 
 # Yak stack
 
-- rewriting `pass_statechange::BBStateChanger` to do a proper dataflow analysis so it's not dumb
+- abstracting some of the dataflow algorithm stuff that was in constprop
+- ...to rewrite `pass_statechange::BBStateChanger` to do a proper dataflow analysis so it's not dumb
 - ...to finish state change analysis
 
 AND THEN

@@ -1,19 +1,11 @@
 
-use std::collections::{ BTreeMap, VecDeque, HashSet };
+use std::collections::{ BTreeMap };
+
+use petgraph::visit::{ DfsPostOrder };
+
+use crate::dataflow::{ JoinSemiLattice, DataflowCfg, DataflowAlgorithm };
 
 use super::*;
-
-// TODO: abstract some of this stuff (JoinSemiLattice, WorkQueue, some of Propagator) out into
-// a separate library for use by other passes
-
-// ------------------------------------------------------------------------------------------------
-// JoinSemiLattice
-// ------------------------------------------------------------------------------------------------
-
-// From rustc!
-trait JoinSemiLattice: Eq {
-	fn join(&mut self, other: &Self) -> bool;
-}
 
 // ------------------------------------------------------------------------------------------------
 // Info
@@ -76,63 +68,29 @@ impl JoinSemiLattice for Info {
 }
 
 // ------------------------------------------------------------------------------------------------
-// State
-// ------------------------------------------------------------------------------------------------
-
-type State = BTreeMap<IrReg, Info>;
-
-fn new_state(regs: impl Iterator<Item = IrReg>) -> State {
-	regs.map(|r| (r, Info::Unk)).collect()
-}
-
-// ------------------------------------------------------------------------------------------------
-// WorkQueue
-// ------------------------------------------------------------------------------------------------
-
-/// Shamelessly ripped from `rustc_data_structures::WorkQueue`.
-struct WorkQueue {
-	list: VecDeque<IrBBId>,
-	// the set is here to avoid enqueueing items which are already in the queue.
-	set:  HashSet<IrBBId>,
-}
-
-impl WorkQueue {
-	fn new() -> Self {
-		Self {
-			list: VecDeque::new(),
-			set: HashSet::new(),
-		}
-	}
-
-	fn new_filled(n: usize) -> Self {
-		let mut ret = Self::new();
-
-		for i in 0 .. n {
-			ret.enqueue(i);
-		}
-
-		ret
-	}
-
-	fn enqueue(&mut self, id: IrBBId) {
-		if self.set.insert(id) {
-			self.list.push_back(id);
-		}
-	}
-
-	fn dequeue(&mut self) -> Option<IrBBId> {
-		if let Some(id) = self.list.pop_front() {
-			self.set.remove(&id);
-			Some(id)
-		} else {
-			None
-		}
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
 // Propagator
 // ------------------------------------------------------------------------------------------------
+
+impl DataflowCfg<IrBBId> for IrCfg {
+	fn num_nodes(&self) -> usize {
+		self.node_count()
+	}
+
+	fn initial_order(&self) -> impl Iterator<Item = IrBBId> {
+		let mut rpo = Vec::<IrBBId>::with_capacity(self.num_nodes());
+		let mut postorder = DfsPostOrder::new(self, 0);
+		while let Some(id) = postorder.next(self) {
+			rpo.push(id);
+		}
+
+		rpo.into_iter().rev()
+	}
+
+	/// Should return an iterator over all successors of the given node.
+	fn successors(&self, id: IrBBId) -> impl Iterator<Item = IrBBId> {
+		self.edges(id).map(|(_, succ, _)| succ)
+	}
+}
 
 /// Results of constant propagation. It maps from IR Registers to a tuple of:
 ///
@@ -144,29 +102,29 @@ impl WorkQueue {
 /// smaller pieces need to be marked as references to that address.
 pub(crate) type ConstPropResults = BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])>;
 
+type ConstPropState = BTreeMap<IrReg, Info>;
+
 pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
 	// since each variable is only assigned once, there's no need to track changing state -
 	// the state of a variable is determined at its def.
-	let mut prop = Propagator::new(bbs, cfg);
-	prop.run();
+	let mut prop = Propagator::new(bbs);
+	prop.run(cfg);
 	prop.finish()
 }
 
-struct Propagator<'bb, 'cf> {
+struct Propagator<'bb> {
 	bbs:   &'bb [IrBasicBlock],
-	cfg:   &'cf IrCfg,
-	state: State,
-	work:  WorkQueue,
+	state: ConstPropState,
 }
 
-impl<'bb, 'cf> Propagator<'bb, 'cf> {
-	fn new(bbs: &'bb [IrBasicBlock], cfg: &'cf IrCfg) -> Self {
+impl<'bb> Propagator<'bb> {
+	fn new(bbs: &'bb [IrBasicBlock]) -> Self {
 		Self {
-			state: new_state(find_all_regs(bbs).into_iter()),
+			state: find_all_regs(bbs)
+				.into_iter()
+				.map(|r| (r, Info::Unk))
+				.collect(),
 			bbs,
-			cfg,
-			// TODO: seeding it with RPO would give faster iteration to fixpoint.
-			work: WorkQueue::new_filled(bbs.len()),
 		}
 	}
 
@@ -180,14 +138,12 @@ impl<'bb, 'cf> Propagator<'bb, 'cf> {
 				})
 			.collect()
 	}
+}
 
-	fn run(&mut self) {
-		while let Some(id) = self.work.dequeue() {
-			self.visit(id);
-		}
-	}
+impl<'bb> DataflowAlgorithm for Propagator<'bb> {
+	type ID = IrBBId;
 
-	fn visit(&mut self, bbid: IrBBId) {
+	fn visit(&mut self, bbid: IrBBId) -> bool {
 		let mut changed = false;
 
 		for phi in self.bbs[bbid].phis() {
@@ -198,11 +154,7 @@ impl<'bb, 'cf> Propagator<'bb, 'cf> {
 			changed |= transfer(inst, &mut self.state);
 		}
 
-		if changed {
-			for (_, succ, _) in self.cfg.edges(bbid) {
-				self.work.enqueue(succ);
-			}
-		}
+		changed
 	}
 }
 
@@ -210,7 +162,7 @@ impl<'bb, 'cf> Propagator<'bb, 'cf> {
 // Phi join function
 // ------------------------------------------------------------------------------------------------
 
-fn phi_join(phi: &IrPhi, state: &mut State) -> bool {
+fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
 	let mut reg_state = state[phi.dst_reg()];
 	let mut changed = false;
 
@@ -226,10 +178,10 @@ fn phi_join(phi: &IrPhi, state: &mut State) -> bool {
 // Transfer function
 // ------------------------------------------------------------------------------------------------
 
-fn transfer(inst: &IrInst, state: &mut State) -> bool {
+fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 	use IrInstKind::*;
 
-	let src_to_info = |src: IrSrc, state: &State| {
+	let src_to_info = |src: IrSrc, state: &ConstPropState| {
 		match src {
 			IrSrc::Reg(reg)   => state[&reg],
 			IrSrc::Const(c)   => Info::some1(c.val(), src),
