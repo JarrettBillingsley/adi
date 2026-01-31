@@ -3,17 +3,17 @@
 
 - test state change analysis!
 
-AND THEN
-
-- refactor `Analysis` cause it really seems to be more like "a function's CFG"
-- make const prop build ASTs for constant provenance
-- write IR compilers for the real arches (oof)
-
 # Tasks!
 
+- refactor `Analysis` cause it really seems to be more like "a function's CFG"
+- refs pass needs to be updated to take `OpInfo` into account
+	- it also needs to notify any referenced functions of the MMU state flowing into them...
+- make const prop build ASTs for constant provenance
+- write IR compilers for the real arches (oof)
 - **FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
 - **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
-- **get rid of older "analysis" methods on `Operand`?** shouldn't really be using them for that stuff anymore...
+- **get rid of older "analysis" methods on `Operand`?**
+	- shouldn't really be using them for that stuff anymore...
 - Analysis priority
 	- it's something that bounced around in my head and then I saw that IDA explicitly does this
 	- diff analysis phases have priorities over others
@@ -27,6 +27,7 @@ AND THEN
 		- **questions:**
 			- could this trigger another round of const prop? hmmmm
 			- how would this interact with the constant provenance AST?
+		- **I'm not sure this is a good idea** -
 	- IR DSE (dead store elim - eyyy there's some commented-out code at the bottom of `ssa.rs`!), which kinda also depends on:
 	- bottom-up function argument/return value/clobber list determination to prune down the number of `use()` and `= <return>` IR instructions around `call` and `ret` IR instructions
 		- use of SSA gen 0 vars indicate arguments

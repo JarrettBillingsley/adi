@@ -219,7 +219,8 @@ fn toy_test_state_change() -> Vec<u8> {
 	use Reg::*;
 
 	let mut b = ToyBuilder::new();
-	const STATE_CHANGE_FUNC: usize = 0x50;
+	const FUNC2: usize = 0x50;
+	const STATE_CHANGE_FUNC: usize = 0x150;
 
 	// ---------------------------------
 	// main
@@ -236,7 +237,42 @@ fn toy_test_state_change() -> Vec<u8> {
 
 	b.movi(A, 4);
 	b.call_to(STATE_CHANGE_FUNC);
+	b.call_to(FUNC2);
 
+	b.ret();
+
+	// ---------------------------------
+	// func2 - tests an if-else where both sides change state to the same value.
+	// state change analysis should unify both predecessors and determine that
+	// final block has that same value.
+	b.org(FUNC2);
+
+	// set state to 10
+	b.movi(D, 0xFF);
+	b.movi(C, 0xFF);
+	b.movi(A, 10);
+	b.st(A, DC);
+
+	// branch on B
+	b.ldi(B, 0x8000);
+	b.movi(A, 10);
+	b.cmp(B, A);
+	let func2_branch = b.beq();
+		// then side
+		b.movi(A, 11);
+		b.st(A, DC);
+	let func2_jmp = b.jmp();
+	b.branch_here(func2_branch);
+		// else side
+		b.movi(A, 12);
+		b.st(A, DC);
+		b.movi(A, 11);
+		b.st(A, DC);
+	b.jump_here(func2_jmp);
+
+	// this block should see 11 as the state no matter what
+	b.ldi(A, 0x8000);
+	b.sti(A, 0x8001);
 	b.ret();
 
 	// ---------------------------------
@@ -245,7 +281,6 @@ fn toy_test_state_change() -> Vec<u8> {
 	b.andi(A, 31);
 	b.sti(A, 0xFFFF);
 	b.ret();
-
 
 	b.finish()
 }

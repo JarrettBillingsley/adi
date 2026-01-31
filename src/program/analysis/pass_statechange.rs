@@ -36,6 +36,11 @@ impl Program {
 		let addr_bits = self.plat.arch().addr_bits();
 
 		// for tracking locations of MMU state changes.
+		//
+		// EA is the EA of the instruction which causes the state change; the new state takes effect
+		// on the instruction *after* it.
+		//
+		// MmuState is that new state.
 		let mut changes: Vec<(EA, MmuState)> = vec![];
 
 		for /*aaa@*/ ConstAddr { bbid, ea, opn, addr, val, access, srcs } in irfunc.const_addrs() {
@@ -43,9 +48,6 @@ impl Program {
 
 			// 1. add OpInfo::VARef to each constant operand
 			let bb = self.bbidx.get_mut(bbid);
-			let next_ea = bb.inst_at_ea(ea)
-				.expect("something went wrong with the IR EA mapping")
-				.next_ea();
 			let inst = bb.inst_at_ea_mut(ea).unwrap(); // safe because of above
 
 			// let's double-check to make sure the arch is implemented properly.
@@ -78,7 +80,7 @@ impl Program {
 						StateChange::Maybe             => {
 							trace!("  found a maybe state change at {}", ea);
 							// TODO: log this as a point of interest for user to investigate
-							// TOOD: also is this even possible in this new model? Maybe was for
+							// TODO: also is this even possible in this new model? Maybe was for
 							// the old model where the state change looked at the macro-instruction.
 							// here, we know exactly what address is being used.
 						}
@@ -88,7 +90,7 @@ impl Program {
 						}
 						StateChange::Static(new_state) => {
 							trace!("  found a static state change at {} to {:?}", ea, new_state);
-							changes.push((next_ea, new_state));
+							changes.push((ea, new_state));
 						}
 					}
 				}
@@ -98,6 +100,7 @@ impl Program {
 			}
 
 			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
+			// (or have const_addrs do that for us)
 			let _ = srcs;
 		}
 
@@ -117,23 +120,30 @@ impl Program {
 		for (ea, new_state) in changes.into_iter() {
 			let bbid = self.span_at_ea(ea).bb().expect("I mean it's in here cause it was in a BB");
 
-			match self.split_bb(bbid, ea, Some(fid)) {
-				Ok(Some(new_bbid)) => {
-					self.get_func_mut(fid).bbs.push(new_bbid);
+			let inst = self.bbidx.get(bbid).inst_at_ea(ea)
+				.expect("something went wrong with the IR EA mapping");
 
-					let ea = match self.bbidx.get(bbid).term() {
-						BBTerm::FallThru(ea) => *ea,
-						_ => unreachable!("split_bb should have made this a FallThru")
-					};
-
-					*self.bbidx.get_mut(bbid).term_mut() = BBTerm::BankChange(ea, new_state);
-					to_propagate.push((bbid, new_state));
-				}
-				Ok(None) => {} // it ok
-				Err(_) => {
-					unreachable!("this should literally be impossible");
+			// if the state-changing instruction is *not* the terminating instruction, split the BB.
+			if inst.ea() != self.bbidx.get(bbid).term_ea() {
+				match self.split_bb(bbid, inst.next_ea(), Some(fid)) {
+					Ok(Some(new_bbid)) => {
+						self.get_func_mut(fid).bbs.push(new_bbid);
+					}
+					Ok(None) => {} // it ok
+					Err(_) => {
+						unreachable!("this should literally be impossible");
+					}
 				}
 			}
+
+			let target = match self.bbidx.get(bbid).term() {
+				BBTerm::FallThru(target) => *target,
+				_ => unreachable!("either split_bb should have made this a FallThru,\
+					or the original unsplit BB should have been a FallThru.")
+			};
+
+			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::BankChange(target, new_state);
+			to_propagate.push((bbid, new_state));
 		}
 
 		// --------------------------------------------------------
