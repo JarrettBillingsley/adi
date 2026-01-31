@@ -86,7 +86,6 @@ impl DataflowCfg<IrBBId> for IrCfg {
 		rpo.into_iter().rev()
 	}
 
-	/// Should return an iterator over all successors of the given node.
 	fn successors(&self, id: IrBBId) -> impl Iterator<Item = IrBBId> {
 		self.edges(id).map(|(_, succ, _)| succ)
 	}
@@ -104,6 +103,7 @@ pub(crate) type ConstPropResults = BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])>;
 
 type ConstPropState = BTreeMap<IrReg, Info>;
 
+/// Runs constant propagation on the given IR code and CFG.
 pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
 	// since each variable is only assigned once, there's no need to track changing state -
 	// the state of a variable is determined at its def.

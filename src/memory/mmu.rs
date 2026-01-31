@@ -9,7 +9,7 @@ use crate::platform::{ GBMmu, NesMmu, ToyMmu };
 
 /// Newtype for MMU configuration state. The interpretation of this type is up to each
 /// implementor of `IMmu`.
-#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone, Hash)]
 pub struct MmuState(u128);
 
 impl MmuState {

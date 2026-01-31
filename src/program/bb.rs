@@ -64,6 +64,15 @@ impl BasicBlock {
 	pub fn insts(&self) -> &[Instruction] { &self.insts }
 	/// The MMU state at the beginning of this BB.
 	pub fn mmu_state(&self) -> MmuState { self.state }
+	/// The MMU state after running this BB. If this BB ends in a `BBTerm::BankChange`, it
+	/// may be different!
+	pub fn mmu_state_after(&self) -> MmuState {
+		if let BBTerm::BankChange(_, state) = self.term {
+			state
+		} else {
+			self.state
+		}
+	}
 
 	/// An iterator over this block's successors.
 	pub fn successors(&'_ self) -> Successors<'_> {
@@ -223,7 +232,7 @@ pub enum BBTerm {
 	/// Jump table with any number of destinations.
 	JumpTbl(Vec<EA>),
 	/// Like FallThru, but perform a bank change as well.
-	BankChange(EA),
+	BankChange(EA, MmuState),
 }
 
 /// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
@@ -240,7 +249,7 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt => None     .into_iter().chain(&[]),
 			FallThru(ea) | Jump(ea) |
-			BankChange(ea)          => Some(ea) .into_iter().chain(&[]),
+			BankChange(ea, _)       => Some(ea) .into_iter().chain(&[]),
 			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(eas)            => None     .into_iter().chain(eas),
@@ -255,7 +264,7 @@ impl BBTerm {
 		match self {
 			DeadEnd | Return | Halt => None     .into_iter().chain([].iter_mut()),
 			FallThru(ea) | Jump(ea) |
-			BankChange(ea)          => Some(ea) .into_iter().chain([].iter_mut()),
+			BankChange(ea, _)       => Some(ea) .into_iter().chain([].iter_mut()),
 			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
 			JumpTbl(eas)            => None     .into_iter().chain(eas.iter_mut()),

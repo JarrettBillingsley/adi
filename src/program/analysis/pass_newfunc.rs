@@ -15,7 +15,7 @@ use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId };
 impl Program {
 	pub(super) fn new_func_pass(&mut self, ea: EA, state: MmuState) {
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin function 1st pass at {}", ea);
+		trace!("- begin function 1st pass at {} with state {:?}", ea, state);
 
 		if !self.should_analyze_func(ea) {
 			return;

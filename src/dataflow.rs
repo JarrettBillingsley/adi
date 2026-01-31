@@ -51,6 +51,8 @@ impl<T: Eq + Hash + Clone + Copy> WorkQueue<T> {
 // DataflowAlgorithm
 // ------------------------------------------------------------------------------------------------
 
+// TODO: support reverse dataflow algorithms too
+
 /// Trait for a control flow graph used by `DataflowAlgorithm`. `ID` is meant to be a type used to
 /// uniquely identify each node in the graph.
 pub(crate) trait DataflowCfg<ID>
@@ -76,7 +78,6 @@ pub(crate) trait DataflowAlgorithm {
 	/// Associated type used to uniquely identify each node in a control flow graph. Used as the
 	/// type parameter to `DataflowCfg`.
 	type ID: Eq + Hash + Clone + Copy;
-
 
 	/// The main method you need to implement. Visits a node of the CFG. Should perform state joins
 	/// from predecessors and then perform the transfer function across the node. Should return

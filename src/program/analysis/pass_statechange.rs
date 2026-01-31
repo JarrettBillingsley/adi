@@ -1,12 +1,14 @@
 
-use std::collections::{ HashMap };
+use std::collections::{ HashMap, HashSet };
 use std::iter::{ IntoIterator} ;
 
 use log::*;
 
-use crate::program::{ Program, BBId, BBTerm, Function, FuncId, OpInfo, RefInfo, Operand };
+use crate::dataflow::{ JoinSemiLattice, DataflowAlgorithm };
+use crate::program::{ Program, BBId, BBTerm, FuncId, OpInfo, RefInfo, Operand };
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
+use crate::program::{ CfgPredecessors };
 use crate::memory::{ MmuState, VA, EA, MemAccess, StateChange };
 use crate::ir::{ ConstAddr };
 
@@ -70,22 +72,22 @@ impl Program {
 					let load = access == MemAccess::R;
 					match self.mem.state_change(old_state, addr, val, load) {
 						StateChange::None              => {
-							trace!("no state change at {}", ea);
+							trace!("  no state change at {}", ea);
 
 						} // no change
 						StateChange::Maybe             => {
-							trace!("found a maybe state change at {}", ea);
+							trace!("  found a maybe state change at {}", ea);
 							// TODO: log this as a point of interest for user to investigate
 							// TOOD: also is this even possible in this new model? Maybe was for
 							// the old model where the state change looked at the macro-instruction.
 							// here, we know exactly what address is being used.
 						}
 						StateChange::Dynamic           => {
-							trace!("found a dynamic state change at {}", ea);
+							trace!("  found a dynamic state change at {}", ea);
 							// TODO: log this as a point of interest for user to investigate
 						}
 						StateChange::Static(new_state) => {
-							trace!("found a static state change at {} to {:?}", ea, new_state);
+							trace!("  found a static state change at {} to {:?}", ea, new_state);
 							changes.push((next_ea, new_state));
 						}
 					}
@@ -124,7 +126,7 @@ impl Program {
 						_ => unreachable!("split_bb should have made this a FallThru")
 					};
 
-					*self.bbidx.get_mut(bbid).term_mut() = BBTerm::BankChange(ea);
+					*self.bbidx.get_mut(bbid).term_mut() = BBTerm::BankChange(ea, new_state);
 					to_propagate.push((bbid, new_state));
 				}
 				Ok(None) => {} // it ok
@@ -137,31 +139,41 @@ impl Program {
 		// --------------------------------------------------------
 		// part 3: propagate state changes determined above
 
-		// 1. make a list of "new states" for each bb.
-		let func = self.get_func(fid);
-		let mut new_states = BBStateChanger::new(func);
+		// 1. run the dataflow algorithm
+		let func       = self.get_func(fid);
+		let ana        = self.func_begin_analysis(func);
+		let all_bbs    = ana.all_bbs().collect::<Vec<_>>();
+		let preds      = self.func_bb_predecessors(&ana);
+		let head_state = self.bbidx.get(func.head_id()).mmu_state();
+		let mut flow = StateFlow::new(preds, &all_bbs, ana.head_id(), head_state, &to_propagate);
+		flow.run(ana.cfg());
+		flow.dump_state("final", &all_bbs);
 
-		// 2. for each one, propagate that state change to the successors.
-		for (bbid, new_state_after) in to_propagate {
-			trace!("  new state being propagated from {:?}: {:?}", bbid, new_state_after);
-			match new_states.propagate(self, bbid, new_state_after) {
-				Ok(()) => {}
-				Err(()) => {} // TODO: there were conflicting states
+		// 2. apply the changes (if possible)
+		for (bbid, new_state) in flow.into_iter() {
+			match new_state {
+				StateInfo::Unk => {
+					// I could see this happening if there is a disconnected BB in the CFG
+					// but uhhhhhhh that shouldn't happen right now
+					panic!("this shouldn't be possible? flow algo determined unknown state...");
+				}
+				StateInfo::Some(new_state) => {
+					self.bbidx.get_mut(bbid).set_mmu_state(new_state);
+					// we might be able to resolve unresolved EAs in the terminator.
+					let changed = self.resolve_unresolved_terminator(new_state, bbid);
+
+					if changed {
+						trace!("changed terminator of {:?}", bbid);
+					}
+				}
+				StateInfo::Multi(states) => {
+					trace!("multiple possible states found for BB {:?}: {:?}", bbid, states);
+					// TODO: point of interest for user to investigate
+				}
 			}
 		}
 
-		// 3. Finally, apply the changes.
-		for (bbid, new_state) in new_states.into_iter() {
-			self.bbidx.get_mut(bbid).set_mmu_state(new_state);
-			// with new knowledge, we might be able to resolve unresolved EAs in the terminator.
-			let changed = self.resolve_unresolved_terminator(new_state, bbid);
-
-			if changed {
-				trace!("changed terminator of {:?}", bbid);
-			}
-		}
-
-		// 6. And set this function up for its refs pass.
+		// and set this function up for its refs pass.
 		self.enqueue_func_refs(fid);
 	}
 
@@ -191,104 +203,134 @@ impl Program {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Helper object for tracking and propagating state changes through a function's BB CFG
+// NEW SHIT
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug)]
-struct BBStateChangeStatus {
-	new_state: Option<MmuState>,
-	visited:   bool,
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum StateInfo {
+	Unk,
+	Some(MmuState),
+	Multi(HashSet<MmuState>),
 }
 
-struct BBStateChanger {
-	map: HashMap<BBId, BBStateChangeStatus>,
-}
+impl JoinSemiLattice for StateInfo {
+	fn join(&mut self, other: &Self) -> bool {
+		use StateInfo::*;
 
-impl BBStateChanger {
-	fn new(func: &Function) -> Self {
-		let mut map = HashMap::new();
+		let new = match (&self, &other) {
+			(Unk, x)                     => (*x).clone(),
+			(x, Unk)                     => (*x).clone(),
+			(Some(a), Some(b)) if a == b => Some(*a),
+			(Some(a), Some(b))           => Multi(HashSet::from([*a, *b])),
+			(Some(a), Multi(m))          => Multi({ let mut s = m.clone(); s.insert(*a); s}),
+			(Multi(m), Some(a))          => Multi({ let mut s = m.clone(); s.insert(*a); s}),
+			(Multi(m1), Multi(m2))       => Multi(m1.union(m2).copied().collect()),
+		};
 
-		for bbid in func.all_bbs() {
-			map.insert(bbid, BBStateChangeStatus { new_state: None, visited: false });
-		}
-
-		Self { map }
-	}
-
-	fn into_iter(self) -> impl Iterator<Item = (BBId, MmuState)> {
-		self.map.into_iter().filter_map(|(bbid, cs)| cs.new_state.map(|ns| (bbid, ns)))
-	}
-
-	fn propagate(&mut self, prog: &Program, from: BBId, new_state: MmuState) -> Result<(), ()> {
-		self.clear_visited();
-		self.walk(prog, from, new_state)
-	}
-
-	fn clear_visited(&mut self) {
-		self.map.iter_mut().for_each(|(_, cs)| cs.visited = false);
-	}
-
-	fn is_visited(&self, bb: BBId) -> bool {
-		self.map[&bb].visited
-	}
-
-	fn mark_visited(&mut self, bb: BBId) {
-		self.map.get_mut(&bb).unwrap().visited = true;
-	}
-
-	fn new_state_for(&self, bb: BBId) -> Option<MmuState> {
-		self.map[&bb].new_state
-	}
-
-	fn set_new_state(&mut self, bb: BBId, new_state: MmuState) {
-		self.map.get_mut(&bb).unwrap().new_state = Some(new_state);
-	}
-
-	fn visit(&mut self, prog: &Program, from: BBId, new_state: MmuState) -> Result<(), ()> {
-		if self.is_visited(from) {
-			Ok(())
+		if *self != new {
+			*self = new;
+			trace!("    instate changed to {:?}", self);
+			true
 		} else {
-			self.mark_visited(from);
+			false
+		}
+	}
+}
 
-			if let Some(ns) = self.new_state_for(from) {
-				// uh oh. conflict
-				let ea = prog.get_bb(from).ea();
-				trace!("    conflicting states @ {} (changing to both {:?} and {:?})",
-					ea, ns, new_state);
-				Err(())
-			} else {
-				trace!("    setting new state of {:?} to {:?}", from, new_state);
-				self.set_new_state(from, new_state);
-				self.walk(prog, from, new_state)
+struct StateFlow<'f> {
+	preds:    &'f CfgPredecessors,
+	instate:  HashMap<BBId, StateInfo>,
+	outstate: HashMap<BBId, StateInfo>,
+}
+
+impl<'f> StateFlow<'f> {
+	fn new(
+		preds: &'f CfgPredecessors,
+		all_bbs: &[BBId],
+		head_id: BBId,
+		head_state: MmuState,
+		to_propagate: &[(BBId, MmuState)],
+	) -> Self {
+		// seed instates and outstates of every BB in the function.
+		let mut instate = HashMap::new();
+		let mut outstate = HashMap::new();
+
+		// first, set everything to unknown.
+		for &bbid in all_bbs {
+			instate.insert(bbid, StateInfo::Unk);
+			outstate.insert(bbid, StateInfo::Unk);
+		}
+
+		// then, for the head block, set its instate to the known head state,
+		// and its outstate to unknown (outstate may be overridden by following loop).
+		instate.insert(head_id, StateInfo::Some(head_state));
+		outstate.insert(head_id, StateInfo::Unk);
+
+		// finally, for all the state changes determined by const prop, set those as
+		// the outstates for those blocks.
+		for (bbid, new_state) in to_propagate.iter() {
+			outstate.insert(*bbid, StateInfo::Some(*new_state));
+		}
+
+		let ret = Self { preds, instate, outstate };
+
+		trace!("- begin state flow");
+		ret.dump_state("initial", all_bbs);
+
+		ret
+	}
+
+	fn dump_state(&self, kind: &str, all_bbs: &[BBId]) {
+		trace!("");
+		trace!("  {} state:", kind);
+		for bbid in all_bbs {
+			trace!("    {:?} in = {:?}, out = {:?}",
+				bbid, self.instate.get(&bbid).unwrap(), self.outstate.get(&bbid).unwrap());
+		}
+		trace!("");
+	}
+
+	fn transfer(&mut self, id: BBId) -> bool {
+		trace!("  transferring across {:?}", id);
+
+		// both safe because ctor added every BB in this function
+		let instate = self.instate.get(&id).unwrap();
+		let outstate = self.outstate.get_mut(&id).unwrap();
+
+		match outstate {
+			StateInfo::Unk => {
+				*outstate = instate.clone();
+				trace!("    outstate changed to {:?}", outstate);
+				true
+			}
+			_ => {
+				false
 			}
 		}
 	}
 
-	fn walk(&mut self, prog: &Program, from: BBId, new_state: MmuState) -> Result<(), ()> {
-		let from = prog.get_bb(from);
-		let fid = from.func();
+	fn into_iter(self) -> impl Iterator<Item = (BBId, StateInfo)> {
+		self.instate.into_iter()
+	}
+}
 
-		for succ in from.successors() {
-			// TODO: having a "magical" invalid EA value is annoying.
-			if succ.is_invalid() { continue; }
+impl<'f> DataflowAlgorithm for StateFlow<'f> {
+	type ID = BBId;
 
-			match prog.span_at_ea(*succ).bb() {
-				Some(succ_id) => {
-					let succ = prog.get_bb(succ_id);
-					if succ.func() == fid {
-						self.visit(prog, succ_id, new_state)?;
-					} else {
-						// successor BB belongs to another function...
-						// TODO: is there anything we need to do here??
-					}
-				}
-				_ => {
-					// no BB at the successor location...
-					// TODO: is there anything we need to do here??
-				}
-			}
+	fn visit(&mut self, id: Self::ID) -> bool {
+		trace!("  joining preds of {:?}", id);
+
+		// safe because all BBs were added to this map in the ctor
+		let instate = self.instate.get_mut(&id).unwrap();
+		let mut changed = false;
+
+		// safe because `func_bb_predecessors` puts all BBs in the map
+		for p in self.preds.get(&id).unwrap() {
+			// safe because blah blah you get it
+			changed |= instate.join(self.outstate.get(&p).unwrap());
 		}
 
-		Ok(())
+		changed |= self.transfer(id);
+		changed
 	}
 }

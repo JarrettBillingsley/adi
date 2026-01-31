@@ -499,9 +499,39 @@ fn va_range_to_ea_range(range: impl RangeBounds<VA>, f: impl Fn(VA) -> EA)
 
 use lazycell::LazyCell;
 
-pub type CfgGraph        = petgraph::graphmap::DiGraphMap<BBId, ()>;
+/// .0 is the underlying `DiGraphMap`
+/// .1 is the head node ID
+pub struct CfgGraph(petgraph::graphmap::DiGraphMap<BBId, ()>, BBId);
 pub type CfgDominators   = petgraph::algo::dominators::Dominators<BBId>;
 pub type CfgPredecessors = HashMap<BBId, SmallVec<[BBId; 4]>>;
+
+impl CfgGraph {
+	fn new(capacity: usize, head: BBId) -> Self {
+		Self(petgraph::graphmap::DiGraphMap::with_capacity(capacity, capacity), head)
+	}
+}
+
+/// Implementation of `crate::dataflow::DataflowCfg` to allow it to be used with the
+/// `DataflowAlgorithm` framework.
+impl crate::dataflow::DataflowCfg<BBId> for CfgGraph {
+	fn num_nodes(&self) -> usize {
+		self.0.node_count()
+	}
+
+	fn initial_order(&self) -> impl Iterator<Item = BBId> {
+		let mut rpo = Vec::<BBId>::with_capacity(self.num_nodes());
+		let mut postorder = petgraph::visit::DfsPostOrder::new(&self.0, self.1);
+		while let Some(id) = postorder.next(&self.0) {
+			rpo.push(id);
+		}
+
+		rpo.into_iter().rev()
+	}
+
+	fn successors(&self, id: BBId) -> impl Iterator<Item = BBId> {
+		self.0.edges(id).map(|(_, succ, _)| succ)
+	}
+}
 
 /// Type to hold onto function CFG analysis data structures to avoid having to recompute them
 /// during longer analyses. Holds a reference to the function to prevent it from being modified
@@ -522,6 +552,28 @@ impl<'f> FuncAnalysis<'f> {
 			preds: LazyCell::new(),
 		}
 	}
+
+	pub(crate) fn func(&self) -> &'f Function {
+		self.func
+	}
+
+	pub(crate) fn cfg(&self) -> &CfgGraph {
+		&self.cfg
+	}
+
+	pub(crate) fn num_bbs(&self) -> usize {
+		self.cfg.0.node_count()
+	}
+
+	pub(crate) fn all_bbs(&self) -> impl Iterator<Item = BBId> + use<'_> {
+		self.cfg.0.nodes()
+	}
+
+	delegate! {
+		to self.func {
+			pub(crate) fn head_id(&self) -> BBId;
+		}
+	}
 }
 
 impl Program {
@@ -530,22 +582,22 @@ impl Program {
 	/// others to operate properly).
 	pub fn func_begin_analysis<'f>(&self, func: &'f Function) -> FuncAnalysis<'f> {
 		let num_bbs = func.num_bbs();
-		let mut cfg = CfgGraph::with_capacity(num_bbs, num_bbs);
+		let mut cfg = CfgGraph::new(num_bbs, func.head_id());
 
 		// for CFGs with only one node, there are 0 edges, so the loop below will not add
 		// the head node.
-		cfg.add_node(func.head_id());
+		cfg.0.add_node(func.head_id());
 
 		for bbid in func.all_bbs() {
 			self.bb_successors_in_function(bbid, |succ_id| {
-				cfg.add_edge(bbid, succ_id, ());
+				cfg.0.add_edge(bbid, succ_id, ());
 			});
 		}
 
 		// should be true... the only way it couldn't be true is if there were a BB that had no
 		// successors or predecessors in the function, which seeeeeeeems impossible. FOR NOW.
 		// this is going to be the setup for a brick joke, isn't it?
-		assert!(cfg.node_count() == num_bbs);
+		assert!(cfg.0.node_count() == num_bbs);
 
 		FuncAnalysis::new(func, cfg)
 	}
@@ -558,11 +610,14 @@ impl Program {
 			let mut preds = CfgPredecessors::new();
 
 			// "borrowed" from petgraph::algo::dominators::simple_fast_post_order :P
-			for pred in DfsPostOrder::new(&ana.cfg, ana.func.head_id()).iter(&ana.cfg) {
-				for succ in ana.cfg.neighbors(pred) {
+			for pred in DfsPostOrder::new(&ana.cfg.0, ana.func.head_id()).iter(&ana.cfg.0) {
+				for succ in ana.cfg.0.neighbors(pred) {
 					preds.entry(succ).or_insert_with(SmallVec::new).push(pred);
 				}
 			}
+
+			// head node has no preds
+			preds.entry(ana.func.head_id()).or_insert_with(SmallVec::new);
 
 			ana.preds.fill(preds).unwrap();
 		}
@@ -577,7 +632,7 @@ impl Program {
 		if !ana.doms.filled() {
 			assert!(!ana.func.is_multi_entry());
 
-			let doms = petgraph::algo::dominators::simple_fast(&ana.cfg, ana.func.head_id());
+			let doms = petgraph::algo::dominators::simple_fast(&ana.cfg.0, ana.func.head_id());
 
 			ana.doms.fill(doms).unwrap();
 		}
@@ -590,7 +645,7 @@ impl Program {
 		use petgraph::dot::{ Dot, Config };
 		println!("--------------------------------------------------------------");
 		println!("function {}", self.name_of_ea(ana.func.ea()));
-		println!("{:?}", Dot::with_config(&ana.cfg, &[Config::EdgeNoLabel]));
+		println!("{:?}", Dot::with_config(&ana.cfg.0, &[Config::EdgeNoLabel]));
 	}
 
 	/// Calculates the set of all BBs reachable from the `start` bb in this function. The returned
@@ -600,7 +655,7 @@ impl Program {
 
 		let mut reachable = HashSet::new();
 
-		for bb in DfsPostOrder::new(&ana.cfg, start).iter(&ana.cfg) {
+		for bb in DfsPostOrder::new(&ana.cfg.0, start).iter(&ana.cfg.0) {
 			reachable.insert(bb);
 		}
 
