@@ -44,7 +44,13 @@ fn setup_panic() {
 
 // ------------------------------------------------------------------------------------------------
 
-fn toy_test_all_instructions() -> Vec<u8> {
+struct ToyTest {
+	image:  Vec<u8>,
+	name:   &'static str,
+	labels: Vec<(String, VA)>,
+}
+
+fn toy_test_all_instructions() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -92,10 +98,16 @@ fn toy_test_all_instructions() -> Vec<u8> {
 	b.org(0x7FFE);
 	b.movi(Reg::A, 10);
 
-	b.finish()
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_all_instructions>",
+		labels: vec![
+			("func".to_string(), VA(0x7FFE)),
+		]
+	}
 }
 
-fn toy_test_ssa() -> Vec<u8> {
+fn toy_test_ssa() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -126,7 +138,7 @@ fn toy_test_ssa() -> Vec<u8> {
 	b.jump_here(bb2_jump);
 	b.sti(A, 0x8000);
 	b.sti(B, 0x8001);
-	let bb4_cal = b.call();
+	let bb4_call = b.call();
 	b.ldi(A, 0x8002);
 	b.cmpi(A, 1);
 	b.beq_to(bb1);
@@ -138,13 +150,19 @@ fn toy_test_ssa() -> Vec<u8> {
 
 	// f
 	b.org(0x40);
-	b.jump_here(bb4_cal);
+	b.jump_here(bb4_call);
 	b.ret();
 
-	b.finish()
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_ssa>",
+		labels: vec![
+			("f".into(), VA(0x40)),
+		]
+	}
 }
 
-fn toy_test_const_prop() -> Vec<u8> {
+fn toy_test_const_prop() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -172,10 +190,14 @@ fn toy_test_const_prop() -> Vec<u8> {
 
 	b.ret();
 
-	b.finish()
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_const_prop>",
+		labels: vec![]
+	}
 }
 
-fn toy_test_calls() -> Vec<u8> {
+fn toy_test_calls() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -189,10 +211,16 @@ fn toy_test_calls() -> Vec<u8> {
 	b.addi(A, 3);
 	b.ret();
 
-	b.finish()
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_calls>",
+		labels: vec![
+			("func".to_string(), VA(0x10)),
+		]
+	}
 }
 
-fn toy_test_loop() -> Vec<u8> {
+fn toy_test_loop() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -206,15 +234,22 @@ fn toy_test_loop() -> Vec<u8> {
 
 		b.subi(B, 1);
 		b.jmp_to(loop_top);
-	b.branch_here(loop_cond);
+	let loop_end = b.branch_here(loop_cond);
 
 	b.mov(A, C);
 	b.ret();
 
-	b.finish()
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_loop>",
+		labels: vec![
+			("_loop_top".to_string(), VA(loop_top)),
+			("_loop_end".to_string(), VA(loop_end)),
+		]
+	}
 }
 
-fn toy_test_state_change() -> Vec<u8> {
+fn toy_test_state_change() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -257,8 +292,7 @@ fn toy_test_state_change() -> Vec<u8> {
 
 	// branch on B
 	b.ldi(B, 0x8000);
-	b.movi(A, 10);
-	b.cmp(B, A);
+	b.cmpi(B, 10);
 	let func2_branch = b.beq();
 		// then side
 		b.movi(A, 11);
@@ -276,7 +310,7 @@ fn toy_test_state_change() -> Vec<u8> {
 	b.ldi(A, 0x8000);
 	b.sti(A, 0x8001);
 
-	// for good measure, let's call the state change function so it sees a new state
+	// for good measure, let's call the state change function so it sees a new caller state
 	b.call_to(STATE_CHANGE_FUNC);
 
 	b.ret();
@@ -295,8 +329,7 @@ fn toy_test_state_change() -> Vec<u8> {
 
 	// branch on B
 	b.ldi(B, 0x8000);
-	b.movi(A, 10);
-	b.cmp(B, A);
+	b.cmpi(B, 10);
 	let func3_branch = b.beq();
 		// then side
 		b.movi(A, 21);
@@ -321,23 +354,37 @@ fn toy_test_state_change() -> Vec<u8> {
 	b.sti(A, 0xFFFF);
 	b.ret();
 
-	b.finish()
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_state_change>",
+		labels: vec![
+			("func2".to_string(), VA(FUNC2)),
+			("func3".to_string(), VA(FUNC3)),
+			("state_change_func".to_string(), VA(STATE_CHANGE_FUNC)),
+		]
+	}
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	// let img_data = toy_test_all_instructions();
-	// let img_data = toy_test_ssa();
-	// let img_data = toy_test_const_prop();
-	// let img_data = toy_test_calls();
-	// let img_data = toy_test_loop();
-	let img_data = toy_test_state_change();
+	let test = toy_test_all_instructions();
+	// let test = toy_test_ssa();
+	// let test = toy_test_const_prop();
+	// let test = toy_test_calls();
+	// let test = toy_test_loop();
+	// let test = toy_test_state_change();
 
-	let img = Image::new("<toy test>", &img_data);
-	let mut prog = program_from_image(img)?;
+	let mut prog = program_from_image(Image::new(test.name, &test.image))?;
+	let state = prog.initial_mmu_state();
+
+	for (name, va) in test.labels {
+		prog.add_name_va(&name, state, va);
+	}
+
 	println!("{}", prog);
 
 	let state = prog.initial_mmu_state();
 	let reset_ea = prog.ea_from_va(state, VA(0));
+	prog.add_name_va("main", state, VA(0x0000));
 
 	prog.enqueue_function(state, reset_ea);
 	prog.analyze_queue();

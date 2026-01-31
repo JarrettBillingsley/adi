@@ -77,7 +77,7 @@ impl ToyBuilder {
 		ret
 	}
 
-	pub fn branch_here(&mut self, from: usize) {
+	pub fn branch_here(&mut self, from: usize) -> usize {
 		assert!(from < self.bytes.len(), "bad source address {:X}", from);
 		let opc = self.bytes[from];
 		if opc != Opcode::BLT_S8 as u8 && opc != Opcode::BLE_S8 as u8 &&
@@ -86,9 +86,10 @@ impl ToyBuilder {
 		}
 
 		self.bytes[from + 1] = calc_branch_offset(from, self.bytes.len());
+		self.bytes.len()
 	}
 
-	pub fn jump_here(&mut self, from: usize) {
+	pub fn jump_here(&mut self, from: usize) -> usize {
 		assert!(from < self.bytes.len(), "bad source address {:X}", from);
 		let opc = self.bytes[from];
 		if opc != Opcode::JMP_I16 as u8 && opc != Opcode::CALL_I16 as u8 {
@@ -98,6 +99,7 @@ impl ToyBuilder {
 		let target = encode_16bit_addr(self.bytes.len());
 		self.bytes[from + 1] = target[0];
 		self.bytes[from + 2] = target[1];
+		self.bytes.len()
 	}
 
 	pub fn mov(&mut self, dst: Reg, src: Reg) -> usize {

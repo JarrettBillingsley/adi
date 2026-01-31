@@ -71,7 +71,13 @@ impl ILoader for ToyLoader {
 			mmu.into()
 		);
 
-		Ok(Program::new(mem, ToyPlatform::new().into()))
+		let mut prog = Program::new(mem, ToyPlatform::new().into());
+
+		let state = prog.initial_mmu_state();
+		prog.add_name_va("BANK", state, VA(0xFFFF));
+		prog.add_name_va("WEIRDBANK", state, VA(0xFFFE));
+
+		Ok(prog)
 	}
 }
 
