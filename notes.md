@@ -1,10 +1,7 @@
 
 # Yak stack
 
-- test state change analysis!
-
-ALSO
-
+- Rename BankChange to StateChange
 - BBs should allow *multiple* states
 
 # Tasks!
@@ -25,6 +22,7 @@ ALSO
 	- this makes sense cause some of the later phases do better work with more information made available from earlier phases
 	- IDA implements it by having a different queue for each phase, and (presumably) taking the next action item from the highest-priority queue first
 - IR stuff
+	- should IrFunction hold a ref to the owning function to prevent issues like modifying a function and then using the outdated IR?
 	- apply results of const prop to the IR? rewrite it?
 		- would definitely simplify some things like the `const_addrs` iteration - rather than having to double-check that a register is constant, just... have a constant there.
 		- should `IrConst` have a field for provenance AST reference?

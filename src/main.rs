@@ -201,21 +201,28 @@ fn toy_test_calls() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
+	const FUNC_FIRST_HALF: usize = 0x20;
+
 	let mut b = ToyBuilder::new();
 	b.movi(A, 0x30);
-	b.call_to(0x10);
+	b.call_to(FUNC_FIRST_HALF);
+	b.ldi(A, 0x8000);
+	let call_second = b.call();
 	b.sti(A, 0x8000);
 	b.ret();
 
-	b.org(0x10);
+	b.org(FUNC_FIRST_HALF);
 	b.addi(A, 3);
+	let func_second_half = b.jump_here(call_second);
+	b.addi(A, 5);
 	b.ret();
 
 	ToyTest {
 		image: b.finish(),
 		name:  "<toy_test_calls>",
 		labels: vec![
-			("func".to_string(), VA(0x10)),
+			("func_first_half".to_string(), VA(FUNC_FIRST_HALF)),
+			("func_second_half".to_string(), VA(func_second_half)),
 		]
 	}
 }
@@ -366,10 +373,10 @@ fn toy_test_state_change() -> ToyTest {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	let test = toy_test_all_instructions();
+	// let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
 	// let test = toy_test_const_prop();
-	// let test = toy_test_calls();
+	let test = toy_test_calls();
 	// let test = toy_test_loop();
 	// let test = toy_test_state_change();
 
@@ -889,17 +896,17 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		Halt | Return => {
 		}
 		FallThru(ea) => {
-			thinger(prog, bb_ea, *ea, "Fall through", Color::Yellow);
+			print_divider_if_diff_funcs(prog, bb_ea, *ea, "Fall through", Color::Yellow);
 		}
 		Jump(ea) => {
-			thinger(prog, bb_ea, *ea, "Tailcall", Color::Yellow);
+			print_divider_if_diff_funcs(prog, bb_ea, *ea, "Tailcall", Color::Yellow);
 		}
 		Call { ret, .. } | IndirCall { ret, .. } => {
-			thinger(prog, bb_ea, *ret, "Fall through", Color::Yellow);
+			print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through", Color::Yellow);
 		}
 		Cond { t, f } => {
-			thinger(prog, bb_ea, *t, "Tailbranch", Color::Yellow);
-			thinger(prog, bb_ea, *f, "Fall through", Color::Yellow);
+			print_divider_if_diff_funcs(prog, bb_ea, *t, "Tailbranch", Color::Yellow);
+			print_divider_if_diff_funcs(prog, bb_ea, *f, "Fall through", Color::Yellow);
 		}
 		JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
 	}
@@ -907,7 +914,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 	println!();
 }
 
-fn thinger(prog: &Program, from: EA, to: EA, msg: &str, color: Color){
+fn print_divider_if_diff_funcs(prog: &Program, from: EA, to: EA, msg: &str, color: Color){
 	if diff_funcs(prog, from, to) {
 		let dest = prog.name_of_ea(to);
 		let msg = format!("---------- {} to {} ----------", msg, dest);

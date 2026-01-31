@@ -108,8 +108,7 @@ impl Program {
 		// part 2: split BBs at state change instructions
 
 		// we're about to change the function, so let's drop this so we don't accidentally use the
-		// outdated IR (TODO: should IrFunction hold a ref to the owning function to prevent issues
-		// like this?)
+		// outdated IR
 		drop(irfunc);
 
 		// vector of BBs which now end in a `BBTerm::BankChange`, and the new MMU state that its
