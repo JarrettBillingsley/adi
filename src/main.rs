@@ -377,9 +377,9 @@ fn toy_test_state_change() -> ToyTest {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	let test = toy_test_all_instructions();
+	// let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
-	// let test = toy_test_const_prop();
+	let test = toy_test_const_prop();
 	// let test = toy_test_calls();
 	// let test = toy_test_loop();
 	// let test = toy_test_state_change();

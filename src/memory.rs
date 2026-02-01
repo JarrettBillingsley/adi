@@ -93,6 +93,11 @@ impl MemAccess {
 	pub fn writes_mem(&self) -> bool {
 		((*self as u8) & W_BIT) != 0
 	}
+
+	/// Is this a control flow target?
+	pub fn is_target(&self) -> bool {
+		((*self as u8) & T_BIT) != 0
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

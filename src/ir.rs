@@ -520,37 +520,54 @@ pub(crate) struct ConstAddrsIter<'func> {
 	func:    &'func IrFunction,
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub(crate) enum ConstAddrKind {
+	///
+	Load,
+	///
+	Store(Option<u64>),
+	/// Control flow target
+	Target,
+	/// Some other reference
+	Offset,
+}
+
+impl ConstAddrKind {
+	pub(crate) fn access(&self) -> MemAccess {
+		use ConstAddrKind::*;
+		match self {
+			Load      => MemAccess::R,
+			Store(..) => MemAccess::W,
+			Target    => MemAccess::Target,
+			Offset    => MemAccess::Offset,
+		}
+	}
+}
+
 pub(crate) struct ConstAddr {
 	pub bbid:    BBId,
 	pub ea:      EA,
 	pub opn:     usize,
 	pub addr:    EA, // may or may not be resolved!
-	pub val:     Option<u64>,
-	pub access:  MemAccess,
+	pub kind:    ConstAddrKind,
 	pub srcs:    [Option<IrSrc>; 3],
 }
 
 impl ConstAddr {
 	pub(crate) fn dump(&self) {
-		let ConstAddr { bbid, ea, opn, addr, val, access, srcs } = self;
-		println!("{:?} in {:?} operand {} is a {} {} <from {:?}>",
+		let ConstAddr { bbid, ea, opn, addr, kind, srcs } = self;
+		use ConstAddrKind::*;
+		println!("{:?} in {:?} operand {} is a {} <from {:?}>",
 			ea,
 			bbid,
 			opn,
-			match access {
-				MemAccess::R => "load from".into(),
-				MemAccess::W => {
-					if let Some(val) = val {
-						format!("store of constant value 0x{:08X} to", val)
-					} else {
-						"store to".into()
-					}
-				},
-				MemAccess::Offset => "reference to".into(),
-				MemAccess::Target => "control flow target to".into(),
-				_ => unreachable!("const_addrs returned something bad"),
+			match kind {
+				Load             => format!("load from {}", addr),
+				Store(Some(val)) => format!("store of const value 0x{:08X} to {}", val, addr),
+				Store(None)      => format!("store to {}", addr),
+				Offset           => format!("reference to {}", addr),
+				Target           => format!("control flow target to {}", addr),
 			},
-			addr,
 			srcs);
 	}
 }
@@ -572,10 +589,6 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 				_ => None,
 			};
 
-			// it's not necessarily Offset, but the match below will only let through
-			// instructions it has deemed "memory-accessing".
-			let access = inst.mem_access().unwrap_or(MemAccess::Offset);
-
 			match inst.kind() {
 				IrInstKind::Branch  { target, targetn: opn } |
 				IrInstKind::CBranch { target, targetn: opn, .. } |
@@ -585,8 +598,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 						ea: inst.ea(),
 						opn: opn as usize,
 						addr: target,
-						val,
-						access,
+						kind: ConstAddrKind::Target,
 						srcs: [None, None, None],
 					});
 				}
@@ -601,17 +613,21 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 						_                                 => None,
 					};
 
-
 					if let Some((addr, srcs)) = addr {
 						let addr = EA::unresolved(addr as usize);
+
+						let kind = match inst.kind() {
+							IrInstKind::Load{ .. }  => ConstAddrKind::Load,
+							IrInstKind::Store{ .. } => ConstAddrKind::Store(val),
+							_                       => ConstAddrKind::Target,
+						};
 
 						return Some(ConstAddr {
 							bbid: self.func.bbs[self.bbidx].real_bbid,
 							ea: inst.ea(),
 							opn: opn as usize,
 							addr,
-							val,
-							access,
+							kind,
 							srcs,
 						});
 					}

@@ -155,31 +155,34 @@ pub struct RefInfo {
 	/// might be a full value (like, the full absolute address or the full offset of a relative
 	/// address), or it might be the high or low half of the address.
 	pub part: RefPart,
+
+	/// what kind of memory access this is.
+	pub access: MemAccess,
 }
 
 impl RefInfo {
-	pub(crate) fn abs(size: usize) -> Self {
-		Self { kind: RefKind::Abs, size, part: RefPart::Full }
+	pub(crate) fn abs(size: usize, access: MemAccess) -> Self {
+		Self { kind: RefKind::Abs, size, part: RefPart::Full, access }
 	}
 
-	pub(crate) fn abs_hi(size: usize) -> Self {
-		Self { kind: RefKind::Abs, size, part: RefPart::Hi }
+	pub(crate) fn abs_hi(size: usize, access: MemAccess) -> Self {
+		Self { kind: RefKind::Abs, size, part: RefPart::Hi, access }
 	}
 
-	pub(crate) fn abs_lo(size: usize) -> Self {
-		Self { kind: RefKind::Abs, size, part: RefPart::Lo }
+	pub(crate) fn abs_lo(size: usize, access: MemAccess) -> Self {
+		Self { kind: RefKind::Abs, size, part: RefPart::Lo, access }
 	}
 
-	pub(crate) fn rel(size: usize, base: EA) -> Self {
-		Self { kind: RefKind::Rel { base }, size, part: RefPart::Full }
+	pub(crate) fn rel(size: usize, base: EA, access: MemAccess) -> Self {
+		Self { kind: RefKind::Rel { base }, size, part: RefPart::Full, access }
 	}
 
-	pub(crate) fn rel_hi(size: usize, base: EA) -> Self {
-		Self { kind: RefKind::Rel { base }, size, part: RefPart::Hi }
+	pub(crate) fn rel_hi(size: usize, base: EA, access: MemAccess) -> Self {
+		Self { kind: RefKind::Rel { base }, size, part: RefPart::Hi, access }
 	}
 
-	pub(crate) fn rel_lo(size: usize, base: EA) -> Self {
-		Self { kind: RefKind::Rel { base }, size, part: RefPart::Lo }
+	pub(crate) fn rel_lo(size: usize, base: EA, access: MemAccess) -> Self {
+		Self { kind: RefKind::Rel { base }, size, part: RefPart::Lo, access }
 	}
 }
 

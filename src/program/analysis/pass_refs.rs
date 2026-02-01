@@ -98,11 +98,14 @@ impl Program {
 
 			let replacement = match inst.get_opinfo(opn) {
 				OpInfo::VARef { target, info } => {
-					let target_ea = self.resolve_control_flow_target(
-						*target, state, bb.func(), &mut funcs);
+					let target_ea = if info.access.is_target() {
+						self.resolve_control_flow_target(*target, state, bb.func(), &mut funcs)
+					} else {
+						self.resolve_target(state, *target)
+					};
 
-					// hm.
-					assert!(target_ea.is_resolved());
+					// we're not guaranteed that the above .resolve*() methods *actually* resolved
+					// the target EA, but that's not a problem really.
 					refs.push((inst.ea(), target_ea));
 
 					OpInfo::Ref {
@@ -141,6 +144,7 @@ impl Program {
 			};
 
 			if should_push {
+				trace!("think I found a function at {}", target_ea);
 				funcs.push((target_ea, state));
 			}
 		}

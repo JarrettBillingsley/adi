@@ -9,8 +9,8 @@ use crate::program::{ Program, BBId, BBTerm, FuncId, OpInfo, RefInfo, Operand };
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ CfgPredecessors };
-use crate::memory::{ MmuState, VA, EA, MemAccess, StateChange };
-use crate::ir::{ ConstAddr };
+use crate::memory::{ MmuState, VA, EA, StateChange };
+use crate::ir::{ ConstAddr, ConstAddrKind };
 
 // ------------------------------------------------------------------------------------------------
 // MMU state change analysis
@@ -43,7 +43,7 @@ impl Program {
 		// MmuState is that new state.
 		let mut changes: Vec<(EA, MmuState)> = vec![];
 
-		for /*aaa@*/ ConstAddr { bbid, ea, opn, addr, val, access, srcs } in irfunc.const_addrs() {
+		for /*aaa@*/ ConstAddr { bbid, ea, opn, addr, kind, srcs } in irfunc.const_addrs() {
 			// aaa.dump();
 
 			// 1. add OpInfo::VARef to each constant operand
@@ -62,7 +62,7 @@ impl Program {
 
 			// hi/lo come into play once we visit the instructions which computed this address.
 			// TODO: I'm not totally confident that this is always absolute...
-			let info = RefInfo::abs(addr_bits);
+			let info = RefInfo::abs(addr_bits, kind.access());
 			*inst.get_opinfo_mut(opn) = if addr.is_resolved() {
 				OpInfo::Ref { target: addr, info }
 			} else {
@@ -70,10 +70,12 @@ impl Program {
 			};
 
 			// 2. detect instruction state changes
-			match access {
-				MemAccess::R | MemAccess::W => {
+			let val = if let ConstAddrKind::Store(val) = kind { val } else { None };
+
+			match kind {
+				ConstAddrKind::Load | ConstAddrKind::Store(..) => {
 					let old_state = bb.mmu_state();
-					let load = access == MemAccess::R;
+					let load = kind == ConstAddrKind::Load;
 
 					// The only instructions marked MemAccess::R/W are loads and stores which, in
 					// the IR, do not have resolved EAs. So, the EA here must be unresolved, in
@@ -104,8 +106,7 @@ impl Program {
 					}
 				}
 
-				MemAccess::Target | MemAccess::Offset => {}
-				_ => unreachable!("const_addrs gave a bad access"),
+				ConstAddrKind::Target | ConstAddrKind::Offset => {}
 			}
 
 			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
