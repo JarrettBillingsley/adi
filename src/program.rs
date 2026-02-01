@@ -440,7 +440,7 @@ impl Program {
 		} else {
 			assert!(given_ea.offs() > ea.offs());
 			let delta = given_ea.offs() - ea.offs();
-			format!("{} + {}", base_name, delta)
+			format!("{} + 0x{:X}", base_name, delta)
 		}
 	}
 

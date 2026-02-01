@@ -60,11 +60,13 @@ impl Program {
 					panic!("this shouldn't be possible. should it be Operand::Mem?"),
 			};
 
-			*inst.get_opinfo_mut(opn) = OpInfo::VARef {
-				target: addr,
-				// hi/lo come into play once we visit the instructions which computed this address.
-				// TODO: I'm not totally confident that this is always absolute...
-				info: RefInfo::abs(addr_bits),
+			// hi/lo come into play once we visit the instructions which computed this address.
+			// TODO: I'm not totally confident that this is always absolute...
+			let info = RefInfo::abs(addr_bits);
+			*inst.get_opinfo_mut(opn) = if addr.is_resolved() {
+				OpInfo::Ref { target: addr, info }
+			} else {
+				OpInfo::VARef { target: VA(addr.offs()), info }
 			};
 
 			// 2. detect instruction state changes
@@ -72,6 +74,13 @@ impl Program {
 				MemAccess::R | MemAccess::W => {
 					let old_state = bb.mmu_state();
 					let load = access == MemAccess::R;
+
+					// The only instructions marked MemAccess::R/W are loads and stores which, in
+					// the IR, do not have resolved EAs. So, the EA here must be unresolved, in
+					// which case it can be turned back into a VA.
+					assert!(addr.is_unresolved());
+					let addr = VA(addr.offs());
+
 					match self.mem.state_change(old_state, addr, val, load) {
 						StateChange::None              => {
 							trace!("  no state change at {}", ea);

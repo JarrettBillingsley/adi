@@ -4,7 +4,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 use lazycell::LazyCell;
 
 use crate::arch::{ IIrCompiler };
-use crate::memory::{ EA, VA, MemAccess };
+use crate::memory::{ EA, MemAccess };
 use crate::program::{ BBId, FuncId };
 
 // ------------------------------------------------------------------------------------------------
@@ -524,7 +524,7 @@ pub(crate) struct ConstAddr {
 	pub bbid:    BBId,
 	pub ea:      EA,
 	pub opn:     usize,
-	pub addr:    VA,
+	pub addr:    EA, // may or may not be resolved!
 	pub val:     Option<u64>,
 	pub access:  MemAccess,
 	pub srcs:    [Option<IrSrc>; 3],
@@ -533,7 +533,7 @@ pub(crate) struct ConstAddr {
 impl ConstAddr {
 	pub(crate) fn dump(&self) {
 		let ConstAddr { bbid, ea, opn, addr, val, access, srcs } = self;
-		println!("{:?} in {:?} operand {} is a {} address 0x{:08X} <from {:?}>",
+		println!("{:?} in {:?} operand {} is a {} {} <from {:?}>",
 			ea,
 			bbid,
 			opn,
@@ -577,25 +577,39 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 			let access = inst.mem_access().unwrap_or(MemAccess::Offset);
 
 			match inst.kind() {
-				// IrInstKind::{Branch,CBranch,Call} already had their addresses determined before
-				// the IR was even built, so we don't handle those here.
+				IrInstKind::Branch  { target, targetn: opn } |
+				IrInstKind::CBranch { target, targetn: opn, .. } |
+				IrInstKind::Call    { target, targetn: opn } if opn >= 0 => {
+					return Some(ConstAddr {
+						bbid: self.func.bbs[self.bbidx].real_bbid,
+						ea: inst.ea(),
+						opn: opn as usize,
+						addr: target,
+						val,
+						access,
+						srcs: [None, None, None],
+					});
+				}
 
-				IrInstKind::Load { addr, addrn: opn, .. } |
-				IrInstKind::Store { addr, addrn: opn, .. } |
+				IrInstKind::Load    { addr, addrn: opn, .. } |
+				IrInstKind::Store   { addr, addrn: opn, .. } |
 				IrInstKind::IBranch { target: addr, targetn: opn, .. } |
-				IrInstKind::ICall { target: addr, targetn: opn, .. }  if opn >= 0 => {
+				IrInstKind::ICall   { target: addr, targetn: opn, .. }  if opn >= 0 => {
 					let addr = match addr {
 						IrSrc::Const(IrConst { val, .. }) => Some((val, [None, None, None])),
 						IrSrc::Reg(r)                     => self.consts.get(&r).copied(),
 						_                                 => None,
 					};
 
+
 					if let Some((addr, srcs)) = addr {
+						let addr = EA::unresolved(addr as usize);
+
 						return Some(ConstAddr {
 							bbid: self.func.bbs[self.bbidx].real_bbid,
 							ea: inst.ea(),
 							opn: opn as usize,
-							addr: VA(addr as usize),
+							addr,
 							val,
 							access,
 							srcs,

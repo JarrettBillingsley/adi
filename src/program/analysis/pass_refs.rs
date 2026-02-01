@@ -40,9 +40,9 @@ impl Program {
 
 							if op.has_addr() {
 								// AFAIK this can only happen for control flow instructions. the
-								// loop over explicit_successors below SHOUUUULD handle them... but
-								// in case some non-control instruction slipped in here, let's put
-								// an assert here.
+								// loop over explicit_successors below SHOUUUULD handle them... in
+								// case some non-control instruction slipped in here, let's put an
+								// assert here.
 								assert!(inst.is_control());
 							}
 						}
@@ -74,10 +74,10 @@ impl Program {
 					Call | Cond | Uncond => {
 						let target_ea = self.resolve_control_flow_target(
 							inst.control_target().unwrap(), state, func.id(), &mut funcs);
+						refs.push((inst.ea(), target_ea));
 
 						if target_ea.is_resolved() {
 							trace!("Call|Cond|Uncond at {} to {}", src, target_ea);
-							refs.push((inst.ea(), target_ea));
 						} else {
 							trace!("Call|Cond|Uncond at {} to unresolved EA {}", src, target_ea);
 						}
