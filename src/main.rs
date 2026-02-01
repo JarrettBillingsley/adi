@@ -596,7 +596,7 @@ fn show_segment(prog: &Program, segid: SegId) {
 	}
 }
 
-const UNK_SIZE_CUTOFF: usize = 512;
+const UNK_SIZE_CUTOFF: usize = 128;
 const UNK_STRIDE: usize = 16;
 
 fn show_unk(prog: &Program, span: &Span) {
@@ -888,7 +888,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		prog.inst_print(inst, state, &mut output).unwrap();
 
 		// Outrefs
-		if let Some(or) = prog.get_outrefs(bb_ea) {
+		if let Some(or) = prog.get_outrefs(inst.ea()) {
 			print!(" {}", ";".green());
 
 			for &r in or {
