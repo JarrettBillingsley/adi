@@ -401,7 +401,7 @@ impl Program {
 		// see if there's already a name here.
 		let base_name = if let Some(name) = self.names.name_for_ea(ea) {
 			name.into()
-		} else if ea.is_invalid() {
+		} else if ea.is_unresolved() {
 			self.generate_name("UNRESOLVED", VA(ea.offs()))
 		} else {
 			// what span is here?

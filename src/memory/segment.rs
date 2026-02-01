@@ -13,20 +13,21 @@ use crate::program::{ DataId };
 // SegId
 // ------------------------------------------------------------------------------------------------
 
-/// newtype for segment IDs. each segment gets a unique ID (index into an array).
+/// newtype for segment IDs. each segment gets a unique ID (index into an array). there is a special
+/// "unresolved" value for use by EAs which cannot be resolved.
 #[derive(Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct SegId(pub u16);
 
 impl SegId {
-	pub fn invalid() -> Self {
+	pub fn unresolved() -> Self {
 		SegId(u16::MAX)
 	}
 
-	pub fn is_invalid(&self) -> bool {
+	pub fn is_unresolved(&self) -> bool {
 		self.0 == u16::MAX
 	}
 
-	pub fn is_valid(&self) -> bool {
+	pub fn is_resolved(&self) -> bool {
 		self.0 != u16::MAX
 	}
 }

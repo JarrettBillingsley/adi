@@ -116,7 +116,7 @@ impl SegCollection {
 	pub fn new() -> Self {
 		let mut ret = Self {
 			segs: vec![
-				Segment::new_with_va(SegId::invalid(), "[UNRESOLVED]", usize::MAX, None,
+				Segment::new_with_va(SegId::unresolved(), "[UNRESOLVED]", usize::MAX, None,
 					Some(VA(0)))
 			],
 			next_seg_id: SegId(0),
@@ -124,7 +124,7 @@ impl SegCollection {
 			seg_id_map: HashMap::new(),
 		};
 
-		ret.seg_id_map.insert(SegId::invalid(), 0);
+		ret.seg_id_map.insert(SegId::unresolved(), 0);
 
 		ret
 	}
@@ -306,12 +306,12 @@ impl Memory {
 
 	/// Same as above, but infallible.
 	pub fn ea_from_va(&self, state: MmuState, va: VA) -> EA {
-		self.ea_for_va(state, va).unwrap_or_else(|| EA::invalid(va.0))
+		self.ea_for_va(state, va).unwrap_or_else(|| EA::unresolved(va.0))
 	}
 
 	/// Gets the VA which corresponds to this EA, if any.
 	pub fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA> {
-		if ea.is_invalid() {
+		if ea.is_unresolved() {
 			Some(VA(ea.offs()))
 		} else {
 			self.mmu.va_for_ea(state, ea)

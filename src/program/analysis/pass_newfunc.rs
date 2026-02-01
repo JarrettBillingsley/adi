@@ -179,7 +179,8 @@ impl Program {
 			}
 			false
 		} else if self.segment_from_ea(ea).is_fake() {
-			trace!("skipping function at invalid EA: {:?}", ea);
+			// TODO: point of interest? calling a function copied into RAM?
+			trace!("skipping function at EA in fake segment: {:?}", ea);
 			false
 		} else {
 			true
@@ -219,7 +220,7 @@ impl Program {
 	fn va_to_ea_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> EA {
 		match self.ea_for_va(state, va) {
 			Some(l) if l.seg() == seg => l,
-			_                         => EA::invalid(va.0)
+			_                         => EA::unresolved(va.0)
 		}
 	}
 }

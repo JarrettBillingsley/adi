@@ -1,9 +1,6 @@
 
 # Yak stack
 
-bbterm EAs are BAD
-irinst EAs are BAD (from those bbterms)
-
 ```
 [TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:0000002C to 0000:00000024
 [TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:0000002E to 0000:00000024
@@ -29,7 +26,7 @@ irinst EAs are BAD (from those bbterms)
 - make const prop build ASTs for constant provenance
 - write IR compilers for the real arches (oof)
 - refactor `Analysis` cause it really seems to be more like "a function's CFG"
-- **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
+- **evaluate uses of `usize/isize`** - I think I should be using `u64/i64` instead in some places
 - **get rid of older "analysis" methods on `Operand`?**
 	- shouldn't really be using them for that stuff anymore...
 - IR stuff

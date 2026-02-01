@@ -205,7 +205,7 @@ impl Program {
 		for target in term.successors_mut() {
 			let old_target = *target;
 
-			if target.is_invalid() {
+			if target.is_unresolved() {
 				*target = self.resolve_target(state, VA(old_target.offs()));
 				// the above *could* still fail!
 				if old_target != *target {

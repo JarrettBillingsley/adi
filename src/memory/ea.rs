@@ -9,13 +9,14 @@ use crate::memory::{ SegId };
 // EA
 // ------------------------------------------------------------------------------------------------
 
-/// A unique location consisting of segment ID and an offset within that Segment. EAs can be valid
-/// or invalid.
+/// A unique location consisting of segment ID and an offset within that Segment. EAs can be
+/// resolved or unresolved.
 ///
-/// A **valid EA** consists of a segment ID and an offset into that segment.
+/// A **resolved EA** consists of a segment ID and an offset into that segment.
 ///
-/// An **invalid EA** has a segment ID of `SegId::invalid()`, and its offset may be a VA which could
-/// not be mapped to a valid EA.
+/// An **unresolved EA** has a segment ID of `SegId::unresolved()`, and its offset may be a VA which
+/// could not be mapped to a known EA. This happens sometimes - not everything can be determined
+/// through static analysis.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct EA(u64);
 
@@ -38,19 +39,19 @@ impl EA {
 		Self(((seg.0 as u64) << SEG_SHIFT) | (offs as u64))
 	}
 
-	/// Make a new invalid EA with the given offset embedded in it. Usually this is a VA.
-	pub fn invalid(offs: usize) -> Self {
-		Self::new(SegId::invalid(), offs)
+	/// Make a new unresolved EA with the given VA embedded in it.
+	pub fn unresolved(offs: usize) -> Self {
+		Self::new(SegId::unresolved(), offs)
 	}
 
-	/// Is this EA invalid?
-	pub fn is_invalid(&self) -> bool {
-		self.seg().is_invalid()
+	/// Is this EA unresolved?
+	pub fn is_unresolved(&self) -> bool {
+		self.seg().is_unresolved()
 	}
 
-	/// Is this EA valid?
-	pub fn is_valid(&self) -> bool {
-		!self.seg().is_invalid()
+	/// Is this EA resolved?
+	pub fn is_resolved(&self) -> bool {
+		!self.seg().is_unresolved()
 	}
 
 	/// The segment ID of this EA.

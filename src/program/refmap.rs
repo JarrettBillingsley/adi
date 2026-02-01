@@ -29,16 +29,20 @@ impl RefMap {
 	}
 
 	/// Add a reference from `src` to `dst`.
+	///
+	/// Panics if `src` is unresolved.
 	pub fn add(&mut self, src: EA, dst: EA) {
-		// invalid dst is fine
-		assert!(!src.is_invalid());
+		// unresolved dst is fine
+		assert!(src.is_resolved());
 		self._add_outref(src, dst);
 		self._add_inref(src, dst);
 	}
 
 	/// Remove a reference.
+	///
+	/// Panics if `src` is unresolved.
 	pub fn remove(&mut self, src: EA, dst: EA) {
-		assert!(!src.is_invalid());
+		assert!(src.is_resolved());
 		self._remove_outref(src, dst);
 		self._remove_inref(src, dst);
 	}
@@ -67,8 +71,10 @@ impl RefMap {
 	}
 
 	/// Get all outrefs from a given EA, or None if there aren't any.
+	///
+	/// Panics if `src` is unresolved.
 	pub fn get_outrefs(&self, src: EA) -> Option<&RefSet> {
-		assert!(!src.is_invalid());
+		assert!(src.is_resolved());
 		self.outrefs.get(&src)
 	}
 

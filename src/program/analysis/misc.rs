@@ -33,7 +33,7 @@ impl Program {
 		}
 
 		// now we have to split the existing bb. first, let's make sure that `start` points to the
-		// beginning of an instruction, because otherwise we'd be jumping to an invalid EA.
+		// beginning of an instruction, because otherwise we'd be jumping to an invalid address.
 		let idx = match old_bb.last_instr_before(start) {
 			Some(idx) => idx,
 			None => {
@@ -84,12 +84,12 @@ impl Program {
 		new_bbid
 	}
 
-	/// Given an MMU state and a target VA, return either the valid EA for it; or an invalid EA
+	/// Given an MMU state and a target VA, return either the valid EA for it; or an unresolved EA
 	/// with the target VA as its offset.
 	pub(super) fn resolve_target(&self, state: MmuState, target: VA) -> EA {
 		match self.ea_for_va(state, target) {
 			Some(l) => l,
-			None    => EA::invalid(target.0),
+			None    => EA::unresolved(target.0),
 		}
 	}
 

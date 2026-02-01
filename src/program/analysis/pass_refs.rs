@@ -75,11 +75,11 @@ impl Program {
 						let target_ea = self.resolve_control_flow_target(
 							inst.control_target().unwrap(), state, func.id(), &mut funcs);
 
-						if target_ea.is_valid() {
+						if target_ea.is_resolved() {
 							trace!("Call|Cond|Uncond at {} to {}", src, target_ea);
 							refs.push((inst.ea(), target_ea));
 						} else {
-							trace!("Call|Cond|Uncond at {} to invalid EA {}", src, target_ea);
+							trace!("Call|Cond|Uncond at {} to unresolved EA {}", src, target_ea);
 						}
 					}
 					_ => {}
@@ -102,7 +102,7 @@ impl Program {
 						*target, state, bb.func(), &mut funcs);
 
 					// hm.
-					assert!(target_ea.is_valid());
+					assert!(target_ea.is_resolved());
 					refs.push((inst.ea(), target_ea));
 
 					OpInfo::Ref {
@@ -132,7 +132,7 @@ impl Program {
 		&self, va: VA, state: MmuState, func_id: FuncId, funcs: &mut Vec<(EA, MmuState)>) -> EA{
 		let target_ea = self.resolve_target(state, va);
 
-		if target_ea.is_valid() {
+		if target_ea.is_resolved() {
 			use SpanKind::*;
 			let should_push = match self.span_at_ea(target_ea).kind() {
 				Unk => true,

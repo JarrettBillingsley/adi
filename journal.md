@@ -288,3 +288,21 @@ Right now the srcs are just listed saying "this const was made from these other 
 The only way to know that is by representing the provenance of each constant as an AST.
 
 Right now the way the const prop algo works is by computing the value (`val`) and remembering where it came from (`srcs`). But it could be instead changed to **having a parallel AST where each `Info::Some` just holds an AST node index;** the node would then contain the computed `val` and its children represent how that value was calculated.
+
+---
+
+## Is it a problem to have EAs as `BBTerm` fields?
+
+Well, I was originally thinking:
+
+1. "it's impossible to map from VA to EA until after doing state change analysis, so doing VA -> EA mapping during the new function pass seems premature"
+2. "it's annoying having a special invalid value for EAs"
+
+*But...*
+
+1. The new func pass doesn't really try to do VA -> EA mapping *except within the current segment.* Since we're assuming most/all code doesn't swap out its own segment, that's safe.
+2. The more I think about it, the more I realize "invalid" **isn't a good name for that kind of EA.** The way it's stringified is more accurate: it's **unresolved.** So my bias against this "weird invalid EA" is probably more rooted in the name than anything.
+	- Unresolved EAs are also *totally* possible to have in the final, fully-analyzed code!
+	- Not everything can be statically determined! An unresolved EA is *something for the user to look into, a point of interest, not a mistake.*
+
+So.
