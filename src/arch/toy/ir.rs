@@ -53,15 +53,23 @@ fn reg_to_ir_reg(reg: Reg) -> IrReg {
 }
 
 fn inst_reg(i: &Instruction, op: usize) -> Reg {
-	decode_reg(i.ops()[op].reg() as u8)
+	let reg = match i.ops()[op] {
+		Operand::Reg(r) => r,
+		Operand::Indir(MemIndir::Reg { reg: r }, ..) => r,
+		_ => panic!("not a register operand"),
+	};
+
+	decode_reg(reg as u8)
 }
 
 fn inst_addr(i: &Instruction, op: usize) -> VA {
-	i.ops()[op].addr()
+	let Operand::Mem(va, _) = i.ops()[op] else { panic!("not a memory operand"); };
+	va
 }
 
 fn inst_imm(i: &Instruction) -> u8 {
-	i.ops()[1].uimm() as u8
+	let Operand::UImm(uimm, _) = i.ops()[1] else { panic!("not a uimm operand"); };
+	uimm as u8
 }
 
 impl InstDesc {

@@ -22,7 +22,7 @@ pub enum MemIndir {
 // Operand
 // ------------------------------------------------------------------------------------------------
 
-/// Instruction operands.
+/// Instruction operands. These are mostly used for printing instructions and converting them to IR.
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
 #[display("{:?}")]
 pub enum Operand {
@@ -42,70 +42,6 @@ pub enum Operand {
 impl Default for Operand {
 	fn default() -> Self {
 		Operand::Reg(0)
-	}
-}
-
-impl Operand {
-	/// Does this refer to a register?
-	pub fn is_reg(&self) -> bool {
-		matches!(self, Operand::Reg(..))
-	}
-
-	/// Is this an immediate value (but NOT a memory address)?
-	pub fn is_imm(&self) -> bool {
-		matches!(self, Operand::UImm(..) | Operand::SImm(..))
-	}
-
-	/// Does this operand access memory?
-	pub fn is_mem(&self) -> bool {
-		self.access().is_some()
-	}
-
-	/// Does this operand have a hard-coded address?
-	pub fn has_addr(&self) -> bool {
-		matches!(self, Operand::Mem(..))
-	}
-
-	/// How, if any way, does this operand access memory?
-	pub fn access(&self) -> Option<MemAccess> {
-		use Operand::*;
-		match self {
-			Mem(_, a) | Indir(_, a) => Some(*a),
-			_                       => None,
-		}
-	}
-
-	/// If `access` is Some (`is_mem` returns true), get the address it refers to; panics otherwise.
-	pub fn addr(&self) -> VA {
-		match self {
-			Operand::Mem(va, _) => *va,
-			_ => panic!("not a memory operand"),
-		}
-	}
-
-	/// If this is an unsigned immediate value, get it as an unsigned number; panics otherwise.
-	pub fn uimm(&self) -> u64 {
-		match self {
-			Operand::UImm(i, ..) => *i,
-			_ => panic!("not an immediate operand"),
-		}
-	}
-
-	/// If this is a signed immediate value, get it as a signed number; panics otherwise.
-	pub fn simm(&self) -> i64 {
-		match self {
-			Operand::SImm(i, ..) => *i,
-			_ => panic!("not an immediate operand"),
-		}
-	}
-
-	/// If this is register, get it; panics otherwise.
-	pub fn reg(&self) -> u8 {
-		match self {
-			Operand::Reg(r) => *r,
-			Operand::Indir(MemIndir::Reg { reg: r }, ..) => *r,
-			_ => panic!("not a register operand"),
-		}
 	}
 }
 

@@ -18,7 +18,18 @@
 - **write IR compilers for the real arches (oof)**
 - refactor `Analysis` cause it really seems to be more like "a function's CFG"
 - **evaluate uses of `usize/isize`** - I think I should be using `u64/i64` instead in some places
-- **get rid of older "analysis" methods on `Operand`?**
+	- well indexing slices `s[i]` requires `i` to be `usize`, I think anything related to accessing the underlying data should be `usize`.
+	- also I think it might be good to have type aliases like IDA's `addr_t` for `u64` (and an equivalent `i64`... `delta_t`? `offs_t`?)
+		- this way it's clear when something is referring to "a big unsigned int" vs. "an abstract address/offset from an address"
+	- offenders:
+		- `VA`
+		- `EA` (multiple methods/impls)
+		- `Segment::size`
+		- `SpanMap`
+		- `Memory::len`
+		- `Memory::fmt_addr`
+		- `ImageSlice<usize>`
+		- `ImageSliceable<usize>`
 - IR stuff
 	- should IrFunction hold a ref to the owning function to prevent issues like modifying a function and then using the outdated IR?
 	- apply results of const prop to the IR? rewrite it?

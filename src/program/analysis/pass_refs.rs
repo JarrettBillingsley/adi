@@ -3,7 +3,7 @@ use std::iter::{ IntoIterator };
 
 use log::*;
 
-use crate::program::{ InstructionKind, Program, FuncId, OpInfo, BBId };
+use crate::program::{ InstructionKind, Program, FuncId, Operand, OpInfo, BBId };
 use crate::memory::{ SpanKind, VA, EA, MmuState };
 
 // ------------------------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ impl Program {
 						OpInfo::None => {
 							let op = inst.get_op(i);
 
-							if op.has_addr() {
+							if matches!(op, Operand::Mem(..)) {
 								// AFAIK this can only happen for control flow instructions. the
 								// loop over explicit_successors below SHOUUUULD handle them... in
 								// case some non-control instruction slipped in here, let's put an
