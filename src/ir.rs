@@ -690,32 +690,26 @@ impl IrBasicBlock {
 		}
 
 		// unwraps below are safe because of the above check.
-		match self.insts.last().unwrap().kind() {
-			IrInstKind::Call { .. } | IrInstKind::ICall { .. } => {
-				// boy I wish I could abstract these two nearly identical pieces of code out
-				// into a closure! too bad it's basically fuckin impossible
+		let (is_call, regs) = match self.insts.last().unwrap().kind() {
+			IrInstKind::Call { .. } |
+			IrInstKind::ICall { .. } => (true, Some(arg_regs)),
+			IrInstKind::Ret { .. }   => (false, Some(ret_regs)),
+			_                        => (false, None),
+		};
+
+		if let Some(regs) = regs {
+			if regs.len() > 0 {
 				let old_inst = self.insts.pop().unwrap();
 				let ea = old_inst.ea();
 
-				for &reg in arg_regs.iter() {
+				for &reg in regs.iter() {
 					self.insts.push(IrInst::use_(ea, reg));
 				}
 
 				self.insts.push(old_inst);
-				true
 			}
-			IrInstKind::Ret { .. } => {
-				let old_inst = self.insts.pop().unwrap();
-				let ea = old_inst.ea();
-
-				for &reg in ret_regs.iter() {
-					self.insts.push(IrInst::use_(ea, reg));
-				}
-
-				self.insts.push(old_inst);
-				false
-			}
-			_ => false,
 		}
+
+		is_call
 	}
 }

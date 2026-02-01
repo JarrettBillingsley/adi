@@ -161,6 +161,10 @@ impl INameLookup for DummyLookup {
 			_      => None,
 		}
 	}
+
+	fn lookup_ea(&self, addr: EA) -> Option<String> {
+		None
+	}
 }
 
 #[test]

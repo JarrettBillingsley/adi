@@ -7,7 +7,7 @@ use std::fmt::{
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{ MmuState, VA, Instruction, Radix, Operand, OpInfo };
+use crate::{ MmuState, VA, EA, Instruction, Radix, Operand, OpInfo };
 
 /// Convenient alias for the `Result` type used by `std::fmt::Write`'s methods, and by extension
 /// many of the printing methods in this library.
@@ -143,6 +143,7 @@ impl IPrintOutput for AnsiConsolePrintOutput {
 /// Trait to abstract the process of looking up names of addresses.
 pub trait INameLookup {
 	fn lookup(&self, state: MmuState, addr: VA) -> Option<String>;
+	fn lookup_ea(&self, ea: EA) -> String;
 }
 
 /// A dummy struct that implements `INameLookup` whose `lookup` method always returns `None`.
@@ -151,6 +152,10 @@ pub struct NullLookup;
 impl INameLookup for NullLookup {
 	fn lookup(&self, _state: MmuState, _addr: VA) -> Option<String> {
 		None
+	}
+
+	fn lookup_ea(&self, ea: EA) -> String {
+		format!("{:?}", ea)
 	}
 }
 
@@ -209,6 +214,11 @@ impl<'i, 'l, 's> PrinterCtx<'i, 'l, 's> {
 	/// If no useful name exists, returns `None`.
 	pub fn name_of_va(&self, va: VA) -> Option<String> {
 		self.lookup.lookup(self.mmu_state, va)
+	}
+
+	/// Gets the name of an EA.
+	pub fn name_of_ea(&self, ea: EA) -> String {
+		self.lookup.lookup_ea(ea)
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -414,8 +424,16 @@ pub trait IPrinter {
 				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
 				self.print_va(ctx, *target)
 			}
-			OpInfo::Ref { target: _, delta: _, info: _ } => {
-				ctx.style_symbol(&|ctx| write!(ctx, "TODO!!!"))
+			OpInfo::Ref { target, delta, info: _ } => {
+				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
+				self.print_ea(ctx, *target)?;
+
+				if *delta != 0 {
+					ctx.style_symbol(&|ctx| write!(ctx, " + "))?;
+					self.print_int_no_radix(ctx, *delta as i64)?;
+				}
+
+				Ok(())
 			}
 		}
 	}
@@ -498,5 +516,12 @@ pub trait IPrinter {
 		} else {
 			self.print_raw_va(ctx, va)
 		}
+	}
+
+	/// If the referenced `ea` has a name (which is discovered through `ctx`), prints that;
+	/// otherwise, prints the raw address (with [`print_raw_ea`]).
+	fn print_ea(&self, ctx: &mut PrinterCtx, ea: EA) -> FmtResult {
+		let name = ctx.name_of_ea(ea);
+		ctx.style_refname(&|ctx| ctx.write_str(&name))
 	}
 }

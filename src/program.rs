@@ -474,6 +474,10 @@ impl INameLookup for Program {
 	fn lookup(&self, state: MmuState, addr: VA) -> Option<String> {
 		Some(self.name_of_va(state, addr))
 	}
+
+	fn lookup_ea(&self, ea: EA) -> String {
+		self.name_of_ea(ea)
+	}
 }
 
 fn va_range_to_ea_range(range: impl RangeBounds<VA>, f: impl Fn(VA) -> EA)

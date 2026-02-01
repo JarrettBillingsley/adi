@@ -1,25 +1,23 @@
 
 # Yak stack
 
-- BBs should allow *multiple* states
 
 # Tasks!
 
-- refactor `Analysis` cause it really seems to be more like "a function's CFG"
 - refs pass needs to be updated to take `OpInfo` into account
 	- it also needs to notify any referenced functions of the MMU state flowing into them...
-- make const prop build ASTs for constant provenance
-- write IR compilers for the real arches (oof)
-- **FUNCTION SPLITTING:** is the predecessor BB to the new entrypoint marked as fallthrough/jump?
-- **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
-- **get rid of older "analysis" methods on `Operand`?**
-	- shouldn't really be using them for that stuff anymore...
 - Analysis priority
 	- it's something that bounced around in my head and then I saw that IDA explicitly does this
 	- diff analysis phases have priorities over others
 		- so e.g. "finding new code" takes precedence over "argument/retval analysis"
 	- this makes sense cause some of the later phases do better work with more information made available from earlier phases
 	- IDA implements it by having a different queue for each phase, and (presumably) taking the next action item from the highest-priority queue first
+- make const prop build ASTs for constant provenance
+- write IR compilers for the real arches (oof)
+- refactor `Analysis` cause it really seems to be more like "a function's CFG"
+- **evaluate uses of `usize`** - I think I should be using `u64` instead in some places
+- **get rid of older "analysis" methods on `Operand`?**
+	- shouldn't really be using them for that stuff anymore...
 - IR stuff
 	- should IrFunction hold a ref to the owning function to prevent issues like modifying a function and then using the outdated IR?
 	- apply results of const prop to the IR? rewrite it?
@@ -29,7 +27,8 @@
 			- could this trigger another round of const prop? hmmmm
 			- how would this interact with the constant provenance AST?
 		- **I'm not sure this is a good idea** -
-	- IR DSE (dead store elim - eyyy there's some commented-out code at the bottom of `ssa.rs`!), which kinda also depends on:
+	- IR DSE (dead store elim - eyyy there's some commented-out code at the bottom of `ssa.rs`!)
+		- since we have those special IR `<return>` values, any
 	- bottom-up function argument/return value/clobber list determination to prune down the number of `use()` and `= <return>` IR instructions around `call` and `ret` IR instructions
 		- use of SSA gen 0 vars indicate arguments
 		- *caller's* use of `<return>` values indicate *callee's* return(s)
@@ -80,11 +79,18 @@
 		- `Single(state)` if the MMU is in just one state
 		- `Multi(Vec<MmuState>)` if the MMU could be one of many states?
 		- how to deal with functions for which the MMU state can be multiple possibilities?
-	- what does `StateChange::Maybe` *mean?*
-		- like under what circumstances would that happen?
-		- and what would you do to handle it?
-		- I guess I was anticipating this as being useful for indirect stores, but on SM83/Z80 that's like, 98% of all stores, so not terribly useful.
-		- well.. **I guess it's for cases like "store into `0x1FF0 + x` where `0x2000` is an MMIO reg, so *maybe* it gets written and *maybe* it doesn't.** I think that's it.
+		- this would have a pretty big knock-on effect... lots of things depend on a BB's state
+			- VA => EA translation
+				- with multiple states, one VA could refer to:
+					- a single EA (where state doesn't matter)
+					- a single EA (where state *does* matter but every state maps to same EA)
+					- multiple EAs
+				- and consequently function discovery during refs pass
+					- it'd be wonderful for that! dynamic dispatch to multiple functions across multiple banks at the same VA...
+			- name lookup
+				- and consequently instruction printing...
+			- state change analysis
+				- which actually would handle this just fine already, it's written for it
 	- GB arch handling of operands is... messy
 		- you've got `GBOpKind` that says how to *decode* any explicit operands; indirectly based on that, you've got the actual operands in the instruction; and then you've got `SynOp` which says how to *display* the instruction, which mixes implied and explicit operands
 		- it's kind of a lot
@@ -93,12 +99,12 @@
 
 - **analysis**
 	- **implied operands**
-		- some of that can come from running the code to see what addresses are actually accessed
+		- IR solves this
 	- **marking functions as "bankswitch functions"**
 		- if it e.g. takes the bank to switch as an argument
 		- ofc user can help with this, but we should be able to identify candidates
 	- **dead-end/invalid control flow back-propagation**
-		- if we hit a dead end, that's a sign that the control flow that got us here is mis-analyzed - maybe an "unconditional conditional branch" or sth
+		- if we hit a dead end, that's a sign that the control flow that got us here is mis-analyzed - maybe an "always-taken conditional branch" or sth
 		- also common with *jump table functions* - right after the call is *not code*
 	- **conditional calls/returns**
 		- 8080/Z80 is fuckin weird and lets you do this??
@@ -122,19 +128,11 @@
 		- if a function makes the stack pointer go *past its return address* then that's a pretty strong signal it's doing something funky, like implementing a jump table
 
 - **arch/platform-specific**
-	- 65xx
+	- **65xx**
 		- MMU doesn't yet handle external RAM
 		- loader incorrectly sets `Image::orig_offs` due to Ines not supporting that
 		- std labels need data item once data is implemented
 		- UXRom linear performance issue
-	- SM83/Z80
-		- in these arches, most memory accesses are done indirectly through registers
-			- e.g. `ld hl, 0xC004`, `ld a, [hl]`
-		- this complicates reference analysis because you have to, like, back-propagate info about how a register is used
-			- that might not be a bad idea... backwards dataflow analysis to say, when it sees `[hl]` as an operand, then `hl` is an address before, so if `hl` (or individually `h` and `l`) is loaded with a constant, that constant is a memory address
-			- even a simple local analysis might yield good results, since that pattern of "load an address, then immediately access it" seems to be super common
-		- oooooh, but then that opens up the possibility of having to do bank change analysis *after* figuring out memory addresses!
-			- which could in turn open up more references... ahaha
 
 ---
 
@@ -172,13 +170,9 @@
 
 ## IR Analysis thoughts
 
-**AAAAAAA SOMETHING TO REMEMBER:** we also have to deal with the fact that **function calls** can modify all our "locals" (registers). Some kind of analysis/annotation may be able to tell us that a function call preserves certain regs, but pessimistically we have to assume that after each call, there is an assignment of some "unknown" value to every reg. (Since calls are already BB terminators, this could be done by inserting an extra BB between a call and its successor which just contains these assignments and falls through to the successor.)
-
-This could be done by having a special IR Src that means "from a call." If any of these variables are actually used, it indicates that the callee has return values; otherwise, they will just be stripped by dead store elimination.
-
 **CONVENIENT THING:** because of the way the algorithm works, after SSA renaming, any variable subscripted with 0 is an argument. So, we don't have to like, assign everything a special value at the beginning of the function.
 
-**SOMETHING ELSE TO CONSIDER:** will we still have "ir branching"? If so, will that be part of the "real" CFG? If not, how will those kinds of instructions (e.g. 68K `movem`, Z80 `ldir`) be represented/handled? (Since they can't cause "real" control flow, maybe they can be represented by just recording their "end-state" effects, like "now BC = 0" etc.)
+**SOMETHING ELSE TO CONSIDER:** how are multi-step instruction (e.g. 68K `movem`, Z80 `ldir`) represented/handled in the IR? Since they can't cause "real" control flow, maybe they can be represented by just recording their "end-state" effects, like "now BC = 0" etc. might be useful to have a "custom" IR instruction type for things like this. I think Sleigh does.
 
 **IMPORTANT:** originally I was thinking paired registers would overlap like in Sleigh, but now I'm going against that. Registers may not overlap in any way in the IR, since overlapping complicates SSA.
 

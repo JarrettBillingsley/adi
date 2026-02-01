@@ -95,6 +95,9 @@ fn toy_test_all_instructions() -> ToyTest {
 
 	b.ret();
 
+	b.org(0x1234);
+	b.ret();
+
 	b.org(0x7FFE);
 	b.movi(Reg::A, 10);
 
@@ -102,6 +105,7 @@ fn toy_test_all_instructions() -> ToyTest {
 		image: b.finish(),
 		name:  "<toy_test_all_instructions>",
 		labels: vec![
+			("indir_func".to_string(), VA(0x1234)),
 			("func".to_string(), VA(0x7FFE)),
 		]
 	}
@@ -373,10 +377,10 @@ fn toy_test_state_change() -> ToyTest {
 }
 
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	// let test = toy_test_all_instructions();
+	let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
 	// let test = toy_test_const_prop();
-	let test = toy_test_calls();
+	// let test = toy_test_calls();
 	// let test = toy_test_loop();
 	// let test = toy_test_state_change();
 

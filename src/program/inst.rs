@@ -122,16 +122,16 @@ pub enum OpInfo {
 	/// No special info associated with it
 	None,
 
-	/// An unresolved memory reference. Refers to a virtual address, but the EA it refers
-	/// to has not yet been determined. Converting this to a `Ref` is done using MMU state info
-	/// determined by the state change pass.
+	/// An unresolved memory reference. Refers to a virtual address, but the EA it refers to has not
+	/// yet been determined. Converting this to a `Ref` is done in the refs pass using MMU state
+	/// info determined by the state change pass.
 	VARef { target: VA, info: RefInfo },
 
 	/// A memory reference. The actual address it points to is `target + delta`.
 	/// `target` is the base address of the thing being pointed to. This way, a memory reference
 	/// can point e.g. into the middle of an array, but be displayed as `arrayname + offset`, where
 	/// `offset` comes from the `delta` field.
-	Ref { target: EA, delta: isize, info: RefInfo },
+	Ref { target: EA, delta: i64, info: RefInfo },
 
 	// TODO: more options here for enum values, struct fields, strings...
 }

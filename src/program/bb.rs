@@ -62,6 +62,8 @@ impl BasicBlock {
 	pub fn term_inst(&self) -> &Instruction { &self.insts.last().unwrap() }
 	/// Its instructions.
 	pub fn insts(&self) -> &[Instruction] { &self.insts }
+	/// Same as above but mutable.
+	pub fn insts_mut(&mut self) -> &mut [Instruction] { &mut self.insts }
 	/// The MMU state at the beginning of this BB.
 	pub fn mmu_state(&self) -> MmuState { self.state }
 	/// The MMU state after running this BB. If this BB ends in a `BBTerm::StateChange`, it
