@@ -142,8 +142,7 @@ impl IMmu for ToyMmu {
 		}
 	}
 
-	// The state is changed by writing to VA 0xFFFF, or by *reading* from VA 0xFFFE. Writing to 0xFFFE
-	// causes a "Maybe" change, just to test that part.
+	// The state is changed by writing to VA 0xFFFF, or by *reading* from VA 0xFFFE.
 	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
 		if load {
 			match va.0 {
@@ -153,7 +152,6 @@ impl IMmu for ToyMmu {
 		}
 		else {
 			match (va.0, val) {
-				(0xFFFE, _)         => StateChange::Maybe,
 				(0xFFFF, Some(val)) => state.change(MmuState::from_u64(val & STATE_MASK)),
 				(0xFFFF, None)      => StateChange::Dynamic,
 				_                   => StateChange::None,

@@ -1,35 +1,24 @@
 
 # Yak stack
 
-```
-[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:0000002C to 0000:00000024
-[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:0000002E to 0000:00000024
-[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000030 to 0000:00000024
-[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000032 to 0000:00000024
-[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000034 to 0000:00000037
-[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000037 to 0000:00007FFE
-[TRACE] [src/program/analysis/pass_refs.rs:50] VARef at 0000:0000003A to 32768
-[TRACE] [src/program/analysis/pass_refs.rs:50] VARef at 0000:0000003F to 32768
-[TRACE] [src/program/analysis/pass_refs.rs:50] VARef at 0000:00000048 to 4660
-```
+
 
 # Tasks!
 
 - generating "name + delta" output is a little more subtle than my first attempt
-- refs pass needs to be updated to take `OpInfo` into account
-	- it also needs to notify any referenced functions of the MMU state flowing into them...
+- refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
+	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
 - Analysis priority
 	- it's something that bounced around in my head and then I saw that IDA explicitly does this
 	- diff analysis phases have priorities over others
 		- so e.g. "finding new code" takes precedence over "argument/retval analysis"
 	- this makes sense cause some of the later phases do better work with more information made available from earlier phases
 	- IDA implements it by having a different queue for each phase, and (presumably) taking the next action item from the highest-priority queue first
-- make const prop build ASTs for constant provenance
-- write IR compilers for the real arches (oof)
+- **make const prop build ASTs for constant provenance**
+- **write IR compilers for the real arches (oof)**
 - refactor `Analysis` cause it really seems to be more like "a function's CFG"
 - **evaluate uses of `usize/isize`** - I think I should be using `u64/i64` instead in some places
 - **get rid of older "analysis" methods on `Operand`?**
-	- shouldn't really be using them for that stuff anymore...
 - IR stuff
 	- should IrFunction hold a ref to the owning function to prevent issues like modifying a function and then using the outdated IR?
 	- apply results of const prop to the IR? rewrite it?
@@ -38,14 +27,14 @@
 		- **questions:**
 			- could this trigger another round of const prop? hmmmm
 			- how would this interact with the constant provenance AST?
-		- **I'm not sure this is a good idea** -
-	- IR DSE (dead store elim - eyyy there's some commented-out code at the bottom of `ssa.rs`!)
-		- since we have those special IR `<return>` values, any
+		- **I'm not sure this is a good idea** - the IR isn't meant to stick around and const prop really does const folding *and* copy propagation simultaneously, so I don't think there's much more to gain by rewriting other than making some code slightly nicer looking while complicating the idea of the
+	- IR DSE (dead store elim) - started on it in `ssa.rs`, see notes below
 	- bottom-up function argument/return value/clobber list determination to prune down the number of `use()` and `= <return>` IR instructions around `call` and `ret` IR instructions
 		- use of SSA gen 0 vars indicate arguments
 		- *caller's* use of `<return>` values indicate *callee's* return(s)
 		- use of non-gen-0 before `ret` indicates clobbers
-	- ooh! stack tracking! yeah that'll also help improve data flow analysis
+		- see more notes below
+	- ooh! **stack tracking!** yeah that'll also help improve data flow analysis
 - modifying functions
 	- removing BBs (mis-analyzed code e.g. after a switch jump or a no-return call)
 	- adding BBs

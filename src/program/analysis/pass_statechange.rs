@@ -84,18 +84,10 @@ impl Program {
 					let addr = VA(addr.offs());
 
 					match self.mem.state_change(old_state, addr, val, load) {
-						StateChange::None              => {
+						StateChange::None => {
 							trace!("  no state change at {}", ea);
-
-						} // no change
-						StateChange::Maybe             => {
-							trace!("  found a maybe state change at {}", ea);
-							// TODO: log this as a point of interest for user to investigate
-							// TODO: also is this even possible in this new model? Maybe was for
-							// the old model where the state change looked at the macro-instruction.
-							// here, we know exactly what address is being used.
 						}
-						StateChange::Dynamic           => {
+						StateChange::Dynamic => {
 							trace!("  found a dynamic state change at {}", ea);
 							// TODO: log this as a point of interest for user to investigate
 						}

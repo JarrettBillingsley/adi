@@ -344,8 +344,6 @@ impl Instruction {
 		assert!(i < self.num_ops as usize);
 		&self.opinfo[i]
 	}
-	// TODO: these mutable accessors might be problematic if there are OpInfo kinds which
-	// are meant to be "internal-only"...
 	/// Mutable accessor for operand info.
 	pub fn get_opinfo_mut(&mut self, i: usize) -> &mut OpInfo {
 		assert!(i < self.num_ops as usize);
