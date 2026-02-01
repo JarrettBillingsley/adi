@@ -2,9 +2,6 @@
 Here is a template for an empty architecture. GO NUTS
 
 ```rust
-//! This is a toy architecture for an imaginary CPU. It exists to make it easier
-//! to write tests. It is not stable and can change at any time.
-
 use crate::program::{
 	// MemAccess,
 	// MemIndir,
@@ -27,9 +24,9 @@ use crate::memory::{ Memory, MmuState, Endian, EA, VA };
 // Disassembler
 // ------------------------------------------------------------------------------------------------
 
-pub struct ToyDisassembler;
+pub struct ARCH_NAME_HERE_Disassembler;
 
-impl IDisassembler for ToyDisassembler {
+impl IDisassembler for ARCH_NAME_HERE_Disassembler {
 	fn disas_instr(&self, _img: &[u8], _state: MmuState, va: VA, ea: EA)
 	-> DisasResult<Instruction> {
 		Err(DisasError::unknown_instruction(va, ea))
@@ -41,15 +38,15 @@ impl IDisassembler for ToyDisassembler {
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Copy, Clone)]
-pub struct ToyPrinter;
+pub struct ARCH_NAME_HERE_Printer;
 
-impl ToyPrinter {
+impl ARCH_NAME_HERE_Printer {
 	pub fn new() -> Self {
 		Self { }
 	}
 }
 
-impl IPrinter for ToyPrinter {
+impl IPrinter for ARCH_NAME_HERE_Printer {
 	fn fmt_mnemonic(&self, _i: &Instruction) -> String {
 		"".into()
 	}
@@ -63,15 +60,15 @@ impl IPrinter for ToyPrinter {
 // Interpreter (dummied out)
 // ------------------------------------------------------------------------------------------------
 
-pub struct ToyInterpreter;
+pub struct ARCH_NAME_HERE_Interpreter;
 
-impl ToyInterpreter {
+impl ARCH_NAME_HERE_Interpreter {
 	fn new() -> Self {
 		Self {}
 	}
 }
 
-impl IInterpreter for ToyInterpreter {
+impl IInterpreter for ARCH_NAME_HERE_Interpreter {
 	fn reset(&mut self) {}
 
 	fn interpret_bb(&mut self, _mem: &Memory, _bb: &BasicBlock, _state: Option<MmuState>)
@@ -88,13 +85,13 @@ impl IInterpreter for ToyInterpreter {
 // Architecture
 // ------------------------------------------------------------------------------------------------
 
-pub struct ToyArchitecture;
+pub struct ARCH_NAME_HERE_Architecture;
 
-impl IArchitecture for ToyArchitecture {
+impl IArchitecture for ARCH_NAME_HERE_Architecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
-	fn new_disassembler(&self) -> Disassembler { ToyDisassembler.into() }
-	fn new_printer     (&self) -> Printer      { ToyPrinter::new().into() }
-	fn new_interpreter (&self) -> Interpreter  { ToyInterpreter::new().into() }
+	fn new_disassembler(&self) -> Disassembler { ARCH_NAME_HERE_Disassembler.into() }
+	fn new_printer     (&self) -> Printer      { ARCH_NAME_HERE_Printer::new().into() }
+	fn new_interpreter (&self) -> Interpreter  { ARCH_NAME_HERE_Interpreter::new().into() }
 }
 ```
