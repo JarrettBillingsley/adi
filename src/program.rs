@@ -135,6 +135,8 @@ impl Program {
 		self.mem.image_segs_iter().map(|s| s.id())
 	}
 
+	/// Tries to get the MMU state at a given EA. MMU states are only defined for code, so if the
+	/// given EA doesn't refer to a byte inside a basic block, returns `None`.
 	pub fn mmu_state_at(&self, ea: EA) -> Option<MmuState> {
 		let span = self.span_at_ea(ea);
 
@@ -389,12 +391,15 @@ impl Program {
 	}
 
 	/// Gets the name of a given EA if one exists, or generates one if not.
-	pub fn name_of_ea(&self, ea: EA) -> String {
+	pub fn name_of_ea(&self, given_ea: EA) -> String {
 		// TODO: uhhhh Functions and DataItems have their own name fields. how does
 		// that interact with this? (should they even have name fields?)
 
+		// find the EA of the span that covers this EA... which might be different (see end)
+		let ea = self.span_at_ea(given_ea).start();
+
 		// see if there's already a name here.
-		if let Some(name) = self.names.name_for_ea(ea) {
+		let base_name = if let Some(name) = self.names.name_for_ea(ea) {
 			name.into()
 		} else if ea.is_invalid() {
 			self.generate_name("UNRESOLVED", VA(ea.offs()))
@@ -428,6 +433,14 @@ impl Program {
 					// no name, so name it "SEGNAME_loc_0C30"
 					self.generate_name(&seg.name(), va),
 			}
+		};
+
+		if ea == given_ea {
+			base_name
+		} else {
+			assert!(given_ea.offs() > ea.offs());
+			let delta = given_ea.offs() - ea.offs();
+			format!("{} + {}", base_name, delta)
 		}
 	}
 

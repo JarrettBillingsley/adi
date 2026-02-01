@@ -424,16 +424,9 @@ pub trait IPrinter {
 				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
 				self.print_va(ctx, *target)
 			}
-			OpInfo::Ref { target, delta, info: _ } => {
+			OpInfo::Ref { target, info: _ } => {
 				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
-				self.print_ea(ctx, *target)?;
-
-				if *delta != 0 {
-					ctx.style_symbol(&|ctx| write!(ctx, " + "))?;
-					self.print_int_no_radix(ctx, *delta as i64)?;
-				}
-
-				Ok(())
+				self.print_ea(ctx, *target)
 			}
 		}
 	}

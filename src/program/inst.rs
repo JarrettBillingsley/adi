@@ -127,11 +127,8 @@ pub enum OpInfo {
 	/// info determined by the state change pass.
 	VARef { target: VA, info: RefInfo },
 
-	/// A memory reference. The actual address it points to is `target + delta`.
-	/// `target` is the base address of the thing being pointed to. This way, a memory reference
-	/// can point e.g. into the middle of an array, but be displayed as `arrayname + offset`, where
-	/// `offset` comes from the `delta` field.
-	Ref { target: EA, delta: i64, info: RefInfo },
+	/// A memory reference to `target`. This might not actually be the beginning of something.
+	Ref { target: EA, info: RefInfo },
 
 	// TODO: more options here for enum values, struct fields, strings...
 }

@@ -1,6 +1,20 @@
 
 # Yak stack
 
+bbterm EAs are BAD
+irinst EAs are BAD (from those bbterms)
+
+```
+[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:0000002C to 0000:00000024
+[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:0000002E to 0000:00000024
+[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000030 to 0000:00000024
+[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000032 to 0000:00000024
+[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000034 to 0000:00000037
+[TRACE] [src/program/analysis/pass_refs.rs:79] Call|Cond|Uncond at 0000:00000037 to 0000:00007FFE
+[TRACE] [src/program/analysis/pass_refs.rs:50] VARef at 0000:0000003A to 32768
+[TRACE] [src/program/analysis/pass_refs.rs:50] VARef at 0000:0000003F to 32768
+[TRACE] [src/program/analysis/pass_refs.rs:50] VARef at 0000:00000048 to 4660
+```
 
 # Tasks!
 

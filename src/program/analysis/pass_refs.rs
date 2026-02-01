@@ -80,7 +80,6 @@ impl Program {
 							refs.push((inst.ea(), target_ea));
 						} else {
 							trace!("Call|Cond|Uncond at {} to invalid EA {}", src, target_ea);
-
 						}
 					}
 					_ => {}
@@ -108,11 +107,6 @@ impl Program {
 
 					OpInfo::Ref {
 						target: target_ea,
-						// I don't think we can necessarily know the delta yet. this may be a
-						// reference to the middle of some unknown span; calculating the delta will
-						// cause it to get out of sync with the actual span map as more stuff is
-						// explored in the future.
-						delta: 0,
 						info: *info,
 					}
 				}
