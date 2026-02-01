@@ -15,6 +15,7 @@
 
 # Tasks!
 
+- generating "name + delta" output is a little more subtle than my first attempt
 - refs pass needs to be updated to take `OpInfo` into account
 	- it also needs to notify any referenced functions of the MMU state flowing into them...
 - Analysis priority

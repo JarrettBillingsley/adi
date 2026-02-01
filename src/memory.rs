@@ -94,9 +94,56 @@ impl MemAccess {
 		((*self as u8) & W_BIT) != 0
 	}
 
+	/// Is this an offset?
+	pub fn is_offset(&self) -> bool {
+		((*self as u8) & O_BIT) != 0
+	}
+
 	/// Is this a control flow target?
 	pub fn is_target(&self) -> bool {
 		((*self as u8) & T_BIT) != 0
+	}
+}
+
+impl Display for MemAccess {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use MemAccess::*;
+		match self {
+			// technically these could be handled by the default case but let's common-case
+			// fast-path them cause "mixed" mem accesses are likely to be rare
+			R      => write!(f, "READ"),
+			W      => write!(f, "WRITE"),
+			Offset => write!(f, "OFFSET"),
+			Target => write!(f, "TARGET"),
+			_ => {
+				// 2 or more bits set
+				let mut first = true;
+
+				if self.reads_mem() {
+					write!(f, "READ")?;
+					first = false;
+				}
+
+				if self.writes_mem() {
+					if !first { write!(f, "+")?; }
+					write!(f, "WRITE")?;
+					first = false;
+				}
+
+				if self.is_offset() {
+					if !first { write!(f, "+")?; }
+					write!(f, "OFFSET")?;
+					first = false;
+				}
+
+				if self.is_target() {
+					if !first { write!(f, "+")?; }
+					write!(f, "TARGET")?;
+				}
+
+				Ok(())
+			}
+		}
 	}
 }
 

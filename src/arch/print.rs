@@ -420,12 +420,12 @@ pub trait IPrinter {
 	fn print_mem_opinfo(&self, ctx: &mut PrinterCtx, i: usize) -> FmtResult {
 		match ctx.get_opinfo(i) {
 			OpInfo::None => Ok(()),
-			OpInfo::VARef { target, info: _ } => {
-				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
+			OpInfo::VARef { target, info } => {
+				ctx.style_symbol(&|ctx| write!(ctx, " => {} ", info.access))?;
 				self.print_va(ctx, *target)
 			}
-			OpInfo::Ref { target, info: _ } => {
-				ctx.style_symbol(&|ctx| write!(ctx, " => "))?;
+			OpInfo::Ref { target, info } => {
+				ctx.style_symbol(&|ctx| write!(ctx, " => {} ", info.access))?;
 				self.print_ea(ctx, *target)
 			}
 		}

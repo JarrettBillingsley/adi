@@ -379,10 +379,10 @@ fn toy_test_state_change() -> ToyTest {
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
-	let test = toy_test_const_prop();
+	// let test = toy_test_const_prop();
 	// let test = toy_test_calls();
-	// let test = toy_test_loop();
-	// let test = toy_test_state_change();
+	// let test = toy_test_loop()
+	let test = toy_test_state_change();
 
 	let mut prog = program_from_image(Image::new(test.name, &test.image))?;
 	let state = prog.initial_mmu_state();
@@ -858,6 +858,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		println!("{:20}{}:", "", prog.name_of_ea(bb_ea).truecolor(127, 63, 0));
 	}
 
+	// MMU state
 	println!("{}", format!("; mmu state = {:?}", bb.mmu_state()).green());
 
 	// Instructions
@@ -885,6 +886,16 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		print!("{:>4}:{}  {:8}      ", seg.name().yellow(), addr, bytes.truecolor(63, 63, 255));
 		let mut output = AnsiConsolePrintOutput;
 		prog.inst_print(inst, state, &mut output).unwrap();
+
+		// Outrefs
+		if let Some(or) = prog.get_outrefs(bb_ea) {
+			print!(" {}", ";".green());
+
+			for &r in or {
+				print!(" {}{}", "->".green(), prog.name_of_ea(r).green());
+			}
+		}
+
 		println!();
 	}
 

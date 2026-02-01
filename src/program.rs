@@ -396,7 +396,8 @@ impl Program {
 		// that interact with this? (should they even have name fields?)
 
 		// find the EA of the span that covers this EA... which might be different (see end)
-		let ea = self.span_at_ea(given_ea).start();
+		// TODO: figure out how to do this right
+		let ea = given_ea; //self.span_at_ea(given_ea).start();
 
 		// see if there's already a name here.
 		let base_name = if let Some(name) = self.names.name_for_ea(ea) {
@@ -435,13 +436,15 @@ impl Program {
 			}
 		};
 
-		if ea == given_ea {
-			base_name
-		} else {
-			assert!(given_ea.offs() > ea.offs());
-			let delta = given_ea.offs() - ea.offs();
-			format!("{} + 0x{:X}", base_name, delta)
-		}
+		base_name
+		// TODO: figure out how to do this right
+		// if ea == given_ea {
+		// 	base_name
+		// } else {
+		// 	assert!(given_ea.offs() > ea.offs());
+		// 	let delta = given_ea.offs() - ea.offs();
+		// 	format!("{} + 0x{:X}", base_name, delta)
+		// }
 	}
 
 	/// All (EA, name) pairs in a given range of VAs, in EA order.
