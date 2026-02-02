@@ -1,10 +1,15 @@
 
 # Yak stack
 
-#[allow(clippy::upper_case_acronyms)]
+- writing the IR compiler for Mos65xx
+
+ALSO
+
+- should implement `HLT` opcodes for Mos65xx
 
 # Tasks!
 
+- **write IR compilers for the real arches (oof)**
 - generating "name + delta" output is a little more subtle than my first attempt
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
@@ -15,7 +20,6 @@
 	- this makes sense cause some of the later phases do better work with more information made available from earlier phases
 	- IDA implements it by having a different queue for each phase, and (presumably) taking the next action item from the highest-priority queue first
 - **make const prop build ASTs for constant provenance**
-- **write IR compilers for the real arches (oof)**
 - refactor `Analysis` cause it really seems to be more like "a function's CFG"
 - **evaluate uses of `usize/isize`** - I think I should be using `u64/i64` instead in some places
 	- well indexing slices `s[i]` requires `i` to be `usize`, I think anything related to accessing the underlying data should be `usize`.

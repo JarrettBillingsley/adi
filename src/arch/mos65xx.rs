@@ -13,6 +13,7 @@ use crate::arch::{
 	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
 	IArchitecture,
+	IrCompiler,
 };
 use crate::memory::{ MmuState, Endian, EA, VA };
 
@@ -21,12 +22,14 @@ use crate::memory::{ MmuState, Endian, EA, VA };
 // ------------------------------------------------------------------------------------------------
 
 mod descs;
+mod ir;
 mod opcodes;
 #[cfg(test)]
 mod tests;
 
 use descs::{ lookup_desc };
 use opcodes::{ Opcode };
+pub(crate) use ir::{ Mos65xxIrCompiler };
 
 // ------------------------------------------------------------------------------------------------
 // SyntaxFlavor
@@ -217,6 +220,20 @@ enum Reg {
 impl Reg {
 	fn register_names() -> &'static [&'static str] {
 		&["a", "x", "y", "s", "p"]
+	}
+}
+
+// I think there is a crate that lets you derive this automatically but eh
+impl From<u8> for Reg {
+	fn from(value: u8) -> Self {
+		match value {
+			x if x == (Reg::A as u8) => Reg::A,
+			x if x == (Reg::X as u8) => Reg::X,
+			x if x == (Reg::Y as u8) => Reg::Y,
+			x if x == (Reg::S as u8) => Reg::S,
+			x if x == (Reg::P as u8) => Reg::P,
+			_ => panic!(),
+		}
 	}
 }
 
@@ -565,4 +582,5 @@ impl IArchitecture for Mos65xxArchitecture {
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
+	fn new_ir_compiler (&self) -> IrCompiler   { Mos65xxIrCompiler.into() }
 }

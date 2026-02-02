@@ -34,60 +34,11 @@ pub enum Reg {
 	A, B, C, D, // data regs
 	DC,         // paired reg
 	SP,         // stack ptr
-	NF, ZF, CF, // flag regs
-
-	// temporary regs for the IR
-	Tmp,
-	Tmp16,
-	TmpCF,
 }
 
 impl Reg {
-	/// how many bytes each register takes up
-	const fn byte_size(&self) -> usize {
-		match self {
-			Reg::DC | Reg::SP | Reg::Tmp16 => 2,
-			_ => 1,
-		}
-	}
-
-	/// offset into registers "segment" for the IR
-	const fn offset(&self) -> u16 {
-		match self {
-			Reg::A     => 0,
-			Reg::B     => 1,
-			Reg::C     => 2,
-			Reg::D     => 3,
-			Reg::DC    => panic!(),
-			Reg::SP    => 4,
-			Reg::NF    => 6,
-			Reg::ZF    => 7,
-			Reg::CF    => 8,
-			Reg::Tmp   => 9,
-			Reg::Tmp16 => 10,
-			Reg::TmpCF => 12,
-		}
-	}
-
-	fn name(&self) -> &'static str {
-		match self {
-			Reg::A     => "a",
-			Reg::B     => "b",
-			Reg::C     => "c",
-			Reg::D     => "d",
-			Reg::DC    => "dc",
-			Reg::SP    => "sp",
-			Reg::NF    => "nf",
-			Reg::ZF    => "zf",
-			Reg::CF    => "cf",
-			Reg::Tmp   => "tmp",
-			Reg::Tmp16 => "tmp16",
-			Reg::TmpCF => "tmpcf",
-		}
-	}
-
 	fn register_names() -> &'static [&'static str] {
-		&["a", "b", "c", "d", "dc", "sp", "nf", "zf", "cf", "tmp", "tmp16", "tmpcf"]
+		&["a", "b", "c", "d", "dc", "sp"]
 	}
 }
 

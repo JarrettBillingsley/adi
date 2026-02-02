@@ -27,17 +27,17 @@ impl IIrCompiler for ToyIrCompiler {
 	}
 }
 
-const REG_A:     IrReg = IrReg::reg8(Reg::A.offset());
-const REG_B:     IrReg = IrReg::reg8(Reg::B.offset());
-const REG_C:     IrReg = IrReg::reg8(Reg::C.offset());
-const REG_D:     IrReg = IrReg::reg8(Reg::D.offset());
-const REG_NF:    IrReg = IrReg::reg8(Reg::NF.offset());
-const REG_ZF:    IrReg = IrReg::reg8(Reg::ZF.offset());
-const REG_CF:    IrReg = IrReg::reg8(Reg::CF.offset());
-const REG_TMP:   IrReg = IrReg::reg8(Reg::Tmp.offset());
-const REG_TMP16: IrReg = IrReg::reg16(Reg::Tmp16.offset());
-const REG_TMPCF: IrReg = IrReg::reg8(Reg::TmpCF.offset());
-const REG_SP:    IrReg = IrReg::reg16(Reg::SP.offset());
+const REG_A:     IrReg = IrReg::reg8 (0);
+const REG_B:     IrReg = IrReg::reg8 (1);
+const REG_C:     IrReg = IrReg::reg8 (2);
+const REG_D:     IrReg = IrReg::reg8 (3);
+const REG_SP:    IrReg = IrReg::reg16(4);
+const REG_NF:    IrReg = IrReg::reg8 (6);
+const REG_ZF:    IrReg = IrReg::reg8 (7);
+const REG_CF:    IrReg = IrReg::reg8 (8);
+const REG_TMP:   IrReg = IrReg::reg8 (9);
+const REG_TMP16: IrReg = IrReg::reg16(10);
+const REG_TMPCF: IrReg = IrReg::reg8 (12);
 
 static ARG_REGS: &[IrReg]    = &[ REG_A, REG_B, REG_C, REG_D, REG_NF, REG_ZF, REG_CF ];
 static RETURN_REGS: &[IrReg] = &[ REG_A, REG_B, REG_C, REG_D, REG_SP, REG_NF, REG_ZF, REG_CF ];
@@ -48,7 +48,8 @@ fn reg_to_ir_reg(reg: Reg) -> IrReg {
 		Reg::B  => REG_B,
 		Reg::C  => REG_C,
 		Reg::D  => REG_D,
-		_       => panic!(),
+		Reg::DC => panic!(),
+		Reg::SP => REG_SP,
 	}
 }
 
