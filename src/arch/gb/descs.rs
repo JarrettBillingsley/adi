@@ -7,14 +7,10 @@ use crate::memory::{ MemAccess };
 // ------------------------------------------------------------------------------------------------
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 pub(super) enum Reg {
-	A, F, B, C, D, E, H, L,
+	#[default] A, F, B, C, D, E, H, L,
 	AF, BC, DE, HL, SP,
-}
-
-impl Default for Reg {
-	fn default() -> Reg { Reg::A }
 }
 
 impl Reg {
@@ -28,18 +24,16 @@ impl Reg {
 // MetaOp
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub(super) enum MetaOp {
+	#[default]
 	UNK,
 	ADC,  ADD, AND, BIT, CALL, CCF,  CP,   CPL,
 	DA,   DEC, DI,  EI,  HALT, INC,  JP,   JR,
 	LD,   LDH, NOP, OR,  POP,  PUSH, RES,  RET,
 	RETI, RL,  RLC, RR,  RRC,  RST,  SBC,  SCF,
 	SET,  SLA, SRA, SRL, STOP, SUB,  SWAP, XOR,
-}
-
-impl Default for MetaOp {
-	fn default() -> Self { Self::UNK }
 }
 
 impl MetaOp {
@@ -480,6 +474,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0xFF, RST,  &[Op],                     Call,   Imp), // rst 0x38
 ];
 
+#[allow(clippy::mistyped_literal_suffixes)]
 const INST_DESCS_CB: &[InstDesc] = &[
 	InstDesc(0xCB_00, RLC,  &[Srg(B)],                 Other,  Imp),
 	InstDesc(0xCB_01, RLC,  &[Srg(C)],                 Other,  Imp),

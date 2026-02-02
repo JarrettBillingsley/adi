@@ -70,7 +70,7 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 		for phi in bb.phis() {
 			for arg in phi.args() {
 				// _0 vars aren't gonna be in the defs map, hence this check.
-				if let Some(def) = defs.get_mut(&arg) {
+				if let Some(def) = defs.get_mut(arg) {
 					def.mark_used();
 				}
 			}

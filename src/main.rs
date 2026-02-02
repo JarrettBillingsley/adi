@@ -677,7 +677,7 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 		U8  => interpret_uint(slice.read_u8(0) as u64, 8, radix),
 		U16 => interpret_uint(slice.read_u16(0, endian) as u64, 16, radix),
 		U32 => interpret_uint(slice.read_u32(0, endian) as u64, 32, radix),
-		U64 => interpret_uint(slice.read_u64(0, endian) as u64, 64, radix),
+		U64 => interpret_uint(slice.read_u64(0, endian)       , 64, radix),
 
 		Char  => interpret_char(slice.read_u8(0) as char),
 		WChar => {
@@ -710,7 +710,7 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 		}
 
 		Ptr(pt) => {
-			interpret_data(prog, Radix::Hex, &pt.kind(), slice)
+			interpret_data(prog, Radix::Hex, pt.kind(), slice)
 		}
 
 		StrZ(_len) => unimplemented!(),
@@ -744,7 +744,7 @@ fn interpret_uint(val: u64, bits: usize, radix: Radix) -> String {
 
 fn show_all_funcs(prog: &Program) {
 	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+	funcs.sort_by_key(|a| a.ea());
 
 	for func in funcs {
 		show_func(prog, func);
@@ -753,7 +753,7 @@ fn show_all_funcs(prog: &Program) {
 
 fn show_all_func_cfgs(prog: &Program) {
 	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+	funcs.sort_by_key(|a| a.ea());
 
 	for func in funcs {
 		show_func_cfg(prog, func);
@@ -764,7 +764,7 @@ fn show_func(prog: &Program, func: &Function) {
 	show_func_header(prog, func);
 
 	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
-	bbs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+	bbs.sort_by_key(|a| a.ea());
 
 	for bb in bbs {
 		show_bb(prog, bb);
@@ -775,7 +775,7 @@ fn show_func_cfg(prog: &Program, func: &Function) {
 	show_func_header(prog, func);
 
 	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
-	bbs.sort_by(|a, b| a.ea().cmp(&b.ea()));
+	bbs.sort_by_key(|a| a.ea());
 
 	for bb in bbs {
 		let bb_ea = bb.ea();

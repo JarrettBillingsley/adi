@@ -387,13 +387,7 @@ impl IrBasicBlock {
 		// to be at the start of a BB?)
 		// since phis execute conceptually in parallel, and since we need to look them up by
 		// what reg they define, might make sense to use a map { reg => phi }.
-		for phi in self.phis() {
-			if phi.dst_reg() == reg {
-				return Some(phi);
-			}
-		}
-
-		None
+		self.phis().find(|&phi| phi.dst_reg() == reg)
 	}
 
 	fn retain_phis(&mut self, p: impl Fn(&IrReg) -> bool) {
@@ -522,9 +516,9 @@ pub(crate) struct ConstAddrsIter<'func> {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum ConstAddrKind {
-	///
+	/// Load (read)
 	Load,
-	///
+	/// Store (write). The optional value is the constant value being stored, if known.
 	Store(Option<u64>),
 	/// Control flow target
 	Target,
@@ -669,6 +663,7 @@ impl<'func> ConstAddrsIter<'func> {
 ///    as arguments to the call.
 /// 2. after, insert a new dummy BB that assigns a special "return" value to each
 ///    return register.
+///
 /// Also inserts 'use' instructions before each return to mark all return registers as used.
 fn rewrite_calls_and_rets(compiler: &impl IIrCompiler, bbs: &mut Vec<IrBasicBlock>,
 cfg: &mut IrCfg) {
@@ -728,7 +723,7 @@ impl IrBasicBlock {
 		};
 
 		if let Some(regs) = regs {
-			if regs.len() > 0 {
+			if !regs.is_empty() {
 				let old_inst = self.insts.pop().unwrap();
 				let ea = old_inst.ea();
 

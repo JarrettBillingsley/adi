@@ -22,13 +22,6 @@ enum Info {
 }
 
 impl Info {
-	fn to_option(&self) -> Option<u64> {
-		match self {
-			Info::Some { val, .. } => Some(*val),
-			_                      => None,
-		}
-	}
-
 	fn some1(val: u64, src1: IrSrc) -> Self {
 		Self::Some { val, from: [Some(src1), None, None] }
 	}
@@ -321,19 +314,19 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			ValSize::_8  => (val1 as u8).wrapping_add(val2 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_add(val2 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_add(val2 as u32) as u64,
-			ValSize::_64 => (val1 as u64).wrapping_add(val2 as u64) as u64,
+			ValSize::_64 => val1.wrapping_add(val2),
 		}
 		IntUSub  => match size {
 			ValSize::_8  => (val1 as u8).wrapping_sub(val2 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_sub(val2 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_sub(val2 as u32) as u64,
-			ValSize::_64 => (val1 as u64).wrapping_sub(val2 as u64) as u64,
+			ValSize::_64 => val1.wrapping_sub(val2),
 		}
 		IntCarry => match size {
 			ValSize::_8  => (val1 as u8).overflowing_add(val2 as u8).1 as u64,
 			ValSize::_16 => (val1 as u16).overflowing_add(val2 as u16).1 as u64,
 			ValSize::_32 => (val1 as u32).overflowing_add(val2 as u32).1 as u64,
-			ValSize::_64 => (val1 as u64).overflowing_add(val2 as u64).1 as u64,
+			ValSize::_64 => val1.overflowing_add(val2).1 as u64,
 		}
 		IntSCarry => match size {
 			ValSize::_8  => (val1 as i8).overflowing_add(val2 as i8).1 as u64,
@@ -355,7 +348,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			ValSize::_8  => (val1 as u8).wrapping_mul(val2 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_mul(val2 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_mul(val2 as u32) as u64,
-			ValSize::_64 => (val1 as u64).wrapping_mul(val2 as u64) as u64,
+			ValSize::_64 => val1.wrapping_mul(val2),
 		}
 		IntUDiv => {
 			// not using checked_div et al. because the result has to be u64, and this is
@@ -367,7 +360,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 					ValSize::_8  => (val1 as u8 / val2 as u8) as u64,
 					ValSize::_16 => (val1 as u16 / val2 as u16) as u64,
 					ValSize::_32 => (val1 as u32 / val2 as u32) as u64,
-					ValSize::_64 => (val1 as u64 / val2 as u64) as u64,
+					ValSize::_64 => val1 / val2,
 				}
 			}
 		}
@@ -391,7 +384,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 					ValSize::_8  => (val1 as u8 % val2 as u8) as u64,
 					ValSize::_16 => (val1 as u16 % val2 as u16) as u64,
 					ValSize::_32 => (val1 as u32 % val2 as u32) as u64,
-					ValSize::_64 => (val1 as u64 % val2 as u64) as u64,
+					ValSize::_64 => val1 % val2,
 				}
 			}
 		}
@@ -421,24 +414,24 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			ValSize::_8  => (val1 as u8).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_16 => (val1 as u16).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_32 => (val1 as u32).checked_shl(val2 as u32).unwrap_or(0) as u64,
-			ValSize::_64 => (val1 as u64).checked_shl(val2 as u32).unwrap_or(0) as u64,
+			ValSize::_64 => val1.checked_shl(val2 as u32).unwrap_or(0),
 		}
 		IntUShr => match size {
 			ValSize::_8  => (val1 as u8).checked_shr(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_16 => (val1 as u16).checked_shr(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_32 => (val1 as u32).checked_shr(val2 as u32).unwrap_or(0) as u64,
-			ValSize::_64 => (val1 as u64).checked_shr(val2 as u32).unwrap_or(0) as u64,
+			ValSize::_64 => val1.checked_shr(val2 as u32).unwrap_or(0),
 		}
 		// TODO: what if val2 is negative?
 		IntSShr => match size {
 			ValSize::_8  => (val1 as i8).checked_shr(val2 as u32)
-				.unwrap_or_else(|| if (val1 as i8) < 0 { -1 } else { 0 }) as u8 as u64,
+				.unwrap_or(if (val1 as i8) < 0 { -1 } else { 0 }) as u8 as u64,
 			ValSize::_16 => (val1 as i16).checked_shr(val2 as u32)
-				.unwrap_or_else(|| if (val1 as i16) < 0 { -1 } else { 0 }) as u16 as u64,
+				.unwrap_or(if (val1 as i16) < 0 { -1 } else { 0 }) as u16 as u64,
 			ValSize::_32 => (val1 as i32).checked_shr(val2 as u32)
-				.unwrap_or_else(|| if (val1 as i32) < 0 { -1 } else { 0 }) as u32 as u64,
+				.unwrap_or(if (val1 as i32) < 0 { -1 } else { 0 }) as u32 as u64,
 			ValSize::_64 => (val1 as i64).checked_shr(val2 as u32)
-				.unwrap_or_else(|| if (val1 as i64) < 0 { -1 } else { 0 }) as u64,
+				.unwrap_or(if (val1 as i64) < 0 { -1 } else { 0 }) as u64,
 		}
 
 		IntPair => (val1 << size as u32) | val2,
@@ -458,13 +451,13 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 			ValSize::_8 => (val1 as u8).wrapping_add(val2 as u8).wrapping_add(val3 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_add(val2 as u16).wrapping_add(val3 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_add(val2 as u32).wrapping_add(val3 as u32) as u64,
-			ValSize::_64 => (val1 as u64).wrapping_add(val2 as u64).wrapping_add(val3 as u64) as u64,
+			ValSize::_64 => val1.wrapping_add(val2).wrapping_add(val3),
 		},
 		IntUSubB => match size {
 			ValSize::_8 => (val1 as u8).wrapping_sub(val2 as u8).wrapping_sub(val3 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_sub(val2 as u16).wrapping_sub(val3 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_sub(val2 as u32).wrapping_sub(val3 as u32) as u64,
-			ValSize::_64 => (val1 as u64).wrapping_sub(val2 as u64).wrapping_sub(val3 as u64) as u64,
+			ValSize::_64 => val1.wrapping_sub(val2).wrapping_sub(val3),
 		},
 		IntCarryC => {
 			let (sum, carry) = match size {
@@ -481,8 +474,8 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 					(sum as u64, carry)
 				}
 				ValSize::_64 => {
-					let (sum, carry) = (val1 as u64).overflowing_add(val2 as u64);
-					(sum as u64, carry)
+					let (sum, carry) = val1.overflowing_add(val2);
+					(sum, carry)
 				}
 			};
 
@@ -493,7 +486,7 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 					ValSize::_8  => (sum as u8).overflowing_add(val3 as u8).1 as u64,
 					ValSize::_16 => (sum as u16).overflowing_add(val3 as u16).1 as u64,
 					ValSize::_32 => (sum as u32).overflowing_add(val3 as u32).1 as u64,
-					ValSize::_64 => (sum as u64).overflowing_add(val3 as u64).1 as u64,
+					ValSize::_64 => sum.overflowing_add(val3).1 as u64,
 				}
 			}
 		}

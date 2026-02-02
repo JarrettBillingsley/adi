@@ -28,8 +28,9 @@ pub(crate) use ir::*;
 // ------------------------------------------------------------------------------------------------
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 pub enum Reg {
+	#[default]
 	A, B, C, D, // data regs
 	DC,         // paired reg
 	SP,         // stack ptr
@@ -90,14 +91,11 @@ impl Reg {
 	}
 }
 
-impl Default for Reg {
-	fn default() -> Reg { Reg::A }
-}
-
 // ------------------------------------------------------------------------------------------------
 // MetaOp
 // ------------------------------------------------------------------------------------------------
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum MetaOp {
 	MOV,                 // copy reg/imm into reg
@@ -142,6 +140,7 @@ impl MetaOp {
 // AddrMode
 // ------------------------------------------------------------------------------------------------
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum AddrMode {
 	IMP,   // no operands
@@ -383,6 +382,7 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 pub struct ToyPrinter;
 
 impl ToyPrinter {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { }
 	}

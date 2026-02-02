@@ -155,6 +155,7 @@ pub struct ArrayType {
 	len: usize,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl ArrayType {
 	pub fn ty(&self)  -> &Type { self.ty.as_ref() }
 	pub fn len(&self) -> usize { self.len }
@@ -363,7 +364,7 @@ pub struct EnumDesc {
 impl EnumDesc {
 	/// ctor. Panics if the type is not strictly integral or character, or if the name is empty.
 	pub fn new(name: String, ty: Box<Type>) -> Self {
-		assert!(name.len() > 0);
+		assert!(!name.is_empty());
 		EnumDesc::_check_type(ty.as_ref());
 		Self { name, ty, values: Vec::new() }
 	}
@@ -393,7 +394,7 @@ impl EnumDesc {
 
 	/// Change the name of this enum. Panics if name is empty.
 	pub fn set_name(&mut self, new_name: &str) {
-		assert!(new_name.len() > 0);
+		assert!(!new_name.is_empty());
 		self.name = new_name.into();
 	}
 
@@ -474,7 +475,7 @@ impl BitfieldField {
 	/// Panics if `ty` is not a "loose" integer type, or if `ty` is itself a bitfield type, or
 	/// if the name is empty.
 	pub fn new(name: &str, ty: Box<Type>, radix: Radix, bit_pos: usize, bit_size: usize) -> Self {
-		assert!(name.len() > 0);
+		assert!(!name.is_empty());
 		BitfieldField::_check_type(ty.as_ref());
 		Self { name: name.into(), ty, radix, bit_pos, bit_size, }
 	}
@@ -501,7 +502,7 @@ pub struct BitfieldDesc {
 impl BitfieldDesc {
 	/// ctor. Panics if the name is empty.
 	pub fn new(name: &str, bit_size: BitfieldSize) -> Self {
-		assert!(name.len() > 0);
+		assert!(!name.is_empty());
 		Self {
 			name: name.into(),
 			bit_size,
@@ -531,7 +532,7 @@ impl BitfieldDesc {
 
 	/// Change the name of this bitfield. Panics if name is empty.
 	pub fn set_name(&mut self, new_name: &str) {
-		assert!(new_name.len() > 0);
+		assert!(!new_name.is_empty());
 		self.name = new_name.into();
 	}
 
@@ -602,7 +603,7 @@ impl StructField {
 
 	/// ctor. Panics if name is empty.
 	pub fn new_radix(name: &str, ty: Box<Type>, radix: Radix, offset: usize) -> Self {
-		assert!(name.len() > 0);
+		assert!(!name.is_empty());
 		Self { name: name.into(), ty, radix, offset }
 	}
 
@@ -695,7 +696,7 @@ impl StructDesc {
 
 	/// ctor. Panics if name is empty.
 	pub fn new_sized(name: String, size: usize) -> Self {
-		assert!(name.len() > 0);
+		assert!(!name.is_empty());
 		Self { name, fields: Vec::new(), size, vla: VlaField::None }
 	}
 
@@ -720,7 +721,7 @@ impl StructDesc {
 
 	/// Iterator over all fields.
 	pub fn all_fields(&self) -> impl Iterator<Item = &StructField> {
-		self.fields.iter().chain(self.vla.get().into_iter())
+		self.fields.iter().chain(self.vla.get())
 	}
 
 	/// Does this struct have a variable-length array member?
@@ -763,7 +764,7 @@ impl StructDesc {
 
 	/// Change the name of this struct. Panics if name is empty.
 	pub fn set_name(&mut self, new_name: &str) {
-		assert!(new_name.len() > 0);
+		assert!(!new_name.is_empty());
 		self.name = new_name.into();
 	}
 

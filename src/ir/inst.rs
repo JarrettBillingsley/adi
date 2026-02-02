@@ -242,60 +242,61 @@ impl Debug for IrInst {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 impl IrInst {
-	///
+	/// TODO: docme
 	pub(crate) fn nop(ea: EA) -> Self {
 		Self { ea, kind: IrInstKind::Nop }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn use_(ea: EA, reg: IrReg) -> Self {
 		Self { ea, kind: IrInstKind::Use { reg } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn assign(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Assign { dst, src, dstn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn izxt(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntZxt, src, dstn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn isxt(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntSxt, src, dstn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ineg(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNeg, src, dstn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn inot(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNot, src, dstn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn bnot(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::BoolNot, src, dstn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ieq(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -303,7 +304,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntEq, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ine(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -311,7 +312,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntNe, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn islt(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -319,7 +320,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSlt, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn isle(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -327,7 +328,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSle, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iult(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -335,7 +336,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUlt, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iule(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -343,7 +344,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUle, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iuadd(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -351,7 +352,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUAdd, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iuaddc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -359,7 +360,7 @@ impl IrInst {
 			dst, src1, op: IrTernOp::IntUAddC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iusub(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -367,7 +368,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUSub, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iusubb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -375,7 +376,7 @@ impl IrInst {
 			dst, src1, op: IrTernOp::IntUSubB, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn icarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -383,7 +384,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntCarry, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn icarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -391,7 +392,7 @@ impl IrInst {
 			dst, src1, op: IrTernOp::IntCarryC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iscarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -399,7 +400,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSCarry, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iscarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -407,7 +408,7 @@ impl IrInst {
 			dst, src1, op: IrTernOp::IntSCarryC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn isborrow(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -415,7 +416,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSBorrow, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn isborrowc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -423,7 +424,7 @@ impl IrInst {
 			dst, src1, op: IrTernOp::IntSBorrowC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn imul(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -431,7 +432,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntMul, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iudiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -439,7 +440,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUDiv, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn isdiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -447,7 +448,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSDiv, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iumod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -455,7 +456,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUMod, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ismod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -463,7 +464,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSMod, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ixor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -471,7 +472,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntXor, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iand(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -479,7 +480,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntAnd, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ior(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -487,7 +488,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntOr, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ishl(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -495,7 +496,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntShl, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn iushr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -503,7 +504,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntUShr, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn isshr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -511,7 +512,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntSShr, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ipair(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -520,7 +521,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::IntPair, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn bxor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -528,7 +529,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::BoolXor, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn band(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -536,7 +537,7 @@ impl IrInst {
 			dst, src1, op: IrBinOp::BoolAnd, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn bor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
@@ -544,49 +545,49 @@ impl IrInst {
 			dst, src1, op: IrBinOp::BoolOr, src2, dstn, src1n, src2n } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn load(ea: EA, dst: IrReg, addr: IrSrc,
 		dstn: i8, addrn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Load { dst, addr, dstn, addrn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn store(ea: EA, addr: IrSrc, src: IrSrc,
 		addrn: i8, srcn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Store { addr, src, addrn, srcn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn branch(ea: EA, target: EA,
 		targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Branch { target, targetn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn cbranch(ea: EA, cond: IrSrc, target: EA,
 		condn: i8, targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::CBranch { cond, target, condn, targetn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ibranch(ea: EA, target: IrSrc,
 		targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::IBranch { target, targetn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn call(ea: EA, target: EA,
 		targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Call { target, targetn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn icall(ea: EA, target: IrSrc,
 		targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::ICall { target, targetn } }
 	}
 
-	///
+	/// TODO: docme
 	pub(crate) fn ret(ea: EA, target: IrSrc,
 		targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Ret { target, targetn } }

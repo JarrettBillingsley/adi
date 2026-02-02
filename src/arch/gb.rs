@@ -124,7 +124,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 
 		Add16(a) => {
 			let addr = (img[2] as usize) << 8 | (img[1] as usize);
-			let addr = VA(addr as usize);
+			let addr = VA(addr);
 			ops[0] = Mem(addr, a);
 
 			if a == Target {
@@ -144,6 +144,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 pub struct GBPrinter;
 
 impl GBPrinter {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { }
 	}

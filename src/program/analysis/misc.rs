@@ -113,8 +113,8 @@ impl Program {
 			// unwrap is ok here because BasicBlock::new asserts that insts is non-empty
 			let (last, rest) = bb.insts().split_last().unwrap();
 			rest.iter().for_each(|inst|
-				compiler.to_ir(inst, None, &mut b));
-			compiler.to_ir(last, bb.control_target(), &mut b);
+				compiler.build_ir(inst, None, &mut b));
+			compiler.build_ir(last, bb.control_target(), &mut b);
 
 			// TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually
 			// end with a terminator. is that an issue? the IR CFG encodes this info already...

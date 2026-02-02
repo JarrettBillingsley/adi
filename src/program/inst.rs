@@ -52,10 +52,11 @@ impl Default for Operand {
 /// Additional information about operands. This information is either extracted automatically
 /// by analysis passes or applied manually by the user. You can think of this as the higher-level
 /// "interpretation" of each operand.
-#[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Display, PartialEq, Eq, Copy, Clone, Default)]
 #[display("{:?}")]
 pub enum OpInfo {
 	/// No special info associated with it
+	#[default]
 	None,
 
 	/// An unresolved memory reference. Refers to a virtual address, but the EA it refers to has not
@@ -67,12 +68,6 @@ pub enum OpInfo {
 	Ref { target: EA, info: RefInfo },
 
 	// TODO: more options here for enum values, struct fields, strings...
-}
-
-impl Default for OpInfo {
-	fn default() -> Self {
-		OpInfo::None
-	}
 }
 
 /// Details associated with a reference.
@@ -170,11 +165,7 @@ pub enum InstructionKind {
 
 impl InstructionKind {
 	pub fn is_control(&self) -> bool {
-		use InstructionKind::*;
-		match self {
-			Other => false,
-			_     => true,
-		}
+		!matches!(self, InstructionKind::Other)
 	}
 
 	pub fn has_control_target(&self) -> bool {

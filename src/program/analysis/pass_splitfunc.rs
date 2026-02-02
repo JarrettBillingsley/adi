@@ -79,7 +79,7 @@ impl Program {
 
 			// then, turn 'reachable' into a vec, with bbid as the first item.
 			let new_func_bbs = Some(bbid).into_iter()
-				.chain(reachable.into_iter())
+				.chain(reachable)
 				.collect::<Vec<_>>();
 
 			// last, make a new function out of the new_func_bbs, and change what function

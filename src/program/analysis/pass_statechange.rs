@@ -308,7 +308,7 @@ impl<'f> StateFlow<'f> {
 		trace!("  {} state:", kind);
 		for bbid in all_bbs {
 			trace!("    {:?} in = {:?}, out = {:?}",
-				bbid, self.instate.get(&bbid).unwrap(), self.outstate.get(&bbid).unwrap());
+				bbid, self.instate.get(bbid).unwrap(), self.outstate.get(bbid).unwrap());
 		}
 		trace!("");
 	}
@@ -350,7 +350,7 @@ impl<'f> DataflowAlgorithm for StateFlow<'f> {
 		// safe because `func_bb_predecessors` puts all BBs in the map
 		for p in self.preds.get(&id).unwrap() {
 			// safe because blah blah you get it
-			changed |= instate.join(self.outstate.get(&p).unwrap());
+			changed |= instate.join(self.outstate.get(p).unwrap());
 		}
 
 		changed |= self.transfer(id);

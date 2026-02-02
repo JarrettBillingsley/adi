@@ -47,6 +47,7 @@ pub enum SyntaxFlavor {
 // ------------------------------------------------------------------------------------------------
 
 /// All 65xx addressing modes.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum AddrMode {
 	/// Implied (no operand bytes), e.g. `rol`.
@@ -114,6 +115,7 @@ impl AddrMode {
 /// in the new syntax, these look different than their original forms. `LDAI/LDXI/LDYI` are the
 /// "load immediate" instructions and look like `li`, while `LSRA/ROLA/RORA` have an implied
 /// `a` operand.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum MetaOp {
 	UNK,
@@ -205,13 +207,11 @@ impl MetaOp {
 
 /// 65xx registers.
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 enum Reg {
-	A, X, Y, S, P
-}
-
-impl Default for Reg {
-	fn default() -> Reg { Reg::A }
+	#[default]
+	A,
+	X, Y, S, P
 }
 
 impl Reg {

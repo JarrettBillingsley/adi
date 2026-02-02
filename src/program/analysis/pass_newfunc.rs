@@ -130,7 +130,7 @@ impl Program {
 				trace!("{} is NO GOOD", start);
 				self.span_cancel_analysis(start);
 			} else {
-				if let Some(..) = iter.err() {
+				if iter.err().is_some() {
 					assert!(end_ea == iter.err_ea());
 					term = Some(BBTerm::DeadEnd);
 				} else if term.is_none() {
@@ -153,7 +153,7 @@ impl Program {
 		assert!(potential_bbs.is_empty());
 
 		// empty func can happen if the very first BB was NO GOOD and was canceled.
-		if bbs.len() == 0 {
+		if bbs.is_empty() {
 			trace!("NOPE that's not a good function.");
 		} else {
 			// now, make the function!!

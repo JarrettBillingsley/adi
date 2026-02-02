@@ -128,7 +128,7 @@ impl IMmu for ToyMmu {
 
 	fn va_for_ea(&self, _state: MmuState, ea: EA) -> Option<VA> {
 		match ea.seg() {
-			seg if seg == self.rom => Some(VA(0x0000 + (ea.offs() & 0x7FFF))),
+			seg if seg == self.rom => Some(VA(          ea.offs() & 0x7FFF)),
 			seg if seg == self.ram => Some(VA(0x8000 + (ea.offs() & 0x7FFF))),
 			_                      => panic!(),
 		}

@@ -10,8 +10,8 @@ use super::*;
 pub(crate) struct ToyIrCompiler;
 
 impl IIrCompiler for ToyIrCompiler {
-	fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
-		lookup_desc(i.bytes()[0]).expect("ono").to_ir(i, target, b);
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, target, b);
 	}
 
 	fn arg_regs(&self) -> &'static [IrReg] {
@@ -82,7 +82,7 @@ impl InstDesc {
 		}
 	}
 
-	pub(super) fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
 		fn r0(i: &Instruction) -> IrReg {

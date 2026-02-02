@@ -1,6 +1,7 @@
 
 /// The "REAL" 65xx opcodes. Each opcode is named with its mnemonic and its addressing mode.
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Opcode {

@@ -245,42 +245,42 @@ impl<'i, 'l, 's> PrinterCtx<'i, 'l, 's> {
 		self.style(PrintStyle::Mnemonic, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_register(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Register, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_number(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Number, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_symbol(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Symbol, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_string(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::String, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_comment(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Comment, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_refname(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Refname, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_label(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Label, f)
 	}
 
-	///
+	/// ditto
 	pub fn style_operand(&mut self, i: usize, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
 	-> FmtResult {
 		self.style(PrintStyle::Operand(i), f)

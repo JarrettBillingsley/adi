@@ -65,9 +65,9 @@ impl From<u8> for MbcType {
 
 		match x {
 			0x00 | 0x08 | 0x09 => None,
-			0x01 | 0x02 | 0x03 => Mbc1,
+			0x01 ..= 0x03      => Mbc1,
 			0x05 | 0x06        => Mbc2,
-			0x0B | 0x0C | 0x0D => Mmm01,
+			0x0B ..= 0x0D      => Mmm01,
 			0x0F ..= 0x13      => Mbc3,
 			0x19 ..= 0x1E      => Mbc5,
 			0x20               => Mbc6,
@@ -408,7 +408,7 @@ fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 
 			// TODO: cart RAM
 
-			NoMbc::new(segids[0], segids[1])
+			NoMbc::init(segids[0], segids[1])
 		}
 		_ => return PlatformError::invalid_image(
 			format!("unsupported MBC: {}", cart.header.mbc_type)),
@@ -609,7 +609,7 @@ struct NoMbc {
 }
 
 impl NoMbc {
-	fn new(rom0: SegId, rom1: SegId) -> Mbc {
+	fn init(rom0: SegId, rom1: SegId) -> Mbc {
 		Self { rom0, rom1 }.into()
 	}
 }

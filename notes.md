@@ -1,7 +1,7 @@
 
 # Yak stack
 
-
+#[allow(clippy::upper_case_acronyms)]
 
 # Tasks!
 

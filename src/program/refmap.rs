@@ -84,11 +84,11 @@ impl RefMap {
 	}
 
 	fn _add_outref(&mut self, src: EA, dst: EA) {
-		self.outrefs.entry(src).or_insert_with(BTreeSet::new).insert(dst);
+		self.outrefs.entry(src).or_default().insert(dst);
 	}
 
 	fn _add_inref(&mut self, src: EA, dst: EA) {
-		self.inrefs.entry(dst).or_insert_with(BTreeSet::new).insert(src);
+		self.inrefs.entry(dst).or_default().insert(src);
 	}
 
 	fn _remove_outref(&mut self, src: EA, dst: EA) {

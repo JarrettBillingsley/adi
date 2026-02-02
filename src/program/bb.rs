@@ -59,7 +59,7 @@ impl BasicBlock {
 	/// Same as above, but mutable.
 	pub fn term_mut(&mut self) -> &mut BBTerm { &mut self.term }
 	/// The terminating instruction.
-	pub fn term_inst(&self) -> &Instruction { &self.insts.last().unwrap() }
+	pub fn term_inst(&self) -> &Instruction { self.insts.last().unwrap() }
 	/// Its instructions.
 	pub fn insts(&self) -> &[Instruction] { &self.insts }
 	/// Same as above but mutable.

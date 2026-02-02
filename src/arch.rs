@@ -157,7 +157,7 @@ pub(crate) enum IrCompiler {
 pub(crate) trait IIrCompiler: Sized + Sync + Send {
 	/// Given an instruction, an optional control flow target, and an [`IrBuilder`], convert the
 	/// instruction into a sequence of IR instructions.
-	fn to_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder);
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder);
 
 	/// Give a set of registers which can be used to pass arguments.
 	fn arg_regs(&self) -> &'static [IrReg];

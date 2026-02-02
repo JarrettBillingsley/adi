@@ -432,7 +432,7 @@ impl Program {
 					self.generate_name(name, va),
 				None =>
 					// no name, so name it "SEGNAME_loc_0C30"
-					self.generate_name(&seg.name(), va),
+					self.generate_name(seg.name(), va),
 			}
 		};
 
@@ -632,12 +632,12 @@ impl Program {
 			// "borrowed" from petgraph::algo::dominators::simple_fast_post_order :P
 			for pred in DfsPostOrder::new(&ana.cfg.0, ana.func.head_id()).iter(&ana.cfg.0) {
 				for succ in ana.cfg.0.neighbors(pred) {
-					preds.entry(succ).or_insert_with(SmallVec::new).push(pred);
+					preds.entry(succ).or_default().push(pred);
 				}
 			}
 
 			// head node has no preds
-			preds.entry(ana.func.head_id()).or_insert_with(SmallVec::new);
+			preds.entry(ana.func.head_id()).or_default();
 
 			ana.preds.fill(preds).unwrap();
 		}
@@ -661,7 +661,7 @@ impl Program {
 	}
 
 	/// Dump the function's CFG as a DOT diagram description to the console. DEBUGGING!
-	pub fn func_dump_cfg<'f>(&self, ana: &'f FuncAnalysis) {
+	pub fn func_dump_cfg(&self, ana: &FuncAnalysis) {
 		use petgraph::dot::{ Dot, Config };
 		println!("--------------------------------------------------------------");
 		println!("function {}", self.name_of_ea(ana.func.ea()));
@@ -670,7 +670,7 @@ impl Program {
 
 	/// Calculates the set of all BBs reachable from the `start` bb in this function. The returned
 	/// set includes `start`. The result of this analysis is not cached.
-	pub fn func_reachable_bbs<'f>(&self, ana: &'f FuncAnalysis, start: BBId) -> HashSet<BBId> {
+	pub fn func_reachable_bbs(&self, ana: &FuncAnalysis, start: BBId) -> HashSet<BBId> {
 		use petgraph::visit::{ DfsPostOrder, Walker };
 
 		let mut reachable = HashSet::new();

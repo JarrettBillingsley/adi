@@ -100,7 +100,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let prg0_len = prg0_img.len();
 			let base_va = if cart.prg_data.len() == 0x4000 { 0xC000 } else { 0x8000 };
 			let prg0 = segs.add_segment_with_va("PRG0", prg0_len, Some(prg0_img), VA(base_va));
-			let ctor = if cart.mapper == 0 { NRom::new } else { NRom::new_cnrom };
+			let ctor = if cart.mapper == 0 { NRom::init } else { NRom::init_cnrom };
 			ctor(prg0, prg0_len)
 		}
 
@@ -108,7 +108,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let prg_rom_len = cart.prg_data.len();
 
 			// data must be a multiple of 16KB (0x4000)
-			if (prg_rom_len % 0x4000) != 0 {
+			if !prg_rom_len.is_multiple_of(0x4000) {
 				return PlatformError::invalid_image(
 					format!("PRG ROM length (0x{:X}) not a multiple of 16KB", cart.prg_data.len()))
 			}
@@ -116,7 +116,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let mut all = Vec::new();
 			let mut iter = cart.prg_data.chunks_exact(0x4000);
 
-			while let Some(chunk) = iter.next() {
+			for chunk in iter.by_ref() {
 				// TODO: this sets "orig_offs" to 0 every time.
 				let prg_img = Image::new(img.name(), chunk);
 				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x4000, Some(prg_img));
@@ -134,22 +134,21 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 				segs.segment_from_id_mut(seg_id).set_base_va(VA(0x8000));
 			}
 
-			UXRom::new(all)
+			UXRom::init(all)
 		}
 
 		7 | 11 => {
 			let prg_rom_len = cart.prg_data.len();
 
 			// data must be a multiple of 32KB (0x8000)
-			if (prg_rom_len % 0x8000) != 0 {
+			if !prg_rom_len.is_multiple_of(0x8000) {
 				return PlatformError::invalid_image(
 					format!("PRG ROM length (0x{:X}) not a multiple of 32KB", cart.prg_data.len()))
 			}
 
 			let mut all = Vec::new();
-			let mut iter = cart.prg_data.chunks_exact(0x8000);
 
-			while let Some(chunk) = iter.next() {
+			for chunk in cart.prg_data.chunks_exact(0x8000) {
 				// TODO: this sets "orig_offs" to 0 every time.
 				let prg_img = Image::new(img.name(), chunk);
 				let seg_id = segs.add_segment_with_va(
@@ -157,7 +156,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 				all.push(seg_id);
 			}
 
-			let ctor = if cart.mapper == 7 { AXRom::new } else { AXRom::new_color_dreams };
+			let ctor = if cart.mapper == 7 { AXRom::init } else { AXRom::init_color_dreams };
 			ctor(all)
 		}
 
@@ -243,6 +242,7 @@ const NES_INT_VECS: &[StdName] = &[
 // NesMmu
 // ------------------------------------------------------------------------------------------------
 
+#[allow(clippy::enum_variant_names)]
 #[enum_dispatch]
 #[derive(Debug)]
 enum Mapper {
@@ -341,15 +341,15 @@ struct NRom {
 }
 
 impl NRom {
-	fn new(prg0: SegId, prg0_len: usize) -> Mapper {
-		Self::_new("<no mapper>", prg0, prg0_len)
+	fn init(prg0: SegId, prg0_len: usize) -> Mapper {
+		Self::_init("<no mapper>", prg0, prg0_len)
 	}
 
-	fn new_cnrom(prg0: SegId, prg0_len: usize) -> Mapper {
-		Self::_new("CNROM", prg0, prg0_len)
+	fn init_cnrom(prg0: SegId, prg0_len: usize) -> Mapper {
+		Self::_init("CNROM", prg0, prg0_len)
 	}
 
-	fn _new(name: &'static str, prg0: SegId, prg0_len: usize) -> Mapper {
+	fn _init(name: &'static str, prg0: SegId, prg0_len: usize) -> Mapper {
 		let prg0_base = 0x10000 - prg0_len;
 		Self { name, prg0, prg0_mask: prg0_len - 1, prg0_base }.into()
 	}
@@ -398,7 +398,7 @@ struct UXRom {
 }
 
 impl UXRom {
-	fn new(all: Vec<SegId>) -> Mapper {
+	fn init(all: Vec<SegId>) -> Mapper {
 		let last = *all.last().unwrap();
 		Self { all, last }.into()
 	}
@@ -488,15 +488,15 @@ struct AXRom {
 }
 
 impl AXRom {
-	fn new(all: Vec<SegId>) -> Mapper {
-		Self::_new("AXROM", all)
+	fn init(all: Vec<SegId>) -> Mapper {
+		Self::_init("AXROM", all)
 	}
 
-	fn new_color_dreams(all: Vec<SegId>) -> Mapper {
-		Self::_new("Color Dreams", all)
+	fn init_color_dreams(all: Vec<SegId>) -> Mapper {
+		Self::_init("Color Dreams", all)
 	}
 
-	fn _new(name: &'static str, all: Vec<SegId>) -> Mapper {
+	fn _init(name: &'static str, all: Vec<SegId>) -> Mapper {
 		Self { name, all }.into()
 	}
 

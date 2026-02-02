@@ -261,7 +261,7 @@ impl PhiPruner {
 						// println!("propagation: marking reg {} as used in bb {}",
 						// 	arg, arg_info.bb());
 						arg_info.mark_used();
-						self.stack.push(arg.clone());
+						self.stack.push(*arg);
 					}
 				}
 			}
@@ -290,7 +290,7 @@ impl PhiPruner {
 		// mark all registers declared by phi functions as unused
 		for phi in bbs[bbid].phis() {
 			// println!("marking reg {} as unused in bb {}", phi.dst_reg(), bbid);
-			self.use_map.insert(phi.dst_reg().clone(), UseInfo::new(bbid));
+			self.use_map.insert(*phi.dst_reg(), UseInfo::new(bbid));
 		}
 
 		// mark all registers used by instructions as used
@@ -300,7 +300,7 @@ impl PhiPruner {
 				// "if reg is defined by some phi function" - this reduces to a check to see
 				// if reg is in the use map, because we are visiting the BBs in dominance order,
 				// so if it was defined by a phi function then it will already have been added.
-				if let Some(info) = self.use_map.get_mut(&reg) {
+				if let Some(info) = self.use_map.get_mut(reg) {
 					// mark as used and push it on the stack
 					// println!("marking reg {:?} as used in bb {:?}", reg, info.bb());
 					info.mark_used();

@@ -52,6 +52,7 @@ pub struct ToyBuilder {
 }
 
 impl ToyBuilder {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { bytes: vec![] }
 	}
