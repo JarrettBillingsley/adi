@@ -195,7 +195,7 @@ impl InstDesc {
 			RET => {
 				b.load(ea,  REG_TMP16, REG_SP,               -1, -1);
 				b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
-				b.ret(ea,   REG_TMP16,                       -1, );
+				b.ret(ea,   REG_TMP16,                       -1);
 			}
 			LD => {
 				let reg = r0(i);

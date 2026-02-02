@@ -8,7 +8,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
-use crate::arch::mos65xx::{ Mos65xxArchitecture };
+use crate::arch::mos65xx::{ Mos65xxArchitecture, VEC_NMI, VEC_IRQ, VEC_RESET };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
 	SegId, EA };
 use crate::program::{ Program };
@@ -233,9 +233,9 @@ const NES_STD_NAMES: &[StdName] = &[
 ];
 
 const NES_INT_VECS: &[StdName] = &[
-	StdName("VEC_NMI",   0xFFFA),
-	StdName("VEC_RESET", 0xFFFC),
-	StdName("VEC_IRQ",   0xFFFE),
+	StdName("VEC_NMI",   VEC_NMI as usize),
+	StdName("VEC_RESET", VEC_RESET as usize),
+	StdName("VEC_IRQ",   VEC_IRQ as usize),
 ];
 
 // ------------------------------------------------------------------------------------------------

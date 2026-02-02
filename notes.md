@@ -10,6 +10,8 @@ ALSO
 # Tasks!
 
 - **write IR compilers for the real arches (oof)**
+- detect "always taken" branches (IR `cbranch` instructions where condition is constant)
+- License: GPL3? (what Mesen uses and I'm referencing that heavily for Mos65xx)
 - generating "name + delta" output is a little more subtle than my first attempt
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old

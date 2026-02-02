@@ -1,3 +1,6 @@
+//! IR compiler for MOS 65xx.
+//!
+//! Referenced from Mesen 2 source code (Mesen2/Core/NES/NesCpu.cpp/h) for accuracy.
 
 use crate::arch::{ IIrCompiler };
 use crate::program::{ MemIndir };
@@ -33,25 +36,24 @@ const REG_A:  IrReg = IrReg::reg8(0);
 const REG_X:  IrReg = IrReg::reg8(1);
 const REG_Y:  IrReg = IrReg::reg8(2);
 const REG_S:  IrReg = IrReg::reg8(3);
-const REG_CF: IrReg = IrReg::reg8(4);  // Carry
-const REG_ZF: IrReg = IrReg::reg8(5);  // Zero
-const REG_IF: IrReg = IrReg::reg8(6);  // Interrupt
-const REG_DF: IrReg = IrReg::reg8(7);  // Decimal
-const REG_BF: IrReg = IrReg::reg8(8);  // Break
-const REG_RF: IrReg = IrReg::reg8(9);  // Reserved
-const REG_OF: IrReg = IrReg::reg8(10); // Overflow
-const REG_NF: IrReg = IrReg::reg8(11); // Negative
+const REG_CF: IrReg = IrReg::reg8(4);  // 0 Carry
+const REG_ZF: IrReg = IrReg::reg8(5);  // 1 Zero
+const REG_IF: IrReg = IrReg::reg8(6);  // 2 Interrupt
+const REG_DF: IrReg = IrReg::reg8(7);  // 3 Decimal
+// bit 4 is the break flag. it isn't actually a register, but appears when flags are pushed.
+// bit 5 is reserved. it isn't actually a register, but appears as a 1 when flags are pushed.
+const REG_VF: IrReg = IrReg::reg8(10); // 6 oVerflow
+const REG_NF: IrReg = IrReg::reg8(11); // 7 Negative
 
 const REG_TMP1:  IrReg = IrReg::reg8(12);  // 8-bit temporary
 const REG_TMP2:  IrReg = IrReg::reg8(13);  // 8-bit temporary
-// const REG_TMP3:  IrReg = IrReg::reg8(14);  // 8-bit temporary
 const REG_TMP16: IrReg = IrReg::reg16(15); // 16-bit temporary
 
 static ARG_REGS: &[IrReg] =
-	&[REG_A, REG_X, REG_Y,        REG_CF, REG_ZF, REG_IF, REG_DF, REG_BF, REG_RF, REG_OF, REG_NF];
+	&[REG_A, REG_X, REG_Y,        REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
 
 static RETURN_REGS: &[IrReg] =
-	&[REG_A, REG_X, REG_Y, REG_S, REG_CF, REG_ZF, REG_IF, REG_DF, REG_BF, REG_RF, REG_OF, REG_NF];
+	&[REG_A, REG_X, REG_Y, REG_S, REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
 
 fn reg_to_ir_reg(reg: u8) -> IrReg {
 	match Reg::from(reg) {
@@ -137,11 +139,9 @@ impl InstDesc {
 					// tmp2  = lo
 					// tmp1  = hi
 					// tmp16 = tmp1:tmp2
-					// tmp16 = *tmp16
 					b.load (ea, REG_TMP2,  IrConst::_16(va),          -1, -1);
 					b.load (ea, REG_TMP1,  IrConst::_16(va & 0xFF00), -1, -1);
 					b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2,        -1, -1, -1);
-					b.load (ea, REG_TMP16, REG_TMP16,                 -1, 0);
 				} else {
 					// ez mode
 
@@ -170,14 +170,12 @@ impl InstDesc {
 				// tmp1 = tmp2 + 1  (wraps at 8 bits)
 				b.iuadd(ea, REG_TMP1, REG_TMP2, IrConst::ONE_8, -1, -1, -1);
 
-				// tmp1 = *tmp1  (hi)
 				// tmp2 = *tmp2  (lo)
+				// tmp1 = *tmp1  (hi)
 				// tmp16 = tmp1:tmp2
-				// tmp16 = *tmp16
-				b.load (ea, REG_TMP1,  REG_TMP1,           -1, -1);
 				b.load (ea, REG_TMP2,  REG_TMP2,           -1, -1);
+				b.load (ea, REG_TMP1,  REG_TMP1,           -1, -1);
 				b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
-				b.load (ea, REG_TMP16, REG_TMP16,          -1, 0);
 				REG_TMP16.into()
 			}
 			// "Indirect Indexed" - double-indirect zero-page Y-indexed (1 byte), e.g. `lda
@@ -212,17 +210,130 @@ impl InstDesc {
 			// PC-relative (1 byte), e.g. `bcc whatever`.
 			// Signed offset added to PC (+2 for size of branch instruction).
 			REL => {
+				panic!("get_operand shouldn't be called on instructions with control flow targets");
 				// Target
-				let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
-				IrConst::_16(va.0 as u16).into()
+				// let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				// IrConst::_16(va.0 as u16).into()
 			}
 			// Alias for `ABS` but for `jmp`/`jsr` instructions, to distinguish their operand types.
 			LAB => {
+				panic!("get_operand shouldn't be called on instructions with control flow targets");
 				// Target
-				let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
-				IrConst::_16(va.0 as u16).into()
+				// let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				// IrConst::_16(va.0 as u16).into()
 			}
 		}
+	}
+
+	/// Gets the actual value of the operand, performing a load if needed, and places the value
+	/// into `dst`.
+	fn get_operand_value_into(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+
+		use AddrMode::*;
+
+		match self.addr_mode {
+			IMP | REL | LAB | IND => {
+				panic!("get_operand_value_into should not be called on this");
+			}
+			IMM => {
+				// just a constant, assign it
+				let val = self.get_operand(i, b);
+				b.assign(ea, dst, val, -1, 0);
+			}
+			ZPG | ABS => {
+				// needs a load, and that load references the operand
+				let addr = self.get_operand(i, b);
+				b.load(ea, dst, addr, -1, 0);
+			}
+			ZPX | ZPY | ABX | ABY | IZX | IZY => {
+				// needs a load, but that load does *not* reference the operand
+				let addr = self.get_operand(i, b);
+				b.load(ea, dst, addr, -1, -1);
+			}
+		}
+	}
+
+	// /// Perform an IR `.assign` to the destination,
+	// fn assign_reg(&self, dst: IrReg, src: IrSrc, i: &Instruction, b: &mut IrBuilder) {
+
+	// }
+
+	/// Push an 8-bit value `src` onto the stack.
+	fn push8(&self, src: impl Into<IrSrc>, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		// empty stack convention - store before subtracting
+		b.ipair(ea, REG_TMP16, IrConst::ONE_8, REG_S, -1, -1, -1);
+		b.store(ea, REG_TMP16, src,                   -1, -1);
+		b.iusub(ea, REG_S, REG_S, IrConst::_8(1),     -1, -1, -1);
+	}
+
+	/// Pop an 8-bit value off the stack into `dst`.
+	fn pop8(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		// empty stack convention - add before loading
+		b.iuadd(ea, REG_S, REG_S, IrConst::_8(1),     -1, -1, -1);
+		b.ipair(ea, REG_TMP16, IrConst::ONE_8, REG_S, -1, -1, -1);
+		b.load (ea, dst, REG_TMP16,                   -1, -1);
+	}
+
+	/// Push the return address to the stack. It's always the instruction's address + 2.
+	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
+	 	let ret_addr = (i.va().0 + 2) as u16;
+		// push hi then lo
+		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), i, b);
+		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), i, b);
+	}
+
+	/// Pop the return address from the stack and `ret` to it.
+	fn return_(&self, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		// pop lo then hi
+		self.pop8(REG_TMP2, i, b);
+		self.pop8(REG_TMP1, i, b);
+		b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
+		b.ret  (ea, REG_TMP16,                     -1);
+	}
+
+	/// Combine all flags IR regs into a single 8-bit value and push it.
+	///
+	/// Changes REG_TMP1.
+	fn push_flags(&self, i: &Instruction, b: &mut IrBuilder) {
+		// TODO: need bit set/get IR instructions...
+
+		// 0 Carry
+		// 1 Zero
+		// 2 Interrupt
+		// 3 Decimal
+		// the values of bits 4 and 5 (Break and Reserved) are always 1 when pushed.
+		// 6 oVerflow
+		// 7 Negative
+
+		b.assign(i.ea(), REG_TMP1, IrConst::ZERO_8, -1, -1);
+		self.push8(REG_TMP1, i, b);
+	}
+
+	/// Pop a value off the stack and split it into the various IR flag regs.
+	///
+	/// Changes REG_TMP1.
+	fn pop_flags(&self, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		self.pop8(REG_TMP1, i, b);
+
+		// TODO: need bit set/get IR instructions...
+
+		// temporarily assigning from TMP1 to prevent constprop from thinking these are constants
+		b.assign(ea, REG_CF, REG_TMP1, -1, -1); // 0 Carry
+		b.assign(ea, REG_ZF, REG_TMP1, -1, -1); // 1 Zero
+		b.assign(ea, REG_IF, REG_TMP1, -1, -1); // 2 Interrupt
+		b.assign(ea, REG_DF, REG_TMP1, -1, -1); // 3 Decimal
+		b.assign(ea, REG_VF, REG_TMP1, -1, -1); // 6 oVerflow
+		b.assign(ea, REG_NF, REG_TMP1, -1, -1); // 7 Negative
+	}
+
+	fn set_nz(&self, reg: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		b.islt(i.ea(), REG_NF, reg, IrConst::ZERO_8,   -1, -1, -1);
+		b.ieq (i.ea(), REG_ZF, reg, IrConst::ZERO_8,   -1, -1, -1);
 	}
 
 	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
@@ -232,194 +343,248 @@ impl InstDesc {
 
 		match self.meta_op {
 			UNK => { panic!("what the hell is an unknown instruction doing in a BB?"); }
-			ADC => {
 
+			// NOPs
+			NOP | DOP => { // no flags changed
+				// uhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh nothing.
+				// really these only matter for cycle counting in emulation but...
 			}
-			AND => {
 
+			// ------------------------------------------------------------------------------------
+			// Computation
+
+			// Addition/subtraction ALU
+			ADC => { // NZCV
+				// TODO
 			}
-			ASLA => {
-
+			SBC => { // NZCV
+				// TODO
 			}
-			ASL => {
 
+			// 'crements
+			DEC => { // NZ
+				// TODO
 			}
-			BCC => {
-
+			DEX => { // NZ
+				b.iusub(ea, REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_X, i, b);
 			}
-			BCS => {
-
+			DEY => { // NZ
+				b.iusub(ea, REG_Y, REG_Y, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_Y, i, b);
 			}
-			BEQ => {
-
+			INC => { // NZ
+				// TODO
 			}
-			BIT => {
-
+			INX => { // NZ
+				b.iuadd(ea, REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_X, i, b);
 			}
-			BMI => {
-
+			INY => { // NZ
+				b.iuadd(ea, REG_Y, REG_Y, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_Y, i, b);
 			}
-			BNE => {
 
+			// Bitwise ALU
+			AND => { // NZ
+				let src = self.get_operand(i, b);
+				b.iand(ea, REG_A, REG_A, src, -1, -1, 0);
+				self.set_nz(REG_A, i, b);
 			}
-			BPL => {
-
+			ORA => { // NZ
+				let src = self.get_operand(i, b);
+				b.ior(ea, REG_A, REG_A, src, -1, -1, 0);
+				self.set_nz(REG_A, i, b);
 			}
-			BRK => {
-
+			EOR => { // NZ
+				let src = self.get_operand(i, b);
+				b.ixor(ea, REG_A, REG_A, src, -1, -1, 0);
+				self.set_nz(REG_A, i, b);
 			}
-			BVC => {
-
+			BIT => { // NZV (NF = mem.7, VF = mem.6, ZF = whether A&op is 0)
+				// TODO
 			}
-			BVS => {
 
+			// Comparisons
+			CMP => { // NZC
+				// TODO
 			}
-			CLC => {
-
+			CPX => { // NZC
+				// TODO
 			}
-			CLD => {
-
+			CPY => { // NZC
+				// TODO
 			}
-			CLI => {
 
+			// Shifts and rotates
+			ASL => { // NZC
+				// TODO
 			}
-			CLV => {
-
+			ASLA => { // NZC
+				// TODO
 			}
-			CMP => {
-
+			LSR => { // NZC (NF = 0, hardcoded)
+				// TODO
 			}
-			CPX => {
-
+			LSRA => { // NZC (NF = 0, hardcoded)
+				// TODO
 			}
-			CPY => {
-
+			ROL => { // NZC
+				// TODO
 			}
-			DEC => {
-
+			ROLA => { // NZC
+				// TODO
 			}
-			DEX => {
-
+			ROR => { // NZC
+				// TODO
 			}
-			DEY => {
-
+			RORA  => { // NZC
+				// TODO
 			}
-			EOR => {
 
+			// ------------------------------------------------------------------------------------
+			// Flag manipulation
+
+			CLC => { b.assign(ea, REG_CF, IrConst::ZERO_8, -1, -1); }
+			CLD => { b.assign(ea, REG_DF, IrConst::ZERO_8, -1, -1); }
+			CLI => { b.assign(ea, REG_IF, IrConst::ZERO_8, -1, -1); }
+			CLV => { b.assign(ea, REG_VF, IrConst::ZERO_8, -1, -1); }
+			SEC => { b.assign(ea, REG_CF, IrConst::ONE_8,  -1, -1); }
+			SED => { b.assign(ea, REG_DF, IrConst::ONE_8,  -1, -1); }
+			SEI => { b.assign(ea, REG_IF, IrConst::ONE_8,  -1, -1); }
+
+			// ------------------------------------------------------------------------------------
+			// Control flow
+
+			// Jump, call, return, break
+			JMP => { // no flags changed
+				match self.addr_mode {
+					AddrMode::LAB => {
+						b.branch(ea, target.unwrap(), 0);
+					}
+					AddrMode::IND => {
+						let target_ind = self.get_operand(i, b);
+						b.ibranch(ea, target_ind, -1);
+					}
+					_ => panic!(),
+				}
 			}
-			INC => {
-
+			JSR => { // no flags changed
+				self.push_return_addr(i, b);
+				b.call(ea, target.unwrap(), 0);
 			}
-			INX => {
-
+			RTS => { // no flags changed
+				self.return_(i, b);
 			}
-			INY => {
-
+			BRK => { // IF = 1
+				self.push_return_addr(i, b);
+				self.push_flags(i, b);
+				b.assign (ea, REG_IF, IrConst::ONE_8,           -1, -1); // set IF
+				b.load   (ea, REG_TMP16, IrConst::_16(VEC_IRQ), -1, -1); // read IRQ vector
+				b.ibranch(ea, REG_TMP16,                        -1);     // jump to it
 			}
-			JMP => {
-
+			RTI => { // flags set from stack
+				self.pop_flags(i, b);
+				self.return_(i, b);
 			}
-			JSR => {
 
+			// Branches
+			BCC => { // no flags changed
+				b.bnot   (ea, REG_TMP1, REG_CF,          -1, -1);
+				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
 			}
-			LDA => {
-
+			BCS => { // no flags changed
+				b.cbranch(ea, REG_CF,   target.unwrap(), -1, 0);
 			}
-			LDAI => {
-
+			BNE => { // no flags changed
+				b.bnot   (ea, REG_TMP1, REG_ZF,          -1, -1);
+				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
 			}
-			LDX => {
-
+			BEQ => { // no flags changed
+				b.cbranch(ea, REG_ZF,   target.unwrap(), -1, 0);
 			}
-			LDXI => {
-
+			BPL => { // no flags changed
+				b.bnot   (ea, REG_TMP1, REG_NF,          -1, -1);
+				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
 			}
-			LDY => {
-
+			BMI => { // no flags changed
+				b.cbranch(ea, REG_NF,   target.unwrap(), -1, 0);
 			}
-			LDYI => {
-
+			BVC => { // no flags changed
+				b.bnot   (ea, REG_TMP1, REG_VF,          -1, -1);
+				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
 			}
-			LSRA => {
-
+			BVS => { // no flags changed
+				b.cbranch(ea, REG_VF,   target.unwrap(), -1, 0);
 			}
-			LSR => {
 
+			// ------------------------------------------------------------------------------------
+			// Data transfer
+
+			// Loads and sores
+			LDA | LDAI => { // NZ
+				self.get_operand_value_into(REG_A, i, b);
+				self.set_nz(REG_A, i, b);
 			}
-			NOP | DOP => {
-
+			LDX | LDXI => { // NZ
+				self.get_operand_value_into(REG_X, i, b);
+				self.set_nz(REG_X, i, b);
 			}
-			ORA => {
-
+			LDY | LDYI => { // NZ
+				self.get_operand_value_into(REG_Y, i, b);
+				self.set_nz(REG_Y, i, b);
 			}
-			PHA => {
-
+			STA => { // no flags changed
+				let addr = self.get_operand(i, b);
+				b.store(ea, addr, REG_A, 0, -1);
 			}
-			PHP => {
-
+			STX => { // no flags changed
+				let addr = self.get_operand(i, b);
+				b.store(ea, addr, REG_X, 0, -1);
 			}
-			PLA => {
-
+			STY => { // no flags changed
+				let addr = self.get_operand(i, b);
+				b.store(ea, addr, REG_Y, 0, -1);
 			}
-			PLP => {
 
+			// Pushes and pops
+			PHA => { // no flags changed
+				self.push8(REG_A, i, b);
 			}
-			ROLA => {
-
+			PHP => { // no flags changed
+				self.push_flags(i, b);
 			}
-			ROL => {
-
+			PLA => { // NZ
+				self.pop8  (REG_A, i, b);
+				self.set_nz(REG_A, i, b);
 			}
-			RORA => {
-
+			PLP => { // flags set from stack
+				self.pop_flags(i, b);
 			}
-			ROR => {
 
+			// Transfers
+			TAX => { // NZ
+				b.assign(ea, REG_X, REG_A, -1, -1);
+				self.set_nz(REG_X, i, b);
 			}
-			RTI => {
-
+			TAY => { // NZ
+				b.assign(ea, REG_Y, REG_A, -1, -1);
+				self.set_nz(REG_Y, i, b);
 			}
-			RTS => {
-
+			TSX => { // NZ
+				b.assign(ea, REG_X, REG_S, -1, -1);
+				self.set_nz(REG_X, i, b);
 			}
-			SBC => {
-
+			TXA => { // NZ
+				b.assign(ea, REG_A, REG_X, -1, -1);
+				self.set_nz(REG_A, i, b);
 			}
-			SEC => {
-
+			TXS => {  // no flags changed
+				b.assign(ea, REG_S, REG_X, -1, -1);
 			}
-			SED => {
-
-			}
-			SEI => {
-
-			}
-			STA => {
-
-			}
-			STX => {
-
-			}
-			STY => {
-
-			}
-			TAX => {
-
-			}
-			TAY => {
-
-			}
-			TSX => {
-
-			}
-			TXA => {
-
-			}
-			TXS => {
-
-			}
-			TYA => {
-
+			TYA => { // NZ
+				b.assign(ea, REG_A, REG_Y, -1, -1);
+				self.set_nz(REG_A, i, b);
 			}
 		}
 	}
