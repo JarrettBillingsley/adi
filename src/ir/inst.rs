@@ -81,18 +81,18 @@ pub(crate) enum IrInstKind {
 	Store   { addr: IrSrc, src: IrSrc, // *addr = src
 		addrn: i8, srcn: i8, },
 
-	Branch  { target: EA,              // pc = target
+	Branch  { target: EA,              // pc = target (also subsumes jumps)
 		targetn: i8, },
 	CBranch { cond: IrSrc, target: EA, // if(cond) pc = target
 		condn: i8, targetn: i8, },
-	IBranch { target: IrSrc,           // pc = src
+	IBranch { target: IrSrc,           // pc = target (but it's indirect)
 		targetn: i8, },
 
 	Call    { target: EA,              // pc = target (but it's a call)
 		targetn: i8, },
-	ICall   { target: IrSrc,           // pc = src (but it's a call)
+	ICall   { target: IrSrc,           // pc = target (but it's an indirect call)
 		targetn: i8, },
-	Ret     { target: IrSrc,           // pc = src (but it's a return)
+	Ret     { target: IrSrc,           // pc = target (but it's a return)
 		targetn: i8, },
 
 	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc, // dst = op src
