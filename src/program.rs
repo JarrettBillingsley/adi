@@ -5,7 +5,6 @@ use std::collections::{
 	hash_map::Iter as HashIter,
 	HashMap,
 	HashSet,
-	VecDeque,
 };
 use std::ops::{ Bound, RangeBounds };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
@@ -52,7 +51,7 @@ pub struct Program {
 	funcs: FuncIndex,
 	data:  DataIndex,
 	bbidx: BBIndex,
-	pub(crate) queue: VecDeque<AnalysisItem>,
+	queue: Analyzer,
 	print: Printer,
 }
 
@@ -67,19 +66,31 @@ impl Program {
 	pub fn new(mem: Memory, plat: Platform) -> Self {
 		Self {
 			mem,
-			print: plat.arch().new_printer(),
+			print: plat.arch().new_printer(), // dumb line has to be here for bOrRoWiNg
 			plat,
 			names: NameMap::new(),
 			refs:  RefMap::new(),
 			funcs: FuncIndex::new(),
 			data:  DataIndex::new(),
 			bbidx: BBIndex::new(),
-			queue: VecDeque::new(),
+			queue: Analyzer::new(),
 		}
 	}
 
 	pub fn plat(&self) -> &Platform {
 		&self.plat
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Analysis
+	delegate! {
+		to self.queue {
+			/// Puts an EA on the queue that should be the start of a function.
+			pub fn enqueue_function(&mut self, state: MmuState, ea: EA);
+
+			/// Puts an EA on the queue that should be the jump instruction for a jump table.
+			pub fn enqueue_jump_table(&mut self, ea: EA);
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------

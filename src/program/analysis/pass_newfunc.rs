@@ -160,7 +160,7 @@ impl Program {
 			let fid = self.new_func(bbs);
 
 			// finally, turn the crank by putting more work on the queue
-			self.enqueue_state_change(fid);
+			self.queue.enqueue_state_change(fid);
 		}
 	}
 
@@ -175,7 +175,7 @@ impl Program {
 			} else {
 				// the middle of an already-analyzed function.
 				trace!("middle of an existing function...");
-				self.enqueue_split_func(ea);
+				self.queue.enqueue_split_func(ea);
 			}
 			false
 		} else if self.segment_from_ea(ea).is_fake() {

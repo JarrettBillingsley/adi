@@ -684,7 +684,7 @@ cfg: &mut IrCfg) {
 			// it was a call; we have to make a new dummy bb!
 
 			// first update the cfg.
-			println!("{:?}", cfg.edges(bb.id).collect::<Vec<_>>());
+			println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
 			let mut edges_iter = cfg.edges(bb.id);
 			let old_dest = edges_iter.next().unwrap().1;
 			assert!(edges_iter.next().is_none(),

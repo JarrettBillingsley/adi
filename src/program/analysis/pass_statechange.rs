@@ -197,7 +197,7 @@ impl Program {
 		}
 
 		// and set this function up for its refs pass.
-		self.enqueue_func_refs(fid);
+		self.queue.enqueue_func_refs(fid);
 	}
 
 	fn resolve_unresolved_terminator(&mut self, state: MmuState, bbid: BBId) -> bool {
