@@ -254,11 +254,6 @@ impl InstDesc {
 		}
 	}
 
-	// /// Perform an IR `.assign` to the destination,
-	// fn assign_reg(&self, dst: IrReg, src: IrSrc, i: &Instruction, b: &mut IrBuilder) {
-
-	// }
-
 	/// Push an 8-bit value `src` onto the stack.
 	fn push8(&self, src: impl Into<IrSrc>, i: &Instruction, b: &mut IrBuilder) {
 		let ea = i.ea();
@@ -331,11 +326,46 @@ impl InstDesc {
 		b.assign(ea, REG_NF, REG_TMP1, -1, -1); // 7 Negative
 	}
 
-	fn set_nz(&self, reg: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		b.islt(i.ea(), REG_NF, reg, IrConst::ZERO_8,   -1, -1, -1);
-		b.ieq (i.ea(), REG_ZF, reg, IrConst::ZERO_8,   -1, -1, -1);
+	/// Do a comparison and set flags according to the result.
+	fn cmp(&self, src1: IrReg, src2: IrReg, src2n: i8, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		b.iusub(ea, REG_TMP1, src1, src2, -1, -1, src2n);
+		// CF = not(src1 <u src2)
+		b.iult (ea, REG_CF,   src1, src2, -1, -1, -1);
+		b.bnot (ea, REG_CF,   REG_CF,     -1, -1);
+		self.set_nz(REG_TMP1, i, b);
 	}
 
+	/// Do an addition and set flags according to the result.
+	fn add_(&self, src: impl Into<IrSrc>, srcn: i8, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		let src = src.into();
+
+		b.iuaddc  (ea, REG_A,  REG_A, src, REG_CF, -1, -1, srcn, -1);
+		b.iscarryc(ea, REG_VF, REG_A, src, REG_CF, -1, -1,   -1, -1);
+		b.icarryc (ea, REG_CF, REG_A, src, REG_CF, -1, -1,   -1, -1);
+		self.set_nz(REG_A, i, b);
+	}
+
+	/// Sets the Negative and Zero flags based on the value of the given `reg`.
+	fn set_nz(&self, reg: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		b.islt(ea, REG_NF, reg, IrConst::ZERO_8,   -1, -1, -1);
+		b.ieq (ea, REG_ZF, reg, IrConst::ZERO_8,   -1, -1, -1);
+	}
+
+	/// Sets the Carry flag to 1 if MSB of `reg` is 1.
+	fn set_c(&self, reg: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		b.islt(i.ea(), REG_CF, reg, IrConst::ZERO_8,   -1, -1, -1);
+	}
+
+	// TODO: are dummy reads/writes worth implementing? at least on the NES there seems to be only
+	// *two* game which rely on a single dummy read, but apparently it's more common on other
+	// platforms like the C64.
+	//
+	// NES games which rely on dummy read done by `sta $4000,X` to acknowledge pending APU IRQs
+	// - Cobra Triangle
+	// - Ironsword: Wizards and Warriors II
 	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
@@ -355,15 +385,33 @@ impl InstDesc {
 
 			// Addition/subtraction ALU
 			ADC => { // NZCV
-				// TODO
+				if self.addr_mode == AddrMode::IMM {
+					let val = self.get_operand(i, b);
+					self.add_(val, 0, i, b);
+				} else {
+					self.get_operand_value_into(REG_TMP1, i, b);
+					self.add_(REG_TMP1, -1, i, b);
+				}
 			}
 			SBC => { // NZCV
-				// TODO
+				if self.addr_mode == AddrMode::IMM {
+					let val = self.get_operand(i, b);
+					b.inot(ea, REG_TMP1, val, -1, -1);
+					self.add_(REG_TMP1, 0, i, b);
+				} else {
+					self.get_operand_value_into(REG_TMP1, i, b);
+					b.inot(ea, REG_TMP1, REG_TMP1, -1, -1);
+					self.add_(REG_TMP1, -1, i, b);
+				}
 			}
 
 			// 'crements
 			DEC => { // NZ
-				// TODO
+				let addr = self.get_operand(i, b);
+				b.load (ea, REG_TMP1, addr,                     -1, 0);
+				b.iusub(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				b.store(ea, REG_TMP1, addr,                     -1, 0);
+				self.set_nz(REG_TMP1, i, b);
 			}
 			DEX => { // NZ
 				b.iusub(ea, REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
@@ -374,7 +422,11 @@ impl InstDesc {
 				self.set_nz(REG_Y, i, b);
 			}
 			INC => { // NZ
-				// TODO
+				let addr = self.get_operand(i, b);
+				b.load (ea, REG_TMP1, addr,                     -1, 0);
+				b.iuadd(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				b.store(ea, REG_TMP1, addr,                     -1, 0);
+				self.set_nz(REG_TMP1, i, b);
 			}
 			INX => { // NZ
 				b.iuadd(ea, REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
@@ -402,44 +454,110 @@ impl InstDesc {
 				self.set_nz(REG_A, i, b);
 			}
 			BIT => { // NZV (NF = mem.7, VF = mem.6, ZF = whether A&op is 0)
-				// TODO
+				self.get_operand_value_into(REG_TMP1, i, b);
+
+				// TODO: need bit set/get IR instructions...
+				// temporarily doing this to prevent constprop from thinking these are constants
+				b.assign(ea, REG_NF,   REG_TMP1,                  -1, -1);
+				b.assign(ea, REG_VF,   REG_TMP1,                  -1, -1);
+
+				b.iand  (ea, REG_TMP1, REG_TMP1, REG_A,           -1, -1, -1);
+				b.ieq   (ea, REG_ZF,   REG_TMP1, IrConst::ZERO_8, -1, -1, -1);
 			}
 
 			// Comparisons
 			CMP => { // NZC
-				// TODO
+				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
+				self.get_operand_value_into(REG_TMP1, i, b);
+				self.cmp(REG_A, REG_TMP1, opn, i, b);
 			}
 			CPX => { // NZC
-				// TODO
+				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
+				self.get_operand_value_into(REG_TMP1, i, b);
+				self.cmp(REG_X, REG_TMP1, opn, i, b);
 			}
 			CPY => { // NZC
-				// TODO
+				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
+				self.get_operand_value_into(REG_TMP1, i, b);
+				self.cmp(REG_Y, REG_TMP1, opn, i, b);
 			}
 
 			// Shifts and rotates
+			// TODO: BOY this stuff is begging to be abstracted
 			ASL => { // NZC
-				// TODO
+				let addr = self.get_operand(i, b);
+				b.load (ea, REG_TMP1, addr,                     -1, 0);
+
+				// if the number is "negative" then the MSB is 1 so set the carry flag
+				self.set_c(REG_TMP1, i, b);
+				b.ishl(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8,  -1, -1, -1);
+				self.set_nz(REG_TMP1, i, b);
+
+				b.store(ea, REG_TMP1, addr,                     -1, 0);
 			}
 			ASLA => { // NZC
-				// TODO
+				self.set_c(REG_A, i, b);
+				b.ishl(ea, REG_A, REG_A, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_A, i, b);
 			}
 			LSR => { // NZC (NF = 0, hardcoded)
-				// TODO
+				let addr = self.get_operand(i, b);
+				b.load (ea, REG_TMP1, addr, -1, 0);
+
+				// cf = (tmp1 & 1) (i.e. if LSB is 1, set CF)
+				b.iand (ea, REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				b.iushr(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_TMP1, i, b);
+
+				b.store(ea, REG_TMP1, addr, -1, 0);
 			}
 			LSRA => { // NZC (NF = 0, hardcoded)
-				// TODO
+				// cf = (A & 1) (i.e. if LSB is 1, set CF)
+				b.iand (ea, REG_CF, REG_A, IrConst::ONE_8, -1, -1, -1);
+				b.iushr(ea, REG_A,  REG_A, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_A, i, b);
 			}
 			ROL => { // NZC
-				// TODO
+				let addr = self.get_operand(i, b);
+				b.load (ea, REG_TMP1, addr, -1, 0);
+
+				b.assign(ea, REG_TMP2, REG_CF, -1, -1);                     // tmp2 = cf
+				self.set_c(REG_TMP1, i, b);                                 // cf = (a < 0)
+				b.ishl(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				b.ior (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_TMP1, i, b);
+
+				b.store(ea, REG_TMP1, addr, -1, 0);
 			}
 			ROLA => { // NZC
-				// TODO
+				b.assign(ea, REG_TMP2, REG_CF, -1, -1);               // tmp2 = cf
+				self.set_c(REG_A, i, b);                              // cf = (a < 0)
+				b.ishl(ea, REG_A, REG_A, IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				b.ior (ea, REG_A, REG_A, REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_A, i, b);
 			}
 			ROR => { // NZC
-				// TODO
+				let addr = self.get_operand(i, b);
+				b.load (ea, REG_TMP1, addr, -1, 0);
+
+				b.assign(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
+				b.iand  (ea, REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1); // cf = (tmp1 & 1)
+				b.iushr (ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				// TODO: do this with bit set/get IR instructions
+				b.ishl  (ea, REG_TMP2, REG_TMP2, IrConst::_8(7), -1, -1, -1); // tmp2 <<= 7
+				b.ior   (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_TMP1, i, b);
+
+				b.store(ea, REG_TMP1, addr, -1, 0);
 			}
 			RORA  => { // NZC
-				// TODO
+				b.assign(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
+				b.iand  (ea, REG_CF,   REG_A,    IrConst::ONE_8, -1, -1, -1); // cf = (A & 1)
+				b.iushr (ea, REG_A,    REG_A,    IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				// TODO: do this with bit set/get IR instructions
+				b.ishl  (ea, REG_TMP2, REG_TMP2, IrConst::_8(7), -1, -1, -1); // tmp2 <<= 7
+				b.ior   (ea, REG_A,    REG_A,    REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_A, i, b);
 			}
 
 			// ------------------------------------------------------------------------------------
@@ -479,7 +597,7 @@ impl InstDesc {
 			BRK => { // IF = 1
 				self.push_return_addr(i, b);
 				self.push_flags(i, b);
-				b.assign (ea, REG_IF, IrConst::ONE_8,           -1, -1); // set IF
+				b.assign (ea, REG_IF,    IrConst::ONE_8,        -1, -1); // set IF
 				b.load   (ea, REG_TMP16, IrConst::_16(VEC_IRQ), -1, -1); // read IRQ vector
 				b.ibranch(ea, REG_TMP16,                        -1);     // jump to it
 			}
