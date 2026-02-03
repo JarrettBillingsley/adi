@@ -15,10 +15,9 @@ use adi::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
-	// test_gb()?;
-	// test_nes()?;
-	test_toy()?;
-	Ok(())
+	// test_gb()
+	test_nes()
+	// test_toy()
 }
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
@@ -37,7 +36,7 @@ fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
 fn setup_panic() {
 	PanicSettings::new()
 		.lineno_suffix(true)
-		// .most_recent_first(false)
+		.most_recent_first(false)
 		.verbosity(PanicVerbosity::Full)
 	.install();
 }
@@ -432,7 +431,7 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 // ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	let img = Image::new_from_file("tests/data/megaman.nes")?;
+	let img = Image::new_from_file("tests/data/10yf.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);

@@ -48,6 +48,7 @@ const REG_NF: IrReg = IrReg::reg8(11); // 7 Negative
 const REG_TMP1:  IrReg = IrReg::reg8(12);  // 8-bit temporary
 const REG_TMP2:  IrReg = IrReg::reg8(13);  // 8-bit temporary
 const REG_TMP16: IrReg = IrReg::reg16(15); // 16-bit temporary
+const REG_TMP16_2: IrReg = IrReg::reg16(17); // 16-bit temporary
 
 static ARG_REGS: &[IrReg] =
 	&[REG_A, REG_X, REG_Y,        REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
@@ -118,8 +119,10 @@ impl InstDesc {
 				// ABY: R|W
 				let Operand::Indir(RegDisp { reg, disp }, _) = i.ops()[0] else { panic!() };
 
-				// tmp16 = reg + disp
-				b.iuadd(ea, REG_TMP16, reg_to_ir_reg(reg), IrConst::_16(disp as u16), -1, -1, 0);
+				// tmp16 = zxt(reg)
+				// tmp16 += disp
+				b.izxt(ea,  REG_TMP16, reg_to_ir_reg(reg), -1, -1);
+				b.iuadd(ea, REG_TMP16, REG_TMP16, IrConst::_16(disp as u16), -1, -1, 0);
 				REG_TMP16.into()
 			}
 			// Indirect (2 bytes); used only for indirect jump i.e. `jmp ($2000)`.
@@ -203,8 +206,10 @@ impl InstDesc {
 					b.load(ea, REG_TMP16, IrConst::_8(va as u8), -1, 0);
 				}
 
-				// tmp16 = tmp16 + Y
-				b.iuadd(ea, REG_TMP16, REG_TMP16, REG_Y, -1, -1, -1);
+				// tmp16_2 = zxt(Y)
+				// tmp16 = tmp16 + tmp16_2
+				b.izxt(ea,  REG_TMP16_2, REG_Y, -1, -1);
+				b.iuadd(ea, REG_TMP16, REG_TMP16, REG_TMP16_2, -1, -1, -1);
 				REG_TMP16.into()
 			}
 			// PC-relative (1 byte), e.g. `bcc whatever`.
@@ -439,18 +444,33 @@ impl InstDesc {
 
 			// Bitwise ALU
 			AND => { // NZ
-				let src = self.get_operand(i, b);
-				b.iand(ea, REG_A, REG_A, src, -1, -1, 0);
+				if self.addr_mode == AddrMode::IMM {
+					let src = self.get_operand(i, b);
+					b.iand(ea, REG_A, REG_A, src, -1, -1, 0);
+				} else {
+					self.get_operand_value_into(REG_TMP1, i, b);
+					b.iand(ea, REG_A, REG_A, REG_TMP1, -1, -1, -1);
+				}
 				self.set_nz(REG_A, i, b);
 			}
 			ORA => { // NZ
-				let src = self.get_operand(i, b);
-				b.ior(ea, REG_A, REG_A, src, -1, -1, 0);
+				if self.addr_mode == AddrMode::IMM {
+					let src = self.get_operand(i, b);
+					b.ior(ea, REG_A, REG_A, src, -1, -1, 0);
+				} else {
+					self.get_operand_value_into(REG_TMP1, i, b);
+					b.ior(ea, REG_A, REG_A, REG_TMP1, -1, -1, -1);
+				}
 				self.set_nz(REG_A, i, b);
 			}
 			EOR => { // NZ
-				let src = self.get_operand(i, b);
-				b.ixor(ea, REG_A, REG_A, src, -1, -1, 0);
+				if self.addr_mode == AddrMode::IMM {
+					let src = self.get_operand(i, b);
+					b.ixor(ea, REG_A, REG_A, src, -1, -1, 0);
+				} else {
+					self.get_operand_value_into(REG_TMP1, i, b);
+					b.ixor(ea, REG_A, REG_A, REG_TMP1, -1, -1, -1);
+				}
 				self.set_nz(REG_A, i, b);
 			}
 			BIT => { // NZV (NF = mem.7, VF = mem.6, ZF = whether A&op is 0)

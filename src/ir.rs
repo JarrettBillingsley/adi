@@ -674,14 +674,21 @@ cfg: &mut IrCfg) {
 	let mut new_bbs = vec![];
 	let mut new_bbid = bbs.len();
 
+	log::debug!("-------------REWRITE----------------");
+	for bb in bbs.iter() {
+		println!("{:?}", bb);
+	}
+
 	for bb in bbs.iter_mut() {
 		if bb.rewrite_call_or_ret(arg_regs, ret_regs) {
 			// it was a call; we have to make a new dummy bb!
 
 			// first update the cfg.
+			println!("{:?}", cfg.edges(bb.id).collect::<Vec<_>>());
 			let mut edges_iter = cfg.edges(bb.id);
 			let old_dest = edges_iter.next().unwrap().1;
-			assert!(edges_iter.next().is_none(), "more than 1 edge coming out of call bb??");
+			assert!(edges_iter.next().is_none(),
+				"more than 1 edge coming out of call bb?? call into BB in same func?");
 
 			assert!(cfg.remove_edge(bb.id, old_dest).is_some());
 			cfg.add_edge(bb.id, new_bbid, ());
