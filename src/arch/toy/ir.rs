@@ -86,11 +86,11 @@ impl InstDesc {
 	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
-		fn r0(i: &Instruction) -> IrReg {
+		let r0 = | | -> IrReg {
 			reg_to_ir_reg(inst_reg(i, 0))
-		}
+		};
 
-		let r1 = |i: &Instruction| -> IrSrc {
+		let r1 = | | -> IrSrc {
 			self.r1(i)
 		};
 
@@ -98,64 +98,64 @@ impl InstDesc {
 
 		match self.meta_op {
 			MOV => {
-				b.assign(ea, r0(i), r1(i), 0, 1);
+				b.assign(ea, r0(), r1(), 0, 1);
 			}
 			ADD => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.icarry(ea, REG_CF, op0, op1,   -1, 0, 1);
 				b.iuadd(ea,  op0,    op0, op1,    0, 0, 1);
 			}
 			ADC => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.assign(ea,  REG_TMPCF, REG_CF,               -1, -1);
 				b.icarryc(ea, REG_CF,    op0, op1, REG_CF,     -1,  0,  1, -1);
 				b.iuaddc(ea,  op0,       op0, op1, REG_TMPCF,   0,  0,  1, -1);
 			}
 			SUB => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.isborrow(ea, REG_CF, op0, op1,   -1, 0, 1);
 				b.iusub(ea,    op0,    op0, op1,    0, 0, 1);
 			}
 			SBC => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.assign(ea,    REG_TMPCF, REG_CF,                -1, -1);
 				b.isborrowc(ea, REG_CF,    op0, op1, REG_CF,      -1,  0, 1, -1);
 				b.iusubb(ea,    op0,       op0, op1, REG_TMPCF,    0,  0, 1, -1);
 			}
 			AND => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.iand(ea, op0, op0, op1, 0, 0, 1);
 			}
 			OR => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.ior(ea, op0, op0, op1, 0, 0, 1);
 			}
 			XOR => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.ixor(ea, op0, op0, op1, 0, 0, 1);
 			}
 			NOT => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.inot(ea, op0, op1, 0, 1);
 			}
 			CMP => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.ieq(ea,  REG_ZF, op0, op1,   -1, 0, 1);
 				b.islt(ea, REG_NF, op0, op1,   -1, 0, 1);
 				b.iult(ea, REG_CF, op0, op1,   -1, 0, 1);
 			}
 			CMC => {
-				let op0 = r0(i);
-				let op1 = r1(i);
+				let op0 = r0();
+				let op1 = r1();
 				b.assign(ea,    REG_TMPCF, REG_CF,                -1, -1);
 				b.isborrowc(ea, REG_CF,    op0, op1, REG_CF,      -1,  0,  1, -1);
 				b.iusubb(ea,    REG_TMP,   op0, op1, REG_TMPCF,   -1,  0,  1, -1);
@@ -198,25 +198,25 @@ impl InstDesc {
 				b.ret(ea,   REG_TMP16,                       -1);
 			}
 			LD => {
-				let reg = r0(i);
+				let reg = r0();
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
 					b.ipair(ea, REG_TMP16, REG_D, REG_C, -1, -1, -1);
 					REG_TMP16.into()
 				} else {
-					r1(i)
+					r1()
 				};
 
 				b.load(ea, reg, addr, 0, 1);
 			}
 			ST => {
-				let reg = r0(i);
+				let reg = r0();
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
 					b.ipair(ea, REG_TMP16, REG_D, REG_C, -1, -1, -1);
 					REG_TMP16.into()
 				} else {
-					r1(i)
+					r1()
 				};
 
 				b.store(ea, addr, reg, 1, 0);
