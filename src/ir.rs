@@ -740,6 +740,11 @@ fn perform_rewrites(
 	}
 
 	bbs.append(&mut new_bbs);
+
+	log::debug!("-------------AFTER REWRITE----------------");
+	for bb in bbs.iter() {
+		println!("{:?}", bb);
+	}
 }
 
 impl IrBasicBlock {

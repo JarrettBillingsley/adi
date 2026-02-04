@@ -145,16 +145,9 @@ impl Function {
 		&mut self.attrs
 	}
 
-	/// Adds another entry point. Must exist in `bbs` and must not exist in `entrypoints`.
-	pub(crate) fn add_entrypoint(&mut self, bbid: BBId) {
-		assert!(self.bbs.contains(&bbid));
-		assert!(!self.entrypoints.contains(&bbid));
-		self.entrypoints.push(bbid);
-	}
-
 	/// Tries to add another entry point. Must exist in `bbs`. If it is added successfully,
 	/// returns true; if it already exists in the `entrypoints`, returns false.
-	pub(crate) fn try_add_entrypoint(&mut self, bbid: BBId) -> bool {
+	pub(crate) fn add_entrypoint(&mut self, bbid: BBId) -> bool {
 		assert!(self.bbs.contains(&bbid));
 
 		if !self.entrypoints.contains(&bbid) {

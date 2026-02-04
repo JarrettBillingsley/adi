@@ -178,13 +178,10 @@ impl Program {
 		(seg, span)
 	}
 
-	/// Does the given `ea` refer to a basic block that belongs to the function `fid`?
-	///
-	/// Panics if `ea` points *into* a basic block but not at its beginning.
+	/// Does the given `ea` refer to a basic block that belongs to the function `fid`? Also works if
+	/// `ea` refers to the middle of a BB within that function.
 	pub(crate) fn ea_is_bb_in_function(&self, ea: EA, fid: FuncId) -> bool {
 		if let Some(bbid) = self.span_at_ea(ea).bb() {
-			assert!(self.bbidx.get(bbid).ea() != ea, "ea points inside basic block");
-
 			if self.bbidx.get(bbid).func() == fid {
 				return true;
 			}
@@ -239,7 +236,7 @@ impl Program {
 		for &ea in bb.successors() {
 			// would like to use ea_is_bb_in_function here but it doesn't give the successor ID
 			if let Some(succ_id) = self.span_at_ea(ea).bb() {
-				assert!(self.bbidx.get(succ_id).ea() != ea, "ea points inside basic block");
+				// assert!(self.bbidx.get(succ_id).ea() != ea, "ea points inside basic block");
 
 				if self.bbidx.get(succ_id).func() == fid {
 					visit(succ_id);

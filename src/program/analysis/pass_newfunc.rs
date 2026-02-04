@@ -5,7 +5,7 @@ use log::*;
 
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
-use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm };
+use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm, FuncId };
 use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId };
 
 // ------------------------------------------------------------------------------------------------
@@ -160,7 +160,18 @@ impl Program {
 			let fid = self.new_func(bbs);
 
 			// finally, turn the crank by putting more work on the queue
-			self.queue.enqueue_state_change(fid);
+			let list = self.func_find_self_calls(fid);
+
+			if list.is_empty() {
+				trace!("new function at {} has no self-calls.", self.get_func(fid).ea());
+				self.queue.enqueue_state_change(fid);
+			} else {
+				trace!("new function at {} has {} self-calls.",
+					self.get_func(fid).ea(), list.len());
+				for ea in list {
+					self.queue.enqueue_split_func(ea);
+				}
+			}
 		}
 	}
 
@@ -222,5 +233,37 @@ impl Program {
 			Some(l) if l.seg() == seg => l,
 			_                         => EA::unresolved(va.0)
 		}
+	}
+
+	/// Finds any call terminators in the function whose target is in-bounds of the same function.
+	/// It's important to find these and split the function up first, because the state change
+	/// analysis can't handle functions with these "self-calls".
+	fn func_find_self_calls(&self, fid: FuncId) -> Vec<EA> {
+		let func = self.get_func(fid);
+		let mut ret = vec![];
+
+		for bbid in func.all_bbs() {
+			let bb = self.get_bb(bbid);
+
+			match bb.term() {
+				BBTerm::Call { dst, .. } => {
+					if self.ea_is_bb_in_function(*dst, fid) {
+						ret.push(*dst);
+					}
+				}
+
+				BBTerm::IndirCall { dst, .. } => {
+					for ea in dst {
+						if self.ea_is_bb_in_function(*ea, fid) {
+							ret.push(*ea);
+						}
+					}
+				}
+
+				_ => {}
+			}
+		}
+
+		ret
 	}
 }

@@ -18,6 +18,14 @@ impl Program {
 		let mut bbid = self.span_at_ea(ea).bb().expect("uh, there used to be a function here");
 		let fid = self.bbidx.get(bbid).func();
 
+		// early out: were we asked to split a function at its first address?
+		if self.funcs.get(fid).ea() == ea {
+			trace!("- oop nevermind, I was asked to split the function at the start");
+			// since no change, return and DON'T enqueue for state change analysis.
+			// LOL THIS IS GONNA BITE ME AT SOME POINT IN THE FUTURE, ISN'T IT?
+			return;
+		}
+
 		// first: split target BB if needed
 		match self.split_bb(bbid, ea, Some(fid)) {
 			Ok(Some(new_bbid)) => {
@@ -39,7 +47,11 @@ impl Program {
 		// that right now.
 		if self.get_func(fid).is_multi_entry() {
 			trace!(" function at {} is multi-entry already", self.get_func(fid).ea());
-			self.get_func_mut(fid).try_add_entrypoint(bbid);
+			self.get_func_mut(fid).add_entrypoint(bbid);
+
+			// since we technically changed the CFG (a new entry point means MMU state may be
+			// different!), enqueue this for a state change.
+			self.queue.enqueue_state_change(fid);
 			return;
 		}
 
@@ -91,10 +103,14 @@ impl Program {
 			}
 
 			trace!(" split off new function {:?} at {}.", new_fid, ea);
+			self.queue.enqueue_state_change(new_fid);
 		} else {
 			// otherwise, give up and mark it a multi-entry function.
 			trace!(" can't split, marking function at {} as multi-entry", self.get_func(fid).ea());
-			self.get_func_mut(fid).try_add_entrypoint(bbid);
+			self.get_func_mut(fid).add_entrypoint(bbid);
 		}
+
+		// either way, the old function needs a state change analysis
+		self.queue.enqueue_state_change(fid);
 	}
 }
