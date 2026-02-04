@@ -1,24 +1,22 @@
 
 # Yak stack
 
-- figuring out when to actually trigger function splitting
-- ...to deal with tail-whatevers in IR use/return-insertion
+- should implement `HLT` opcodes for Mos65xx
 - ...to test the IR compiler for Mos65xx
 - ...to write IR compilers for the real arches
 
 ALSO
 
-- should implement `HLT` opcodes for Mos65xx
 
 # Tasks!
 
+- detect "always taken" branches (IR `cbranch` instructions where condition is constant)
 - IR instruction name/method name/outputs are needlessly inconsistent.
 - **State change analysis needs to take multiple entry points into account? Maybe?**
 - **Analysis queue improvements:**
 	- use `WorkQueue` to avoid enqueueing the same item multiple times
 	- **possibly:** remove items from lower-priority queues if they are enqueued in a higher-priority queue which will eventually enqueue them for a lower-priority one?
 		- well that's not needed if we do the first thing, cause all that'll happen is the higher-priority pass runs, tries to enqueue it for the lower-priority, and it doesn't get enqueued cause it's already in there.
-- detect "always taken" branches (IR `cbranch` instructions where condition is constant)
 - License: GPL3? (what Mesen uses and I'm referencing that heavily for Mos65xx)
 - generating "name + delta" output is a little more subtle than my first attempt
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
@@ -121,8 +119,6 @@ ALSO
 		- if we add **custom operands,** it might be worth redoing this
 
 - **analysis**
-	- **implied operands**
-		- IR solves this
 	- **marking functions as "bankswitch functions"**
 		- if it e.g. takes the bank to switch as an argument
 		- ofc user can help with this, but we should be able to identify candidates

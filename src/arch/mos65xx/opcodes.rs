@@ -5,7 +5,7 @@
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Opcode {
-	BRK_IMP = 0x00,
+	BRK_IMM = 0x00,
 
 	ADC_ABS = 0x6D, ADC_ABX = 0x7D, ADC_ABY = 0x79, ADC_IMM = 0x69,
 	ADC_IZX = 0x61, ADC_IZY = 0x71, ADC_ZPG = 0x65, ADC_ZPX = 0x75,

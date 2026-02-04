@@ -42,7 +42,7 @@ fn indiry_w (a: u64) -> Operand {
 
 const INST_DESCS: &[InstDesc] = &[
 	// 0x00
-	InstDesc { opcode: BRK_IMP, meta_op: BRK,  addr_mode: IMP, access: Some(direct_r) },
+	InstDesc { opcode: BRK_IMM, meta_op: BRK,  addr_mode: IMM, access: None },
 	InstDesc { opcode: ORA_IZX, meta_op: ORA,  addr_mode: IZX, access: Some(indirx_r) },
 	OP_INVALID,
 	OP_INVALID,

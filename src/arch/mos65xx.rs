@@ -274,7 +274,7 @@ impl InstDesc {
 			Opcode::JSR_LAB                      => InstructionKind::Call,
 			Opcode::RTS_IMP | Opcode::RTI_IMP    => InstructionKind::Ret,
 			Opcode::JMP_LAB                      => InstructionKind::Uncond,
-			Opcode::JMP_IND | Opcode::BRK_IMP    => InstructionKind::Indir,
+			Opcode::JMP_IND | Opcode::BRK_IMM    => InstructionKind::Indir,
 			_ if self.addr_mode == AddrMode::REL => InstructionKind::Cond,
 			_                                    => InstructionKind::Other,
 		}
@@ -333,9 +333,6 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 
 				// +2 to include size of the branch instruction itself
 				REL => ((va.0 as i32) + (img[0] as i8 as i32) + 2) as u16,
-
-				// for BRK
-				IMP => VEC_IRQ,
 
 				_ => unreachable!()
 			};
