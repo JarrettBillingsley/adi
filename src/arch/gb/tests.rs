@@ -1,9 +1,9 @@
 #![allow(unused_imports)]
 
-use crate::memory::{ MmuState, SegId, EA, VA };
+use crate::memory::{ MmuState, SegId, EA, VA, MemAccess };
 use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter,
 	FmtWritePrintOutput, PrinterCtx };
-use crate::program::{ MemAccess, MemIndir, Instruction, Operand };
+use crate::program::{ MemIndir, Instruction, Operand };
 
 use super::{
 	MetaOp,
@@ -160,10 +160,6 @@ impl INameLookup for DummyLookup {
 			0xFFFC => Some("v_hram".into()),
 			_      => None,
 		}
-	}
-
-	fn lookup_ea(&self, addr: EA) -> Option<String> {
-		None
 	}
 }
 

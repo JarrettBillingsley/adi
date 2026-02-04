@@ -142,8 +142,14 @@ impl IPrintOutput for AnsiConsolePrintOutput {
 
 /// Trait to abstract the process of looking up names of addresses.
 pub trait INameLookup {
+	/// Given an `MmuState`	and a `VA`, try to find a name for it. Return `None` if none is found.
 	fn lookup(&self, state: MmuState, addr: VA) -> Option<String>;
-	fn lookup_ea(&self, ea: EA) -> String;
+
+	/// Similar to `lookup`, but for an `EA`. Default implementation returns the EA converted
+	/// to a string in the format `0000:00000000` (segment id, followed by offset into segment).
+	fn lookup_ea(&self, ea: EA) -> String {
+		format!("{:?}", ea)
+	}
 }
 
 /// A dummy struct that implements `INameLookup` whose `lookup` method always returns `None`.
@@ -152,10 +158,6 @@ pub struct NullLookup;
 impl INameLookup for NullLookup {
 	fn lookup(&self, _state: MmuState, _addr: VA) -> Option<String> {
 		None
-	}
-
-	fn lookup_ea(&self, ea: EA) -> String {
-		format!("{:?}", ea)
 	}
 }
 

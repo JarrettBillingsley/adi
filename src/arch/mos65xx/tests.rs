@@ -8,14 +8,14 @@ use super::{
 	lookup_desc,
 };
 
-use crate::memory::{ MmuState, SegId, EA, VA };
+use crate::memory::{ MmuState, SegId, EA, VA, MemAccess };
 use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter,
 	FmtWritePrintOutput, PrinterCtx };
-use crate::program::{ MemAccess, Instruction };
+use crate::program::{ Instruction };
 
 #[test]
 fn opcode_lookup() {
-	assert_eq!(lookup_desc(Opcode::BRK_IMP as u8).meta_op, MetaOp::BRK);
+	assert_eq!(lookup_desc(Opcode::BRK_IMM as u8).meta_op, MetaOp::BRK);
 	assert_eq!(lookup_desc(Opcode::ORA_IZX as u8).meta_op, MetaOp::ORA);
 	assert_eq!(lookup_desc(Opcode::INC_ABX as u8).meta_op, MetaOp::INC);
 	assert_eq!(lookup_desc(0x72                 ).meta_op, MetaOp::UNK);
@@ -106,7 +106,8 @@ fn disasm_success() {
 	use MemAccess::{ R, W, RW, Target };
 	use Opcode::*;
 
-	check_disas(0, &[BRK_IMP as u8],               BRK,  None);
+	check_disas(0, &[CLC_IMP as u8],               CLC,  None);
+	check_disas(0, &[BRK_IMM as u8, 0x69],         BRK,  Some(uimm(0x69)));
 	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(uimm(0xEF)));
 	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(mem(0x3456, R)));
 	check_disas(0, &[STY_ZPG as u8, 0x33],         STY,  Some(mem(0x0033, W)));
@@ -123,7 +124,8 @@ fn disasm_range() {
 	use Opcode::*;
 
 	let code = &[
-		BRK_IMP as u8,
+		CLC_IMP as u8,
+		BRK_IMM as u8, 0x32,
 		LDA_IMM as u8, 0xEF,
 		ADC_ABS as u8, 0x56, 0x34,
 		STY_ZPG as u8, 0x33,
@@ -142,7 +144,8 @@ fn disasm_range() {
 	];
 
 	let expected = &[
-		"brk ",
+		"clc ",
+		"brk #$32",
 		"lda #$EF",
 		"adc $3456",
 		"sty $33",
@@ -150,8 +153,8 @@ fn disasm_range() {
 		"rol beefmaster",
 		"jmp $FFFE",
 		"jmp (VEC_RESET)",
-		"bcc $001F",
-		"bcc $0009",
+		"bcc $0021",
+		"bcc $000B",
 		"ora v_ztable,x",
 		"ldx $40,y",
 		"ldy $6050,x",
@@ -211,22 +214,23 @@ fn printing() {
 	use Opcode::*;
 
 	let tests: &[(Instruction, &str, &str)] = &[
-		(disas(0, &[BRK_IMP as u8]),             "brk ",            "brk "                  ),
-		(disas(0, &[LDA_IMM as u8, 0xEF]),       "lda #$EF",        "li  a, 0xEF"            ),
-		(disas(0, &[ADC_ABS as u8, 0x56, 0x34]), "adc $3456",       "adc a, [0x3456]"       ),
-		(disas(0, &[STY_ZPG as u8, 0x33]),       "sty $33",         "st  y, [0x33]"          ),
-		(disas(0, &[ASL_ZPG as u8, 0x99]),       "asl $99",         "shl [0x99]"            ),
-		(disas(0, &[ROL_ABS as u8, 0xEF, 0xBE]), "rol beefmaster",  "rol [beefmaster]"      ),
-		(disas(0, &[JMP_LAB as u8, 0xFE, 0xFF]), "jmp $FFFE",       "jmp 0xFFFE"            ),
-		(disas(0, &[JMP_IND as u8, 0xFC, 0xFF]), "jmp (VEC_RESET)", "jmp [VEC_RESET]"       ),
-		(disas(3, &[BCC_REL as u8, 10]),         "bcc $000F",       "bcc 0x000F"            ),
-		(disas(8, &[BCC_REL as u8, 0xF2]),       "bcc VEC_RESET",   "bcc VEC_RESET"         ),
-		(disas(0, &[ORA_ZPX as u8, 0x30]),       "ora v_ztable,x",  "or  a, [v_ztable + x]"  ),
-		(disas(0, &[LDX_ZPY as u8, 0x40]),       "ldx $40,y",       "ld  x, [0x40 + y]"      ),
-		(disas(0, &[LDY_ABX as u8, 0x50, 0x60]), "ldy $6050,x",     "ld  y, [0x6050 + x]"    ),
-		(disas(0, &[CMP_ABY as u8, 0x30, 0x00]), "cmp v_ztable,y",  "cmp a, [v_ztable + y]" ),
-		(disas(0, &[SBC_IZX as u8, 0x10]),       "sbc ($10,x)",     "sbc a, [[0x10 + x]]"   ),
-		(disas(0, &[EOR_IZY as u8, 0x90]),       "eor ($90),y",     "xor a, [[0x90] + y]"   ),
+		(disas(0, &[CLC_IMP as u8]),             "clc ",            "clr c"                ),
+		(disas(0, &[BRK_IMM as u8, 3]),          "brk 3",           "brk 3"                ),
+		(disas(0, &[LDA_IMM as u8, 0xEF]),       "lda #$EF",        "li  a, 0xEF"          ),
+		(disas(0, &[ADC_ABS as u8, 0x56, 0x34]), "adc $3456",       "adc a, [0x3456]"      ),
+		(disas(0, &[STY_ZPG as u8, 0x33]),       "sty $33",         "st  y, [0x33]"        ),
+		(disas(0, &[ASL_ZPG as u8, 0x99]),       "asl $99",         "shl [0x99]"           ),
+		(disas(0, &[ROL_ABS as u8, 0xEF, 0xBE]), "rol beefmaster",  "rol [beefmaster]"     ),
+		(disas(0, &[JMP_LAB as u8, 0xFE, 0xFF]), "jmp $FFFE",       "jmp 0xFFFE"           ),
+		(disas(0, &[JMP_IND as u8, 0xFC, 0xFF]), "jmp (VEC_RESET)", "jmp [VEC_RESET]"      ),
+		(disas(3, &[BCC_REL as u8, 10]),         "bcc $000F",       "bcc 0x000F"           ),
+		(disas(8, &[BCC_REL as u8, 0xF2]),       "bcc VEC_RESET",   "bcc VEC_RESET"        ),
+		(disas(0, &[ORA_ZPX as u8, 0x30]),       "ora v_ztable,x",  "or  a, [v_ztable + x]"),
+		(disas(0, &[LDX_ZPY as u8, 0x40]),       "ldx $40,y",       "ld  x, [0x40 + y]"    ),
+		(disas(0, &[LDY_ABX as u8, 0x50, 0x60]), "ldy $6050,x",     "ld  y, [0x6050 + x]"  ),
+		(disas(0, &[CMP_ABY as u8, 0x30, 0x00]), "cmp v_ztable,y",  "cmp a, [v_ztable + y]"),
+		(disas(0, &[SBC_IZX as u8, 0x10]),       "sbc ($10,x)",     "sbc a, [[0x10 + x]]"  ),
+		(disas(0, &[EOR_IZY as u8, 0x90]),       "eor ($90),y",     "xor a, [[0x90] + y]"  ),
 	];
 
 	let old = Mos65xxPrinter::new(SyntaxFlavor::Old);
