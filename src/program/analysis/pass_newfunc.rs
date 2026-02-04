@@ -133,12 +133,20 @@ impl Program {
 				if iter.err().is_some() {
 					assert!(end_ea == iter.err_ea());
 					term = Some(BBTerm::DeadEnd);
+					trace!("DeadEnd terminator due to bad instruction. Instructions:");
+					for inst in insts.iter() {
+						println!("  {} {}", inst.ea(), self.inst_to_string(inst, state));
+					}
 				} else if term.is_none() {
 					// we got through the whole slice with no errors, meaning
 					// this is a fallthrough to the next bb.
 					// if we got to the end of the *segment,* though, end_ea may be invalid.
 					if end_ea.offs() >= seg.len() {
-						term = Some(BBTerm::DeadEnd)
+						term = Some(BBTerm::DeadEnd);
+						trace!("DeadEnd terminator due to end of segment. Instructions:");
+						for inst in insts.iter() {
+							println!("  {} {}", inst.ea(), self.inst_to_string(inst, state));
+						}
 					} else {
 						term = Some(BBTerm::FallThru(end_ea));
 					}

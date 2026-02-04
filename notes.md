@@ -12,6 +12,7 @@ ALSO
 
 # Tasks!
 
+- IR instruction name/method name/outputs are needlessly inconsistent.
 - **State change analysis needs to take multiple entry points into account? Maybe?**
 - **Analysis queue improvements:**
 	- use `WorkQueue` to avoid enqueueing the same item multiple times
@@ -77,6 +78,8 @@ ALSO
 		- on code, data items, enum values, struct members..
 	- custom fields on `Instruction` and `Operand`
 		- for e.g. remembering which instruction description it is so we don't have to keep looking it up, operands that don't fall into one of the provided categories, etc.
+	- "alternate mnemonics" for some instructions
+		- e.g. on x86 there are `jz` and `je`, which are technically two names for the same instruction, but in some contexts it's being used to check for zero and in other for equality... would be a nice quality-of-life addition
 
 - **design issues**
 	- `Instruction::next_ea()` is fundamentally dangerous.
