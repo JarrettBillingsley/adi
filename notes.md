@@ -30,7 +30,13 @@
 		- during `func_to_ir`
 			- mark **which BBs need use-insertion** (and whether they should be inserted at end or one instruction before end)
 			- mark **which BBs need `<return>`-insertion**
-		- then `rewrite_calls_and_rets` can become two functions: `insert_uses` and `insert_return_uses`
+		- then `rewrite_calls_and_rets` can become two functions:
+			- `insert_uses` which inserts uses before or after last inst
+			- `insert_return_uses` which inserts a new intermediate BB and puts <return>s in there
+	- also maybe keep track of a function's **exit points?**
+		- a function can have multiple exit points due to tailcalls/tailbranches/fallthroughs
+		- would be useful to know where they all are
+			- not sure if having the IR have a "virtual" return node that they all connect to would be useful... since they might be going to different places with different sets of live values - not sure what value there is in unifying all that info
 - ...to finish writing the IR compiler for Mos65xx
 
 ALSO
@@ -91,6 +97,7 @@ ALSO
 	- jumptables
 	- functions that access particular hardware registers
 - more NES mappers
+	- **NOTE:** when MMU state changes, may have to call `.set_base_va` on a segment in order to track which VAs a segment appears at
 
 # TODO:
 
@@ -222,7 +229,9 @@ ALSO
 
 **Dead store elimination:** the problem with doing any kind of dead store elim on this SSA is that we don't actually know which values are used **in the presence of function calls and returns.**
 
-At any return point (and there can be more than one in the function!), any currently-live value *might* be a return value. We don't know, because there are no calling conventions. Similarly before a call, any value *might* be an argument.
+I will define **exit point** as anywhere where control flow leaves the function permanently. A return *is just one example;* there are also tailcalls, tailbranches, fallthroughs, etc.
+
+At any exit point (and there can be more than one in the function!), any currently-live value *might* be a return value. We don't know, because there are no calling conventions. Similarly before a call, any value *might* be an argument.
 
 Argument and return value analysis would have to be done in a particular order - on the **call graph,** from leaves to root. Basic idea:
 
@@ -234,14 +243,28 @@ Each arch's IR compiler needs to give more info to the IR analyzer:
 - A list of regs which can be used as args (like, all of them)
 - A list of regs which can be used as returns (again, all of them)
 
-These can be used as the "worst case" starting points for the algorithm which can then prune them down from there (e.g. if a function never uses a _0 reg, then it cannot possibly be an argument........ unless it calls a function which does, and it just passes that reg through!)
+These can be used as the "worst case" starting points for the algorithm which can then prune them down from there (e.g. if a function never uses a _0 reg, then it cannot possibly be an argument........ unless it (tail)calls a function which does, and it just passes that reg through!)
 
-Insight: *if a function uses a _0 reg at all return points, then it does not take/return that register at all.* Why:
+A **return point** is special kind of exit point: where the function returns. A function can have multiple return points.
 
-- Each return is annotated with uses of all currently-live registers.
-- If that register is changed at any point in the function, it will have a nonzero generation.
-- If there are multiple returns, and it's been changed in any control path, then at least one of the return uses will use a nonzero generation of that register.
-- Therefore, if all returns use the _0 version, then it can't have been assigned anywhere (even in a callee), and is unaffected by the function.
+Insight: *if a function **only** has return points, and uses a _0 reg at **all** return point points, then it does not take/return that register at all.* Why:
+
+- If there are *only* return points (and no other kinds of exit points), then the register cannot be needed by this function, the callee. The caller may need it, but *not* the callee.
+	- (By contrast, **if there are any non-return exit points (e.g. a tailcall),** it could mean that the register is an argument passed through to the tailcalled function!)
+- Each return point is annotated with uses of all currently-live registers.
+- If that register is changed at any point in the function, any use of it thereafter will have a nonzero generation.
+- If there are multiple return points, and it's been changed in **any** control path, then **at least one** of the return point uses will use a nonzero generation of that register.
+- Therefore, if all return points use the zero generation, then it can't have been assigned anywhere and is unaffected by the function.
+	- **This definition even extends to functions which call others!** If we know a callee doesn't touch register R, then the `R_n = <return>`s after the `call` will be pruned, leading to `R_0` still being the most recent generation.
+
+The *meaning* of "is unaffected" is ambiguous, however. It could be:
+
+- A caller-saved register that was never used
+	- e.g. `t` registers in MIPS, most go unused in most functions
+- A callee-saved register that was not needed
+	- e.g. `s` registers in MIPS; not using one maintains the agreement that they will have the same value on exit as on entry
+- Something that really *was* an argument, but the code was rewritten and it went unused, so even though the caller sets it before each call, it never gets read
+- I'm sure there are other cases I'm not thinking of...
 
 ---
 

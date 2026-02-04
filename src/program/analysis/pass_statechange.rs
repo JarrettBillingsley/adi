@@ -234,6 +234,7 @@ enum StateInfo {
 	Unk,
 	Some(MmuState),
 	Multi(HashSet<MmuState>),
+	// TODO: Dynamic (once those are actually representable in BasicBlock...)
 }
 
 impl JoinSemiLattice for StateInfo {
