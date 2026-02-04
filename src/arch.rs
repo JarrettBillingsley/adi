@@ -129,6 +129,12 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 					self.va += size;
 					self.ea += size;
 					self.offs += size;
+
+					// terminate iteration if the instruction is a halt
+					if inst.is_halt() {
+						self.offs = self.img.len();
+					}
+
 					Some(inst)
 				}
 

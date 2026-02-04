@@ -64,5 +64,18 @@ pub enum Opcode {
 	DOP_E2 = 0xE2,
 	DOP_F4 = 0xF4,
 
+	HLT_02 = 0x02,
+	HLT_12 = 0x12,
+	HLT_22 = 0x22,
+	HLT_32 = 0x32,
+	HLT_42 = 0x42,
+	HLT_52 = 0x52,
+	HLT_62 = 0x62,
+	HLT_72 = 0x72,
+	HLT_92 = 0x92,
+	HLT_B2 = 0xB2,
+	HLT_D2 = 0xD2,
+	HLT_F2 = 0xF2,
+
 	INVALID = 0xFF,
 }

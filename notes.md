@@ -1,10 +1,6 @@
 
 # Yak stack
 
-- should implement `HLT` opcodes for Mos65xx
-- ...to test the IR compiler for Mos65xx
-- ...to write IR compilers for the real arches
-
 # Imminent tasks!
 
 - detect "always taken" branches (IR `cbranch` instructions where condition is constant)
@@ -19,6 +15,7 @@
 		- well that's not needed if we do the first thing, cause all that'll happen is the higher-priority pass runs, tries to enqueue it for the lower-priority, and it doesn't get enqueued cause it's already in there.
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
+- write GB IR compiler
 
 # TODO:
 

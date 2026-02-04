@@ -379,10 +379,15 @@ impl InstDesc {
 		match self.meta_op {
 			UNK => { panic!("what the hell is an unknown instruction doing in a BB?"); }
 
+			HLT => {
+				// the CFG will handle this.
+				b.nop(ea);
+			}
+
 			// NOPs
 			NOP | DOP => { // no flags changed
-				// uhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh nothing.
-				// really these only matter for cycle counting in emulation but...
+				// have to emit *something* or else we can end up with empty IR BBs.
+				b.nop(ea);
 			}
 
 			// ------------------------------------------------------------------------------------

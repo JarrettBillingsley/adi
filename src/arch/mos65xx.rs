@@ -133,6 +133,8 @@ impl AddrMode {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum MetaOp {
 	UNK,
+	HLT,
+
 	ADC, AND,  ASLA, ASL,  BCC,  BCS,  BEQ,  BIT, BMI, BNE,
 	BPL, BRK,  BVC,  BVS,  CLC,  CLD,  CLI,  CLV, CMP, CPX,
 	CPY, DEC,  DEX,  DEY,  EOR,  INC,  INX,  INY, JMP, JSR,
@@ -152,6 +154,7 @@ impl MetaOp {
 			SyntaxFlavor::Old =>
 				match self {
 					UNK  => "???",
+					HLT  => "kil",
 					ADC  => "adc", AND  => "and", ASLA => "asl", ASL  => "asl",
 					BCC  => "bcc", BCS  => "bcs", BEQ  => "beq", BIT  => "bit",
 					BMI  => "bmi", BNE  => "bne", BPL  => "bpl", BRK  => "brk",
@@ -173,6 +176,7 @@ impl MetaOp {
 			SyntaxFlavor::New =>
 				match self {
 					UNK  => "???",
+					HLT  => "hlt",
 					ADC  => "adc", AND  => "and", ASLA => "shl", ASL  => "shl",
 					BCC  => "bcc", BCS  => "bcs", BEQ  => "beq", BIT  => "bit",
 					BMI  => "bmi", BNE  => "bne", BPL  => "bpl", BRK  => "brk",
@@ -276,6 +280,7 @@ impl InstDesc {
 			Opcode::JMP_LAB                      => InstructionKind::Uncond,
 			Opcode::JMP_IND | Opcode::BRK_IMM    => InstructionKind::Indir,
 			_ if self.addr_mode == AddrMode::REL => InstructionKind::Cond,
+			_ if self.meta_op == MetaOp::HLT     => InstructionKind::Halt,
 			_                                    => InstructionKind::Other,
 		}
 	}

@@ -18,20 +18,22 @@ fn opcode_lookup() {
 	assert_eq!(lookup_desc(Opcode::BRK_IMM as u8).meta_op, MetaOp::BRK);
 	assert_eq!(lookup_desc(Opcode::ORA_IZX as u8).meta_op, MetaOp::ORA);
 	assert_eq!(lookup_desc(Opcode::INC_ABX as u8).meta_op, MetaOp::INC);
-	assert_eq!(lookup_desc(0x72                 ).meta_op, MetaOp::UNK);
+	assert_eq!(lookup_desc(Opcode::HLT_72  as u8).meta_op, MetaOp::HLT);
 	assert_eq!(lookup_desc(0xFF                 ).meta_op, MetaOp::UNK);
 }
 
 #[test]
 fn mnemonics() {
-	assert_eq!(MetaOp::BRK.mnemonic(SyntaxFlavor::Old),  "brk");
-	assert_eq!(MetaOp::BRK.mnemonic(SyntaxFlavor::New),  "brk");
-	assert_eq!(MetaOp::LDA.mnemonic(SyntaxFlavor::Old),  "lda");
-	assert_eq!(MetaOp::LDA.mnemonic(SyntaxFlavor::New),  "ld");
+	assert_eq!(MetaOp::BRK .mnemonic(SyntaxFlavor::Old), "brk");
+	assert_eq!(MetaOp::BRK .mnemonic(SyntaxFlavor::New), "brk");
+	assert_eq!(MetaOp::LDA .mnemonic(SyntaxFlavor::Old), "lda");
+	assert_eq!(MetaOp::LDA .mnemonic(SyntaxFlavor::New), "ld" );
 	assert_eq!(MetaOp::LDAI.mnemonic(SyntaxFlavor::Old), "lda");
-	assert_eq!(MetaOp::LDAI.mnemonic(SyntaxFlavor::New), "li");
-	assert_eq!(MetaOp::UNK.mnemonic(SyntaxFlavor::Old),  "???");
-	assert_eq!(MetaOp::UNK.mnemonic(SyntaxFlavor::New),  "???");
+	assert_eq!(MetaOp::LDAI.mnemonic(SyntaxFlavor::New), "li" );
+	assert_eq!(MetaOp::UNK .mnemonic(SyntaxFlavor::Old), "???");
+	assert_eq!(MetaOp::UNK .mnemonic(SyntaxFlavor::New), "???");
+	assert_eq!(MetaOp::HLT .mnemonic(SyntaxFlavor::Old), "kil");
+	assert_eq!(MetaOp::HLT .mnemonic(SyntaxFlavor::New), "hlt");
 }
 
 /*fn make_instr(va: usize, opcode: u8, ops: &[Operand]) -> Instruction {
@@ -107,6 +109,7 @@ fn disasm_success() {
 	use Opcode::*;
 
 	check_disas(0, &[CLC_IMP as u8],               CLC,  None);
+	check_disas(0, &[HLT_F2  as u8],               HLT,  None);
 	check_disas(0, &[BRK_IMM as u8, 0x69],         BRK,  Some(uimm(0x69)));
 	check_disas(0, &[LDA_IMM as u8, 0xEF],         LDAI, Some(uimm(0xEF)));
 	check_disas(0, &[ADC_ABS as u8, 0x56, 0x34],   ADC,  Some(mem(0x3456, R)));
@@ -172,6 +175,44 @@ fn disasm_range() {
 	for inst in &mut iter {
 		output.push(fmt_inst(&p, &inst, state));
 	}
+
+	assert!(!iter.has_err());
+
+	assert_eq!(expected.len(), output.len());
+
+	for (exp, out) in expected.iter().zip(output.iter()) {
+		assert_eq!(exp, out);
+	}
+}
+
+#[test]
+fn disasm_halt() {
+	use Opcode::*;
+
+	let code = &[
+		CLC_IMP as u8,
+		LDA_IMM as u8, 0xEF,
+		HLT_B2  as u8,
+		ADC_ABS as u8, 0x56, 0x34,
+	];
+
+	let expected = &[
+		"clc ",
+		"lda #$EF",
+		"kil ",
+	];
+
+	let p = Mos65xxPrinter::new(SyntaxFlavor::Old);
+	let state = MmuState::default();
+	let dis: Disassembler = Mos65xxDisassembler.into();
+	let mut iter = dis.disas_all(code, state, VA(0), EA::new(SegId(0), 0));
+	let mut output = Vec::new();
+
+	for inst in &mut iter {
+		output.push(fmt_inst(&p, &inst, state));
+	}
+
+	println!("{:?}", output);
 
 	assert!(!iter.has_err());
 
