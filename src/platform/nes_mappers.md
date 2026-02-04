@@ -1,0 +1,73 @@
+
+## NES Mappers
+
+Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
+
+- 1 (mmc1/sxrom) **e.g. dragon warrior**
+	- *PRG ROM*
+		- each bank is **16KB**
+		- PRG banking unused/disabled if prg0 size <= 32KB
+		- mode 0: entire 32KB `8000-FFFF` swapped in pairs of banks
+			- bank pair is given by even number (0, 2, 4..) - low bit ignored
+			- so `{ 8000 bank n, C000 bank n + 1 }` for n in 0, 2, 4..
+		- mode 2: `{ 8000 bank 0,    C000 swappable }`
+		- mode 3: `{ 8000 swappable, C000 bank -1   }`
+	- *PRG RAM*
+		- optional, each bank is **8KB**, up to 4 banks, mapped to `6000-7FFF`
+- 4 (mmc3/txrom, mmc6/hkrom) - **e.g. mario 3**
+	- **mmc6** is almost same except it has built-in PRG RAM?
+	- *PRG ROM*
+		- each bank is **8KB**, up to 64 banks
+		- frames at `8000, A000, C000, E000`
+		- mode 0: `{ 8000 swappable, A000 swappable, C000 bank -2,   E000 bank -1}`
+		- mode 1: `{ 8000 bank -2,   A000 swappable, C000 swappable, E000 bank -1}`
+	- *PRG RAM*
+		- unbanked, optional **8KB** at `6000-7FFF`
+- 2 (uxrom) **e.g. mega man 1**
+	- *PRG ROM*
+		- each bank is **16KB**
+		- frames at `8000, C000`
+		- `{ 8000 swappable, C000 bank -1 }`
+	- *PRG RAM*
+		- none.
+- 0 (nrom) **e.g. mario 1, duck hunt, 10-yard fight**
+	- *PRG ROM*
+		- no banking; either 16K or 32K; if 16K, starts at `C000`
+	- *PRG RAM*
+		- in Family Basic only, 2/4K at `6000`, mirrored until `7FFF`
+- 3 (cnrom) **e.g. arkanoid**
+	- *PRG ROM*
+		- no banking, just 32K.
+	- *PRG RAM*
+		- none.
+- 7 (axrom) **e.g. battletoads**
+	- *PRG ROM*
+		- just one **32KB** bank at `8000`, up to 8 banks.
+	- *PRG RAM*
+		- none.
+- 206 (mimic-1, namcot 118) **e.g. gauntlet**
+	- *PRG ROM*
+		- predecessor of MMC3
+		- each bank is **8KB**, up to 16 banks
+		- frames at `8000` and `A000`
+		- `{ 8000 swappable, A000 swappable, C000 bank -2, E000 bank -1 }`
+	- *PRG RAM*
+		- none.
+- 11 (color dreams) **e.g. exodus (lmao)**
+	- *PRG ROM*
+		- just one **32KB** bank at `8000`, up to 4 banks.
+	- *PRG RAM*
+		- none.
+- 5 (mmc5/exrom) **e.g. castlevania 3**
+	- *PRG ROM*
+		- ..... it's complicated.
+	- *PRG RAM*
+- 19 (namco N129/N163) **e.g. star wars (N129), rolling thunder (N163)**
+	- *PRG ROM*
+		- **8KB** banks, up to **512KB** (64 banks) total
+		- frames at `8000, A000, C000, E000`
+		- `{ 8000 swappable, A000 swappable, C000 swappable, E000 bank -1}`
+	- *PRG RAM*
+		- *optional* battery-backed **8KB** at `6000`
+	- also may have 128B internal battery-backed RAM
+		- that's used for the wavetable synth at runtime, but I guess they use it for savegames when it's powered off

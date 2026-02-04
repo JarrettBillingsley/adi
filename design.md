@@ -285,6 +285,7 @@ Here are the major simplifying assumptions I am operating under for this analysi
 1. **The bytes of a single instruction will be *entirely* contained within one memory segment.**
 	- Typically the way these games were written was by having one source code file per memory segment. You run that file through the assembler, you get the ROM image for that segment. So, it would be *very* unlikely for a human program to split a single instruction across two files that represent different segments.
 	- In the entire NES game library, there is a *single* game that splits the bytes of an instruction across two non-contiguous segments a *single* time. Is it even intentional?? Who knows!!
+		- [on this page](https://wiki.nesdev.com/w/index.php/Tricky-to-emulate_games) it's The Magic of Scheherazade
 2. **A function's code will be *entirely* contained within one memory segment.**
 	- Again, following from how these programs were written, all the basic blocks that comprise a function would *typically* be in one file, and therefore one segment.
 	- In the probably-rare-but-definitely-possible case that this assumption is wrong, it might be the case that the two parts of the function can be modeled as two functions where the first tailcalls the second. 

@@ -406,10 +406,11 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 		IntAnd => val1 & val2,
 		IntOr =>  val1 | val2,
 
-		// TODO: for all shifts, what if shift distance exceeds bits? checked_shx().unwrap_or(0)
-		// treats it as "all bits shifted off end" but some architectures instead shift only by
+		// TODO: for all shifts, what if shift distance exceeds bits? checked_shx().unwrap_or
+		// (0) treats it as "all bits shifted off end" but some architectures instead shift only by
 		// lower bits (so e.g. if it's a 16-bit arch, and you shift by 17, it treats it as shifting
-		// by 1). Should that be an option? or give an error? or...?
+		// by 1). Should that be an option? or give an error? or force arches to mask off the
+		// distance before passing it to a shift? or...?
 		IntShl => match size {
 			ValSize::_8  => (val1 as u8).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_16 => (val1 as u16).checked_shl(val2 as u32).unwrap_or(0) as u64,
