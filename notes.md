@@ -1,43 +1,8 @@
 
 # Yak stack
 
-- dealing with tailcalls in `rewrite_calls_and_rets`
-	- basically, any BBTerm other than Ret *could* have 0 in-function successors, but the current algorithm assumes that that's only true for Ret.
-	- `FallThru`, `Jump`, `Call { ret }`, `IndirCall { ret }`, `Cond { t, f }`, `JumpTbl(all)`, `StateChange` could *all* have an out-of-function successor
-	- **how do we handle this?**
-		- so, the const prop algorithm only operates **within a single function**
-		- so it's not really a *problem* for it to just run into "an end" and stop there
-		- however, those "ends" should be represented in the IR somehow
-			- because later, we *do want that information* about what values are in use at that point so that we can do argument/return/clobber analysis
-			- and also so we can propagate MMU state from all terminating BBs to successors, even if those successors are in another function
-		- but representing them as an IR `ret` is inaccurate
-			- cause they may be more like a `call`...
-			- but we can't really use a `call` there because `rewrite_calls_and_rets` would try to insert a dummy BB after
-	- maybe `rewrite_calls_and_rets` needs to *know* that the successor is out-of-function!
-		- but ofc it'd have to deal with more than just `call` and `ret`
-		- I kinda thought about this already: **TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually end with a terminator. is that an issue? the IR CFG encodes this info already...**
-			- so yeah, maybe `rewrite_calls_and_rets` shouldn't be looking for `call` and `ret` instructions themselves but rather **at the IR CFG**
-				- `call` and `ret` are just *special cases* in that algorithm
-				- yes before every `call` and `ret` we need to insert `use`s, but *not every `call` needs `= <return>` after it, and **not only** calls need `use`s before them*
-				- ahhhhhh
-	- **realization: you can only *elide* the "dummy `use`s at end" in blocks where *all successors are in the same function**
-		- both `call` and `ret` have a successor (`target`) that is out-of-function, which is why I had to insert them there
-		- but that generalizes to other kinds of BBs and other instructions...
-			- BBs with `DeadEnd`, `FallThru`, `StateChange` end in a *non*-control-flow instruction but may need `use`s inserted
-				- for `StateChange` it will be *before* the terminating instruction, but for the other two, *after*
-			- `icall`, `branch`, `cbranch`, `ibranch` all need the same "insert `use`s before them" behavior
-	- so I'm thinking:
-		- during `func_to_ir`
-			- mark **which BBs need use-insertion** (and whether they should be inserted at end or one instruction before end)
-			- mark **which BBs need `<return>`-insertion**
-		- then `rewrite_calls_and_rets` can become two functions:
-			- `insert_uses` which inserts uses before or after last inst
-			- `insert_return_uses` which inserts a new intermediate BB and puts <return>s in there
-	- also maybe keep track of a function's **exit points?**
-		- a function can have multiple exit points due to tailcalls/tailbranches/fallthroughs
-		- would be useful to know where they all are
-			- not sure if having the IR have a "virtual" return node that they all connect to would be useful... since they might be going to different places with different sets of live values - not sure what value there is in unifying all that info
 - ...to finish writing the IR compiler for Mos65xx
+- ...to finish writing IR compilers for the real arches
 
 ALSO
 
@@ -45,7 +10,6 @@ ALSO
 
 # Tasks!
 
-- **write IR compilers for the real arches (oof)**
 - detect "always taken" branches (IR `cbranch` instructions where condition is constant)
 - License: GPL3? (what Mesen uses and I'm referencing that heavily for Mos65xx)
 - generating "name + delta" output is a little more subtle than my first attempt

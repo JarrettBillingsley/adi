@@ -424,6 +424,16 @@ impl Debug for IrBasicBlock {
 }
 
 // ------------------------------------------------------------------------------------------------
+// IrRewrite
+// ------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum IrRewrite {
+	Uses { before_last: bool },
+	Returns,
+}
+
+// ------------------------------------------------------------------------------------------------
 // IrFunction
 // ------------------------------------------------------------------------------------------------
 
@@ -446,9 +456,14 @@ pub(crate) struct IrFunction {
 }
 
 impl IrFunction {
-	pub(crate) fn new(compiler: &impl IIrCompiler, real_fid: FuncId, mut bbs: Vec<IrBasicBlock>,
-	mut cfg: IrCfg) -> Self {
-		rewrite_calls_and_rets(compiler, &mut bbs, &mut cfg);
+	pub(crate) fn new(
+		compiler: &impl IIrCompiler,
+		rewrites: Vec<(IrBBId, IrRewrite)>,
+		real_fid: FuncId,
+		mut bbs: Vec<IrBasicBlock>,
+		mut cfg: IrCfg
+	) -> Self {
+		perform_rewrites(compiler, rewrites, &mut bbs, &mut cfg);
 		ssa::to_ssa(&mut bbs, &cfg);
 		Self {
 			real_fid,
@@ -655,7 +670,7 @@ impl<'func> ConstAddrsIter<'func> {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Call/return rewriting
+// Rewrites
 // ------------------------------------------------------------------------------------------------
 
 /// Rewrites each call instruction in two ways:
@@ -665,30 +680,44 @@ impl<'func> ConstAddrsIter<'func> {
 ///    return register.
 ///
 /// Also inserts 'use' instructions before each return to mark all return registers as used.
-fn rewrite_calls_and_rets(compiler: &impl IIrCompiler, bbs: &mut Vec<IrBasicBlock>,
-cfg: &mut IrCfg) {
-	// TODO: what about tailcalls/tailbranches? aaa...
+fn perform_rewrites(
+	compiler: &impl IIrCompiler,
+	rewrites: Vec<(IrBBId, IrRewrite)>,
+	bbs: &mut Vec<IrBasicBlock>,
+	cfg: &mut IrCfg
+) {
 	let arg_regs = compiler.arg_regs();
 	let ret_regs = compiler.return_regs();
-
-	let mut new_bbs = vec![];
-	let mut new_bbid = bbs.len();
 
 	log::debug!("-------------REWRITE----------------");
 	for bb in bbs.iter() {
 		println!("{:?}", bb);
 	}
 
-	for bb in bbs.iter_mut() {
-		if bb.rewrite_call_or_ret(arg_regs, ret_regs) {
-			// it was a call; we have to make a new dummy bb!
+	// first pass: insert uses
+	for (irbbid, rewrite) in rewrites.iter() {
+		if let IrRewrite::Uses { before_last } = rewrite {
+			bbs[*irbbid].insert_dummy_uses(arg_regs, ret_regs, *before_last);
+		}
+	}
+
+	let mut new_bbs = vec![];
+	let mut new_bbid = bbs.len();
+
+	// second pass: insert dummy BBs for return-uses
+	for (irbbid, rewrite) in rewrites.into_iter() {
+		if matches!(rewrite, IrRewrite::Returns) {
+			let bb = &mut bbs[irbbid];
 
 			// first update the cfg.
 			println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
 			let mut edges_iter = cfg.edges(bb.id);
-			let old_dest = edges_iter.next().unwrap().1;
+			let old_dest = edges_iter.next()
+				.expect("IrWrite::Returns put on a BB with no in-function successor")
+				.1;
 			assert!(edges_iter.next().is_none(),
-				"more than 1 edge coming out of call bb?? call into BB in same func?");
+				"IrWrite::Returns put on a BB with 2 in-function successors; caused by call into \
+				BB in same func. Why hasn't this function been split?");
 
 			assert!(cfg.remove_edge(bb.id, old_dest).is_some());
 			cfg.add_edge(bb.id, new_bbid, ());
@@ -716,32 +745,32 @@ cfg: &mut IrCfg) {
 impl IrBasicBlock {
 	/// Inserts dummy uses of the arg/return regs before call and return instructions.
 	/// Returns true if a call was rewritten, so the caller can then insert the dummy BB.
-	fn rewrite_call_or_ret(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg]) -> bool {
-		if self.insts.is_empty() {
-			return false;
-		}
+	fn insert_dummy_uses(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg], before_last: bool) {
+		// safe because `func_to_ir` checks that every IR BB has at least 1 instruction.
+		let (terminating_inst, _) = self.insts.split_last().unwrap();
+		let terminating_inst = *terminating_inst;
 
-		// unwraps below are safe because of the above check.
-		let (is_call, regs) = match self.insts.last().unwrap().kind() {
-			IrInstKind::Call { .. } |
-			IrInstKind::ICall { .. } => (true, Some(arg_regs)),
-			IrInstKind::Ret { .. }   => (false, Some(ret_regs)),
-			_                        => (false, None),
+		// the match is also valid because irbb_terminator_sanity_check ensured that any BB that
+		// ends in IrInstKind::Ret really did come from a BB with BBTerm::Ret.
+		let regs = match terminating_inst.kind() {
+			IrInstKind::Ret { .. } => ret_regs,
+			_                      => arg_regs,
 		};
 
-		if let Some(regs) = regs {
-			if !regs.is_empty() {
-				let old_inst = self.insts.pop().unwrap();
-				let ea = old_inst.ea();
+		if !regs.is_empty() {
+			let ea = terminating_inst.ea();
 
-				for &reg in regs.iter() {
-					self.insts.push(IrInst::use_(ea, reg));
-				}
+			if before_last {
+				self.insts.pop();
+			}
 
-				self.insts.push(old_inst);
+			for &reg in regs.iter() {
+				self.insts.push(IrInst::use_(ea, reg));
+			}
+
+			if before_last {
+				self.insts.push(terminating_inst);
 			}
 		}
-
-		is_call
 	}
 }

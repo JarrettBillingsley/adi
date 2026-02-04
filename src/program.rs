@@ -178,6 +178,21 @@ impl Program {
 		(seg, span)
 	}
 
+	/// Does the given `ea` refer to a basic block that belongs to the function `fid`?
+	///
+	/// Panics if `ea` points *into* a basic block but not at its beginning.
+	pub(crate) fn ea_is_bb_in_function(&self, ea: EA, fid: FuncId) -> bool {
+		if let Some(bbid) = self.span_at_ea(ea).bb() {
+			assert!(self.bbidx.get(bbid).ea() != ea, "ea points inside basic block");
+
+			if self.bbidx.get(bbid).func() == fid {
+				return true;
+			}
+		}
+
+		false
+	}
+
 	pub(crate) fn span_begin_analysis(&mut self, ea: EA) {
 		self.segment_from_ea_mut(ea).span_begin_analysis(ea)
 	}
@@ -213,6 +228,32 @@ impl Program {
 			#[call(get_mut)]
 			pub fn get_bb_mut(&mut self, id: BBId) -> &mut BasicBlock;
 		}
+	}
+
+	/// Given a BB, iterate over only the successors which appear within the same function.
+	/// This does not return an iterator for Borrowing Reasons.
+	pub fn bb_successors_in_function(&self, bbid: BBId, mut visit: impl FnMut(BBId)) {
+		let bb = self.bbidx.get(bbid);
+		let fid = bb.func();
+
+		for &ea in bb.successors() {
+			// would like to use ea_is_bb_in_function here but it doesn't give the successor ID
+			if let Some(succ_id) = self.span_at_ea(ea).bb() {
+				assert!(self.bbidx.get(succ_id).ea() != ea, "ea points inside basic block");
+
+				if self.bbidx.get(succ_id).func() == fid {
+					visit(succ_id);
+				}
+			}
+		}
+	}
+
+	/// Are all successors of `bbid` in the same function that `bbid` appears in?
+	pub fn bb_all_successors_in_function(&self, bbid: BBId) -> bool {
+		let bb = self.bbidx.get(bbid);
+		let fid = bb.func();
+
+		bb.successors().all(|&ea| { self.ea_is_bb_in_function(ea, fid) })
 	}
 
 	/// Iterator over all functions in the program, in arbitrary order.
@@ -691,20 +732,5 @@ impl Program {
 		}
 
 		reachable
-	}
-
-	/// Given a BB, iterate over only the successors which appear within the same function.
-	/// This does not return an iterator for Borrowing Reasons.
-	pub fn bb_successors_in_function(&self, bbid: BBId, mut visit: impl FnMut(BBId)) {
-		let bb = self.bbidx.get(bbid);
-		let fid = bb.func();
-
-		for &ea in bb.successors() {
-			if let Some(succ_id) = self.span_at_ea(ea).bb() {
-				if self.bbidx.get(succ_id).func() == fid {
-					visit(succ_id);
-				}
-			}
-		}
 	}
 }

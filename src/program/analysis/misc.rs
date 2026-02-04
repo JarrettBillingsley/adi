@@ -6,7 +6,8 @@ use std::collections::{ HashMap };
 
 use crate::arch::{ IArchitecture, IIrCompiler };
 use crate::platform::{ IPlatform };
-use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrCfg };
+use crate::ir::{ IrFunction, IrBuilder, IrRewrite, IrBasicBlock, IrBBId, IrCfg, IrInst,
+	IrInstKind };
 
 // ------------------------------------------------------------------------------------------------
 // Misc analysis helper functions
@@ -106,6 +107,8 @@ impl Program {
 		let mut bbs = vec![];
 		let mut bbid_to_irbbid = HashMap::new();
 
+		let mut rewrites: Vec<(IrBBId, IrRewrite)> = vec![];
+
 		for (irbbid, bbid) in func.all_bbs().enumerate() {
 			let bb = self.get_bb(bbid);
 			let mut b = IrBuilder::new();
@@ -116,10 +119,48 @@ impl Program {
 				compiler.build_ir(inst, None, &mut b));
 			compiler.build_ir(last, bb.control_target(), &mut b);
 
+			// determine what kind of use-insertion is needed, if any.
+			use BBTerm::*;
+			match bb.term {
+				// never insert
+				DeadEnd | Halt => {}
+
+				// always insert, before final
+				Return => {
+					// before, ret regs
+					rewrites.push((irbbid, IrRewrite::Uses { before_last: true }));
+				}
+
+				_ => {
+					// only insert uses if there is *at least one* out-of-function successor.
+					if !self.bb_all_successors_in_function(bbid) {
+						let before_last = match bb.term {
+							Jump(..) | JumpTbl(..) | Cond{..} | Call{..} | IndirCall{..} => true,
+							FallThru(..) | StateChange(..)                               => false,
+							_ => unreachable!()
+						};
+
+						rewrites.push((irbbid, IrRewrite::Uses { before_last }));
+					}
+				}
+			}
+
+			// determine if return-insertion is needed
+			if let Call { ret, .. } | IndirCall { ret, .. } = bb.term {
+				// if ret is an in-function successor, it needs return-insertion
+				if self.ea_is_bb_in_function(ret, bb.func()) {
+					rewrites.push((irbbid, IrRewrite::Returns));
+				}
+			}
+
 			// TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually
 			// end with a terminator. is that an issue? the IR CFG encodes this info already...
 
 			let insts = b.finish();
+			assert!(!insts.is_empty(),
+				"no IR instructions emitted for BB {:?} at {:?}", bb.id(), bb.ea());
+
+			irbb_terminator_sanity_check(bb.term(), &insts);
 			bbs.push(IrBasicBlock::new(irbbid, bbid, insts));
 			bbid_to_irbbid.insert(bbid, irbbid);
 		}
@@ -139,6 +180,100 @@ impl Program {
 			});
 		}
 
-		IrFunction::new(&compiler, fid, bbs, cfg)
+		IrFunction::new(&compiler, rewrites, fid, bbs, cfg)
+	}
+}
+
+/// Does sanity checking on the terminating instruction of an IR BB to ensure the arch IR
+/// compiler is implemented correctly (or at least, consistently with the instruction
+/// categorization).
+///
+/// These are the rules. Really it's only checking "if the BBTerm is this, then the IrInstKind
+/// must be that," but the first column is to clarify *how* those BBTerms were determined.
+///
+/// | if an instruction | then analysis used | and the IR compiler should have  |
+/// | was categorized   | this terminator... | emitted this kind of instruction |
+/// | as a...           |                    | as the IRBB's last one.          |
+/// |-------------------|--------------------|----------------------------------|
+/// | `InstructionKind` | `BBTerm`           | `IrInstKind`                     |
+/// |-------------------|--------------------|----------------------------------|
+/// | `Ret`             | `Return`           | `Ret`                            |
+/// | `Halt`            | `Halt`             | non-control-flow is allowed\*    |
+/// | `Indir`           | `JumpTbl`          | `IBranch`                        |
+/// | `IndirCall`       | `IndirCall`        | `ICall`                          |
+/// | `Call`            | `Call`             | `Call`                           |
+/// | `Uncond`          | `Jump`             | `Branch`                         |
+/// | `Cond`            | `Cond`             | `CBranch`                        |
+/// | _                 | `DeadEnd`          | non-control-flow is allowed\*    |
+/// | _                 | `FallThru`         | non-control-flow is allowed      |
+/// | _                 | `StateChange`      | `Load` or `Store`                |
+///
+/// Other notes:
+///
+///   - Currently only loads or stores are checked for MMU state changes. This *could* change in
+///     the future, but that seems unlikely.
+///   - For `BBTerm::Halt` and `BBTerm::DeadEnd`, currently any non-control flow instruction is
+///     allowed, but that may change in the future (if `IrInstKind` gains some halt or dead-end
+///     instructions).
+///
+/// Panics if the above check for the appropriate terminating
+/// instruction fails.
+fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
+	// safe because code above asserts it's not empty
+	let (inst, _) = insts.split_last().unwrap();
+
+	use BBTerm::*;
+	match term {
+		FallThru(..) | Halt | DeadEnd => {
+			match inst.kind() {
+				IrInstKind::Ret { .. }
+				| IrInstKind::IBranch { .. }
+				| IrInstKind::ICall { .. }
+				| IrInstKind::Call { .. }
+				| IrInstKind::Branch { .. }
+				| IrInstKind::CBranch { .. } => {
+					panic!("for `{:?}`, the terminating instruction should not have been a \
+						control flow instruction, but found this: {:?}", term, inst.kind());
+				}
+
+				_ => {} // yay
+			}
+		}
+		Return => {
+			assert!(matches!(inst.kind(), IrInstKind::Ret { .. }),
+				"for `BBTerm::Return`, the terminating instruction should have \
+				been `IrInstKind::Ret`, but found this instead: {:?}", inst.kind());
+		}
+		JumpTbl(..) => {
+			assert!(matches!(inst.kind(), IrInstKind::IBranch { .. }),
+				"for `BBTerm::Jump`, the terminating instruction should have \
+				been `IrInstKind::IBranch`, but found this instead: {:?}", inst.kind());
+		}
+		IndirCall {..} => {
+			assert!(matches!(inst.kind(), IrInstKind::ICall { .. }),
+				"for `BBTerm::Indir`, the terminating instruction should have \
+				been `IrInstKind::ICall`, but found this instead: {:?}", inst.kind());
+		}
+		Call {..} => {
+			assert!(matches!(inst.kind(), IrInstKind::Call { .. }),
+				"for `BBTerm::Call`, the terminating instruction should have \
+				been `IrInstKind::Call`, but found this instead: {:?}", inst.kind());
+		}
+		Jump(..) => {
+			assert!(matches!(inst.kind(), IrInstKind::Branch { .. }),
+				"for `BBTerm::Jump`, the terminating instruction should have \
+				been `IrInstKind::Branch`, but found this instead: {:?}", inst.kind());
+		}
+		Cond {..} => {
+			assert!(matches!(inst.kind(), IrInstKind::CBranch { .. }),
+				"for `BBTerm::Cond`, the terminating instruction should have \
+				been `IrInstKind::CBranch`, but found this instead: {:?}", inst.kind());
+		}
+		StateChange(..) => {
+			assert!(matches!(inst.kind(), IrInstKind::Load { .. } | IrInstKind::Store { .. }),
+				"for `BBTerm::StateChange`, the terminating instruction should have \
+				been `IrInstKind::Load` or `IrInstKind::Store`, but found this instead: {:?}",
+				inst.kind());
+		}
 	}
 }
