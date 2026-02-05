@@ -21,9 +21,18 @@ impl Program {
 		trace!("------------------------------------------------------------------------");
 		trace!("- begin func state change analysis at {}", self.get_func(fid).ea());
 
-		// --------------------------------------------------------
-		// part 1: construct IR, do constant propagation, and determine *where* state changes are
+		let changes = self.func_find_state_changes(fid);
+		self.func_apply_state_changes(fid, changes);
 
+		for (bbid, new_state) in self.func_run_state_change_dataflow(fid) {
+			self.bb_apply_new_state(bbid, new_state);
+		}
+
+		self.queue.enqueue_func_refs(fid);
+	}
+
+	/// part 1: construct IR, do constant propagation, and determine *where* state changes are
+	fn func_find_state_changes(&mut self, fid: FuncId) -> Vec<(EA, MmuState)> {
 		let irfunc = self.func_to_ir(fid);
 		// println!("------------------------------------------------------------------");
 		// println!("Constants:");
@@ -41,6 +50,7 @@ impl Program {
 		// on the instruction *after* it.
 		//
 		// MmuState is that new state.
+
 		let mut changes: Vec<(EA, MmuState)> = vec![];
 
 		for /*aaa@*/ ConstAddr { bbid, ea, opn, addr, kind, srcs } in irfunc.const_addrs() {
@@ -51,8 +61,7 @@ impl Program {
 			let inst = bb.inst_at_ea_mut(ea).unwrap(); // safe because of above
 
 			// let's double-check to make sure the arch is implemented properly.
-			let op = inst.get_op(opn);
-			match op {
+			match inst.get_op(opn) {
 				Operand::Mem(_, _) | Operand::Indir(_, _) => {}
 				Operand::Reg(_) =>
 					panic!("this shouldn't be possible. should it be Operand::Indir?"),
@@ -113,13 +122,11 @@ impl Program {
 		// *thought* they were Static but a revisit determines they're not...)
 		// (cropped up in battletoads bankswitch function at EA 0003:00007F84 (PRG0:FF84))
 
-		// --------------------------------------------------------
-		// part 2: split BBs at state change instructions
+		changes
+	}
 
-		// we're about to change the function, so let's drop this so we don't accidentally use the
-		// outdated IR
-		drop(irfunc);
-
+	/// part 2: split BBs at state change instructions
+	fn func_apply_state_changes(&mut self, fid: FuncId, changes: Vec<(EA, MmuState)>) {
 		for (ea, new_state) in changes.into_iter() {
 			let bbid = self.span_at_ea(ea).bb().expect("I mean it's in here cause it was in a BB");
 
@@ -157,11 +164,10 @@ impl Program {
 			let bb = self.bbidx.get(bbid);
 			trace!("rewrote terminator of BB {:?} @ {:?} to {:?}", bbid, bb.ea(), bb.term());
 		}
+	}
 
-		// --------------------------------------------------------
-		// part 3: propagate state changes determined above
-
-		// 1. run the dataflow algorithm
+	/// part 3: run state change dataflow algorithm and determine new states for all BBs
+	fn func_run_state_change_dataflow(&self, fid: FuncId) -> impl Iterator<Item = (BBId, StateInfo)> {
 		let func       = self.get_func(fid);
 		let ana        = self.func_begin_analysis(func);
 		let all_bbs    = ana.all_bbs().collect::<Vec<_>>();
@@ -183,48 +189,37 @@ impl Program {
 		let mut flow = StateFlow::new(preds, &all_bbs, ana.head_id(), head_state, &to_propagate);
 		flow.run(ana.cfg());
 		flow.dump_state("final", &all_bbs);
-
-		// 2. apply the changes (if possible)
-		for (bbid, new_state) in flow.into_iter() {
-			match new_state {
-				StateInfo::Unk => {
-					// I could see this happening if there is a disconnected BB in the CFG
-					// but uhhhhhhh that shouldn't happen right now
-					panic!("this shouldn't be possible? flow algo determined unknown state...");
-				}
-				StateInfo::Some(new_state) => {
-					self.bbidx.get_mut(bbid).set_mmu_state(new_state);
-					// we might be able to resolve unresolved EAs in the terminator.
-					let changed = self.resolve_unresolved_terminator(new_state, bbid);
-
-					if changed {
-						trace!("changed terminator of {:?}", bbid);
-					}
-				}
-				StateInfo::Multi(states) => {
-					let new_state = *states.iter().next().unwrap();
-					warn!("multiple possible states found for BB {:?} at {}: {:?}; picking \
-						state {:?} for it arbitrarily",
-						bbid, self.bbidx.get(bbid).ea(), states, new_state);
-					// TODO: point of interest for user to investigate
-
-					// TODO: this is just temporary code!!!!!!
-					self.bbidx.get_mut(bbid).set_mmu_state(new_state);
-					// we might be able to resolve unresolved EAs in the terminator.
-					let changed = self.resolve_unresolved_terminator(new_state, bbid);
-
-					if changed {
-						trace!("changed terminator of {:?}", bbid);
-					}
-				}
-			}
-		}
-
-		// and set this function up for its refs pass.
-		self.queue.enqueue_func_refs(fid);
+		flow.into_iter()
 	}
 
-	fn resolve_unresolved_terminator(&mut self, state: MmuState, bbid: BBId) -> bool {
+	/// apply new state from the dataflow algorithm to a BB
+	fn bb_apply_new_state(&mut self, bbid: BBId, new_state: StateInfo) {
+		match new_state {
+			StateInfo::Unk => {
+				// I could see this happening if there is a disconnected BB in the CFG
+				// but uhhhhhhh that shouldn't happen right now
+				panic!("this shouldn't be possible? flow algo determined unknown state...");
+			}
+			StateInfo::Some(new_state) => {
+				self.bbidx.get_mut(bbid).set_mmu_state(new_state);
+				self.resolve_unresolved_terminator(new_state, bbid);
+			}
+			StateInfo::Multi(states) => {
+				let new_state = *states.iter().next().unwrap();
+				warn!("multiple possible states found for BB {:?} at {}: {:?}; picking \
+					state {:?} for it arbitrarily",
+					bbid, self.bbidx.get(bbid).ea(), states, new_state);
+				// TODO: point of interest for user to investigate
+
+				// TODO: this is just temporary code!!!!!! until BBs can have multi-states
+				self.bbidx.get_mut(bbid).set_mmu_state(new_state);
+				self.resolve_unresolved_terminator(new_state, bbid);
+			}
+		}
+	}
+
+	/// attempt to resolve an unresolved terminator, now that new state is known
+	fn resolve_unresolved_terminator(&mut self, state: MmuState, bbid: BBId) {
 		let mut term = self.bbidx.get(bbid).term().clone();
 		let mut changed = false;
 
@@ -242,15 +237,14 @@ impl Program {
 		}
 
 		if changed {
+			trace!("changed terminator of {:?} to {:?}", bbid, term);
 			*self.bbidx.get_mut(bbid).term_mut() = term;
 		}
-
-		changed
 	}
 }
 
 // ------------------------------------------------------------------------------------------------
-// NEW SHIT
+// StateInfo
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -284,6 +278,10 @@ impl JoinSemiLattice for StateInfo {
 		}
 	}
 }
+
+// ------------------------------------------------------------------------------------------------
+// StateFlow
+// ------------------------------------------------------------------------------------------------
 
 struct StateFlow<'f> {
 	preds:    &'f CfgPredecessors,

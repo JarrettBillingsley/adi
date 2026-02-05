@@ -1,6 +1,9 @@
 
 # Yak stack
 
+- I don't think OpInfo::VARef is needed
+	- its job can be done with an unresolved EA
+
 # Imminent tasks!
 
 - detect "always taken" branches (IR `cbranch` instructions where condition is constant)
