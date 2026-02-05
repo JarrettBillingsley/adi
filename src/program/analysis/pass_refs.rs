@@ -1,5 +1,6 @@
 
 use std::iter::{ IntoIterator };
+use std::convert::{ TryFrom };
 
 use log::*;
 
@@ -46,16 +47,17 @@ impl Program {
 								assert!(inst.is_control());
 							}
 						}
-						OpInfo::VARef { target, .. } => {
-							trace!("VARef at {} to {}", src, target);
-							// need to turn this into a Ref later
-							varefs.push((bb.id(), instidx, i));
-						}
 						OpInfo::Ref { target, .. } => {
-							// I could see this happening if this pass is re-run on a function. It's
-							// harmless to push the ref anyway, since adding a ref to the refmap
-							// that already exists is a no-op.
-							refs.push((src, *target));
+							if target.is_resolved() {
+								// I could see this happening if this pass is re-run on a function.
+								// It's harmless to push the ref anyway, since adding a ref to the
+								// refmap that already exists is a no-op.
+								refs.push((src, *target));
+							} else {
+								trace!("VA ref at {} to {}", src, VA::try_from(*target).unwrap());
+								// need to turn this into a Ref later
+								varefs.push((bb.id(), instidx, i));
+							}
 						}
 					}
 				}
@@ -66,7 +68,7 @@ impl Program {
 					IndirCall => {
 						// I don't thiiiiiiink there's anything that needs to be done here? if the
 						// target could be statically determined, the const prop algo would have
-						// done that and put an OpInfo::VARef on it... if not, there's nothing we
+						// done that and put an OpInfo::Ref on it... if not, there's nothing we
 						// can do here cause we don't know what the target is.
 
 						// maybe put a point of interest here?
@@ -97,11 +99,13 @@ impl Program {
 			let inst = &bb.insts()[instidx];
 
 			let replacement = match inst.get_opinfo(opn) {
-				OpInfo::VARef { target, info } => {
+				OpInfo::Ref { target, info } => {
+					let target_va = VA::try_from(*target).unwrap();
+
 					let target_ea = if info.access.is_target() {
-						self.resolve_control_flow_target(*target, state, bb.func(), &mut funcs)
+						self.resolve_control_flow_target(target_va, state, bb.func(), &mut funcs)
 					} else {
-						self.resolve_target(state, *target)
+						self.resolve_target(state, target_va)
 					};
 
 					// we're not guaranteed that the above .resolve*() methods *actually* resolved
@@ -113,7 +117,7 @@ impl Program {
 						info: *info,
 					}
 				}
-				_ => unreachable!("something other than a VARef in varefs??? waaaaat")
+				_ => unreachable!("something other than a Ref in varefs??? waaaaat")
 			};
 
 			*self.bbidx.get_mut(bbid)

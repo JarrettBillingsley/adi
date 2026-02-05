@@ -267,17 +267,18 @@ But state change analysis can't be done until doing const prop and determining p
 AAAAAAA so it's like:
 
 Initial instruction (finds statically-known VAs)
--> const prop (finds more VAs)
+
+- const prop (finds more VAs)
 	- **we need to pass this info to the state change pass WITHOUT using `OpInfo::Ref`??**
 	- add another `OpInfo` variant? `VARef`? sort of an "unresolved" reference? ***yes, Done***
--> state change pass (STILL VAs)
+- state change pass (STILL VAs)
 	- to distinguish between `StateChange::Dynamic` and `StateChange::Static(new_state)`, `inst_state_change` needs the const prop info!!! because if you're storing some register into an address, you have to know 1. if that address is constant and 2. if the reg value is constant.
 	- wait, this seems like a duplication of effort. why ask the arch to figure out if its instruction writes to memory? *we already KNOW if it does from the IR.*
 	- rather than looking at which *macro* instructions access memory, **we should really be looking at which *IR* instructions access memory,** and then ask the arch "could this trigger an MMU state change?"
 		- and we can give it an actual target VA and optional value being stored
 		- YEAHHHHHHHH.
 		- also apparently it's common for MMUs to respond to *reads* not just writes, so we gotta check both
--> references pass (can finally map from VAs to EAs and convert `OpInfo::VARef`s to `OpInfo::Ref`s, as well as adding references from the statically-known VAs determined in the initial disassembly)
+- references pass (can finally map from VAs to EAs and convert `OpInfo::VARef`s to `OpInfo::Ref`s, as well as adding references from the statically-known VAs determined in the initial disassembly)
 
 ---
 

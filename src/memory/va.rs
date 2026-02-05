@@ -1,7 +1,11 @@
-use parse_display::Display;
 
+use std::convert::{ TryFrom };
 use std::ops::{ Add, AddAssign, Sub, SubAssign };
 use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };
+
+use parse_display::Display;
+
+use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
 // VA
@@ -10,6 +14,18 @@ use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };
 /// newtype for virtual addresses.
 #[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct VA(pub usize);
+
+impl TryFrom<EA> for VA {
+	type Error = ();
+
+	fn try_from(ea: EA) -> Result<VA, ()> {
+		if ea.is_unresolved() {
+			Ok(VA(ea.offs()))
+		} else {
+			Err(())
+		}
+	}
+}
 
 impl UpperHex for VA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {

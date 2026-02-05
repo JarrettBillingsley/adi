@@ -59,12 +59,8 @@ pub enum OpInfo {
 	#[default]
 	None,
 
-	/// An unresolved memory reference. Refers to a virtual address, but the EA it refers to has not
-	/// yet been determined. Converting this to a `Ref` is done in the refs pass using MMU state
-	/// info determined by the state change pass.
-	VARef { target: VA, info: RefInfo },
-
-	/// A memory reference to `target`. This might not actually be the beginning of something.
+	/// A memory reference to `target`. This might not actually be the beginning of something, and
+	/// the `target` may or may not be resolved.
 	Ref { target: EA, info: RefInfo },
 
 	// TODO: more options here for enum values, struct fields, strings...

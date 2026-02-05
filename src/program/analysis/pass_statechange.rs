@@ -53,44 +53,32 @@ impl Program {
 
 		let mut changes: Vec<(EA, MmuState)> = vec![];
 
-		for /*aaa@*/ ConstAddr { bbid, ea, opn, addr, kind, srcs } in irfunc.const_addrs() {
-			// aaa.dump();
-
-			// 1. add OpInfo::VARef to each constant operand
+		for ConstAddr { bbid, ea, opn, addr, kind, srcs } in irfunc.const_addrs() {
+			// 1. add OpInfo::Ref to each constant operand
 			let bb = self.bbidx.get_mut(bbid);
 			let inst = bb.inst_at_ea_mut(ea).unwrap(); // safe because of above
 
 			// let's double-check to make sure the arch is implemented properly.
-			match inst.get_op(opn) {
-				Operand::Mem(_, _) | Operand::Indir(_, _) => {}
-				Operand::Reg(_) =>
-					panic!("this shouldn't be possible. should it be Operand::Indir?"),
-				Operand::UImm(_, _) | Operand::SImm(_, _) =>
-					panic!("this shouldn't be possible. should it be Operand::Mem?"),
-			};
+			assert!(matches!(inst.get_op(opn), Operand::Mem(_, _) | Operand::Indir(_, _)),
+				"only Mem and Indir operands are allowed to have constant addresses");
 
 			// hi/lo come into play once we visit the instructions which computed this address.
 			// TODO: I'm not totally confident that this is always absolute...
 			let info = RefInfo::abs(addr_bits, kind.access());
-			*inst.get_opinfo_mut(opn) = if addr.is_resolved() {
-				OpInfo::Ref { target: addr, info }
-			} else {
-				OpInfo::VARef { target: VA(addr.offs()), info }
-			};
+			*inst.get_opinfo_mut(opn) = OpInfo::Ref { target: addr, info };
 
 			// 2. detect instruction state changes
-			let val = if let ConstAddrKind::Store(val) = kind { val } else { None };
-
 			match kind {
 				ConstAddrKind::Load | ConstAddrKind::Store(..) => {
-					let old_state = bb.mmu_state();
-					let load = kind == ConstAddrKind::Load;
-
 					// The only instructions marked MemAccess::R/W are loads and stores which, in
 					// the IR, do not have resolved EAs. So, the EA here must be unresolved, in
 					// which case it can be turned back into a VA.
 					assert!(addr.is_unresolved());
+
+					let old_state = bb.mmu_state();
 					let addr = VA(addr.offs());
+					let val = if let ConstAddrKind::Store(val) = kind { val } else { None };
+					let load = kind == ConstAddrKind::Load;
 
 					match self.mem.state_change(old_state, addr, val, load) {
 						StateChange::None => {
