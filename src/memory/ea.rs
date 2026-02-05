@@ -17,7 +17,7 @@ use crate::memory::{ SegId };
 /// An **unresolved EA** has a segment ID of `SegId::unresolved()`, and its offset may be a VA which
 /// could not be mapped to a known EA. This happens sometimes - not everything can be determined
 /// through static analysis.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct EA(u64);
 
 impl Display for EA {

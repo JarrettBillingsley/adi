@@ -1,8 +1,7 @@
 
-use std::collections::{ VecDeque };
-
 use crate::program::{ Program, FuncId };
 use crate::memory::{ MmuState, EA };
+use crate::dataflow::{ WorkQueue };
 
 // ------------------------------------------------------------------------------------------------
 // Submodules
@@ -18,24 +17,6 @@ pub mod pass_splitfunc;
 // ------------------------------------------------------------------------------------------------
 // Analysis items
 // ------------------------------------------------------------------------------------------------
-
-mod item_types {
-	use super::*;
-	#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-	pub(super) struct NewFunc(pub EA, pub MmuState);
-
-	#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-	pub(super) struct SplitFunc(pub EA);
-
-	#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-	pub(super) struct StateChange(pub FuncId);
-
-	#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-	pub(super) struct FuncRefs(pub FuncId);
-
-	#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-	pub(super) struct JumpTable(pub EA);
-}
 
 /// Things that can be put onto the analysis queue.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -57,61 +38,60 @@ pub(crate) enum AnalysisItem {
 // ------------------------------------------------------------------------------------------------
 
 pub(crate) struct Analyzer {
-	new_func_queue:     VecDeque<item_types::NewFunc>,
-	split_func_queue:   VecDeque<item_types::SplitFunc>,
-	state_change_queue: VecDeque<item_types::StateChange>,
-	func_refs_queue:    VecDeque<item_types::FuncRefs>,
-	jump_table_queue:   VecDeque<item_types::JumpTable>,
+	new_func_queue:     WorkQueue<(EA, MmuState)>,
+	split_func_queue:   WorkQueue<EA>,
+	state_change_queue: WorkQueue<FuncId>,
+	func_refs_queue:    WorkQueue<FuncId>,
+	jump_table_queue:   WorkQueue<EA>,
 }
 
 impl Analyzer {
 	pub(crate) fn new() -> Self {
 		Self {
-			new_func_queue:     VecDeque::new(),
-			split_func_queue:   VecDeque::new(),
-			state_change_queue: VecDeque::new(),
-			func_refs_queue:    VecDeque::new(),
-			jump_table_queue:   VecDeque::new(),
+			new_func_queue:     WorkQueue::new(10),
+			split_func_queue:   WorkQueue::new(10),
+			state_change_queue: WorkQueue::new(10),
+			func_refs_queue:    WorkQueue::new(10),
+			jump_table_queue:   WorkQueue::new(10),
 		}
 	}
 
 	/// Puts an EA on the queue that should be the start of a function.
 	pub fn enqueue_function(&mut self, state: MmuState, ea: EA) {
-		self.new_func_queue.push_back(item_types::NewFunc(ea, state))
+		self.new_func_queue.enqueue((ea, state))
 	}
 
 	/// Puts an EA on the queue that should be the jump instruction for a jump table.
 	pub fn enqueue_jump_table(&mut self, ea: EA) {
-		self.jump_table_queue.push_back(item_types::JumpTable(ea))
+		self.jump_table_queue.enqueue(ea)
 	}
 
 	/// Schedules a function to have its references analyzed.
 	fn enqueue_func_refs(&mut self, fid: FuncId) {
-		self.func_refs_queue.push_back(item_types::FuncRefs(fid));
+		self.func_refs_queue.enqueue(fid);
 	}
 
 	/// Schedules a function to have its MMU state changes analyzed.
 	fn enqueue_state_change(&mut self, fid: FuncId) {
-		self.state_change_queue.push_back(item_types::StateChange(fid));
+		self.state_change_queue.enqueue(fid);
 	}
 
 	/// Schedules a function to attempt to be split at the given EA.
 	fn enqueue_split_func(&mut self, ea: EA) {
-		self.split_func_queue.push_back(item_types::SplitFunc(ea));
+		self.split_func_queue.enqueue(ea);
 	}
 
 	fn pop(&mut self) -> Option<AnalysisItem> {
 		// TODO: make this prettier.
-		use item_types::*;
-		if let Some(NewFunc(ea, state)) = self.new_func_queue.pop_front() {
+		if let Some((ea, state)) = self.new_func_queue.dequeue() {
 			Some(AnalysisItem::NewFunc(ea, state))
-		} else if let Some(SplitFunc(ea)) = self.split_func_queue.pop_front() {
+		} else if let Some(ea) = self.split_func_queue.dequeue() {
 			Some(AnalysisItem::SplitFunc(ea))
-		} else if let Some(StateChange(fid)) = self.state_change_queue.pop_front() {
+		} else if let Some(fid) = self.state_change_queue.dequeue() {
 			Some(AnalysisItem::StateChange(fid))
-		} else if let Some(FuncRefs(fid)) = self.func_refs_queue.pop_front() {
+		} else if let Some(fid) = self.func_refs_queue.dequeue() {
 			Some(AnalysisItem::FuncRefs(fid))
-		} else if let Some(JumpTable(ea)) = self.jump_table_queue.pop_front() {
+		} else if let Some(ea) = self.jump_table_queue.dequeue() {
 			Some(AnalysisItem::JumpTable(ea))
 		} else {
 			None
@@ -123,19 +103,17 @@ impl Analyzer {
 // analyze_queue
 // ------------------------------------------------------------------------------------------------
 
-impl Program
-{
+impl Program {
 	/// Analyzes all items in the analysis queue. Analysis may generate more items to analyze,
 	/// so this can do a lot of work in a single call.
 	pub fn analyze_queue(&mut self) {
 		while let Some(item) = self.queue.pop() {
-			use AnalysisItem::*;
 			match item {
-				NewFunc(ea, state) => self.new_func_pass(ea, state),
-				StateChange(fid)   => self.state_change_pass(fid),
-				FuncRefs(fid)      => self.func_refs_pass(fid),
-				JumpTable(ea)      => self.jump_table_pass(ea),
-				SplitFunc(ea)      => self.split_func_pass(ea),
+				AnalysisItem::NewFunc(ea, state) => self.new_func_pass(ea, state),
+				AnalysisItem::StateChange(fid)   => self.state_change_pass(fid),
+				AnalysisItem::FuncRefs(fid)      => self.func_refs_pass(fid),
+				AnalysisItem::JumpTable(ea)      => self.jump_table_pass(ea),
+				AnalysisItem::SplitFunc(ea)      => self.split_func_pass(ea),
 			}
 		}
 	}

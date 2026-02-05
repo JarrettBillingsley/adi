@@ -17,7 +17,7 @@ pub(crate) trait JoinSemiLattice: Eq {
 // ------------------------------------------------------------------------------------------------
 
 /// Shamelessly ripped from `rustc_data_structures::WorkQueue`.
-struct WorkQueue<T> {
+pub(crate) struct WorkQueue<T> {
 	list: VecDeque<T>,
 	// the set is here to avoid enqueueing items which are already in the queue.
 	set:  HashSet<T>,
@@ -31,16 +31,16 @@ impl<T: Eq + Hash + Clone + Copy> WorkQueue<T> {
 		}
 	}
 
-	pub(crate) fn enqueue(&mut self, id: T) {
-		if self.set.insert(id) {
-			self.list.push_back(id);
+	pub(crate) fn enqueue(&mut self, item: T) {
+		if self.set.insert(item) {
+			self.list.push_back(item);
 		}
 	}
 
 	pub(crate) fn dequeue(&mut self) -> Option<T> {
-		if let Some(id) = self.list.pop_front() {
-			self.set.remove(&id);
-			Some(id)
+		if let Some(item) = self.list.pop_front() {
+			self.set.remove(&item);
+			Some(item)
 		} else {
 			None
 		}

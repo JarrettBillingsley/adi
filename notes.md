@@ -156,6 +156,18 @@
 		- more mappers (remember to set segment base VA when state changes)
 	- **GB**
 		- more MBCs (remember to set segment base VA when state changes)
+	- **Mos65xx**
+		- there are more (unofficial) variations of `NOP`
+		- correct `DOP` addressing modes
+		- implement `TOP`
+		- implement unofficial opcodes in some way?
+			- maybe not actually implement them in IR but at least disassemble them
+		- **CPU variants/revisions?**
+			- Early (no ROR)
+			- NMOS
+			- CMOS (slightly different behavior
+		- decimal mode (ew)
+			- that would require dataflow analysis in and of itself... UGH...
 
 ---
 
