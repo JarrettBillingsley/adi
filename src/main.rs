@@ -431,7 +431,9 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 // ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	let img = Image::new_from_file("tests/data/10yf.nes")?;
+	// let img = Image::new_from_file("tests/data/10yf.nes")?;
+	// let img = Image::new_from_file("tests/data/duckhunt.nes")?;
+	let img = Image::new_from_file("tests/data/battletoads.nes")?;
 	let mut prog = program_from_image(img)?;
 
 	println!("{}", prog);
@@ -882,7 +884,8 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		// println!("{:>4}:{}  {:8}      {:3} {:30}",
 		// 	seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
-		print!("{:>4}:{}  {:8}      ", seg.name().yellow(), addr, bytes.truecolor(63, 63, 255));
+		print!("{} {:>4}:{}  {:8}      ", inst.ea(), seg.name().yellow(), addr,
+			bytes.truecolor(63, 63, 255));
 		let mut output = AnsiConsolePrintOutput;
 		prog.inst_print(inst, state, &mut output).unwrap();
 

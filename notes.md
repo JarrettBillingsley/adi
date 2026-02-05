@@ -8,6 +8,8 @@
 		- PRG0:A9A6
 		- PRG0:BFA9
 		- PRG0:C17F
+	- duck hunt
+		- PRG0:F844
 - IR instruction name/method name/outputs are needlessly inconsistent.
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old

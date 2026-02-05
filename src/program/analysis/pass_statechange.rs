@@ -113,11 +113,6 @@ impl Program {
 		// outdated IR
 		drop(irfunc);
 
-		// vector of BBs which now end in a `BBTerm::StateChange`, and the new MMU state that its
-		// terminating instruction produced, to be propagated to its successors (note: NOT the new
-		// MMU state for the BEGINNING of that BB!!)
-		let mut to_propagate: Vec<(BBId, MmuState)> = vec![];
-
 		for (ea, new_state) in changes.into_iter() {
 			let bbid = self.span_at_ea(ea).bb().expect("I mean it's in here cause it was in a BB");
 
@@ -144,7 +139,8 @@ impl Program {
 			};
 
 			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::StateChange(target, new_state);
-			to_propagate.push((bbid, new_state));
+			let bb = self.bbidx.get(bbid);
+			trace!("rewrote terminator of BB {:?} @ {:?} to {:?}", bbid, bb.ea(), bb.term());
 		}
 
 		// --------------------------------------------------------
@@ -156,6 +152,19 @@ impl Program {
 		let all_bbs    = ana.all_bbs().collect::<Vec<_>>();
 		let preds      = self.func_bb_predecessors(&ana);
 		let head_state = self.bbidx.get(func.head_id()).mmu_state();
+		// vector of BBs which end in a `BBTerm::StateChange`, and the new MMU state that its
+		// terminating instruction produced, to be propagated to its successors (note: NOT the new
+		// MMU state for the BEGINNING of that BB!!)
+		let mut to_propagate: Vec<(BBId, MmuState)> = vec![];
+
+		for bbid in all_bbs.iter() {
+			trace!("  {:?} @ {:?}", bbid, self.bbidx.get(*bbid).ea());
+
+			if let BBTerm::StateChange(_, new_state) = self.bbidx.get(*bbid).term() {
+				to_propagate.push((*bbid, *new_state));
+			}
+		}
+
 		let mut flow = StateFlow::new(preds, &all_bbs, ana.head_id(), head_state, &to_propagate);
 		flow.run(ana.cfg());
 		flow.dump_state("final", &all_bbs);

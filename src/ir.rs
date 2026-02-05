@@ -689,10 +689,10 @@ fn perform_rewrites(
 	let arg_regs = compiler.arg_regs();
 	let ret_regs = compiler.return_regs();
 
-	log::debug!("-------------REWRITE----------------");
-	for bb in bbs.iter() {
-		println!("{:?}", bb);
-	}
+	// log::debug!("-------------REWRITE----------------");
+	// for bb in bbs.iter() {
+	// 	println!("{:?}", bb);
+	// }
 
 	// first pass: insert uses
 	for (irbbid, rewrite) in rewrites.iter() {
@@ -710,7 +710,7 @@ fn perform_rewrites(
 			let bb = &mut bbs[irbbid];
 
 			// first update the cfg.
-			println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
+			// println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
 			let mut edges_iter = cfg.edges(bb.id);
 			let old_dest = edges_iter.next()
 				.expect("IrWrite::Returns put on a BB with no in-function successor")
@@ -741,10 +741,10 @@ fn perform_rewrites(
 
 	bbs.append(&mut new_bbs);
 
-	log::debug!("-------------AFTER REWRITE----------------");
-	for bb in bbs.iter() {
-		println!("{:?}", bb);
-	}
+	// log::debug!("-------------AFTER REWRITE----------------");
+	// for bb in bbs.iter() {
+	// 	println!("{:?}", bb);
+	// }
 }
 
 impl IrBasicBlock {

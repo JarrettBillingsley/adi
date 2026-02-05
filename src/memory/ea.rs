@@ -14,7 +14,7 @@ use crate::memory::{ SegId };
 ///
 /// A **resolved EA** consists of a segment ID and an offset into that segment.
 ///
-/// An **unresolved EA** has a segment ID of `SegId::unresolved()`, and its offset may be a VA which
+/// An **unresolved EA** has a segment ID of `SegId::unresolved()`, and its offset is a VA which
 /// could not be mapped to a known EA. This happens sometimes - not everything can be determined
 /// through static analysis.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]

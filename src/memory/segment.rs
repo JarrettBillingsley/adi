@@ -13,8 +13,9 @@ use crate::program::{ DataId };
 // SegId
 // ------------------------------------------------------------------------------------------------
 
-/// newtype for segment IDs. each segment gets a unique ID (index into an array). there is a special
-/// "unresolved" value for use by EAs which cannot be resolved.
+/// newtype for segment IDs. each segment gets a unique ID (index into an array). There is a special
+/// "unresolved" value for use by EAs which either have not yet been resolved, or cannot be
+/// resolved.
 #[derive(Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct SegId(pub u16);
 
