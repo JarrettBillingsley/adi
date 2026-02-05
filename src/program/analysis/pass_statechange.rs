@@ -90,6 +90,8 @@ impl Program {
 						StateChange::Dynamic => {
 							trace!("  found a dynamic state change at {}", ea);
 							// TODO: log this as a point of interest for user to investigate
+							// TODO: if this BB already ends in BBTerm::StateChange, it needs to
+							// be updated??? once BBs and StateChanges can understand this...
 						}
 						StateChange::Static(new_state) => {
 							trace!("  found a static state change at {} to {:?}", ea, new_state);
@@ -105,6 +107,11 @@ impl Program {
 			// (or have const_addrs do that for us)
 			let _ = srcs;
 		}
+
+		// TODO: if any *existing* BBTerm::StateChange terminators were *not* seen in const_addrs,
+		// mark them as Dynamic state changes. (this can happen on re-analysis where old analysis
+		// *thought* they were Static but a revisit determines they're not...)
+		// (cropped up in battletoads bankswitch function at EA 0003:00007F84 (PRG0:FF84))
 
 		// --------------------------------------------------------
 		// part 2: split BBs at state change instructions

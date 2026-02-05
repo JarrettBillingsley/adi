@@ -20,6 +20,9 @@
 - **Features**
 	- **Function attributes**
 		- e.g. "bankswitch", "jumptable"
+		- for bankswitch functions, we could **let the user specify some formula for them**
+			- like "when this function is called, the MMU state is set to `(A & 0x7) | 0x10`"
+			- and there can be a little expression parser which turns it into an IR template that can be blobbed down in place of each time the function is called
 	- **Comments (line, repeatable)**
 		- on code, data items, enum values, struct members..
 	- **Custom fields on `Instruction` and `Operand`**
