@@ -123,7 +123,7 @@ impl Program {
 
 		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
-		for (f, s) in funcs.into_iter()    { self.enqueue_function(s, f); }
+		for (f, s) in funcs.into_iter()    { self.enqueue_new_func(s, f); }
 	}
 
 	/// try to resolve a control flow target `va` using the given `state`. `func_id` is the function

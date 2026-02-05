@@ -51,7 +51,7 @@ pub struct Program {
 	funcs: FuncIndex,
 	data:  DataIndex,
 	bbidx: BBIndex,
-	queue: Analyzer,
+	queue: AnalysisQueue,
 	print: Printer,
 }
 
@@ -73,7 +73,7 @@ impl Program {
 			funcs: FuncIndex::new(),
 			data:  DataIndex::new(),
 			bbidx: BBIndex::new(),
-			queue: Analyzer::new(),
+			queue: AnalysisQueue::new(),
 		}
 	}
 
@@ -86,7 +86,7 @@ impl Program {
 	delegate! {
 		to self.queue {
 			/// Puts an EA on the queue that should be the start of a function.
-			pub fn enqueue_function(&mut self, state: MmuState, ea: EA);
+			pub fn enqueue_new_func(&mut self, state: MmuState, ea: EA);
 
 			/// Puts an EA on the queue that should be the jump instruction for a jump table.
 			pub fn enqueue_jump_table(&mut self, ea: EA);
