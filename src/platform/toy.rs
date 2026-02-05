@@ -143,16 +143,16 @@ impl IMmu for ToyMmu {
 	}
 
 	// The state is changed by writing to VA 0xFFFF, or by *reading* from VA 0xFFFE.
-	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
+	fn state_change(&self, _state: MmuState, va: VA, val: Option<u64>, load: bool) -> StateChange {
 		if load {
 			match va.0 {
-				0xFFFE => state.change(MmuState::new(READ_FFFE_STATE)),
+				0xFFFE => StateChange::Static(MmuState::new(READ_FFFE_STATE)),
 				_      => StateChange::None,
 			}
 		}
 		else {
 			match (va.0, val) {
-				(0xFFFF, Some(val)) => state.change(MmuState::from_u64(val & STATE_MASK)),
+				(0xFFFF, Some(val)) => StateChange::Static(MmuState::from_u64(val & STATE_MASK)),
 				(0xFFFF, None)      => StateChange::Dynamic,
 				_                   => StateChange::None,
 			}

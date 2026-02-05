@@ -134,8 +134,16 @@ impl Program {
 
 			let target = match self.bbidx.get(bbid).term() {
 				BBTerm::FallThru(target) => *target,
-				_ => unreachable!("either split_bb should have made this a FallThru,\
-					or the original unsplit BB should have been a FallThru.")
+				BBTerm::StateChange(target, old_new_state) => {
+					assert_eq!(new_state, *old_new_state,
+						"BB already had a StateChange terminator, but its old \"new state\" and \
+						its new \"new state\" don't match");
+					*target
+				}
+				_ => {
+					unreachable!("either split_bb should have made this a FallThru, \
+					or the original unsplit BB should have been a FallThru.");
+				}
 			};
 
 			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::StateChange(target, new_state);
