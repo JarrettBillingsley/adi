@@ -1,6 +1,8 @@
 
 ## NES Mappers
 
+According to https://web.archive.org/web/20211205042651/http://bootgod.dyndns.org:7777/stats.php?page=6
+
 Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 
 - 1 (mmc1/sxrom) **e.g. dragon warrior**

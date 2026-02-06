@@ -39,6 +39,9 @@ impl Program {
 				// TODO: mark referrer as being invalid somehow.
 				warn!("  attempted to split function starting at {} at EA {}, but it failed",
 					self.get_func(fid).ea(), ea);
+
+				// let's bail.
+				return;
 			}
 		}
 
@@ -88,6 +91,9 @@ impl Program {
 			// first, remove all the 'reachable' bbs from func
 			self.get_func_mut(fid).bbs
 				.retain(|&to_keep| to_keep != bbid && !reachable.contains(&to_keep));
+
+			assert!(!self.get_func(fid).bbs.is_empty(),
+				"function at {} was stripped of all BBs!", self.get_func(fid).ea());
 
 			// then, turn 'reachable' into a vec, with bbid as the first item.
 			let new_func_bbs = Some(bbid).into_iter()
