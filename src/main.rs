@@ -434,19 +434,22 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 // ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	// listed in order of decreasing mapper popularity
-	// let img = Image::new_from_file("tests/data/dragonwarrior.nes")?; // 1   (mmc1/sxrom)
-	// let img = Image::new_from_file("tests/data/gauntlet.nes")?;      // 4   (mmc3/txrom, mmc6/hkrom)
-	// let img = Image::new_from_file("tests/data/megaman.nes")?;       // 2   (uxrom)
-	// let img = Image::new_from_file("tests/data/10yf.nes")?;          // 0   (nrom)
-	// let img = Image::new_from_file("tests/data/duckhunt.nes")?;      // 0   (nrom)
-	let img = Image::new_from_file("tests/data/smb.nes")?;           // 0   (nrom)
-	// let img = Image::new_from_file("tests/data/arkanoid.nes")?;      // 3   (cnrom)
-	// let img = Image::new_from_file("tests/data/battletoads.nes")?;   // 7   (axrom)
-	// let img = Image::new_from_file("tests/data/namcot 118")?;        // 206 (mimic-1, namcot 118)
-	// let img = Image::new_from_file("tests/data/exodus.nes")?;        // 11  (color dreams)
-	// let img = Image::new_from_file("tests/data/castlevania3.nes")?;  // 5   (mmc5/exrom)
-	// I HAVE NO ROM FOR THIS                             // 19 (namco N129/N163)
+	let img = Image::new_from_file(
+		// listed in order of decreasing mapper popularity
+		// "tests/data/dragonwarrior.nes" // 1   (mmc1/sxrom)              *UNIMPLEMENTED*
+		// "tests/data/gauntlet.nes"      // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
+		// "tests/data/smb3.nes"          // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
+		// "tests/data/megaman.nes"       // 2   (uxrom)
+		// "tests/data/10yf.nes"          // 0   (nrom)
+		// "tests/data/duckhunt.nes"      // 0   (nrom)
+		// "tests/data/smb.nes"           // 0   (nrom)
+		// "tests/data/arkanoid.nes"      // 3   (cnrom)
+		// "tests/data/battletoads.nes"   // 7   (axrom)
+		// I HAVE NO ROM FOR THIS         // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
+		"tests/data/exodus.nes"        // 11  (color dreams)
+		// "tests/data/castlevania3.nes"  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
+		// I HAVE NO ROM FOR THIS         // 19 (namco N129/N163)          *UNIMPLEMENTED*
+	)?;
 
 	let mut prog = program_from_image(img)?;
 
