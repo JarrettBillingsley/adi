@@ -57,7 +57,7 @@ impl Program {
 				// the Old Way checked for bank changes here using self.mem.inst_state_change
 				// on each instruction, and ending the BB if so. but now we're checking for
 				// bank changes later, when we have the whole function and can do const prop
-				// on it and stuff, in state_change_pass.
+				// on it and stuff, in func_analysis_pass.
 
 				use InstructionKind::*;
 				match inst.kind() {
@@ -172,7 +172,7 @@ impl Program {
 
 			if list.is_empty() {
 				trace!("new function at {} has no self-calls.", self.get_func(fid).ea());
-				self.queue.enqueue_state_change(fid);
+				self.queue.enqueue_func_analysis(fid);
 			} else {
 				trace!("new function at {} has {} self-calls.",
 					self.get_func(fid).ea(), list.len());
@@ -244,7 +244,7 @@ impl Program {
 	}
 
 	/// Finds any call terminators in the function whose target is in-bounds of the same function.
-	/// It's important to find these and split the function up first, because the state change
+	/// It's important to find these and split the function up first, because the static function
 	/// analysis can't handle functions with these "self-calls".
 	fn func_find_self_calls(&self, fid: FuncId) -> Vec<EA> {
 		let func = self.get_func(fid);

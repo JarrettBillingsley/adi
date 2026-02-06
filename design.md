@@ -164,7 +164,7 @@ Regardless, the first pass just tries to figure out the boundaries of the functi
 
 Importantly, **at this point no MMU state tracking is done, so any control flow out of the current segment is assumed to be out of the function.** That control flow will, in later passes, become references to new functions which will have their own pass 1 run!
 
-If this process completes successfully, the collection of BBs is turned into a real function. Then, if the function contains any "self-calls" (call instructions which call into any BB inside itself), it is scheduled for function splitting; otherwise it's scheduled for MMU state change analysis.
+If this process completes successfully, the collection of BBs is turned into a real function. Then, if the function contains any "self-calls" (call instructions which call into any BB inside itself), it is scheduled for function splitting; otherwise it's scheduled for static analysis.
 
 ### Pass 1.5: Function splitting
 
@@ -190,11 +190,11 @@ func2:
 
 In pass 1, func1 would be analyzed as containing 2 BBs, `_block1` and `_block2`. But later, `func2` is analyzed and it turns out `_block2` is *treated as a function,* meaning that `func1` is really two functions in a row! The first function `_block1` simply **falls through** into the second `_block2` function.
 
-The function splitting pass takes situations like this and either splits that one function into two functions, or marks the function as **multi-entry** if its control flow graph is shaped in a way that splitting would be impossible. In either case, it then schedules the function for MMU state change analysis, even if it's been analyzed before, because changing the function's CFG can affect the outcome of that pass.
+The function splitting pass takes situations like this and either splits that one function into two functions, or marks the function as **multi-entry** if its control flow graph is shaped in a way that splitting would be impossible. In either case, it then schedules the function for static analysis, even if it's been analyzed before, because changing the function's CFG can affect the outcome of that pass.
 
-This can happen *before the state change analysis runs,* but it may happen *any* time after the initial first pass.
+This can happen *before the static analysis pass runs,* but it may happen *any* time after the initial first pass.
 
-### Pass 2: MMU state change analysis
+### Pass 2: static function analysis
 
 This tries to figure out exactly what the MMU state is for each BB in the function. This is a pretty complicated algorithm which progresses through 5 stages:
 

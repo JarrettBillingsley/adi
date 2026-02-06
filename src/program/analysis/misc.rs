@@ -210,8 +210,9 @@ impl Program {
 ///
 /// Other notes:
 ///
-/// - Currently only loads or stores are checked for MMU state changes. This *could* change in
-///   the future, but that seems unlikely.
+/// - Currently only loads or stores are checked for MMU state changes. This will probably change
+///   in the future, once "state change functions" are implemented, in which case call instructions
+///   will be checked as well; but beyond that, I doubt any more will be.
 /// - For `BBTerm::Halt` and `BBTerm::DeadEnd`, currently any non-control flow instruction is
 ///   allowed, but that may change in the future (if `IrInstKind` gains some halt or dead-end
 ///   instructions).

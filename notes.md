@@ -10,6 +10,18 @@
 		- PRG0:C17F
 	- duck hunt
 		- PRG0:F844
+- ok but ... when, and how do we apply them?
+	- seems kinda silly to do them during the state change pass
+	- but also seems silly to do const prop twice when we could do it once
+	- maybe the "state change" pass isn't the best name or concept
+		- maybe it's an "IR pass", and state change detection is only one of the things it does
+		- I mean, we *are* already adding `OpInfo::Ref` to operands, which doesn't have anything to do with state change analysis
+	- so yeah maybe it's more like a "deep analysis" pass which converts to IR and does const prop in order to find *anything* statically determinable, like:
+		- address references
+		- MMU state changes
+		- always-taken branches
+	- also having a separate refs pass... is that needed?
+		- yeah, if not right now then probably yes in the future once data analysis is implemented
 - IR instruction name/method name/outputs are needlessly inconsistent.
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
@@ -18,6 +30,10 @@
 # TODO:
 
 - **Features**
+	- **"Points of interest" to let user know things to investigate**
+		- state changes that can't be automatically determined
+		- jumptables
+		- functions that access particular hardware registers
 	- **Function attributes**
 		- e.g. "bankswitch", "jumptable"
 		- for bankswitch functions, we could **let the user specify some formula for them**
@@ -30,10 +46,6 @@
 	- **Alternate mnemonics for instructions**
 		- e.g. on x86 there are `jz` and `je`, which are technically two names for the same instruction, but in some contexts it's being used to check for zero and in other for equality... would be a nice quality-of-life addition
 			- same thing on Mos65xx, `bcs` and `bge` are aliases
-	- **"Points of interest" to let user know things to investigate**
-		- state changes that can't be automatically determined
-		- jumptables
-		- functions that access particular hardware registers
 	- **Generating "name + delta" output is a little more subtle than my first attempt**
 		- really these should be rare
 	- **Modifying functions**
@@ -106,6 +118,12 @@
 			- end BB, and push next instruction as potential BB
 		- `InstructionKind` needs to represent these
 			- as a field of `Call/Ret`? as different variants (`CondCall/CondRet`)?
+			- really a conditional call isn't *that* different and might not need any special consideration. either it happens and we carry on, or it doesn't happen and we carry on. either way, the control flow analysis remains the same.
+				- though there would probably need to be a `ccall` IR instruction by analogy to `cbranch` so it can participate in const prop and "always-taken" analysis
+			- a conditional *return* really is a different kind of control flow.
+				- I think a new `bool` in `InstructionKind::Ret` would make sense
+				- and `BBTerm::Ret` would get a `bool` saying whether it's conditional.
+				- and finally, `cret` in the IR
 	- **Jumptable analysis**
 		- should support multiple strategies (depending on the arch), e.g.
 			- absolute

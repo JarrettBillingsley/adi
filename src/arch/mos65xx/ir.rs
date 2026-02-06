@@ -71,7 +71,7 @@ impl InstDesc {
 	/// memory operands, gives the final effective address, but doesn't load from/store into it.
 	/// Some kinds of memory operands require multiple memory accesses, though.)
 	///
-	/// May affect REG_TMP1, REG_TMP2, or REG_TMP16.
+	/// May affect REG_TMP1, REG_TMP2, REG_TMP16, and REG_TMP16_2.
 	///
 	/// Returned source is either a constant, REG_TMP2 (for zero-page addresses), or REG_TMP16.
 	///

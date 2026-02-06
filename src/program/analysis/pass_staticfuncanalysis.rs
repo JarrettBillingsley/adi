@@ -13,13 +13,13 @@ use crate::memory::{ MmuState, VA, EA, StateChange };
 use crate::ir::{ ConstAddr, ConstAddrKind };
 
 // ------------------------------------------------------------------------------------------------
-// MMU state change analysis
+// Function static analysis
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	pub(super) fn state_change_pass(&mut self, fid: FuncId) {
+	pub(super) fn static_func_analysis_pass(&mut self, fid: FuncId) {
 		trace!("------------------------------------------------------------------------");
-		trace!("- begin func state change analysis at {}", self.get_func(fid).ea());
+		trace!("- begin func static analysis at {}", self.get_func(fid).ea());
 
 		let changes = self.func_find_state_changes(fid);
 		self.func_apply_state_changes(fid, changes);

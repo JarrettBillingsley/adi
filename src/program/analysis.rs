@@ -10,7 +10,7 @@ use crate::dataflow::{ WorkQueue };
 pub mod misc;
 pub mod pass_newfunc;
 pub mod pass_splitfunc;
-pub mod pass_statechange;
+pub mod pass_staticfuncanalysis;
 pub mod pass_refs;
 pub mod pass_jumptable;
 
@@ -19,21 +19,21 @@ pub mod pass_jumptable;
 // ------------------------------------------------------------------------------------------------
 
 pub(crate) struct AnalysisQueue {
-	new_func_queue:     WorkQueue<(EA, MmuState)>,
-	split_func_queue:   WorkQueue<EA>,
-	state_change_queue: WorkQueue<FuncId>,
-	func_refs_queue:    WorkQueue<FuncId>,
-	jump_table_queue:   WorkQueue<EA>,
+	new_func_queue:      WorkQueue<(EA, MmuState)>,
+	split_func_queue:    WorkQueue<EA>,
+	func_analysis_queue: WorkQueue<FuncId>,
+	func_refs_queue:     WorkQueue<FuncId>,
+	jump_table_queue:    WorkQueue<EA>,
 }
 
 impl AnalysisQueue {
 	pub(crate) fn new() -> Self {
 		Self {
-			new_func_queue:     WorkQueue::new(50),
-			split_func_queue:   WorkQueue::new(50),
-			state_change_queue: WorkQueue::new(50),
-			func_refs_queue:    WorkQueue::new(50),
-			jump_table_queue:   WorkQueue::new(50),
+			new_func_queue:      WorkQueue::new(50),
+			split_func_queue:    WorkQueue::new(50),
+			func_analysis_queue: WorkQueue::new(50),
+			func_refs_queue:     WorkQueue::new(50),
+			jump_table_queue:    WorkQueue::new(50),
 		}
 	}
 
@@ -47,9 +47,9 @@ impl AnalysisQueue {
 		self.split_func_queue.enqueue(ea);
 	}
 
-	/// Schedules a function to have its MMU state changes analyzed.
-	fn enqueue_state_change(&mut self, fid: FuncId) {
-		self.state_change_queue.enqueue(fid);
+	/// Schedules a function to be statically analyzed.
+	fn enqueue_func_analysis(&mut self, fid: FuncId) {
+		self.func_analysis_queue.enqueue(fid);
 	}
 
 	/// Schedules a function to have its references analyzed.
@@ -79,8 +79,8 @@ impl Program {
 			} else if let Some(ea) = self.queue.split_func_queue.dequeue() {
 				self.split_func_pass(ea);
 				continue;
-			} else if let Some(fid) = self.queue.state_change_queue.dequeue() {
-				self.state_change_pass(fid);
+			} else if let Some(fid) = self.queue.func_analysis_queue.dequeue() {
+				self.static_func_analysis_pass(fid);
 				continue;
 			} else if let Some(fid) = self.queue.func_refs_queue.dequeue() {
 				self.func_refs_pass(fid);

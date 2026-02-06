@@ -94,8 +94,8 @@ impl Program {
 		}
 
 		for (bbid, instidx, opn) in varefs.into_iter() {
-			let state = self.bbidx.get(bbid).mmu_state();
 			let bb = self.bbidx.get(bbid);
+			let state = bb.mmu_state();
 			let inst = &bb.insts()[instidx];
 
 			let replacement = match inst.get_opinfo(opn) {
