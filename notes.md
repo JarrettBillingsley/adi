@@ -3,26 +3,38 @@
 
 # Imminent tasks!
 
-- detect "always taken" branches (IR `cbranch` instructions where condition is constant)
-	- 10yf examples
-		- PRG0:A9A6
-		- PRG0:BFA9
-		- PRG0:C17F
-	- duck hunt
-		- PRG0:F844
-- ok but ... when, and how do we apply them?
-	- seems kinda silly to do them during the state change pass
-	- but also seems silly to do const prop twice when we could do it once
-	- maybe the "state change" pass isn't the best name or concept
-		- maybe it's an "IR pass", and state change detection is only one of the things it does
-		- I mean, we *are* already adding `OpInfo::Ref` to operands, which doesn't have anything to do with state change analysis
-	- so yeah maybe it's more like a "deep analysis" pass which converts to IR and does const prop in order to find *anything* statically determinable, like:
-		- address references
-		- MMU state changes
-		- always-taken branches
-	- also having a separate refs pass... is that needed?
-		- yeah, if not right now then probably yes in the future once data analysis is implemented
 - IR instruction name/method name/outputs are needlessly inconsistent.
+- detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
+	- examples:
+		- 10yf
+			- PRG0:A9A6
+			- PRG0:BFA9
+			- PRG0:C17F
+		- duck hunt
+			- PRG0:F844
+	- finding them should be simple
+		- IR, consts, find all `cbranch` whose `cond` is constant, boom.
+	- **BUUUUUUUUUUUUUUUUUT**
+		- I could see this being a little too eager
+		- I already ran into an issue with state change analysis where it determined a state change was constant... until a revisit, when it realized it was dynamic
+		- so I don't think applying any *permanent* change to the function's CFG would be good
+		- or maybe limit it to `cbranch`es whose `cond` is constant *and that constant has some kind of provenance that proves it could never be dynamic*
+			- since 6502 has no uncond branch, it's common to do:
+				lda #$10   ; nonzero,
+				bne _label ; so always taken
+			- in IR that'd be like (with constant info):
+				mov     A, const 0x10   ; A    = Some(0x10) from <const 0x10>
+				slt     NF, A, const 0  ; NF   = Some(0)    from <A, const 0>
+				seq     ZF, A, const 0  ; ZF   = Some(0)    from <A, const 0>
+				bnot    tmp1, ZF        ; tmp1 = Some(1)    from <ZF>
+				cbranch tmp1, _label    ;
+			- the chain of provenance leads to an `IrSrc::const` and *it's in the same BB*
+			- **BUUUUUUUUUUUUUUUUUUUUUUUUUUT** something could split the BB between the `lda` and the `bne` and ffffffffffffffuck it all up lol. aAHGHAHGlLlL
+	- I think what makes the most sense then is:
+		- un-make the BB which can never be run
+		- put a POI there
+	- **BUT THIS IS IMPORTANT:** since this is changing the function's CFG, it means it needs to rerun the static analysis pass. **but that means it's rescheduling itself.**
+		- so something else needs to be put at that address/on the BB that owns the terminator to say "hey, we analyzed this before, don't do it again" or else it could loop infinitely
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
 - write GB IR compiler
@@ -51,6 +63,11 @@
 	- **Modifying functions**
 		- removing BBs (mis-analyzed code e.g. after a switch jump or a no-return call)
 		- adding BBs...?
+	- **Control flow depth indentation**
+		- those dumb arrows in IDA/Ghidra/r2/everything are so useless
+		- INDENTATION is what shows control flow
+		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
+		- but maybe this can fall under the same sorta thing as line comments
 
 - **Design issues**
 	- **Should IrFunction hold a ref to the owning function?**
