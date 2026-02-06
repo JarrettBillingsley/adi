@@ -691,7 +691,7 @@ fn perform_rewrites(
 
 	// log::debug!("-------------REWRITE----------------");
 	// for bb in bbs.iter() {
-	// 	println!("{:?}", bb);
+	// 	log::debug!("{:?}", bb);
 	// }
 
 	// first pass: insert uses
@@ -743,7 +743,7 @@ fn perform_rewrites(
 
 	// log::debug!("-------------AFTER REWRITE----------------");
 	// for bb in bbs.iter() {
-	// 	println!("{:?}", bb);
+	// 	log::debug!("{:?}", bb);
 	// }
 }
 

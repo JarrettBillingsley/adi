@@ -1,9 +1,10 @@
 
-use crate::program::{ Program, BBId, BBTerm, FuncId };
-use crate::memory::{ MmuState, EA, SpanKind, VA };
-
 use std::collections::{ HashMap };
 
+use log::*;
+
+use crate::program::{ Program, BBId, BBTerm, FuncId };
+use crate::memory::{ MmuState, EA, SpanKind, VA };
 use crate::arch::{ IArchitecture, IIrCompiler };
 use crate::platform::{ IPlatform };
 use crate::ir::{ IrFunction, IrBuilder, IrRewrite, IrBasicBlock, IrBBId, IrCfg, IrInst,
@@ -38,7 +39,7 @@ impl Program {
 		let idx = match old_bb.last_instr_before(start) {
 			Some(idx) => idx,
 			None => {
-				log::warn!("splitting bb at {} failed", old_bb.ea);
+				warn!("splitting bb at {} failed", old_bb.ea);
 				return Err(());
 			}
 		};
@@ -81,7 +82,7 @@ impl Program {
 		let (old, new) = self.bbidx.get2_mut(old_bbid, new_bbid);
 		std::mem::swap(&mut old.term, &mut new.term);
 
-		log::trace!("split bb new id: {:?} ea: {}, term: {:?}", new_bbid, new.ea, new.term);
+		trace!("split bb new id: {:?} ea: {}, term: {:?}", new_bbid, new.ea, new.term);
 		new_bbid
 	}
 

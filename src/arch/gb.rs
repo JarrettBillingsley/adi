@@ -56,7 +56,7 @@ impl IDisassembler for GBDisassembler {
 		} else if let Some(desc) = lookup_desc(img[0]) {
 			desc
 		} else {
-			log::trace!("ran into opcode 0x{:02X}", img[0]);
+			log::warn!("ran into opcode 0x{:02X}", img[0]);
 			return Err(DisasError::unknown_instruction(va, ea));
 		};
 

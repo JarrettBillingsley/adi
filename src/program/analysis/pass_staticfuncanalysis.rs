@@ -18,8 +18,8 @@ use crate::ir::{ ConstAddr, ConstAddrKind };
 
 impl Program {
 	pub(super) fn static_func_analysis_pass(&mut self, fid: FuncId) {
-		trace!("------------------------------------------------------------------------");
-		trace!("- begin func static analysis at {}", self.get_func(fid).ea());
+		debug!("------------------------------------------------------------------------");
+		debug!("- begin func static analysis at {}", self.get_func(fid).ea());
 
 		let changes = self.func_find_state_changes(fid);
 		self.func_apply_state_changes(fid, changes);
@@ -150,7 +150,7 @@ impl Program {
 
 			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::StateChange(target, new_state);
 			let bb = self.bbidx.get(bbid);
-			trace!("rewrote terminator of BB {:?} @ {:?} to {:?}", bbid, bb.ea(), bb.term());
+			debug!("rewrote terminator of BB {:?} @ {:?} to {:?}", bbid, bb.ea(), bb.term());
 		}
 	}
 
@@ -219,13 +219,13 @@ impl Program {
 				// the above *could* still fail!
 				if old_target != *target {
 					changed = true;
-					trace!("resolved terminator from {:?} to {:?}", old_target, *target);
+					debug!("resolved terminator from {:?} to {:?}", old_target, *target);
 				}
 			}
 		}
 
 		if changed {
-			trace!("changed terminator of {:?} to {:?}", bbid, term);
+			debug!("changed terminator of {:?} to {:?}", bbid, term);
 			*self.bbidx.get_mut(bbid).term_mut() = term;
 		}
 	}
@@ -308,7 +308,7 @@ impl<'f> StateFlow<'f> {
 
 		let ret = Self { preds, instate, outstate };
 
-		trace!("- begin state flow");
+		debug!("- begin state flow");
 		ret.dump_state("initial", all_bbs);
 
 		ret

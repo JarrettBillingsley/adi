@@ -14,8 +14,8 @@ use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId };
 
 impl Program {
 	pub(super) fn new_func_pass(&mut self, ea: EA, state: MmuState) {
-		trace!("------------------------------------------------------------------------");
-		trace!("- begin function 1st pass at {} with state {:?}", ea, state);
+		info!("------------------------------------------------------------------------");
+		info!("- begin function 1st pass at {} with state {:?}", ea, state);
 
 		if !self.should_analyze_func(ea) {
 			return;
@@ -51,7 +51,7 @@ impl Program {
 			let mut iter     = dis.disas_all(slice, state, va, start);
 
 			'instloop: for inst in &mut iter {
-				// trace!("{:04X} {:?}", inst.va(), inst.bytes());
+				// debug!("{:04X} {:?}", inst.va(), inst.bytes());
 				end_ea = inst.next_ea();
 
 				// the Old Way checked for bank changes here using self.mem.inst_state_change
@@ -127,13 +127,13 @@ impl Program {
 
 			if start == end_ea {
 				// oop. no good.
-				trace!("{} is NO GOOD", start);
+				debug!("{} is NO GOOD", start);
 				self.span_cancel_analysis(start);
 			} else {
 				if iter.err().is_some() {
 					assert!(end_ea == iter.err_ea());
 					term = Some(BBTerm::DeadEnd);
-					trace!("DeadEnd terminator due to bad instruction. Instructions:");
+					debug!("DeadEnd terminator due to bad instruction. Instructions:");
 					for inst in insts.iter() {
 						println!("  {} {}", inst.ea(), self.inst_to_string(inst, state));
 					}
@@ -143,7 +143,7 @@ impl Program {
 					// if we got to the end of the *segment,* though, end_ea may be invalid.
 					if end_ea.offs() >= seg.len() {
 						term = Some(BBTerm::DeadEnd);
-						trace!("DeadEnd terminator due to end of segment. Instructions:");
+						debug!("DeadEnd terminator due to end of segment. Instructions:");
 						for inst in insts.iter() {
 							println!("  {} {}", inst.ea(), self.inst_to_string(inst, state));
 						}
@@ -162,7 +162,7 @@ impl Program {
 
 		// empty func can happen if the very first BB was NO GOOD and was canceled.
 		if bbs.is_empty() {
-			trace!("NOPE that's not a good function.");
+			debug!("NOPE that's not a good function.");
 		} else {
 			// now, make the function!!
 			let fid = self.new_func(bbs);
@@ -171,10 +171,10 @@ impl Program {
 			let list = self.func_find_self_calls(fid);
 
 			if list.is_empty() {
-				trace!("new function at {} has no self-calls.", self.get_func(fid).ea());
+				debug!("new function at {} has no self-calls.", self.get_func(fid).ea());
 				self.queue.enqueue_func_analysis(fid);
 			} else {
-				trace!("new function at {} has {} self-calls.",
+				debug!("new function at {} has {} self-calls.",
 					self.get_func(fid).ea(), list.len());
 				for ea in list {
 					self.queue.enqueue_split_func(ea);
@@ -190,16 +190,16 @@ impl Program {
 
 			if ea == orig_func.ea() {
 				// the beginning of an already-analyzed function.
-				trace!("oh, I've seen this one already. NEVERMIIIND");
+				debug!("canceling, function already analyzed");
 			} else {
 				// the middle of an already-analyzed function.
-				trace!("middle of an existing function...");
+				debug!("middle of an existing function...");
 				self.queue.enqueue_split_func(ea);
 			}
 			false
 		} else if self.segment_from_ea(ea).is_fake() {
 			// TODO: point of interest? calling a function copied into RAM?
-			trace!("skipping function at EA in fake segment: {:?}", ea);
+			debug!("skipping function at EA in fake segment: {:?}", ea);
 			false
 		} else {
 			true
@@ -232,7 +232,7 @@ impl Program {
 	}
 
 	fn new_bb(&mut self, ea: EA, term: BBTerm, insts: Vec<Instruction>, state: MmuState) -> BBId {
-		log::trace!("new bb ea: {}, term: {:?}", ea, term);
+		trace!("new bb ea: {}, term: {:?}", ea, term);
 		self.bbidx.new_bb(ea, term, insts, state)
 	}
 

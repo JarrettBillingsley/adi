@@ -13,7 +13,8 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Trace)?;
+	setup_logging(LevelFilter::Debug)?;
+
 	setup_panic();
 	// test_gb()
 	test_nes()
@@ -22,15 +23,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
 	let log_config = ConfigBuilder::new()
-		.set_level_color(Level::Info, simplelog::Color::Green)
-		.set_level_color(Level::Debug, simplelog::Color::Blue)
-		.set_level_color(Level::Trace, simplelog::Color::Cyan)
+		.set_level_color(Level::Info, Some(simplelog::Color::Green))
+		.set_level_color(Level::Debug, Some(simplelog::Color::Cyan))
+		.set_level_color(Level::Trace, Some(simplelog::Color::White))
 		.set_time_level(LevelFilter::Off)
 		.set_thread_level(LevelFilter::Off)
 		.set_target_level(LevelFilter::Off)
-		.set_location_level(LevelFilter::Debug)
+		// .set_location_level(LevelFilter::Error)
+		.set_location_level(LevelFilter::Off)
+		.set_level_padding(LevelPadding::Right)
 		.build();
-	TermLogger::init(max_level, log_config, TerminalMode::Mixed)
+	TermLogger::init(max_level, log_config, TerminalMode::Mixed, ColorChoice::Always)
 }
 
 fn setup_panic() {

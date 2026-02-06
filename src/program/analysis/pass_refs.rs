@@ -15,8 +15,8 @@ impl Program {
 	pub(super) fn func_refs_pass(&mut self, fid: FuncId) {
 		let func = self.get_func(fid);
 
-		trace!("------------------------------------------------------------------------");
-		trace!("- begin function refs pass at {}", func.ea());
+		debug!("------------------------------------------------------------------------");
+		debug!("- begin function refs pass at {}", func.ea());
 
 		// switch instruction
 		let mut jumptables = Vec::<EA>::new();

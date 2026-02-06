@@ -241,7 +241,7 @@ impl IDisassembler for ToyDisassembler {
 		let desc = match lookup_desc(img[0]) {
 			Some(d) => d,
 			None => {
-				log::trace!("ran into opcode 0x{:02X}", img[0]);
+				log::warn!("ran into opcode 0x{:02X}", img[0]);
 				return Err(DisasError::unknown_instruction(va, ea));
 			}
 		};
