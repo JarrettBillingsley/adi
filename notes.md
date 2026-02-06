@@ -191,7 +191,6 @@
 		- MMU doesn't yet handle external RAM
 		- loader incorrectly sets `Image::orig_offs` due to Ines not supporting that
 		- std labels need data item once data is implemented
-		- UXRom linear performance issue
 		- more mappers (remember to set segment base VA when state changes)
 	- **GB**
 		- more MBCs (remember to set segment base VA when state changes)

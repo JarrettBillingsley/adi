@@ -1,6 +1,7 @@
 use std::io::{ BufReader, Cursor };
 use std::error::{ Error };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::collections::{ HashMap };
 
 use nes_rom::ines::{ Ines };
 use parse_display::Display;
@@ -395,23 +396,18 @@ impl IMapper for NRom {
 struct UXRom {
 	all:  Vec<SegId>,
 	last: SegId,
+	map:  HashMap<SegId, usize>,
 }
 
 impl UXRom {
 	fn init(all: Vec<SegId>) -> Mapper {
 		let last = *all.last().unwrap();
-		Self { all, last }.into()
+		let map = all.iter().enumerate().map(|(idx, seg)| (*seg, idx)).collect();
+		Self { all, last, map }.into()
 	}
 
 	fn seg_idx_for_seg_id(&self, seg: SegId) -> Option<usize> {
-		// TODO: linear... problem?
-		for (i, &s) in self.all.iter().enumerate() {
-			if s == seg {
-				return Some(i);
-			}
-		}
-
-		None
+		self.map.get(&seg).copied()
 	}
 
 	fn contains_seg(&self, seg: SegId) -> bool {
@@ -485,6 +481,7 @@ impl IMapper for UXRom {
 struct AXRom {
 	name: &'static str,
 	all:  Vec<SegId>,
+	map:  HashMap<SegId, usize>,
 }
 
 impl AXRom {
@@ -497,18 +494,12 @@ impl AXRom {
 	}
 
 	fn _init(name: &'static str, all: Vec<SegId>) -> Mapper {
-		Self { name, all }.into()
+		let map = all.iter().enumerate().map(|(idx, seg)| (*seg, idx)).collect();
+		Self { name, all, map }.into()
 	}
 
 	fn seg_idx_for_seg_id(&self, seg: SegId) -> Option<usize> {
-		// TODO: linear... problem?
-		for (i, &s) in self.all.iter().enumerate() {
-			if s == seg {
-				return Some(i);
-			}
-		}
-
-		None
+		self.map.get(&seg).copied()
 	}
 
 	fn contains_seg(&self, seg: SegId) -> bool {
