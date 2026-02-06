@@ -1,7 +1,6 @@
 
 # Yak stack
 
-- update from Rust 2018 to Rust 2024 (if-let chains!!!)
 - update dependencies
 
 # Imminent tasks!

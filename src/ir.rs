@@ -79,13 +79,13 @@ impl ValSize {
 pub(crate) struct IrReg {
 	size:   ValSize,
 	offset: u16,
-	gen:    Option<u32>
+	gen_:    Option<u32>
 }
 
 impl Debug for IrReg {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		if let Some(gen) = self.gen {
-			write!(f, "r{}_{}.{}", self.offset, gen, self.size.name())
+		if let Some(gen_) = self.gen_ {
+			write!(f, "r{}_{}.{}", self.offset, gen_, self.size.name())
 		} else {
 			write!(f, "r{}.{}", self.offset, self.size.name())
 		}
@@ -95,22 +95,22 @@ impl Debug for IrReg {
 impl IrReg {
 	/// Constructs an 8-bit register.
 	pub(crate) const fn reg8(offset: u16) -> Self {
-		Self { size: ValSize::_8, offset, gen: None }
+		Self { size: ValSize::_8, offset, gen_: None }
 	}
 
 	/// Constructs a 16-bit register.
 	pub(crate) const fn reg16(offset: u16) -> Self {
-		Self { size: ValSize::_16, offset, gen: None }
+		Self { size: ValSize::_16, offset, gen_: None }
 	}
 
 	/// Constructs a 32-bit register.
 	pub(crate) const fn reg32(offset: u16) -> Self {
-		Self { size: ValSize::_32, offset, gen: None }
+		Self { size: ValSize::_32, offset, gen_: None }
 	}
 
 	/// Constructs a 64-bit register.
 	pub(crate) const fn reg64(offset: u16) -> Self {
-		Self { size: ValSize::_64, offset, gen: None }
+		Self { size: ValSize::_64, offset, gen_: None }
 	}
 
 	/// The size of this register.
@@ -127,15 +127,15 @@ impl IrReg {
 
 	/// True if this register has been given an SSA generation.
 	fn is_ssa(&self) -> bool {
-		self.gen.is_some()
+		self.gen_.is_some()
 	}
 
 	/// If this is not an SSA register, returns a new `IrReg` subscripted with the given index.
 	/// Panics if this is already an SSA register.
 	fn sub(&self, i: u32) -> Self {
-		assert!(self.gen.is_none(), ".sub() called on '{:?}'", self);
+		assert!(self.gen_.is_none(), ".sub() called on '{:?}'", self);
 		Self {
-			gen: Some(i),
+			gen_: Some(i),
 			..*self
 		}
 	}

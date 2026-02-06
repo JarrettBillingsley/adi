@@ -188,7 +188,8 @@ impl Program {
 	}
 
 	/// part 3: run state change dataflow algorithm and determine new states for all BBs
-	fn func_run_state_change_dataflow(&self, fid: FuncId) -> impl Iterator<Item = (BBId, StateInfo)> {
+	fn func_run_state_change_dataflow(&self, fid: FuncId)
+	-> impl Iterator<Item = (BBId, StateInfo)> + use<> {
 		debug!("- running state change dataflow");
 		let func       = self.get_func(fid);
 		let ana        = self.func_begin_analysis(func);
@@ -375,7 +376,7 @@ impl<'f> StateFlow<'f> {
 		}
 	}
 
-	fn into_iter(self) -> impl Iterator<Item = (BBId, StateInfo)> {
+	fn into_iter(self) -> impl Iterator<Item = (BBId, StateInfo)> + use<> {
 		self.instate.into_iter()
 	}
 }
