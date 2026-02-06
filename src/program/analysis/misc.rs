@@ -82,7 +82,7 @@ impl Program {
 		let (old, new) = self.bbidx.get2_mut(old_bbid, new_bbid);
 		std::mem::swap(&mut old.term, &mut new.term);
 
-		trace!("split bb new id: {:?} ea: {}, term: {:?}", new_bbid, new.ea, new.term);
+		trace!("  split bb new id: {:?} ea: {}, term: {:?}", new_bbid, new.ea, new.term);
 		new_bbid
 	}
 

@@ -159,13 +159,13 @@ impl RegRenamer {
 
 		// 1. update instructions in this bb
 		for phi in bb.phis_mut() {
-			// println!("phi dst = {:?}", phi.dst_reg());
+			// log::trace!("phi dst = {:?}", phi.dst_reg());
 			self.visit_assignment_dst(phi.dst_reg_mut(), &mut to_pop);
 		}
 
 		for inst in bb.insts_mut() {
 			inst.visit_uses_mut(|v| {
-				// println!("use = {:?}", v);
+				// log::trace!("use = {:?}", v);
 				*v = v.sub(*self.stacks[&v.offset()].last().unwrap_or(&0));
 			});
 
@@ -177,7 +177,7 @@ impl RegRenamer {
 		// 2. update phi functions in successors
 		for succ in cfg.neighbors_directed(bbid, Direction::Outgoing) {
 			let j = self.predecessor_index_of(succ, bbid, cfg);
-			// println!("pred = {}, succ = {}, j = {}", bbid, succ, j);
+			// log::trace!("pred = {}, succ = {}, j = {}", bbid, succ, j);
 
 			for phi in bbs[succ].phis_mut() {
 				let args = phi.args_mut();
@@ -258,7 +258,7 @@ impl PhiPruner {
 				// if arg is marked as useless, mark it as useful and push it to the stack.
 				if let Some(arg_info) = self.use_map.get_mut(arg) {
 					if !arg_info.used() {
-						// println!("propagation: marking reg {} as used in bb {}",
+						// log::trace!("propagation: marking reg {} as used in bb {}",
 						// 	arg, arg_info.bb());
 						arg_info.mark_used();
 						self.stack.push(*arg);
@@ -289,7 +289,7 @@ impl PhiPruner {
 	fn visit_mark(&mut self, bbid: IrBBId, bbs: &mut [IrBasicBlock], doms: &DomTree) {
 		// mark all registers declared by phi functions as unused
 		for phi in bbs[bbid].phis() {
-			// println!("marking reg {} as unused in bb {}", phi.dst_reg(), bbid);
+			// log::trace!("marking reg {} as unused in bb {}", phi.dst_reg(), bbid);
 			self.use_map.insert(*phi.dst_reg(), UseInfo::new(bbid));
 		}
 
@@ -302,7 +302,7 @@ impl PhiPruner {
 				// so if it was defined by a phi function then it will already have been added.
 				if let Some(info) = self.use_map.get_mut(reg) {
 					// mark as used and push it on the stack
-					// println!("marking reg {:?} as used in bb {:?}", reg, info.bb());
+					// log::trace!("marking reg {:?} as used in bb {:?}", reg, info.bb());
 					info.mark_used();
 					self.stack.push(*reg);
 				}

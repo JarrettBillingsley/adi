@@ -13,7 +13,7 @@ pub(crate) fn elim_dead_stores(bbs: &mut [IrBasicBlock]) {
 	for (reg, def) in defs.iter() {
 		if !def.used() {
 			// TODO: uhhhhhhh actually eliminate the dead stores lmao
-			println!("{:?} is dead", reg);
+			log::debug!("{:?} is dead", reg);
 		}
 	}
 }

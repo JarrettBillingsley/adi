@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Debug)?;
+	setup_logging(LevelFilter::Trace)?;
 
 	setup_panic();
 	// test_gb()
@@ -434,8 +434,8 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 // ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	// let img = Image::new_from_file("tests/data/10yf.nes")?;
-	let img = Image::new_from_file("tests/data/duckhunt.nes")?;
+	let img = Image::new_from_file("tests/data/10yf.nes")?;
+	// let img = Image::new_from_file("tests/data/duckhunt.nes")?;
 	// let img = Image::new_from_file("tests/data/battletoads.nes")?;
 	let mut prog = program_from_image(img)?;
 

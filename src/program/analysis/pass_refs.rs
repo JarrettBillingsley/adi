@@ -15,8 +15,8 @@ impl Program {
 	pub(super) fn func_refs_pass(&mut self, fid: FuncId) {
 		let func = self.get_func(fid);
 
-		debug!("------------------------------------------------------------------------");
-		debug!("- begin function refs pass at {}", func.ea());
+		info!("------------------------------------------------------------------------");
+		info!("- begin function refs pass at {}", func.ea());
 
 		// switch instruction
 		let mut jumptables = Vec::<EA>::new();
@@ -54,7 +54,7 @@ impl Program {
 								// refmap that already exists is a no-op.
 								refs.push((src, *target));
 							} else {
-								trace!("VA ref at {} to {}", src, VA::try_from(*target).unwrap());
+								trace!("  VA ref at {} to {}", src, VA::try_from(*target).unwrap());
 								// need to turn this into a Ref later
 								varefs.push((bb.id(), instidx, i));
 							}
@@ -79,9 +79,9 @@ impl Program {
 						refs.push((inst.ea(), target_ea));
 
 						if target_ea.is_resolved() {
-							trace!("Call|Cond|Uncond at {} to {}", src, target_ea);
+							trace!("  Call|Cond|Uncond at {} to {}", src, target_ea);
 						} else {
-							trace!("Call|Cond|Uncond at {} to unresolved EA {}", src, target_ea);
+							trace!("  Call|Cond|Uncond at {} to unresolved EA {}", src, target_ea);
 						}
 					}
 					_ => {}
@@ -148,7 +148,7 @@ impl Program {
 			};
 
 			if should_push {
-				trace!("think I found a function at {}", target_ea);
+				trace!("  think I found a function at {}", target_ea);
 				funcs.push((target_ea, state));
 			}
 		}

@@ -10,7 +10,7 @@ use crate::memory::{ EA };
 
 impl Program {
 	pub(super) fn jump_table_pass(&mut self, ea: EA) {
-		debug!("there's a jumptable at {}", ea);
+		info!("WOWOWOW there's a jumptable at {}", ea);
 		// todo!()
 	}
 }

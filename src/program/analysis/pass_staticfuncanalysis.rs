@@ -18,13 +18,16 @@ use crate::ir::{ ConstAddr, ConstAddrKind };
 
 impl Program {
 	pub(super) fn static_func_analysis_pass(&mut self, fid: FuncId) {
-		debug!("------------------------------------------------------------------------");
-		debug!("- begin func static analysis at {}", self.get_func(fid).ea());
+		info!("------------------------------------------------------------------------");
+		info!("- begin function static analysis pass at {}", self.get_func(fid).ea());
 
 		let changes = self.func_find_state_changes(fid);
 		self.func_apply_state_changes(fid, changes);
 
-		for (bbid, new_state) in self.func_run_state_change_dataflow(fid) {
+		let new_states = self.func_run_state_change_dataflow(fid);
+		debug!("- applying new states");
+
+		for (bbid, new_state) in new_states {
 			self.bb_apply_new_state(bbid, new_state);
 		}
 
@@ -33,14 +36,16 @@ impl Program {
 
 	/// part 1: construct IR, do constant propagation, and determine *where* state changes are
 	fn func_find_state_changes(&mut self, fid: FuncId) -> Vec<(EA, MmuState)> {
+		debug!("- finding state changes");
+
 		let irfunc = self.func_to_ir(fid);
-		// println!("------------------------------------------------------------------");
-		// println!("Constants:");
+		// debug!("------------------------------------------------------------------");
+		// debug!("Constants:");
 		// let consts = irfunc.constants();
 		// for (reg, (val, from)) in consts {
-		// 	println!("{:?} = {:08X} <from {:?}>", reg, val, from);
+		// 	debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
 		// }
-		// println!("{:?}", irfunc);
+		// debug!("{:?}", irfunc);
 
 		let addr_bits = self.plat.arch().addr_bits();
 
@@ -115,6 +120,8 @@ impl Program {
 
 	/// part 2: split BBs at state change instructions
 	fn func_apply_state_changes(&mut self, fid: FuncId, changes: Vec<(EA, MmuState)>) {
+		debug!("- applying state changes");
+
 		for (ea, new_state) in changes.into_iter() {
 			let bbid = self.span_at_ea(ea).bb().expect("I mean it's in here cause it was in a BB");
 
@@ -156,6 +163,7 @@ impl Program {
 
 	/// part 3: run state change dataflow algorithm and determine new states for all BBs
 	fn func_run_state_change_dataflow(&self, fid: FuncId) -> impl Iterator<Item = (BBId, StateInfo)> {
+		debug!("- running state change dataflow");
 		let func       = self.get_func(fid);
 		let ana        = self.func_begin_analysis(func);
 		let all_bbs    = ana.all_bbs().collect::<Vec<_>>();
@@ -166,8 +174,9 @@ impl Program {
 		// MMU state for the BEGINNING of that BB!!)
 		let mut to_propagate: Vec<(BBId, MmuState)> = vec![];
 
+		trace!("  BB EAs:");
 		for bbid in all_bbs.iter() {
-			trace!("  {:?} @ {:?}", bbid, self.bbidx.get(*bbid).ea());
+			trace!("    {:?} @ {:?}", bbid, self.bbidx.get(*bbid).ea());
 
 			if let BBTerm::StateChange(_, new_state) = self.bbidx.get(*bbid).term() {
 				to_propagate.push((*bbid, *new_state));
@@ -307,10 +316,7 @@ impl<'f> StateFlow<'f> {
 		}
 
 		let ret = Self { preds, instate, outstate };
-
-		debug!("- begin state flow");
 		ret.dump_state("initial", all_bbs);
-
 		ret
 	}
 

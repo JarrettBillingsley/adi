@@ -12,8 +12,8 @@ use crate::memory::{ EA };
 
 impl Program {
 	pub(super) fn split_func_pass(&mut self, ea: EA) {
-		debug!("------------------------------------------------------------------------");
-		debug!("- begin function splitting at {}", ea);
+		info!("------------------------------------------------------------------------");
+		info!("- begin function splitting pass at {}", ea);
 
 		let mut bbid = self.span_at_ea(ea).bb().expect("uh, there used to be a function here");
 		let fid = self.bbidx.get(bbid).func();
@@ -37,7 +37,7 @@ impl Program {
 			Ok(None) => {} // didn't split, s'fine
 			Err(_) => {
 				// TODO: mark referrer as being invalid somehow.
-				warn!(" attempted to split function starting at {} at EA {}, but it failed",
+				warn!("  attempted to split function starting at {} at EA {}, but it failed",
 					self.get_func(fid).ea(), ea);
 			}
 		}
@@ -46,7 +46,7 @@ impl Program {
 		// the head node dominates all the other entry points. but I don't care to deal with
 		// that right now.
 		if self.get_func(fid).is_multi_entry() {
-			debug!(" function at {} is multi-entry already", self.get_func(fid).ea());
+			debug!("  function at {} is multi-entry already", self.get_func(fid).ea());
 			self.get_func_mut(fid).add_entrypoint(bbid);
 
 			// since we technically changed the CFG (a new entry point means MMU state may be
@@ -65,9 +65,9 @@ impl Program {
 		reachable.remove(&bbid);
 
 		// self.func_dump_cfg(&ana);
-		// println!("trying to add entry point in {:?}", bbid);
-		// println!("{:#?}", doms);
-		// println!("reachable: {:#?}", reachable);
+		// debug!("trying to add entry point in {:?}", bbid);
+		// debug!("{:#?}", doms);
+		// debug!("reachable: {:#?}", reachable);
 
 		// if this BB doesn't dominate all BBs in reachable (except itself), then we can't split.
 		let mut can_split = true;
@@ -102,11 +102,11 @@ impl Program {
 				self.bbidx.get_mut(bb).change_func(new_fid);
 			}
 
-			debug!(" split off new function {:?} at {}.", new_fid, ea);
+			debug!("  split off new function {:?} at {}.", new_fid, ea);
 			self.queue.enqueue_func_analysis(new_fid);
 		} else {
 			// otherwise, give up and mark it a multi-entry function.
-			debug!(" can't split, marking function at {} as multi-entry", self.get_func(fid).ea());
+			debug!("  can't split, marking function at {} as multi-entry", self.get_func(fid).ea());
 			self.get_func_mut(fid).add_entrypoint(bbid);
 		}
 
