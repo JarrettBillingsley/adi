@@ -1,8 +1,6 @@
 
 # Yak stack
 
-- update dependencies
-
 # Imminent tasks!
 
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
