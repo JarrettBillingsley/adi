@@ -420,7 +420,7 @@ impl InstDesc {
 				let addr = self.get_operand(i, b);
 				b.load (ea, REG_TMP1, addr,                     -1, 0);
 				b.iusub(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
-				b.store(ea, REG_TMP1, addr,                     -1, 0);
+				b.store(ea, addr, REG_TMP1,                     0, -1);
 				self.set_nz(REG_TMP1, i, b);
 			}
 			DEX => { // NZ
@@ -435,7 +435,7 @@ impl InstDesc {
 				let addr = self.get_operand(i, b);
 				b.load (ea, REG_TMP1, addr,                     -1, 0);
 				b.iuadd(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
-				b.store(ea, REG_TMP1, addr,                     -1, 0);
+				b.store(ea, addr, REG_TMP1,                     0, -1);
 				self.set_nz(REG_TMP1, i, b);
 			}
 			INX => { // NZ
@@ -518,7 +518,7 @@ impl InstDesc {
 				b.ishl(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8,  -1, -1, -1);
 				self.set_nz(REG_TMP1, i, b);
 
-				b.store(ea, REG_TMP1, addr,                     -1, 0);
+				b.store(ea, addr, REG_TMP1,                     0, -1);
 			}
 			ASLA => { // NZC
 				self.set_c(REG_A, i, b);
@@ -534,7 +534,7 @@ impl InstDesc {
 				b.iushr(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
 				self.set_nz(REG_TMP1, i, b);
 
-				b.store(ea, REG_TMP1, addr, -1, 0);
+				b.store(ea, addr, REG_TMP1, 0, -1);
 			}
 			LSRA => { // NZC (NF = 0, hardcoded)
 				// cf = (A & 1) (i.e. if LSB is 1, set CF)
@@ -552,7 +552,7 @@ impl InstDesc {
 				b.ior (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
 				self.set_nz(REG_TMP1, i, b);
 
-				b.store(ea, REG_TMP1, addr, -1, 0);
+				b.store(ea, addr, REG_TMP1, 0, -1);
 			}
 			ROLA => { // NZC
 				b.assign(ea, REG_TMP2, REG_CF, -1, -1);               // tmp2 = cf
@@ -573,7 +573,7 @@ impl InstDesc {
 				b.ior   (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
 				self.set_nz(REG_TMP1, i, b);
 
-				b.store(ea, REG_TMP1, addr, -1, 0);
+				b.store(ea, addr, REG_TMP1, 0, -1);
 			}
 			RORA  => { // NZC
 				b.assign(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf

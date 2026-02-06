@@ -67,9 +67,19 @@ impl Program {
 			assert!(matches!(inst.get_op(opn), Operand::Mem(_, _) | Operand::Indir(_, _)),
 				"only Mem and Indir operands are allowed to have constant addresses");
 
+			// have to see if there is already a ref here - if it's to the same address, we may be
+			// just accessing it in a different way (e.g. for an increment instruction, the IR will
+			// break it into a load and a store - so we will have a RefInfo with a MemAccess::R on
+			// it already, and we will have to add MemAccess::W to it)
+			let access = match inst.get_opinfo(opn) {
+				OpInfo::Ref { target: old_target, info: old_info } if *old_target == addr =>
+					old_info.access.union(kind.access()),
+				_ => kind.access() // otherwise it's just a brand new reference
+			};
+
 			// hi/lo come into play once we visit the instructions which computed this address.
 			// TODO: I'm not totally confident that this is always absolute...
-			let info = RefInfo::abs(addr_bits, kind.access());
+			let info = RefInfo::abs(addr_bits, access);
 			*inst.get_opinfo_mut(opn) = OpInfo::Ref { target: addr, info };
 
 			// 2. detect instruction state changes

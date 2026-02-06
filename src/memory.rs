@@ -103,6 +103,16 @@ impl MemAccess {
 	pub fn is_target(&self) -> bool {
 		((*self as u8) & T_BIT) != 0
 	}
+
+	/// Returns a new MemAccess that is the union of `self` and `other` (that is, with all bits
+	/// in either of the sources turned on).
+	pub fn union(&self, other: MemAccess) -> MemAccess {
+		let combined = (*self as u8) | (other as u8);
+		assert!(combined <= (MemAccess::RWOT as u8));
+		unsafe {
+			std::mem::transmute(combined)
+		}
+	}
 }
 
 impl Display for MemAccess {
