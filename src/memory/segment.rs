@@ -118,7 +118,7 @@ impl Segment {
 	/// Panics if the given EA does not fall within this segment.
 	pub fn va_for_ea(&self, ea: EA) -> Option<VA> {
 		assert!(self.contains_ea(ea));
-		self.base_va.map(|base_va| VA(ea.offs() - base_va.0))
+		self.base_va.map(|base_va| VA(ea.offs() + base_va.0))
 	}
 
 	/// Same as above, but infallible.

@@ -675,7 +675,10 @@ fn show_data(prog: &Program, data: &DataItem) {
 
 	if seg.is_real() {
 		let slice = seg.image_slice(start .. start + size);
-		println!("    {}", interpret_data(prog, data.radix(), data.ty(), &slice));
+		let vaddr = prog.fmt_addr(seg.va_from_ea(start).0);
+
+		println!("{} {:>4}:{}  {}", start, seg.name().yellow(), vaddr,
+			interpret_data(prog, data.radix(), data.ty(), &slice));
 	}
 }
 
@@ -894,14 +897,14 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 			_ => unreachable!()
 		}
 
-		let addr = prog.fmt_addr(inst.va().0);
+		let vaddr = prog.fmt_addr(inst.va().0);
 		// let mnem = prog.inst_get_mnemonic(inst);
 		// let ops  = prog.inst_operands_to_string(inst, state);
 
 		// println!("{:>4}:{}  {:8}      {:3} {:30}",
-		// 	seg.name().yellow(), addr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
+		// 	seg.name().yellow(), vaddr, bytes.truecolor(63, 63, 255), mnem.red(), ops);
 
-		print!("{} {:>4}:{}  {:8}      ", inst.ea(), seg.name().yellow(), addr,
+		print!("{} {:>4}:{}  {:8}      ", inst.ea(), seg.name().yellow(), vaddr,
 			bytes.truecolor(63, 63, 255));
 		let mut output = AnsiConsolePrintOutput;
 		prog.inst_print(inst, state, &mut output).unwrap();
