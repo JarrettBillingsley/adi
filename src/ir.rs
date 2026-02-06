@@ -155,10 +155,10 @@ pub(crate) struct IrConst {
 impl Debug for IrConst {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self.size {
-			ValSize::_8  => write!(f, "const 0x{:02X}", self.val),
-			ValSize::_16 => write!(f, "const 0x{:04X}", self.val),
-			ValSize::_32 => write!(f, "const 0x{:08X}", self.val),
-			ValSize::_64 => write!(f, "const 0x{:016X}", self.val),
+			ValSize::_8  => write!(f, "#0x{:02X}", self.val),
+			ValSize::_16 => write!(f, "#0x{:04X}", self.val),
+			ValSize::_32 => write!(f, "#0x{:08X}", self.val),
+			ValSize::_64 => write!(f, "#0x{:016X}", self.val),
 		}
 	}
 }
@@ -673,13 +673,6 @@ impl<'func> ConstAddrsIter<'func> {
 // Rewrites
 // ------------------------------------------------------------------------------------------------
 
-/// Rewrites each call instruction in two ways:
-/// 1. before, insert 'use' instructions to mark all argument registers as being used
-///    as arguments to the call.
-/// 2. after, insert a new dummy BB that assigns a special "return" value to each
-///    return register.
-///
-/// Also inserts 'use' instructions before each return to mark all return registers as used.
 fn perform_rewrites(
 	compiler: &impl IIrCompiler,
 	rewrites: Vec<(IrBBId, IrRewrite)>,
@@ -748,8 +741,6 @@ fn perform_rewrites(
 }
 
 impl IrBasicBlock {
-	/// Inserts dummy uses of the arg/return regs before call and return instructions.
-	/// Returns true if a call was rewritten, so the caller can then insert the dummy BB.
 	fn insert_dummy_uses(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg], before_last: bool) {
 		// safe because `func_to_ir` checks that every IR BB has at least 1 instruction.
 		let (terminating_inst, _) = self.insts.split_last().unwrap();

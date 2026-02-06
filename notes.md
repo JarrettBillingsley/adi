@@ -3,7 +3,6 @@
 
 # Imminent tasks!
 
-- IR instruction name/method name/outputs are needlessly inconsistent.
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
 		- 10yf
@@ -118,6 +117,10 @@
 
 - **Analysis**
 	- **Make const prop build ASTs for constant provenance**
+		- wait uhhhhhhhhh
+		- that could be used for *way more* than just constant provenance right?
+		- you could have it show little HLL-like snippets of what a sequence of instructions does
+		- like a very limited decompiler
 	- **IR Dead Store Elimination**
 		- ties into argument/return value/clobber analysis
 	- **Data analysis**
