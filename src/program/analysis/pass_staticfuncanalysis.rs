@@ -16,10 +16,26 @@ use crate::ir::{ ConstAddr, ConstAddrKind };
 // Function static analysis
 // ------------------------------------------------------------------------------------------------
 
+fn dump_func(prog: &Program, fid: FuncId) {
+	let func = prog.get_func(fid);
+	let mut bbs: Vec<BBId> = func.all_bbs().collect();
+	bbs.sort_by_key(|bbid| prog.bbidx.get(*bbid).ea());
+	for bbid in bbs {
+		let bb = prog.bbidx.get(bbid);
+		let state = bb.mmu_state_after();
+		debug!("    {:?}:", bbid);
+		for inst in bb.insts().iter() {
+			debug!("      {} {}", inst.ea(), prog.inst_to_string(inst, state));
+		}
+	}
+}
+
 impl Program {
 	pub(super) fn static_func_analysis_pass(&mut self, fid: FuncId) {
 		info!("------------------------------------------------------------------------");
 		info!("- begin function static analysis pass at {}", self.get_func(fid).ea());
+
+		// dump_func(self, fid);
 
 		let changes = self.func_find_state_changes(fid);
 		self.func_apply_state_changes(fid, changes);

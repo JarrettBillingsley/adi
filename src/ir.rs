@@ -495,15 +495,38 @@ impl Debug for IrFunction {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		writeln!(f, "-------------------------------------------------------")?;
 		writeln!(f, "IR for {:?}", self.real_fid)?;
-		writeln!(f, "\nCFG:\n")?;
-		writeln!(f, "{:?}", Dot::with_config(&self.cfg, &[DotConfig::EdgeNoLabel]))?;
+		writeln!(f, "{:?}", DebugWorkaroundThing(&self.cfg, &self.bbs))
+	}
+}
 
-		for bb in &self.bbs {
+// WOw!!!! look at all the dumb bullshit I have to do just to reuse one piece of code as both
+// a Debug::fmt impl and a standalone function!!!!!!! AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+struct DebugWorkaroundThing<'aaaa>(&'aaaa IrCfg, &'aaaa [IrBasicBlock]);
+
+impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		let DebugWorkaroundThing(cfg, bbs) = *self;
+		writeln!(f, "")?;
+		writeln!(f, "CFG (NOTE!!!! numbers in \"a ->b \" are NOT NECESSARILY BB NUMBERS,")?;
+		writeln!(f, "only trust the actual dot graph output or look at the successors")?;
+		writeln!(f, "at the end of the BBs below):")?;
+		writeln!(f, "")?;
+		writeln!(f, "{:?}", Dot::with_config(cfg, &[DotConfig::EdgeNoLabel]))?;
+
+		for bb in bbs {
 			Debug::fmt(&bb, f)?;
+
+			for target in cfg.edges(bb.id).map(|(_, n, _)|n) {
+				writeln!(f, "    -> bb{}", target)?;
+			}
 		}
 
 		Ok(())
 	}
+}
+
+fn debug_dump_ir_cfg_and_bbs(cfg: &IrCfg, bbs: &[IrBasicBlock]) {
+	log::debug!("{:?}", DebugWorkaroundThing(cfg, bbs));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -682,10 +705,8 @@ fn perform_rewrites(
 	let arg_regs = compiler.arg_regs();
 	let ret_regs = compiler.return_regs();
 
-	// log::debug!("-------------REWRITE----------------");
-	// for bb in bbs.iter() {
-	// 	log::debug!("{:?}", bb);
-	// }
+	// log::debug!("-------------BEFORE REWRITE----------------");
+	// debug_dump_ir_cfg_and_bbs(cfg, bbs);
 
 	// first pass: insert uses
 	for (irbbid, rewrite) in rewrites.iter() {
@@ -697,20 +718,37 @@ fn perform_rewrites(
 	let mut new_bbs = vec![];
 	let mut new_bbid = bbs.len();
 
-	// second pass: insert dummy BBs for return-uses
+	// second pass: insert dummy BBs for return-uses after calls
 	for (irbbid, rewrite) in rewrites.into_iter() {
 		if matches!(rewrite, IrRewrite::Returns) {
 			let bb = &mut bbs[irbbid];
 
 			// first update the cfg.
 			// println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
-			let mut edges_iter = cfg.edges(bb.id);
-			let old_dest = edges_iter.next()
-				.expect("IrWrite::Returns put on a BB with no in-function successor")
-				.1;
-			assert!(edges_iter.next().is_none(),
-				"IrWrite::Returns put on a BB with 2 in-function successors; caused by call into \
-				BB in same func. Why hasn't this function been split?");
+			let targets = cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>();
+
+			let old_dest = match targets[..] {
+				[] => panic!("IrWrite::Returns put on a BB with no in-function successor"),
+				[target] => target, // ok cool beans
+				[target1, target2] => {
+					// this case can happen if a function is recursive, which is okay. but any
+					// NON-recursive call would be an error.
+					if target1 == 0 {
+						target2
+					} else if target2 == 0 {
+						target1
+					} else {
+						panic!("IrWrite::Returns put on BB @ {} where one of the call targets \
+							({}, {}) is self-call but NOT a recursive call. Why hasn't this \
+							function been split?",
+							bb.insts[0].ea(),
+							target1, target2);
+					}
+				}
+				_ => panic!("UHHHHHHHHHHHHHHHH TOO MANY EDGES"),
+			};
+
+			log::debug!("  changing bb{}'s dest from bb{} to bb{}", bb.id, old_dest, new_bbid);
 
 			assert!(cfg.remove_edge(bb.id, old_dest).is_some());
 			cfg.add_edge(bb.id, new_bbid, ());
@@ -735,9 +773,7 @@ fn perform_rewrites(
 	bbs.append(&mut new_bbs);
 
 	// log::debug!("-------------AFTER REWRITE----------------");
-	// for bb in bbs.iter() {
-	// 	log::debug!("{:?}", bb);
-	// }
+	// debug_dump_ir_cfg_and_bbs(cfg, bbs);
 }
 
 impl IrBasicBlock {

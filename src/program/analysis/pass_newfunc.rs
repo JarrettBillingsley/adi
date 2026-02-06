@@ -174,9 +174,10 @@ impl Program {
 				debug!("  new function at {} has no self-calls.", self.get_func(fid).ea());
 				self.queue.enqueue_func_analysis(fid);
 			} else {
-				debug!("  new function at {} has {} self-calls.",
+				debug!("  new function at {} has {} self-call(s):",
 					self.get_func(fid).ea(), list.len());
 				for ea in list {
+					debug!("    {}", ea);
 					self.queue.enqueue_split_func(ea);
 				}
 			}
