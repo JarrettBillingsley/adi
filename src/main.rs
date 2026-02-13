@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Trace)?;
+	setup_logging(LevelFilter::Error)?;
 
 	setup_panic();
 	// test_gb()
@@ -540,7 +540,119 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// show_all_funcs(&prog);
 	// show_prg0(&prog);
 
+	// generate_fe_test_data(&prog);
+
 	Ok(())
+}
+
+// janktastic, lots of duplication with code below, just meant for testing purposes
+fn generate_fe_test_data(prog: &Program) {
+	let segid = prog.segment_for_name("PRG0").unwrap().id();
+	let seg = prog.segment_from_id(segid);
+
+	for span in seg.all_spans() {
+		match span.kind() {
+			SpanKind::Unk      => {
+				let ea    = span.start();
+				let state = prog.mmu_state_at(ea).unwrap_or_else(|| prog.initial_mmu_state());
+				let va    = prog.va_from_ea(state, ea);
+				let addr  = prog.fmt_addr(va.0);
+
+				println!("    (0x{:04X}, \"\\", va.0);
+				println!("{:>4}:{} [{} unexplored byte(s)]", seg.name(), addr, span.len());
+				let mut first = true;
+
+				if seg.is_real() {
+					let len = span.len().min(UNK_SIZE_CUTOFF);
+					let slice = seg.image_slice(ea .. ea + len);
+					let data = slice.data();
+					let seg_name = seg.name();
+
+					for (i, chunk) in data.chunks(UNK_STRIDE).enumerate() {
+						let mut bytes = String::with_capacity(chunk.len() * 3);
+
+						bytes.push_str(&format!("{:02X}", chunk[0]));
+
+						for byte in &chunk[1 ..] {
+							bytes.push_str(&format!(" {:02X}", byte));
+						}
+
+						let addr = prog.fmt_addr(va.0 + i * UNK_STRIDE);
+
+						if first { first = false; } else { println!(); }
+						print!("{:>4}:{} {}", seg_name, addr, bytes);
+					}
+
+					if span.len() > UNK_SIZE_CUTOFF {
+						if !first { println!(); }
+						print!("          {}", "...");
+					}
+				}
+				println!("\"),");
+			}
+			SpanKind::Code(id) => {
+				let bb = prog.get_bb(id);
+				let bb_ea = bb.ea();
+				let state = prog.mmu_state_at(bb_ea).unwrap_or_else(|| prog.initial_mmu_state());
+				let va    = prog.va_from_ea(state, bb_ea);
+
+				println!("    (0x{:04X}, \"\\", va.0);
+
+				// Inrefs and label
+				if prog.get_inrefs(bb_ea).is_some() {
+					println!("{:20}{}:", "", prog.name_of_ea(bb_ea));
+				}
+
+				// Instructions
+
+				let state = bb.mmu_state();
+
+				let mut first = true;
+				for inst in bb.insts() {
+					let mut bytes = String::new();
+					let b = inst.bytes();
+
+					match b.len() {
+						1 => write!(bytes, "{:02X}",               b[0]).unwrap(),
+						2 => write!(bytes, "{:02X} {:02X}",        b[0], b[1]).unwrap(),
+						3 => write!(bytes, "{:02X} {:02X} {:02X}", b[0], b[1], b[2]).unwrap(),
+						_ => unreachable!()
+					}
+
+					let vaddr = prog.fmt_addr(inst.va().0);
+
+					if first { first = false; } else { println!(); }
+					print!("{:>4}:{}  {:8}      ", seg.name(), vaddr, bytes);
+					let mut output = ConsolePrintOutput;
+					prog.inst_print(inst, state, &mut output).unwrap();
+				}
+
+				println!("\"),");
+			}
+			SpanKind::Data(id) => {
+				let data  = prog.get_data(id);
+				let start = data.ea();
+				let state = prog.mmu_state_at(start).unwrap_or_else(|| prog.initial_mmu_state());
+				let va    = prog.va_from_ea(state, start);
+
+				println!("    (0x{:04X}, \"\\", va.0);
+
+				let size = data.size();
+
+				println!("{}: ; {} byte(s), type {}", prog.name_of_ea(start), size, data.ty());
+
+				if seg.is_real() {
+					let slice = seg.image_slice(start .. start + size);
+					let vaddr = prog.fmt_addr(seg.va_from_ea(start).0);
+
+					print!("{:>4}:{}  {}", seg.name(), vaddr,
+						interpret_data(&prog, data.radix(), data.ty(), &slice));
+				}
+				println!("\"),");
+			}
+			_ => {}
+		}
+	}
 }
 
 fn find_identical_image_pieces(prog: &Program) {

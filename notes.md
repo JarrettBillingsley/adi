@@ -69,6 +69,8 @@
 		- but maybe this can fall under the same sorta thing as line comments
 
 - **Design issues**
+	- **`Operand::UImm/SImm` radix should probably be moved to `OpInfo`**
+		- since that's where "meta-information about the operand" lives now
 	- **Should IrFunction hold a ref to the owning function?**
 		- would prevent issues like modifying a function and then using the outdated IR
 	- **Does state change analysis needs to take multiple entry points into account?**
