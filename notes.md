@@ -67,6 +67,9 @@
 		- INDENTATION is what shows control flow
 		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
 		- but maybe this can fall under the same sorta thing as line comments
+	- **Function-local labels**
+		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
+			- *this would also imply another variant of `Name` like `Name::Local`*
 
 - **Design issues**
 	- **`Operand::UImm/SImm` radix should probably be moved to `OpInfo`**
