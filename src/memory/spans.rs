@@ -101,6 +101,55 @@ pub enum SpanKind {
 }
 
 // ------------------------------------------------------------------------------------------------
+// SpanIdx
+// ------------------------------------------------------------------------------------------------
+
+/// Newtype for a zero-based index into a [`SpanMap`]'s spans. Although spans are primarily indexed
+/// by their offset into a segment, it is often useful (in GUIs for example) to refer to spans by
+/// their index.
+#[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord, Hash)]
+pub struct SpanIdx(pub usize);
+
+impl SpanIdx {
+	/// Returns whether this [`SpanIdx`] and `other` are within `delta` of each other, inclusive
+	/// both directions. e.g. if this is index 5, and `other` is 15, and `delta` is 10, returns
+	/// `true`, as well as if this and `other` are swapped.
+	pub fn is_within_delta_inclusive(&self, other: SpanIdx, delta: usize) -> bool {
+		(self.0).abs_diff(other.0) <= delta
+	}
+}
+
+// impl From<SpanIdx> for usize {
+// 	fn from(value: SpanIdx) -> Self {
+// 		value.0
+// 	}
+// }
+
+impl core::ops::Sub<SpanIdx> for SpanIdx {
+	type Output = Self;
+	#[inline] fn sub(self, other: SpanIdx) -> Self {
+		SpanIdx(self.0 - other.0)
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// SpanMapListener
+// ------------------------------------------------------------------------------------------------
+
+/// Trait for a "listener" that can be attached to a [`SpanMap`] to listen for important events
+/// such as spans being added, removed, or redefined. Intended to be used by e.g. GUIs.
+pub trait SpanMapListener {
+	/// A span was added at segment offset `offs`.
+	fn span_added(&self, offs: usize);
+
+	/// A span was removed at segment offset `offs`, so there is no longer a span starting there.
+	fn span_removed(&self, offs: usize);
+
+	/// A span at segment offset `offs` changed in some way (e.g. different type, changed size).
+	fn span_changed(&self, offs: usize);
+}
+
+// ------------------------------------------------------------------------------------------------
 // SpanMap
 // ------------------------------------------------------------------------------------------------
 
@@ -122,9 +171,10 @@ pub enum SpanKind {
 ///     - that leaves two non-contiguous spans with the same owner, which makes no sense
 ///     - but it's fine to bisect an unknown span for the same reason it's fine to coalesce them.
 pub(crate) struct SpanMap {
-	seg:   SegId,
-	spans: BTreeMap<usize, SpanInternal>,
-	end:   usize,
+	seg:      SegId,
+	spans:    BTreeMap<usize, SpanInternal>,
+	end:      usize,
+	listener: Option<Box<dyn SpanMapListener>>,
 }
 
 // The span map actually uses this type - only the end and kind fields, since the start
@@ -147,7 +197,13 @@ impl SpanMap {
 		let end = size;
 		let mut spans = BTreeMap::new();
 		spans.insert(0, SpanInternal::new(end, SpanKind::Unk));
-		Self { seg, spans, end }
+		Self { seg, spans, end, listener: None }
+	}
+
+	/// Attach or detach a [`SpanMapListener`] to this `SpanMap`. Passing `None` will remove any
+	/// listener currently attached.
+	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener>>) {
+		self.listener = new_listener;
 	}
 
 	/// Given an offset into the segment, gets the span which contains it.
@@ -215,6 +271,7 @@ impl SpanMap {
 				(AnaCode(..), Code(..)) => {
 					// redefine it!
 					old.kind = kind;
+					if let Some(l) = &self.listener { l.span_changed(start); }
 				}
 
 				(_, Unk) => self.undefine(start),
@@ -248,6 +305,7 @@ impl SpanMap {
 					// ditch that old unknown span!
 					self.spans.remove(&after.start);
 					new_end = after.end;
+					if let Some(l) = &self.listener { l.span_removed(after.start); }
 				}
 			}
 
@@ -255,6 +313,11 @@ impl SpanMap {
 			self.spans.insert(new_start, SpanInternal::new(new_end, SpanKind::Unk));
 			// and shorten the old one to [.. new_start)
 			self.spans.get_mut(&old_start).unwrap().end = new_start;
+
+			if let Some(l) = &self.listener {
+				l.span_added(new_start);
+				l.span_changed(old_start);
+			}
 
 			#[cfg(debug_assertions)]
 			self.check_invariants();
@@ -286,6 +349,7 @@ impl SpanMap {
 		if new_end < old.end {
 			// make new unknown span [new_end .. old.end)
 			self.spans.insert(new_end, SpanInternal::new(old.end, SpanKind::Unk));
+			if let Some(l) = &self.listener { l.span_added(new_end); }
 		}
 
 		// now let's check if we're redefining the old span, or making a new one
@@ -297,10 +361,12 @@ impl SpanMap {
 		} else {
 			// make the new span [start .. new_end)
 			self.spans.insert(start, SpanInternal::new(new_end, kind));
+			if let Some(l) = &self.listener { l.span_added(start); }
 			// and shorten the old one to [.. start)
 			self.spans.get_mut(&old.start).unwrap().end = start;
 		}
 
+		if let Some(l) = &self.listener { l.span_changed(old.start); }
 		#[cfg(debug_assertions)]
 		self.check_invariants();
 	}
@@ -320,6 +386,7 @@ impl SpanMap {
 		if old.kind != Unk {
 			let prev = self.span_before(start);
 			let next = self.span_after(start);
+			let old_start = old.start;
 
 			match (prev, next) {
 				(Some(prev @ Span { kind: Unk, .. }), Some(next @ Span { kind: Unk, .. })) => {
@@ -327,25 +394,44 @@ impl SpanMap {
 					self.spans.remove(&old.start).expect("wat");
 					self.spans.remove(&next.start).expect("wat");
 					self.spans.get_mut(&prev.start).unwrap().end = next.end;
+
+					if let Some(l) = &self.listener {
+						l.span_removed(old.start);
+						l.span_removed(next.start);
+						l.span_changed(prev.start);
+					}
 				}
 
 				(Some(prev @ Span { kind: Unk, .. }), _) => {
 					// coalesce with prev: delete old span, and make prev span longer
 					self.spans.remove(&old.start).expect("wat");
 					self.spans.get_mut(&prev.start).unwrap().end = old.end;
+					if let Some(l) = &self.listener {
+						l.span_removed(old.start);
+						l.span_changed(prev.start);
+					}
 				}
 
 				(_, Some(next @ Span { kind: Unk, .. })) => {
 					// coalesce with next: delete next span, and make old span longer
 					self.spans.remove(&next.start).expect("wat");
-					let old = self.spans.get_mut(&old.start).unwrap();
+					let old = self.spans.get_mut(&old_start).unwrap();
 					old.end = next.end;
 					old.kind = Unk;
+
+					if let Some(l) = &self.listener {
+						l.span_removed(next.start);
+						l.span_changed(old_start);
+					}
 				}
 
 				_ => {
 					// no coalescing to do.
 					self.spans.get_mut(&old.start).unwrap().kind = Unk;
+
+					if let Some(l) = &self.listener {
+						l.span_changed(old.start);
+					}
 				}
 			}
 		}

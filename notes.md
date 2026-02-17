@@ -37,6 +37,8 @@
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
 - write GB IR compiler
+- add IR rotate left/right ops
+	- since this seems to be pretty common in these older arches
 
 # TODO:
 

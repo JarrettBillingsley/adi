@@ -5,7 +5,7 @@ use std::fmt::{ Debug, };
 use parse_display::Display;
 
 use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind, EA,
-VA };
+VA, SpanMapListener, };
 
 use crate::program::{ DataId };
 
@@ -174,6 +174,12 @@ impl Segment {
 
 	// ---------------------------------------------------------------------------------------------
 	// Span management (spanagement?)
+
+	/// Attach or detach a [`SpanMapListener`] to this segment's `SpanMap`. Passing `None` will
+	/// remove any listener currently attached.
+	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener>>) {
+		self.spans.attach_listener(new_listener);
+	}
 
 	/// Get the span which contains the given EA.
 	pub fn span_at_ea(&self, ea: EA) -> Span {
