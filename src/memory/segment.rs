@@ -5,7 +5,7 @@ use std::fmt::{ Debug, };
 use parse_display::Display;
 
 use crate::memory::{ Image, ImageSlice, ImageRead, ImageSliceable, SpanMap, Span, SpanKind, EA,
-VA, SpanMapListener, };
+VA, SpanMapListener, SpanIdx };
 
 use crate::program::{ DataId };
 
@@ -187,9 +187,40 @@ impl Segment {
 		self.spans.span_at(ea.offs())
 	}
 
+	/// Gets the zero-based index of the span whose EA is `ea`.
+	///
+	/// WARNING: this is a linear time operation.
+	///
+	/// # Panics
+	///
+	/// - if `ea` is not the address of the start of a span.
+	pub fn span_idx_at_ea(&self, ea: EA) -> SpanIdx {
+		assert!(ea.seg() == self.id);
+		self.spans.offset_to_idx(ea.offs())
+	}
+
 	/// Iterator over all spans in this segment, in order.
 	pub fn all_spans(&self) -> impl Iterator<Item = Span> + '_ {
 		self.spans.iter()
+	}
+
+	/// Takes start and end zero-based indices. Returns an iterator over the spans whose indices
+	/// fall in the range `[start_idx, end_idx)`.
+	///
+	/// WARNING: this is a linear time operation.
+	///
+	/// # Panics
+	///
+	/// - if `end_idx > the number of spans`
+	/// - if `start_idx > end_idx`
+	pub fn bracket_spans(&self, start_idx: SpanIdx, end_idx: SpanIdx)
+	-> impl Iterator<Item = Span> + '_ {
+		self.spans.bracket_iter(start_idx, end_idx)
+	}
+
+	/// How many spans there are in this segment.
+	pub fn num_spans(&self) -> usize {
+		self.spans.len()
 	}
 
 	pub(crate) fn span_make_data(&mut self, ea: EA, size: usize, id: DataId) {

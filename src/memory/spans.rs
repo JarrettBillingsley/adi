@@ -243,10 +243,56 @@ impl SpanMap {
 		iter.next_back().map(|s| Span::from_internal(self.seg, s))
 	}
 
+	/// Gets the zero-based index of the span which starts at `offs`.
+	///
+	/// WARNING: this is a linear time operation.
+	///
+	/// # Panics
+	///
+	/// - if `offs` is not the start of a span.
+	pub fn offset_to_idx(&self, offs: usize) -> SpanIdx {
+		SpanIdx(self.spans.iter().position(|(span_offs, _)| *span_offs == offs).unwrap())
+	}
+
 	/// Iterator over all spans in the segment, in order.
 	pub fn iter(&self) -> impl Iterator<Item = Span> + '_ {
 		let seg = self.seg;
 		self.spans.iter().map(move |s| Span::from_internal(seg, s))
+	}
+
+	/// Takes start and end zero-based indices. Returns an iterator over the spans whose indices
+	/// fall in the range `[start_idx, end_idx)`.
+	///
+	/// WARNING: this is a linear time operation.
+	///
+	/// # Panics
+	///
+	/// - if `end_idx > the number of spans`
+	/// - if `start_idx > end_idx`
+	pub fn bracket_iter(&self, start_idx: SpanIdx, end_idx: SpanIdx)
+	-> impl Iterator<Item = Span> + '_ {
+		assert!(end_idx.0 <= self.spans.len());
+		assert!(start_idx.0 <= end_idx.0);
+
+		let mut ret = self.spans.iter();
+
+		for _ in 0 .. start_idx.0 {
+			// SAFETY: asserts above
+			ret.next().unwrap();
+		}
+
+		for _ in 0 .. (self.spans.len() - end_idx.0) {
+			// SAFETY: asserts above
+			ret.next_back().unwrap();
+		}
+
+		let seg = self.seg;
+		ret.map(move |s| Span::from_internal(seg, s))
+	}
+
+	/// How many spans there are.
+	pub fn len(&self) -> usize {
+		self.spans.len()
 	}
 
 	/// Redefine a span that begins at `start` with a new `kind`. Has no effect
