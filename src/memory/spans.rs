@@ -243,15 +243,14 @@ impl SpanMap {
 		iter.next_back().map(|s| Span::from_internal(self.seg, s))
 	}
 
-	/// Gets the zero-based index of the span which starts at `offs`.
-	///
-	/// WARNING: this is a linear time operation.
+	/// Given an offset into the segment, gets the zero-based index of the span which contains it.
 	///
 	/// # Panics
 	///
-	/// - if `offs` is not the start of a span.
+	/// - if `offs` is after the last address.
 	pub fn offset_to_idx(&self, offs: usize) -> SpanIdx {
-		SpanIdx(self.spans.iter().position(|(span_offs, _)| *span_offs == offs).unwrap())
+		assert!(offs < self.end);
+		SpanIdx(self.spans.range(..= offs).count() - 1)
 	}
 
 	/// Iterator over all spans in the segment, in order.

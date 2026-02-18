@@ -175,6 +175,11 @@ impl Segment {
 	// ---------------------------------------------------------------------------------------------
 	// Span management (spanagement?)
 
+	/// How many spans there are in this segment.
+	pub fn num_spans(&self) -> usize {
+		self.spans.len()
+	}
+
 	/// Attach or detach a [`SpanMapListener`] to this segment's `SpanMap`. Passing `None` will
 	/// remove any listener currently attached.
 	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener>>) {
@@ -185,6 +190,28 @@ impl Segment {
 	pub fn span_at_ea(&self, ea: EA) -> Span {
 		assert!(ea.seg() == self.id);
 		self.spans.span_at(ea.offs())
+	}
+
+	/// Given an address in the segment, gets the span which comes after the containing span,
+	/// or None if the containing span is the last one in the segment.
+	///
+	/// # Panics
+	///
+	/// - if `ea` is after the last address.
+	pub fn span_after_ea(&self, ea: EA) -> Option<Span> {
+		assert!(ea.seg() == self.id);
+		self.spans.span_after(ea.offs())
+	}
+
+	/// Given an address in the segment, gets the span which comes before the containing span,
+	/// or None if the containing span is the first one in the segment.
+	///
+	/// # Panics
+	///
+	/// - if `ea` is after the last address.
+	pub fn span_before_ea(&self, ea: EA) -> Option<Span> {
+		assert!(ea.seg() == self.id);
+		self.spans.span_before(ea.offs())
 	}
 
 	/// Gets the zero-based index of the span whose EA is `ea`.
@@ -216,11 +243,6 @@ impl Segment {
 	pub fn bracket_spans(&self, start_idx: SpanIdx, end_idx: SpanIdx)
 	-> impl Iterator<Item = Span> + '_ {
 		self.spans.bracket_iter(start_idx, end_idx)
-	}
-
-	/// How many spans there are in this segment.
-	pub fn num_spans(&self) -> usize {
-		self.spans.len()
 	}
 
 	pub(crate) fn span_make_data(&mut self, ea: EA, size: usize, id: DataId) {
