@@ -437,28 +437,42 @@ impl IPrinter for Mos65xxPrinter {
 		})
 	}
 
+	fn print_uint_dec(&self, ctx: &mut PrinterCtx, val: u64) -> FmtResult {
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "#{}", val),
+				SyntaxFlavor::New => write!(ctx, "{}", val),
+			}
+		})
+	}
+
 	fn print_int_hex(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
-		if val < 0 {
-			ctx.style_symbol(&|ctx| ctx.write_char('-'))?;
-		}
+		let sign = if val < 0 { "-" } else { "" };
 
 		ctx.style_number(&|ctx| {
 			match self.flavor {
-				SyntaxFlavor::Old => write!(ctx, "#${:X}", val.abs()),
-				SyntaxFlavor::New => write!(ctx, "0x{:X}", val.abs()),
+				SyntaxFlavor::Old => write!(ctx, "#{}${:X}", sign, val.abs()),
+				SyntaxFlavor::New => write!(ctx, "{}0x{:X}", sign, val.abs()),
 			}
 		})
 	}
 
 	fn print_int_bin(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
-		if val < 0 {
-			ctx.style_symbol(&|ctx| ctx.write_char('-'))?;
-		}
+		let sign = if val < 0 { "-" } else { "" };
 
 		ctx.style_number(&|ctx| {
 			match self.flavor {
-				SyntaxFlavor::Old => write!(ctx, "#%{:b}", val.abs()),
-				SyntaxFlavor::New => write!(ctx, "0b{:b}", val.abs()),
+				SyntaxFlavor::Old => write!(ctx, "#{}%{:b}", sign, val.abs()),
+				SyntaxFlavor::New => write!(ctx, "{}0b{:b}", sign, val.abs()),
+			}
+		})
+	}
+
+	fn print_int_dec(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
+		ctx.style_number(&|ctx| {
+			match self.flavor {
+				SyntaxFlavor::Old => write!(ctx, "#{}", val),
+				SyntaxFlavor::New => write!(ctx, "{}", val),
 			}
 		})
 	}
@@ -493,7 +507,6 @@ impl IPrinter for Mos65xxPrinter {
 					match desc.addr_mode {
 						ABS | ZPG | REL | LAB | IMM => {
 							// {}
-							// TODO: IMM should put a # before its operand, right?
 							self.print_operand(ctx, 0)?;
 						}
 						ABX | ZPX => {

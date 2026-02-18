@@ -465,22 +465,16 @@ pub trait IPrinter {
 	/// the value with `0x` and uses uppercase hex digits. Negative numbers are displayed
 	/// like `-0x12` for `-18`, rather than in 2's complement.
 	fn print_int_hex(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
-		if val < 0 {
-			ctx.style_symbol(&|ctx| ctx.write_char('-'))?;
-		}
-
-		ctx.style_number(&|ctx| write!(ctx, "0x{:X}", val.abs()))
+		let sign = if val < 0 { "-" } else { "" };
+		ctx.style_number(&|ctx| write!(ctx, "{}0x{:X}", sign, val.abs()))
 	}
 
 	/// Prints a signed integer in binary (base 2). Defaults to prepending the
 	/// value with `0b`. Negative numbers are displayed like `-0b101` for `-5`, rather than
 	/// in 2's complement.
 	fn print_int_bin(&self, ctx: &mut PrinterCtx, val: i64) -> FmtResult {
-		if val < 0 {
-			ctx.style_symbol(&|ctx| ctx.write_char('-'))?;
-		}
-
-		ctx.style_number(&|ctx| write!(ctx, "0b{:b}", val.abs()))
+		let sign = if val < 0 { "-" } else { "" };
+		ctx.style_number(&|ctx| write!(ctx, "{}0b{:b}", sign, val.abs()))
 	}
 
 	/// Prints a signed integer with no specified radix. Defaults to using decimal for
