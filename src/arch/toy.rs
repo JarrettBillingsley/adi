@@ -303,7 +303,7 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		}
 		RI8 => {
 			ops[0] = opcode_reg;
-			ops[1] = Operand::UImm(img[1] as u64, None);
+			ops[1] = Operand::UImm(img[1] as u64);
 			(2, None)
 		}
 		S8 => {

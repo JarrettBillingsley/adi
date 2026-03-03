@@ -59,6 +59,9 @@ impl Program {
 								varefs.push((bb.id(), instidx, i));
 							}
 						}
+						OpInfo::Radix(_) => {
+							// doooooo nothing?
+						}
 					}
 				}
 

@@ -69,7 +69,7 @@ fn inst_addr(i: &Instruction, op: usize) -> VA {
 }
 
 fn inst_imm(i: &Instruction) -> u8 {
-	let Operand::UImm(uimm, _) = i.ops()[1] else { panic!("not a uimm operand"); };
+	let Operand::UImm(uimm) = i.ops()[1] else { panic!("not a uimm operand"); };
 	uimm as u8
 }
 

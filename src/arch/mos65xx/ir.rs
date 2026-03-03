@@ -85,7 +85,7 @@ impl InstDesc {
 			IMP => { panic!("get_operand shouldn't be called on instructions with no operand"); }
 			// Immediate (1 byte), e.g. `lda #$30`.
 			IMM => {
-				let Operand::UImm(val, _) = i.ops()[0] else { panic!() };
+				let Operand::UImm(val) = i.ops()[0] else { panic!() };
 				IrConst::_8(val as u8).into()
 			}
 			// Zero-page absolute (1 byte), e.g. `lda $10`.

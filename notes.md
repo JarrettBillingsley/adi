@@ -39,6 +39,7 @@
 - write GB IR compiler
 - add IR rotate left/right ops
 	- since this seems to be pretty common in these older arches
+	- and rust does actually have rotate methods
 
 # TODO:
 
@@ -69,13 +70,19 @@
 		- INDENTATION is what shows control flow
 		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
 		- but maybe this can fall under the same sorta thing as line comments
+	- **Automatically add names for functions**
+		- like when it adds refs
 	- **Function-local labels**
 		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
 			- *this would also imply another variant of `Name` like `Name::Local`*
 
 - **Design issues**
-	- **`Operand::UImm/SImm` radix should probably be moved to `OpInfo`**
-		- since that's where "meta-information about the operand" lives now
+	- **`PrintStyle::Operand` is out of place**
+		- really there should be a separate pair of methods for beginning/ending an operand
+	- **Some kind of "initial symbol" for the UI**
+		- e.g. `VEC_RESET` should be focused after loading
+	- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
+		- is it possible to rearchitect it so it doesn't?
 	- **Should IrFunction hold a ref to the owning function?**
 		- would prevent issues like modifying a function and then using the outdated IR
 	- **Does state change analysis needs to take multiple entry points into account?**

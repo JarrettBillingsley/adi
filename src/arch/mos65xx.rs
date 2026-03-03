@@ -350,7 +350,7 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 			(Some(operand_ctor(addr as u64)), target)
 		} else {
 			assert!(matches!(desc.addr_mode, IMM));
-			(Some(Operand::UImm(img[0] as u64, None)), None)
+			(Some(Operand::UImm(img[0] as u64)), None)
 		}
 	} else {
 		(None, None)
@@ -611,6 +611,6 @@ impl IArchitecture for Mos65xxArchitecture {
 	fn endianness      (&self) -> Endian       { Endian::Little }
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
-	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::New).into() }
+	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::Old).into() }
 	fn new_ir_compiler (&self) -> IrCompiler   { Mos65xxIrCompiler.into() }
 }

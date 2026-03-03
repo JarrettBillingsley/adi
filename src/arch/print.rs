@@ -393,16 +393,29 @@ pub trait IPrinter {
 			use crate::Operand::*;
 			use crate::MemIndir::{ self, RegDisp };
 
+			let radix = match ctx.get_opinfo(i) {
+				OpInfo::Radix(r) => Some(r),
+				_ => None,
+			};
+
 			match ctx.get_op(i) {
-				Reg(r)                          => self.print_register(ctx, *r),
-				UImm(imm, None)                 => self.print_uint_no_radix(ctx, *imm),
-				UImm(imm, Some(Radix::Bin))     => self.print_uint_bin(ctx, *imm),
-				UImm(imm, Some(Radix::Dec))     => self.print_uint_dec(ctx, *imm),
-				UImm(imm, Some(Radix::Hex))     => self.print_uint_hex(ctx, *imm),
-				SImm(imm, None)                 => self.print_int_no_radix(ctx, *imm),
-				SImm(imm, Some(Radix::Bin))     => self.print_int_bin(ctx, *imm),
-				SImm(imm, Some(Radix::Dec))     => self.print_int_dec(ctx, *imm),
-				SImm(imm, Some(Radix::Hex))     => self.print_int_hex(ctx, *imm),
+				Reg(r) => self.print_register(ctx, *r),
+				UImm(imm) => {
+					match radix {
+						None             => self.print_uint_no_radix(ctx, *imm),
+						Some(Radix::Bin) => self.print_uint_bin(ctx, *imm),
+						Some(Radix::Dec) => self.print_uint_dec(ctx, *imm),
+						Some(Radix::Hex) => self.print_uint_hex(ctx, *imm),
+					}
+				}
+				SImm(imm) => {
+					match radix {
+						None             => self.print_int_no_radix(ctx, *imm),
+						Some(Radix::Bin) => self.print_int_bin(ctx, *imm),
+						Some(Radix::Dec) => self.print_int_dec(ctx, *imm),
+						Some(Radix::Hex) => self.print_int_hex(ctx, *imm),
+					}
+				}
 				Mem(va, _)                      => {
 					self.print_mem_addr(ctx, *va)?;
 					self.print_mem_opinfo(ctx, i)
@@ -421,7 +434,7 @@ pub trait IPrinter {
 
 	fn print_mem_opinfo(&self, ctx: &mut PrinterCtx, i: usize) -> FmtResult {
 		match ctx.get_opinfo(i) {
-			OpInfo::None => Ok(()),
+			OpInfo::None | OpInfo::Radix(_) => Ok(()),
 			OpInfo::Ref { target, info } => {
 				ctx.style_symbol(&|ctx| write!(ctx, " => {} ", info.access))?;
 				self.print_ea(ctx, *target)

@@ -180,6 +180,11 @@ impl Segment {
 		self.spans.len()
 	}
 
+	/// The offset of the last span.
+	pub fn last_span_offset(&self) -> usize {
+		self.spans.last_span_offset()
+	}
+
 	/// Attach or detach a [`SpanMapListener`] to this segment's `SpanMap`. Passing `None` will
 	/// remove any listener currently attached.
 	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener>>) {

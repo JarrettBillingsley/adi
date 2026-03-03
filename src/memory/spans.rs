@@ -243,6 +243,12 @@ impl SpanMap {
 		iter.next_back().map(|s| Span::from_internal(self.seg, s))
 	}
 
+	/// The offset of the last span.
+	pub fn last_span_offset(&self) -> usize {
+		// SAFETY: self.spans is never empty
+		*self.spans.last_key_value().unwrap().0
+	}
+
 	/// Given an offset into the segment, gets the zero-based index of the span which contains it.
 	///
 	/// # Panics

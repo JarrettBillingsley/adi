@@ -28,11 +28,10 @@ pub enum MemIndir {
 pub enum Operand {
 	/// A register. The interpretation of the number is up to the architecture.
 	Reg(u8),
-	/// An unsigned immediate. If the radix is `None`, its value will be displayed in either
-	/// decimal (for small values) or hex (for larger ones).
-	UImm(u64, Option<Radix>),
-	/// A signed immediate. The same radix rules apply.
-	SImm(i64, Option<Radix>),
+	/// An unsigned immediate.
+	UImm(u64),
+	/// A signed immediate.
+	SImm(i64),
 	/// A memory address, along with what kind of access it is.
 	Mem(VA, MemAccess),
 	/// An indirect memory access, where the address is not part of the instruction.
@@ -62,6 +61,9 @@ pub enum OpInfo {
 	/// A memory reference to `target`. This might not actually be the beginning of something, and
 	/// the `target` may or may not be resolved.
 	Ref { target: EA, info: RefInfo },
+
+	/// For numeric operands, the radix in which they should be displayed.
+	Radix(Radix),
 
 	// TODO: more options here for enum values, struct fields, strings...
 }
