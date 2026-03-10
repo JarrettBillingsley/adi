@@ -3,8 +3,6 @@
 
 # Imminent tasks!
 
-- **Some kind of "initial symbol" for the UI**
-	- e.g. `VEC_RESET` should be focused after loading
 - **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
 	- is it possible to rearchitect it so it doesn't?
 - **Names should be more than just Strings**

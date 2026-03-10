@@ -386,7 +386,8 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_loop()
 	let test = toy_test_state_change();
 
-	let mut prog = program_from_image(Image::new(test.name, &test.image))?;
+	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
+	prog.add_name("main", start_ea);
 	let state = prog.initial_mmu_state();
 
 	for (name, va) in test.labels {
@@ -394,12 +395,9 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	}
 
 	println!("{}", prog);
+	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
 
-	let state = prog.initial_mmu_state();
-	let reset_ea = prog.ea_from_va(state, VA(0));
-	prog.add_name_va("main", state, VA(0x0000));
-
-	prog.enqueue_new_func(state, reset_ea);
+	prog.enqueue_new_func(state, start_ea);
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
@@ -415,8 +413,9 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	let img = Image::new_from_file("tests/data/tetris.gb")?;
-	let mut prog = program_from_image(img)?;
+	let (mut prog, start_ea) = program_from_image(img)?;
 	println!("{}", prog);
+	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
 
 	let state = prog.initial_mmu_state();
 	prog.enqueue_new_func(state, prog.ea_from_name("RESET"));
@@ -451,9 +450,10 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		// I HAVE NO ROM FOR THIS         // 19 (namco N129/N163)          *UNIMPLEMENTED*
 	)?;
 
-	let mut prog = program_from_image(img)?;
+	let (mut prog, start_ea) = program_from_image(img)?;
 
 	println!("{}", prog);
+	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
 
 	// find_identical_image_pieces(&prog);
 

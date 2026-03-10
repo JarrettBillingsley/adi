@@ -59,7 +59,7 @@ impl ILoader for ToyLoader {
 		ToyLoader.parse_header(img.data()).is_ok()
 	}
 
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
+	fn program_from_image(&self, img: Image) -> PlatformResult<(Program, EA)> {
 		let rom_img = self.parse_image(&img)?;
 		let mut segs = SegCollection::new();
 		let mmu = setup_mmu(&mut segs, rom_img);
@@ -77,7 +77,8 @@ impl ILoader for ToyLoader {
 		prog.add_name_va("BANK", state, VA(0xFFFF));
 		prog.add_name_va("WEIRDBANK", state, VA(0xFFFE));
 
-		Ok(prog)
+		let reset = prog.ea_from_va(state, VA(0x0000));
+		Ok((prog, reset))
 	}
 }
 

@@ -362,7 +362,7 @@ impl ILoader for GBLoader {
 		GBLoader.parse_header(img.data()).is_ok()
 	}
 
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
+	fn program_from_image(&self, img: Image) -> PlatformResult<(Program, EA)> {
 		let cart = self.parse_image(&img)?;
 		let mut segs = SegCollection::new();
 		let mmu = setup_mmu(&mut segs, cart)?;
@@ -376,7 +376,9 @@ impl ILoader for GBLoader {
 
 		let mut prog = Program::new(mem, GBPlatform::new().into());
 		setup_gb_labels(&mut prog);
-		Ok(prog)
+
+		let reset = prog.ea_from_name("RESET");
+		Ok((prog, reset))
 	}
 }
 

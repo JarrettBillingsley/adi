@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use enum_dispatch::enum_dispatch;
 
 use crate::arch::{ Architecture };
-use crate::memory::{ Image };
+use crate::memory::{ EA, Image };
 use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
@@ -63,8 +63,12 @@ pub enum Loader {
 
 #[enum_dispatch(Loader)]
 pub trait ILoader: Sync + Send {
+	/// Returns whether this loader can parse the given image.
 	fn can_parse(&self, img: &Image) -> bool;
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program>;
+
+	/// Loads the image, creates a [`Program`] to represent it, and returns a tuple of the `Program`
+	/// and the [`EA`] of where the program begins execution (typically a reset vector or similar).
+	fn program_from_image(&self, img: Image) -> PlatformResult<(Program, EA)>;
 }
 
 lazy_static! {
@@ -77,7 +81,7 @@ lazy_static! {
 	};
 }
 
-pub fn program_from_image(img: Image) -> PlatformResult<Program> {
+pub fn program_from_image(img: Image) -> PlatformResult<(Program, EA)> {
 	for loader in ALL_LOADERS.iter() {
 		if loader.can_parse(&img) {
 			return loader.program_from_image(img);

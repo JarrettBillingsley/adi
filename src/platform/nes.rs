@@ -52,7 +52,7 @@ impl ILoader for NesLoader {
 	}
 
 	#[allow(deprecated)]
-	fn program_from_image(&self, img: Image) -> PlatformResult<Program> {
+	fn program_from_image(&self, img: Image) -> PlatformResult<(Program, EA)> {
 		let reader = BufReader::new(Cursor::new(img.data()));
 		let cart = match Ines::from_rom(reader) {
 			Ok(cart) => cart,
@@ -76,7 +76,8 @@ impl ILoader for NesLoader {
 		// 5. setup default names
 		setup_nes_labels(&mut prog);
 
-		Ok(prog)
+		let reset = prog.ea_from_name("VEC_RESET");
+		Ok((prog, reset))
 	}
 }
 
