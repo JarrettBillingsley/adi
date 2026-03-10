@@ -39,7 +39,6 @@ pub struct DataId(pub Index);
 #[derive(Debug)]
 pub struct DataItem {
 	id:    DataId,
-	name:  Option<String>,
 	ea:    EA,
 	ty:    Type,
 	size:  usize,
@@ -47,14 +46,12 @@ pub struct DataItem {
 }
 
 impl DataItem {
-	fn new(id: DataId, name: Option<String>, ea: EA, ty: Type, size: usize) -> Self {
-		Self { id, name, ea, ty, size, radix: Radix::Hex }
+	fn new(id: DataId, ea: EA, ty: Type, size: usize) -> Self {
+		Self { id, ea, ty, size, radix: Radix::Hex }
 	}
 
 	/// Its unique ID.
 	pub fn id(&self) -> DataId { self.id }
-	/// Its name.
-	pub fn name(&self) -> Option<&String> { self.name.as_ref() }
 	/// Its EA.
 	pub fn ea(&self) -> EA { self.ea }
 	/// Its type.
@@ -84,12 +81,12 @@ impl DataIndex {
 	}
 
 	/// Creates a new data item and returns its ID.
-	pub fn new_item(&mut self, name: Option<String>, ea: EA, ty: Type, size: usize)
+	pub fn new_item(&mut self, ea: EA, ty: Type, size: usize)
 	-> DataId {
 		assert!(size >= ty.min_size());
 
 		DataId(self.arena.insert_with(move |id| {
-			DataItem::new(DataId(id), name, ea, ty, size)
+			DataItem::new(DataId(id), ea, ty, size)
 		}))
 	}
 

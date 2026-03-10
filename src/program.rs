@@ -368,7 +368,7 @@ impl Program {
 	/// Creates a new data item at the given EA. Returns its ID.
 	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: Type, size: usize)
 	-> DataId {
-		let did = self.data.new_item(name.map(|s| s.into()), ea, ty, size);
+		let did = self.data.new_item(ea, ty, size);
 		let seg = self.segment_from_ea_mut(ea);
 		seg.span_make_data(ea, size, did);
 

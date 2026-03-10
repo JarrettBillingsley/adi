@@ -49,8 +49,6 @@ pub struct Function {
 	id:    FuncId,
 	/// Where its head BB begins.
 	ea:    EA,
-	/// Its user-given name, if any.
-	name:  Option<String>,
 	/// Attributes.
 	attrs: FuncAttrs,
 	/// The IDs of its `BasicBlock`s. The first entry is the head (entry point). The rest have no
@@ -64,11 +62,6 @@ impl Function {
 	/// Its globally-unique identifier.
 	pub fn id(&self) -> FuncId {
 		self.id
-	}
-
-	/// Its name, if it was given one. If `None`, an auto-generated name will be used instead.
-	pub fn name(&self) -> Option<&String> {
-		self.name.as_ref()
 	}
 
 	/// The basic block ID of the function's head.
@@ -126,14 +119,13 @@ impl Function {
 	// ---------------------------------------------------------------------------------------------
 	// crate
 
-	/// Ctor. The name defaults to `None` and the attributes default to `FuncAttrs::NONE`.
+	/// Ctor. The attributes default to `FuncAttrs::NONE`.
 	pub(crate) fn new(id: FuncId, ea: EA, bbs: Vec<BBId>) -> Self {
 		let entrypoints = SmallVec::from_slice(&bbs[..1]);
 
 		Self {
 			id,
 			ea,
-			name: None,
 			attrs: FuncAttrs::NONE,
 			bbs,
 			entrypoints

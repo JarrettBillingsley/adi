@@ -8,7 +8,6 @@
 	- `Name::AutoGen` (not actually in the name table, just used for display)
 	- `Name::User` (user-given)
 	- `Name::Local` (local to a function)
-- **Should `Function/DataItem` have a name field *in addition to* the name map??** maybe not
 - **Automatically add names for functions**
 	- like when it adds refs
 - **Add IR rotate left/right ops**
