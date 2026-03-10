@@ -14,6 +14,14 @@ use crate::{ MmuState, VA, EA, Instruction, Radix, Operand, OpInfo };
 pub type FmtResult = Result<(), FmtError>;
 
 // ------------------------------------------------------------------------------------------------
+// OperandIdx
+// ------------------------------------------------------------------------------------------------
+
+/// Alias for `u8` for the number of an instruction operand. It's unlikely any instruction would
+/// have more than 3 or 4 operands so using a `usize` for that is wasteful.
+pub type OperandIdx = u8;
+
+// ------------------------------------------------------------------------------------------------
 // PrintStyle
 // ------------------------------------------------------------------------------------------------
 
@@ -38,9 +46,6 @@ pub enum PrintStyle {
 	Refname,
 	/// Labels that define a new name.
 	Label,
-	/// An instruction operand; the `usize` is its index in the instruction, and can be used
-	/// in e.g. GUIs to make them interactive.
-	Operand(usize),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -56,6 +61,11 @@ pub trait IPrintOutput: FmtWrite {
 	fn begin(&mut self, style: PrintStyle) -> FmtResult;
 	/// End some style of text.
 	fn end(&mut self, style: PrintStyle) -> FmtResult;
+
+	/// Begin operand number `opn`.
+	fn begin_operand(&mut self, opn: OperandIdx) -> FmtResult;
+	/// End operand number `opn`.
+	fn end_operand(&mut self, opn: OperandIdx) -> FmtResult;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -75,6 +85,8 @@ impl FmtWrite for FmtWritePrintOutput<'_> {
 impl IPrintOutput for FmtWritePrintOutput<'_> {
 	fn begin(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
 	fn end(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
+	fn begin_operand(&mut self, _opn: OperandIdx) -> FmtResult { Ok(()) }
+	fn end_operand(&mut self, _opn: OperandIdx) -> FmtResult { Ok(()) }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -95,6 +107,8 @@ impl FmtWrite for ConsolePrintOutput {
 impl IPrintOutput for ConsolePrintOutput {
 	fn begin(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
 	fn end(&mut self, _style: PrintStyle) -> FmtResult { Ok(()) }
+	fn begin_operand(&mut self, _opn: OperandIdx) -> FmtResult { Ok(()) }
+	fn end_operand(&mut self, _opn: OperandIdx) -> FmtResult { Ok(()) }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -134,6 +148,8 @@ impl IPrintOutput for AnsiConsolePrintOutput {
 			_ => Ok(()),
 		}
 	}
+	fn begin_operand(&mut self, _opn: OperandIdx) -> FmtResult { Ok(()) }
+	fn end_operand(&mut self, _opn: OperandIdx) -> FmtResult { Ok(()) }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -242,6 +258,13 @@ impl<'i, 'l, 's> PrinterCtx<'i, 'l, 's> {
 		self.output.end(style)
 	}
 
+	pub fn operand(&mut self, opn: OperandIdx, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
+	-> FmtResult {
+		self.output.begin_operand(opn)?;
+		f(self)?;
+		self.output.end_operand(opn)
+	}
+
 	/// Short for `ctx.style(PrintStyle::Mnemonic, &whatever)`. Same goes for the rest.
 	pub fn style_mnemonic(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Mnemonic, f)
@@ -280,12 +303,6 @@ impl<'i, 'l, 's> PrinterCtx<'i, 'l, 's> {
 	/// ditto
 	pub fn style_label(&mut self, f: &dyn Fn(&mut PrinterCtx) -> FmtResult) -> FmtResult {
 		self.style(PrintStyle::Label, f)
-	}
-
-	/// ditto
-	pub fn style_operand(&mut self, i: usize, f: &dyn Fn(&mut PrinterCtx) -> FmtResult)
-	-> FmtResult {
-		self.style(PrintStyle::Operand(i), f)
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -374,7 +391,7 @@ pub trait IPrinter {
 	/// This is only called by [`print_inst`], so if you override that method (maybe
 	/// because your architecture does not fill in all operands), this may go unused.
 	fn print_operands(&self, ctx: &mut PrinterCtx) -> FmtResult {
-		for i in 0 .. ctx.num_ops() {
+		for i in 0 .. ctx.num_ops() as u8 {
 			if i > 0 {
 				ctx.write_str(", ")?;
 			}
@@ -388,17 +405,17 @@ pub trait IPrinter {
 	/// Prints the `i`th operand of the instruction associated with `ctx`. This dispatches
 	/// to the appropriate `print_` method based on the operand's type. It also calls
 	/// `ctx.style_operand` around everything.
-	fn print_operand(&self, ctx: &mut PrinterCtx, i: usize) -> FmtResult {
-		ctx.style_operand(i, &|ctx| {
+	fn print_operand(&self, ctx: &mut PrinterCtx, i: OperandIdx) -> FmtResult {
+		ctx.operand(i, &|ctx| {
 			use crate::Operand::*;
 			use crate::MemIndir::{ self, RegDisp };
 
-			let radix = match ctx.get_opinfo(i) {
+			let radix = match ctx.get_opinfo(i as usize) {
 				OpInfo::Radix(r) => Some(r),
 				_ => None,
 			};
 
-			match ctx.get_op(i) {
+			match ctx.get_op(i as usize) {
 				Reg(r) => self.print_register(ctx, *r),
 				UImm(imm) => {
 					match radix {
@@ -432,8 +449,8 @@ pub trait IPrinter {
 		})
 	}
 
-	fn print_mem_opinfo(&self, ctx: &mut PrinterCtx, i: usize) -> FmtResult {
-		match ctx.get_opinfo(i) {
+	fn print_mem_opinfo(&self, ctx: &mut PrinterCtx, i: OperandIdx) -> FmtResult {
+		match ctx.get_opinfo(i as usize) {
 			OpInfo::None | OpInfo::Radix(_) => Ok(()),
 			OpInfo::Ref { target, info } => {
 				ctx.style_symbol(&|ctx| write!(ctx, " => {} ", info.access))?;

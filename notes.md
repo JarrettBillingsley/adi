@@ -3,6 +3,16 @@
 
 # Imminent tasks!
 
+- **Some kind of "initial symbol" for the UI**
+	- e.g. `VEC_RESET` should be focused after loading
+- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
+	- is it possible to rearchitect it so it doesn't?
+- **Names should be more than just Strings**
+	- `Name::Hardware` (for MMIO regs, vector locations etc)
+	- `Name::AutoGen` (not actually in the name table, just used for display)
+	- `Name::User` (user-given)
+	- `Name::Local` (local to a function)
+
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
 		- 10yf
@@ -77,12 +87,6 @@
 			- *this would also imply another variant of `Name` like `Name::Local`*
 
 - **Design issues**
-	- **`PrintStyle::Operand` is out of place**
-		- really there should be a separate pair of methods for beginning/ending an operand
-	- **Some kind of "initial symbol" for the UI**
-		- e.g. `VEC_RESET` should be focused after loading
-	- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
-		- is it possible to rearchitect it so it doesn't?
 	- **Should IrFunction hold a ref to the owning function?**
 		- would prevent issues like modifying a function and then using the outdated IR
 	- **Does state change analysis needs to take multiple entry points into account?**
@@ -99,12 +103,13 @@
 			- an unresolved EA
 	- **Does `RefMap` need ordering? (Does this need to be `BTreeMap/Set`?)**
 		- I feel like no...
+	- **Is there duplication of info between `OpInfo::Ref` and `RefMap`?**
+		- On the one hand, we kinda need `OpInfo::Ref` to know *which* operand is doing the reference; `RefMap` only operates on an `EA -> [EA]` basis so all references in the instruction are flattened into a single entry
+		- On the other hand, we kinda need `RefMap` in order to support fast cross-reference lookups
+			- Especially inrefs - might have to change all inrefs if their target changes, and discovering that by just looking at `OpInfo` would be way too slow
+		- So maybe this is fine?
 	- **Disassemblers and Printers can take ctor arguments**
 		- have to be able to account for that in IArchitecture.
-	- **Names should be more than just Strings**
-		- `Name::Hardware` (for MMIO regs, vector locations etc)
-		- `Name::AutoGen` (not actually in the name table, just used for display)
-		- `Name::User` (user-given)
 	- **Should `Function/DataItem` have a name field *in addition to* the name map??** maybe not
 	- **GB arch handling of operands is... messy**
 		- you've got `GBOpKind` that says how to *decode* any explicit operands; indirectly based on that, you've got the actual operands in the instruction; and then you've got `SynOp` which says how to *display* the instruction, which mixes implied and explicit operands
