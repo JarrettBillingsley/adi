@@ -16,6 +16,7 @@ use crate::arch::{
 	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
 	IArchitecture,
+	IrCompiler,
 };
 use crate::memory::{ MmuState, Endian, EA, VA, MemAccess };
 
@@ -270,4 +271,5 @@ impl IArchitecture for GBArchitecture {
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { GBDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { GBPrinter::new().into() }
+	fn new_ir_compiler (&self) -> IrCompiler   { unimplemented!("ah fuck") }
 }

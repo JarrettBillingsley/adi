@@ -9,7 +9,7 @@ use crate::arch::{
 	Printer, IPrinter, PrinterCtx, FmtResult,
 	Disassembler, IDisassembler,
 	IArchitecture,
-	IIrCompiler,
+	IrCompiler, IIrCompiler,
 };
 use crate::memory::{ MemAccess, MmuState, Endian, EA, VA };
 
@@ -394,4 +394,5 @@ impl IArchitecture for ToyArchitecture {
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { ToyDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { ToyPrinter::new().into() }
+	fn new_ir_compiler (&self) -> IrCompiler   { ToyIrCompiler.into() }
 }

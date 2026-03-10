@@ -3,13 +3,20 @@
 
 # Imminent tasks!
 
-- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
-	- is it possible to rearchitect it so it doesn't?
 - **Names should be more than just Strings**
 	- `Name::Hardware` (for MMIO regs, vector locations etc)
 	- `Name::AutoGen` (not actually in the name table, just used for display)
 	- `Name::User` (user-given)
 	- `Name::Local` (local to a function)
+- **Should `Function/DataItem` have a name field *in addition to* the name map??** maybe not
+- **Automatically add names for functions**
+	- like when it adds refs
+- **Add IR rotate left/right ops**
+	- since this seems to be pretty common in these older arches
+	- and rust does actually have rotate methods
+- **Write GB IR compiler**
+- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
+	- is it possible to rearchitect it so it doesn't?
 
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
@@ -44,10 +51,6 @@
 		- so something else needs to be put at that address/on the BB that owns the terminator to say "hey, we analyzed this before, don't do it again" or else it could loop infinitely
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
 	- would that trigger a re-state-analysis? maybe only if the new state differs from the old
-- write GB IR compiler
-- add IR rotate left/right ops
-	- since this seems to be pretty common in these older arches
-	- and rust does actually have rotate methods
 
 # TODO:
 
@@ -78,8 +81,6 @@
 		- INDENTATION is what shows control flow
 		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
 		- but maybe this can fall under the same sorta thing as line comments
-	- **Automatically add names for functions**
-		- like when it adds refs
 	- **Function-local labels**
 		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
 			- *this would also imply another variant of `Name` like `Name::Local`*
@@ -108,7 +109,6 @@
 		- So maybe this is fine?
 	- **Disassemblers and Printers can take ctor arguments**
 		- have to be able to account for that in IArchitecture.
-	- **Should `Function/DataItem` have a name field *in addition to* the name map??** maybe not
 	- **GB arch handling of operands is... messy**
 		- you've got `GBOpKind` that says how to *decode* any explicit operands; indirectly based on that, you've got the actual operands in the instruction; and then you've got `SynOp` which says how to *display* the instruction, which mixes implied and explicit operands
 		- it's kind of a lot
@@ -169,12 +169,14 @@
 		- should support *jumptable functions* - call a function to perform the switch
 	- **BBs and functions for which the MMU state can be multiple possibilities**
 		- BB MMU state could really be more than just one thing...
-			- `Dynamic` if the MMU state cannot be *statically* determined
 			- `Single(state)` if the MMU is in just one state
 			- `Multi(Vec<MmuState>)` if the MMU could be one of many states
+			- `Dynamic` if the MMU state cannot be *statically* determined
+				- and maybe it can hold a `Vec<MmuState>` for user-added MMU state possibilities
 		- this means each *function* can also have multiple MMU states on entry
 			- e.g. common functions called from multiple banks
 		- and the MMU state on *exit* from a function can be different than on entry
+			- e.g. "bank change" functions
 		- this would have a pretty big knock-on effect... lots of things depend on a BB's state
 			- VA => EA translation
 				- with multiple states, one VA could refer to:

@@ -202,10 +202,6 @@ pub(crate) trait IArchitecture: Sized + Sync + Send {
 	fn new_disassembler(&self) -> Disassembler;
 	/// Construct a new printer.
 	fn new_printer(&self) -> Printer;
-
-	// TODO: this is just a temporary implementation until all arches have their own
 	/// Construct a new IR compiler.
-	fn new_ir_compiler(&self) -> IrCompiler {
-		ToyIrCompiler.into()
-	}
+	fn new_ir_compiler(&self) -> IrCompiler;
 }
