@@ -37,15 +37,16 @@ impl Program {
 
 		// dump_func(self, fid);
 
-		let changes = self.func_find_state_changes(fid);
-		self.func_apply_state_changes(fid, changes);
+		// TODO: TEMPORARILY WHILE STATIC ANALYSIS IS DISABLED
+		// let changes = self.func_find_state_changes(fid);
+		// self.func_apply_state_changes(fid, changes);
 
-		let new_states = self.func_run_state_change_dataflow(fid);
-		debug!("- applying new states");
+		// let new_states = self.func_run_state_change_dataflow(fid);
+		// debug!("- applying new states");
 
-		for (bbid, new_state) in new_states {
-			self.bb_apply_new_state(bbid, new_state);
-		}
+		// for (bbid, new_state) in new_states {
+		// 	self.bb_apply_new_state(bbid, new_state);
+		// }
 
 		self.queue.enqueue_func_refs(fid);
 	}

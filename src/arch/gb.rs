@@ -25,13 +25,13 @@ use crate::memory::{ MmuState, Endian, EA, VA, MemAccess };
 // ------------------------------------------------------------------------------------------------
 
 mod descs;
+mod ir;
 #[cfg(test)]
 mod tests;
 
 use descs::{ lookup_desc, lookup_desc_cb, Reg, GBOpKind, InstDesc, SynOp, Cc };
-
-#[cfg(test)]
 use descs::{ MetaOp };
+pub(crate) use ir::{ GBIrCompiler };
 
 // ------------------------------------------------------------------------------------------------
 // Disassembler
@@ -72,6 +72,7 @@ impl IDisassembler for GBDisassembler {
 		let bytes = &img[0 .. inst_size];
 		let mut ops = [Operand::Reg(0), Operand::Reg(0)];
 		let (num_ops, target) = decode_operands(desc, va, bytes, &mut ops);
+
 		Ok(Instruction::new(va, ea, desc.kind(), target, &ops[0 .. num_ops], bytes))
 	}
 }
@@ -80,6 +81,7 @@ fn rdisp(reg: Reg, disp: i64) -> MemIndir {
 	MemIndir::RegDisp { reg: reg as u8, disp }
 }
 
+/// decode operands into `ops`. returns (number of operands, control flow target)
 fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 -> (usize, Option<VA>) {
 	use GBOpKind::*;
@@ -271,5 +273,5 @@ impl IArchitecture for GBArchitecture {
 	fn addr_bits       (&self) -> usize        { 16 }
 	fn new_disassembler(&self) -> Disassembler { GBDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { GBPrinter::new().into() }
-	fn new_ir_compiler (&self) -> IrCompiler   { unimplemented!("ah fuck") }
+	fn new_ir_compiler (&self) -> IrCompiler   { GBIrCompiler.into() }
 }

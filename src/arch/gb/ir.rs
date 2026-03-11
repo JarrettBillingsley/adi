@@ -1,0 +1,554 @@
+//! IR compiler for Game Boy/LR35902/SM83.
+
+use crate::arch::{ IIrCompiler };
+// use crate::program::{ MemIndir };
+use crate::ir::{ IrReg, IrConst, IrSrc, IrBuilder };
+
+use super::*;
+
+// ------------------------------------------------------------------------------------------------
+// IR
+// ------------------------------------------------------------------------------------------------
+
+pub(crate) struct GBIrCompiler;
+
+impl IIrCompiler for GBIrCompiler {
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+		let bytes = i.bytes();
+		if bytes[0] == 0xCB {
+			lookup_desc_cb(bytes[1]).build_ir(i, target, b)
+		} else {
+			lookup_desc(bytes[0]).expect("ono").build_ir(i, target, b)
+		}
+	}
+
+	fn arg_regs(&self) -> &'static [IrReg] {
+		ARG_REGS
+	}
+
+	fn return_regs(&self) -> &'static [IrReg] {
+		RETURN_REGS
+	}
+
+	fn stack_ptr_reg(&self) -> IrReg {
+		REG_SP
+	}
+}
+
+const REG_A:  IrReg = IrReg::reg8(0);
+const REG_B:  IrReg = IrReg::reg8(1);
+const REG_C:  IrReg = IrReg::reg8(2);
+const REG_D:  IrReg = IrReg::reg8(3);
+const REG_E:  IrReg = IrReg::reg8(4);
+const REG_H:  IrReg = IrReg::reg8(5);
+const REG_L:  IrReg = IrReg::reg8(6);
+
+const REG_CF: IrReg = IrReg::reg8(7);   // 4 Carry
+const REG_HF: IrReg = IrReg::reg8(8);   // 5 Half-carry (BCD)
+const REG_NF: IrReg = IrReg::reg8(9);   // 6 Subtraction (BCD)
+const REG_ZF: IrReg = IrReg::reg8(10);  // 7 Zero
+
+const REG_SP: IrReg = IrReg::reg16(11);
+
+const REG_W:  IrReg = IrReg::reg8(13); // 8-bit temporary
+const REG_Z:  IrReg = IrReg::reg8(14); // 8-bit temporary
+
+// const REG_TMP16: IrReg = IrReg::reg16(15); // 16-bit temporary
+// const REG_TMP16_2: IrReg = IrReg::reg16(17); // 16-bit temporary
+
+static ARG_REGS: &[IrReg] =
+	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF];
+
+static RETURN_REGS: &[IrReg] =
+	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF, REG_SP];
+
+fn reg_to_ir_reg(reg: u8) -> IrReg {
+	match Reg::from(reg) {
+		Reg::A  => REG_A,
+		Reg::B  => REG_B,
+		Reg::C  => REG_C,
+		Reg::D  => REG_D,
+		Reg::E  => REG_E,
+		Reg::H  => REG_H,
+		Reg::L  => REG_L,
+		Reg::SP => REG_SP,
+		_ => panic!(),
+	}
+}
+
+impl InstDesc {
+	/// Do an addition and set flags according to the result.
+	fn add_(&self, dst: IrReg, src: impl Into<IrSrc>, dstn: i8, srcn: i8, i: &Instruction,
+	b: &mut IrBuilder) {
+		let ea = i.ea();
+		let src = src.into();
+
+		b.iuadd (ea, dst,    dst, src,               dstn, dstn, srcn);
+		b.icarry(ea, REG_CF, dst, src,               -1, -1, -1);
+		b.ieq   (ea, REG_ZF, dst, IrConst::ZERO_8,   -1, -1, -1);
+	}
+
+	pub(super) fn build_ir(&self, i: &Instruction, _target: Option<EA>, b: &mut IrBuilder) {
+		use MetaOp::*;
+
+		let ea = i.ea();
+
+		match self.meta_op() {
+			UNK => { panic!("what the hell is an unknown instruction doing in a BB?"); }
+
+			// for all these, have to emit *something* to avoid empty IR BBs.
+			NOP  => { b.nop(ea); } // no flag changes
+			DI   => { b.nop(ea); } // no flag changes
+			EI   => { b.nop(ea); } // no flag changes
+			HALT => { b.nop(ea); } // no flag changes
+			STOP => { b.nop(ea); } // no flag changes
+
+			// ------------------------------------------------------------------------------------
+			// Computation
+
+			ADD => {
+				// a += r8
+					// {Z*, N0, H*, C*} 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x87 (add a, r)
+					// InstDesc(   0x80, ADD,  &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a += [hl]
+					// {Z*, N0, H*, C*} 0x86 (add a, [hl])
+					// InstDesc(   0x86, ADD,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a += uimm8
+					// {Z*, N0, H*, C*} 0xC6 (add a, imm8)
+					// InstDesc(   0xC6, ADD,  &[Srg(A), Op],             Other,  UImm8),
+
+				// hl += r16
+					// {Z-, N0, H*, C*} 0x09, 0x19, 0x29, 0x39 (add hl, rr)
+					// InstDesc(   0x09, ADD,  &[Srg(HL), Srg(BC)],       Other,  Imp),
+					// ...
+
+				// sp += simm8
+					// {Z0, N0, H*, C*} 0xE8 (add sp, imm)
+					// InstDesc(   0xE8, ADD,  &[Srg(SP), Op],            Other,  SImm8),
+			}
+			ADC => {
+				// a += r8 + cf
+					// {Z*, N0, H*, C*} 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8F (adc a, r)
+					// InstDesc(   0x88, ADC,  &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a += [hl] + cf
+					// {Z*, N0, H*, C*} 0x8E (adc a, [hl])
+					// InstDesc(   0x8E, ADC,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a += uimm8 + cf
+					// {Z*, N0, H*, C*} 0xCE (adc a, imm8)
+					// InstDesc(   0xCE, ADC,  &[Srg(A), Op],             Other,  UImm8),
+			}
+			SUB => {
+				// a -= r8
+					// {Z*, N1, H*, C*} 0x90, 0x91, 0x92, 0x93, 0x94, 0x95 (sub a, r)
+					// {Z1, N1, H0, C0} 0x97 (sub a, a) (just a special case?)
+					// InstDesc(   0x90, SUB,  &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a -= [hl]
+					// {Z*, N1, H*, C*} 0x96 (sub a, [hl])
+					// InstDesc(   0x96, SUB,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a -= uimm8
+					// {Z*, N1, H*, C*} 0xD6 (sub a, imm8)
+					// InstDesc(   0xD6, SUB,  &[Srg(A), Op],             Other,  UImm8),
+			}
+			SBC => {
+				// a -= r8 - cf
+					// {Z*, N1, H*, C*} 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D (sbc a, r)
+					// {Z*, N1, H*, C-} 0x9F (sbc a, a) (just a special case?)
+					// InstDesc(   0x98, SBC,  &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a -= [hl] - cf
+					// {Z*, N1, H*, C*} 0x9E (sbc a, [hl])
+					// InstDesc(   0x9E, SBC,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a -= uimm8 - cf
+					// {Z*, N1, H*, C*} 0xDE (sbc a, imm8)
+					// InstDesc(   0xDE, SBC,  &[Srg(A), Op],             Other,  UImm8),
+			}
+			AND => {
+				// a &= r8
+					// {Z*, N0, H1, C0} 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA7 (and a, r)
+					// InstDesc(   0xA0, AND,  &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a &= [hl]
+					// {Z*, N0, H1, C0} 0xA6 (and a, [hl])
+					// InstDesc(   0xA6, AND,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a &= uimm8
+					// {Z*, N0, H1, C0} 0xE6 (and a, imm)
+					// InstDesc(   0xE6, AND,  &[Srg(A), Op],             Other,  UImm8),
+			}
+			OR => {
+				// a |= r8
+					// {Z*, N0, H0, C0} 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB7 (or a, r)
+					// InstDesc(   0xB0, OR,   &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a |= [hl]
+					// {Z*, N0, H0, C0} 0xB6 (or a, [hl])
+					// InstDesc(   0xB6, OR,   &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a |= uimm8
+					// {Z*, N0, H0, C0} 0xF6 (or a, imm8)
+					// InstDesc(   0xF6, OR,   &[Srg(A), Op],             Other,  UImm8),
+			}
+			XOR => {
+				// a ^= r8
+					// {Z*, N0, H0, C0} 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD (xor a, r)
+					// {Z1, N0, H0, C0} 0xAF (xor a, a) (just a special case?)
+					// InstDesc(   0xA8, XOR,  &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a ^= [hl]
+					// {Z*, N0, H0, C0} 0xAE (xor a, [hl])
+					// InstDesc(   0xAE, XOR,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a ^= uimm8
+					// {Z*, N0, H0, C0} 0xEE (xor a, imm8)
+					// InstDesc(   0xEE, XOR,  &[Srg(A), Op],             Other,  UImm8),
+			}
+			CP => {
+				// a - r8
+					// {Z*, N1, H*, C*} 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD (cp a, r)
+					// {Z1, N1, H0, C0} 0xBF (cp a, a) (just a special case?)
+					// InstDesc(   0xB8, CP,   &[Srg(A), Srg(B)],         Other,  Imp),
+					// ...
+
+				// a - [hl]
+					// {Z*, N1, H*, C*} 0xBE (cp a, [hl])
+					// InstDesc(   0xBE, CP,   &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
+
+				// a - uimm8
+					// {Z*, N1, H*, C*} 0xFE (cp a, imm8)
+					// InstDesc(   0xFE, CP,   &[Srg(A), Op],             Other,  UImm8),
+			}
+			INC => {
+				// r8++
+					// {Z*, N0, H*, C-} 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C (inc r)
+					// InstDesc(   0x04, INC,  &[Srg(B)],                 Other,  Imp),
+					// ...
+
+				// [hl]++
+					// {Z*, N0, H*, C-} 0x34 (inc [hl])
+					// InstDesc(   0x34, INC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+
+				// r16++
+					// no flag changes
+					// InstDesc(   0x03, INC,  &[Srg(BC)],                Other,  Imp),
+					// ...
+			}
+			DEC => {
+
+				// r8--
+					// {Z*, N1, H*, C-} 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D (dec r)
+					// InstDesc(   0x05, DEC,  &[Srg(B)],                 Other,  Imp),
+					// ...
+
+				// [hl]--
+					// {Z*, N1, H*, C-} 0x3f (dec [hl])
+					// InstDesc(   0x35, DEC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+
+				// r16--
+					// no flag changes
+					// InstDesc(   0x0B, DEC,  &[Srg(BC)],                Other,  Imp),
+					// ...
+			}
+			CPL => {
+				// {Z-, N1, H1, C-} 0x2F (cpl)
+			}
+			DA => {
+				// {Z*, N-, H0, C*} 0x27 (da a)
+			}
+
+			// ------------------------------------------------------------------------------------
+			// Bitwise
+
+			SLA => {
+				// r8 <<= 1
+					// {Z*, N0, H0, C*} 0xCB_{0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x27} (sla r)
+					// InstDesc(0xCB_20, SLA,  &[Srg(B)],                 Other,  Imp),
+					// ...
+
+				// [hl] <<= 1
+					// {Z*, N0, H0, C*} 0xCB_26 (sla [hl])
+					// InstDesc(0xCB_26, SLA,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			SRA => {
+				// r8 >>= 1
+					// {Z*, N0, H0, C*} 0xCB_{0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2F} (sra r)
+					// InstDesc(0xCB_28, SRA,  &[Srg(B)],                 Other,  Imp),
+					// ...
+
+				// [hl] >>= 1
+					// {Z*, N0, H0, C*} 0xCB_2E (sra [hl])
+					// InstDesc(0xCB_2E, SRA,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			SRL => {
+				// r8 >>>= 1
+					// {Z*, N0, H0, C*} 0xCB_{0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3F} (srl r)
+					// InstDesc(0xCB_38, SRL,  &[Srg(B)],                 Other,  Imp),
+					// ...
+
+				// [hl] >>>= 1
+					// {Z*, N0, H0, C*} 0xCB_3E (srl [hl])
+					// InstDesc(0xCB_3E, SRL,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			RLA => {
+				// {Z0, N0, H0, C*} 0x17 (rla)
+			}
+			RL => {
+				// rol(r8)
+					// {Z*, N0, H0, C*} 0xCB_{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x17} (rl r)
+					// InstDesc(   0x17, RL,   &[Srg(A)],                 Other,  Imp),
+					// InstDesc(0xCB_17, RL,   &[Srg(A)],                 Other,  Imp),
+					// ...
+
+				// rol([hl])
+					// {Z*, N0, H0, C*} 0xCB_16 (rl [hl])
+					// InstDesc(0xCB_16, RL,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			RLCA => {
+				// {Z0, N0, H0, C*} 0x07 (rlca)
+			}
+			RLC => {
+				// rolc(r8)
+					// {Z*, N0, H0, C*} 0xCB_{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x07} (rlc r)
+					// InstDesc(   0x07, RLC,  &[Srg(A)],                 Other,  Imp),
+					// InstDesc(0xCB_07, RLC,  &[Srg(A)],                 Other,  Imp),
+					// ...
+
+				// rolc([hl])
+					// {Z*, N0, H0, C*} 0xCB_06 (rlc [hl])
+					// InstDesc(0xCB_06, RLC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			RRA => {
+				// {Z0, N0, H0, C*} 0x1F (rra)
+			}
+			RR => {
+				// ror(r8)
+					// {Z*, N0, H0, C*} 0xCB_{0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1F} (rr r)
+					// InstDesc(   0x1F, RR,   &[Srg(A)],                 Other,  Imp),
+					// InstDesc(0xCB_1F, RR,   &[Srg(A)],                 Other,  Imp),
+					// ...
+
+				// ror([hl])
+					// {Z*, N0, H0, C*} 0xCB_1E (rr [hl])
+					// InstDesc(0xCB_1E, RR,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			RRCA => {
+				// {Z0, N0, H0, C*} 0x0F (rrca)
+			}
+			RRC => {
+				// rorc(r8)
+					// {Z*, N0, H0, C*} 0xCB_{0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0F} (rrc r)
+					// InstDesc(   0x0F, RRC,  &[Srg(A)],                 Other,  Imp),
+					// InstDesc(0xCB_0F, RRC,  &[Srg(A)],                 Other,  Imp),
+					// ...
+
+				// rorc([hl])
+					// {Z*, N0, H0, C*} 0xCB_0E (rrc [hl])
+					// InstDesc(0xCB_0E, RRC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			SWAP => {
+				// swap(r8)
+					// {Z*, N0, H0, C0} 0xCB_{0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x37} (swap r)
+					// InstDesc(0xCB_30, SWAP, &[Srg(B)],                 Other,  Imp),
+					// ...
+
+				// swap([hl])
+					// {Z*, N0, H0, C0} 0xCB_36 (swap [hl])
+					// InstDesc(0xCB_36, SWAP, &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			}
+			BIT => {
+				// zf <- r8.n
+					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{^6,E}}} (bit n, r)
+					// InstDesc(0xCB_40, BIT,  &[Op, Srg(B)],             Other,  Imp),
+					// ...
+
+				// zf <- [hl].n
+					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{6,E}}} (bit n, [hl])
+					// InstDesc(0xCB_46, BIT,  &[Op, IndReg(HL)],         Other,  Ind(HL, R)),
+			}
+			RES => {
+				// r8.n <- 0
+					// no flag changes
+					// InstDesc(0xCB_80, RES,  &[Op, Srg(B)],             Other,  Imp),
+					// ...
+
+				// [hl].n <- 0
+					// no flag changes
+					// InstDesc(0xCB_86, RES,  &[Op, IndReg(HL)],         Other,  Ind(HL, RW)),
+			}
+			SET => {
+				// r8.n <- 1
+					// no flag changes
+					// InstDesc(0xCB_C0, SET,  &[Op, Srg(B)],             Other,  Imp),
+					// ...
+
+				// [hl].n <- 1
+					// no flag changes
+					// InstDesc(0xCB_C6, SET,  &[Op, IndReg(HL)],         Other,  Ind(HL, RW)),
+			}
+
+			// ------------------------------------------------------------------------------------
+			// Flag manipulation
+
+			CCF => {
+				// {Z-, N0, H0, C*} 0x3F (ccf)
+			}
+			SCF => {
+				// {Z-, N0, H0, C1} 0x37 (scf)
+			}
+
+			// ------------------------------------------------------------------------------------
+			// Control flow
+
+			JP => {
+				// no flag changes
+
+				// pc <- uimm16
+					// InstDesc(   0xC3, JP,   &[Op],                     Uncond, Add16(Target)),
+
+				// pc <- hl
+					// InstDesc(   0xE9, JP,   &[Srg(HL)],                Indir,  Imp),
+
+				// if cc { pc <- uimm16 }
+					// InstDesc(   0xC2, JP,   &[CC_NZ, Op],              Cond,   Add16(Target)),
+					// ...
+			}
+			JR => {
+				// no flag changes
+
+				// pc += imm8
+					// InstDesc(   0x18, JR,   &[Op],                     Uncond, Rel),
+
+				// if cc { pc += imm8 }
+					// InstDesc(   0x20, JR,   &[CC_NZ, Op],              Cond,   Rel),
+					// ...
+			}
+			CALL => {
+				// no flag changes
+
+				// push(pc + 3), pc <- uimm16
+					// InstDesc(   0xCD, CALL, &[Op],                     Call,   Add16(Target)),
+
+				// if cc { push(pc + 3), pc <- uimm16
+					// InstDesc(   0xC4, CALL, &[CC_NZ, Op],              Call,   Add16(Target)),
+					// ...
+			}
+			RET => {
+				// no flag changes
+
+				// pc <- pop()
+					// InstDesc(   0xC9, RET,  &[],                       Ret,    Imp),
+
+				// if cc { pc <- pop() }
+					// InstDesc(   0xC0, RET,  &[CC_NZ],                  Ret,    Imp),
+					// ...
+			}
+			RST => {
+				// no flag changes
+
+				// pc <- rst_target()
+					// InstDesc(   0xC7, RST,  &[Op],                     Call,   Imp), // rst 0x00
+					// ...
+			}
+			RETI => {
+				// no flag changes
+			}
+
+			// ------------------------------------------------------------------------------------
+			// Data transfer
+
+			LD => {
+				// no flag changes EXCEPT for 0xF8
+
+				// REG <- REG
+					// r8 <- r8
+						// InstDesc(   0x40, LD,   &[Srg(B), Srg(B)],         Other,  Imp),
+						// ...
+
+					// r16 <- r16
+						// InstDesc(   0xF9, LD,   &[Srg(SP), Srg(HL)],       Other,  Imp),
+						// ...
+
+					// hl <- sp + imm8
+						// {Z0, N0, H*, C*} 0xF8 (ld hl, sp + imm)
+						// InstDesc(   0xF8, LD,   &[Srg(HL), SpPlusOp],      Other,  SPImm),
+
+				// REG <- IMM
+					// r8 <- uimm8
+						// InstDesc(   0x06, LD,   &[Srg(B), Op],             Other,  UImm8),
+						// ...
+
+					// r16 <- imm16
+						// InstDesc(   0x01, LD,   &[Srg(BC), Op],            Other,  Imm16),
+						// ...
+
+				// REG <- [MEM]
+					// r8 <- [r16]
+						// InstDesc(   0x0A, LD,   &[Srg(A), IndReg(BC)],     Other,  Ind(BC, R)),
+						// ...
+
+					// a <- [hl±]
+						// InstDesc(   0x2A, LD,   &[Srg(A), IndHlPlus],      Other,  Ind(HL, R)),
+						// InstDesc(   0x3A, LD,   &[Srg(A), IndHlMinus],     Other,  Ind(HL, R)),
+
+					// a <- [imm16]
+						// InstDesc(   0xFA, LD,   &[Srg(A), IndOp],          Other,  Add16(R)),
+
+				// [MEM] <- REG
+					// [r16] <- r8
+						// InstDesc(   0x02, LD,   &[IndReg(BC), Srg(A)],     Other,  Ind(BC, W)),
+						// ...
+
+					// [hl±] <- a
+						// InstDesc(   0x22, LD,   &[IndHlPlus, Srg(A)],      Other,  Ind(HL, W)),
+						// InstDesc(   0x32, LD,   &[IndHlMinus, Srg(A)],     Other,  Ind(HL, W)),
+
+					// [imm16] <- sp
+						// InstDesc(   0x08, LD,   &[IndOp, Srg(SP)],         Other,  Add16(W)),
+
+					// [imm16] <- a
+						// InstDesc(   0xEA, LD,   &[IndOp, Srg(A)],          Other,  Add16(W)),
+
+				// [MEM] <- IMM
+					// [hl] <- uimm8
+						// InstDesc(   0x36, LD,   &[IndReg(HL), Op2],        Other,  LdHlImm),
+
+			}
+			LDH => {
+				// no flag changes
+
+				// [MEM] <- REG
+					// InstDesc(   0xE0, LDH,  &[IndOp, Srg(A)],          Other,  AddHi(W)),
+					// InstDesc(   0xE2, LDH,  &[IndReg(C), Srg(A)],      Other,  IndHi(W)),
+
+				// REG <- [MEM]
+					// InstDesc(   0xF0, LDH,  &[Srg(A), IndOp],          Other,  AddHi(R)),
+					// InstDesc(   0xF2, LDH,  &[Srg(A), IndReg(C)],      Other,  IndHi(R)),
+			}
+			PUSH => {
+				// no flag changes
+				// InstDesc(   0xC5, PUSH, &[Srg(BC)],                Other,  Ind(SP, W)),
+				// ...
+			}
+			POP => {
+				// no flag changes EXCEPT for 0xF1
+				// {Z*, N*, H*, C*} 0xF1 (pop af)
+
+				// InstDesc(   0xC1, POP,  &[Srg(BC)],                Other,  Ind(SP, R)),
+				// ...
+			}
+		}
+	}
+}

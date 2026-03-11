@@ -20,6 +20,28 @@ impl Reg {
 	}
 }
 
+// I think there is a crate that lets you derive this automatically but eh
+impl From<u8> for Reg {
+	fn from(value: u8) -> Self {
+		match value {
+			x if x == (Reg::A  as u8) => Reg::A,
+			x if x == (Reg::F  as u8) => Reg::F,
+			x if x == (Reg::B  as u8) => Reg::B,
+			x if x == (Reg::C  as u8) => Reg::C,
+			x if x == (Reg::D  as u8) => Reg::D,
+			x if x == (Reg::E  as u8) => Reg::E,
+			x if x == (Reg::H  as u8) => Reg::H,
+			x if x == (Reg::L  as u8) => Reg::L,
+			x if x == (Reg::AF as u8) => Reg::AF,
+			x if x == (Reg::BC as u8) => Reg::BC,
+			x if x == (Reg::DE as u8) => Reg::DE,
+			x if x == (Reg::HL as u8) => Reg::HL,
+			x if x == (Reg::SP as u8) => Reg::SP,
+			_ => panic!(),
+		}
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // MetaOp
 // ------------------------------------------------------------------------------------------------
@@ -32,8 +54,9 @@ pub(super) enum MetaOp {
 	ADC,  ADD, AND, BIT, CALL, CCF,  CP,   CPL,
 	DA,   DEC, DI,  EI,  HALT, INC,  JP,   JR,
 	LD,   LDH, NOP, OR,  POP,  PUSH, RES,  RET,
-	RETI, RL,  RLC, RR,  RRC,  RST,  SBC,  SCF,
-	SET,  SLA, SRA, SRL, STOP, SUB,  SWAP, XOR,
+	RETI, RL,  RLA, RLC, RLCA, RR,   RRA,  RRC,
+	RRCA, RST, SBC, SCF, SET,  SLA,  SRA,  SRL,
+	STOP, SUB, SWAP, XOR,
 }
 
 impl MetaOp {
@@ -48,8 +71,9 @@ impl MetaOp {
 			HALT => "halt", INC  => "inc",  JP   => "jp",   JR  => "jr",
 			LD   => "ld",   LDH  => "ldh",  NOP  => "nop",  OR  => "or",
 			POP  => "pop",  PUSH => "push", RES  => "res",  RET => "ret",
-			RETI => "reti", RL   => "rl",   RLC  => "rlc",  RR  => "rr",
-			RRC  => "rrc",  RST  => "rst",  SBC  => "sbc",  SCF => "scf",
+			RETI => "reti", RL   => "rl",   RLA  => "rla",  RLC => "rlc",
+			RLCA => "rlca", RR   => "rr",   RRA  => "RRA",  RRC => "rrc",
+			RRCA => "rrca", RST  => "rst",  SBC  => "sbc",  SCF => "scf",
 			SET  => "set",  SLA  => "sla",  SRA  => "sra",  SRL => "srl",
 			STOP => "stop", SUB  => "sub",  SWAP => "swap", XOR => "xor",
 		}
@@ -143,11 +167,11 @@ pub(super) struct InstDesc (
 );
 
 impl InstDesc {
-	#[inline] pub(super) fn opcode  (&self) -> u16             { self.0 }
-	#[inline] pub(super) fn meta_op (&self) -> MetaOp          { self.1 }
-	#[inline] pub(super) fn syn_ops(&self) -> &'static [SynOp] { self.2 }
-	#[inline] pub(super) fn kind    (&self) -> InstructionKind { self.3 }
-	#[inline] pub(super) fn op_kind (&self) -> GBOpKind        { self.4 }
+	#[inline] pub(super) fn opcode  (&self) -> u16              { self.0 }
+	#[inline] pub(super) fn meta_op (&self) -> MetaOp           { self.1 }
+	#[inline] pub(super) fn syn_ops (&self) -> &'static [SynOp] { self.2 }
+	#[inline] pub(super) fn kind    (&self) -> InstructionKind  { self.3 }
+	#[inline] pub(super) fn op_kind (&self) -> GBOpKind         { self.4 }
 
 	pub(super) fn access(&self) -> Option<MemAccess> {
 		self.op_kind().access()
@@ -223,7 +247,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x04, INC,  &[Srg(B)],                 Other,  Imp),
 	InstDesc(   0x05, DEC,  &[Srg(B)],                 Other,  Imp),
 	InstDesc(   0x06, LD,   &[Srg(B), Op],             Other,  UImm8),
-	InstDesc(   0x07, RLC,  &[Srg(A)],                 Other,  Imp),
+	InstDesc(   0x07, RLCA, &[],                       Other,  Imp),
 	InstDesc(   0x08, LD,   &[IndOp, Srg(SP)],         Other,  Add16(W)),
 	InstDesc(   0x09, ADD,  &[Srg(HL), Srg(BC)],       Other,  Imp),
 	InstDesc(   0x0A, LD,   &[Srg(A), IndReg(BC)],     Other,  Ind(BC, R)),
@@ -231,7 +255,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x0C, INC,  &[Srg(C)],                 Other,  Imp),
 	InstDesc(   0x0D, DEC,  &[Srg(C)],                 Other,  Imp),
 	InstDesc(   0x0E, LD,   &[Srg(C), Op],             Other,  UImm8),
-	InstDesc(   0x0F, RRC,  &[Srg(A)],                 Other,  Imp),
+	InstDesc(   0x0F, RRCA, &[],                       Other,  Imp),
 	InstDesc(   0x10, STOP, &[],                       Other,  Dummy),
 	InstDesc(   0x11, LD,   &[Srg(DE), Op],            Other,  Imm16),
 	InstDesc(   0x12, LD,   &[IndReg(DE), Srg(A)],     Other,  Ind(DE, W)),
@@ -239,7 +263,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x14, INC,  &[Srg(D)],                 Other,  Imp),
 	InstDesc(   0x15, DEC,  &[Srg(D)],                 Other,  Imp),
 	InstDesc(   0x16, LD,   &[Srg(D), Op],             Other,  UImm8),
-	InstDesc(   0x17, RL,   &[Srg(A)],                 Other,  Imp),
+	InstDesc(   0x17, RLA,  &[],                       Other,  Imp),
 	InstDesc(   0x18, JR,   &[Op],                     Uncond, Rel),
 	InstDesc(   0x19, ADD,  &[Srg(HL), Srg(DE)],       Other,  Imp),
 	InstDesc(   0x1A, LD,   &[Srg(A), IndReg(DE)],     Other,  Ind(DE, R)),
@@ -247,7 +271,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x1C, INC,  &[Srg(E)],                 Other,  Imp),
 	InstDesc(   0x1D, DEC,  &[Srg(E)],                 Other,  Imp),
 	InstDesc(   0x1E, LD,   &[Srg(E), Op],             Other,  UImm8),
-	InstDesc(   0x1F, RR,   &[Srg(A)],                 Other,  Imp),
+	InstDesc(   0x1F, RRA,  &[],                       Other,  Imp),
 	InstDesc(   0x20, JR,   &[CC_NZ, Op],              Cond,   Rel),
 	InstDesc(   0x21, LD,   &[Srg(HL), Op],            Other,  Imm16),
 	InstDesc(   0x22, LD,   &[IndHlPlus, Srg(A)],      Other,  Ind(HL, W)),

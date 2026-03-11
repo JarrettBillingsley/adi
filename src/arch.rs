@@ -151,11 +151,13 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 // IIrCompiler
 // ------------------------------------------------------------------------------------------------
 
+use gb::{ GBIrCompiler };
 use toy::{ ToyIrCompiler };
 use mos65xx::{ Mos65xxIrCompiler };
 
 #[enum_dispatch]
 pub(crate) enum IrCompiler {
+	GBIrCompiler,
 	ToyIrCompiler,
 	Mos65xxIrCompiler,
 }

@@ -16,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 
 	setup_panic();
-	// test_gb()
-	test_nes()
+	test_gb()
+	// test_nes()
 	// test_toy()
 }
 

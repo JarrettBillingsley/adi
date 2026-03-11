@@ -44,7 +44,9 @@ impl Program {
 								// loop over explicit_successors below SHOUUUULD handle them... in
 								// case some non-control instruction slipped in here, let's put an
 								// assert here.
-								assert!(inst.is_control());
+
+								// TODO: TEMPORARILY WHILE STATIC ANALYSIS IS DISABLED
+								// assert!(inst.is_control());
 							}
 						}
 						OpInfo::Ref { target, .. } => {

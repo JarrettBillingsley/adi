@@ -1,20 +1,42 @@
 
 # Yak stack
 
+- static analysis disabled
+	- uncomment pass_staticfuncanalysis.rs:40-48
+	- uncomment pass_refs.rs:47
+
 # Imminent tasks!
 
+- **Add IR instructions:**
+	- bit set/get 
+		- needed for Mos65xx flags, Mos65xx `BIT`, GB `CB`-prefixed bitwise instructions...
+	- unpair
+		- needed for e.g. doing a 16-bit load into 2 8-bit registers
+	- rotate left/right
+		- since this seems to be pretty common in these older arches
+		- and rust does actually have rotate methods
+- **Conditional calls/returns**
+	- 8080/Z80 is fuckin weird and lets you do this??
+	- in analysis, treat conditional return as a conditional branch
+		- end BB, and push next instruction as potential BB
+	- `InstructionKind` needs to represent these
+		- as a field of `Call/Ret`? as different variants (`CondCall/CondRet`)?
+		- really a conditional call isn't *that* different and might not need any special consideration. either it happens and we carry on, or it doesn't happen and we carry on. either way, the control flow analysis remains the same.
+			- though there would probably need to be a `ccall` IR instruction by analogy to `cbranch` so it can participate in const prop and "always-taken" analysis
+		- a conditional *return* really is a different kind of control flow.
+			- I think a new `bool` in `InstructionKind::Ret` would make sense
+			- and `BBTerm::Ret` would get a `bool` saying whether it's conditional.
+			- and finally, `cret` in the IR
+				- tho we don't need like "IR control flow" to support it - it'd be handled by the IR CFG instead
+- **Write GB IR compiler**
+- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
+	- is it possible to rearchitect it so it doesn't?
 - **Function-local labels**
 	- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
 	- how to keep it globally-unique for the `NameMap` tho?
 		- well, could leave that to the frontend to deal with it
 		- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
-- **Add IR rotate left/right ops**
-	- since this seems to be pretty common in these older arches
-	- and rust does actually have rotate methods
-- **Write GB IR compiler**
-- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
-	- is it possible to rearchitect it so it doesn't?
-
+	
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
 		- 10yf
@@ -143,18 +165,6 @@
 	- **Dead-end/invalid control flow back-propagation**
 		- if we hit a dead end, that's a sign that the control flow that got us here is mis-analyzed - maybe an "always-taken conditional branch" or sth
 		- also common with *jump table functions* - right after the call is *not code*
-	- **Conditional calls/returns**
-		- 8080/Z80 is fuckin weird and lets you do this??
-		- in analysis, treat conditional return as a conditional branch
-			- end BB, and push next instruction as potential BB
-		- `InstructionKind` needs to represent these
-			- as a field of `Call/Ret`? as different variants (`CondCall/CondRet`)?
-			- really a conditional call isn't *that* different and might not need any special consideration. either it happens and we carry on, or it doesn't happen and we carry on. either way, the control flow analysis remains the same.
-				- though there would probably need to be a `ccall` IR instruction by analogy to `cbranch` so it can participate in const prop and "always-taken" analysis
-			- a conditional *return* really is a different kind of control flow.
-				- I think a new `bool` in `InstructionKind::Ret` would make sense
-				- and `BBTerm::Ret` would get a `bool` saying whether it's conditional.
-				- and finally, `cret` in the IR
 	- **Jumptable analysis**
 		- should support multiple strategies (depending on the arch), e.g.
 			- absolute
