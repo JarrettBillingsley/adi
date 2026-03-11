@@ -209,7 +209,7 @@ mod descs {
 		InstDesc(BNE_S8,     BNE,  S8,     Cond),
 		InstDesc(JMP_I16,    JMP,  I16,    Uncond),
 		InstDesc(JMPI_IMPDC, JMPI, IMPDC,  Indir),
-		InstDesc(CALL_I16,   CALL, I16,    Call),
+		InstDesc(CALL_I16,   CALL, I16,    Call(false)),
 		InstDesc(CALI_IMPDC, CALI, IMPDC,  IndirCall),
 		InstDesc(RET_IMP,    RET,  IMP,    Ret),
 		InstDesc(LD_RI16,    LD,   RI16,   Other),

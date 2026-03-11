@@ -86,7 +86,7 @@ impl Program {
 						// the destination EAs are filled in later
 						term = Some(BBTerm::IndirCall { dst: vec![], ret: next });
 					}
-					Call => {
+					Call(cond) => {
 						let target_va = inst.control_target().expect("should have control target");
 						let target_ea = self.va_to_ea_in_same_seg(seg.id(), state, target_va);
 
@@ -95,7 +95,7 @@ impl Program {
 
 						// debug!("  {:04X} t: {} next: {}", inst.va(), target_ea, next);
 
-						term = Some(BBTerm::Call { dst: target_ea, ret: next });
+						term = Some(BBTerm::Call { dst: target_ea, ret: next, cond });
 					}
 					Uncond | Cond => {
 						let target_va = inst.control_target().expect("should have control target");

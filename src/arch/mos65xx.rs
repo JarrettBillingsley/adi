@@ -275,7 +275,7 @@ struct InstDesc {
 impl InstDesc {
 	fn kind(&self) -> InstructionKind {
 		match self.opcode {
-			Opcode::JSR_LAB                      => InstructionKind::Call,
+			Opcode::JSR_LAB                      => InstructionKind::Call(false),
 			Opcode::RTS_IMP | Opcode::RTI_IMP    => InstructionKind::Ret,
 			Opcode::JMP_LAB                      => InstructionKind::Uncond,
 			Opcode::JMP_IND | Opcode::BRK_IMM    => InstructionKind::Indir,

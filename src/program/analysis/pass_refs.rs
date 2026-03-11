@@ -78,7 +78,7 @@ impl Program {
 
 						// maybe put a point of interest here?
 					}
-					Call | Cond | Uncond => {
+					Call { .. } | Cond | Uncond => {
 						let target_ea = self.resolve_control_flow_target(
 							inst.control_target().unwrap(), state, func.id(), &mut funcs);
 						refs.push((inst.ea(), target_ea));

@@ -202,7 +202,8 @@ impl Program {
 /// | `Halt`            | `Halt`             | non-control-flow is allowed\*    |
 /// | `Indir`           | `JumpTbl`          | `IBranch`                        |
 /// | `IndirCall`       | `IndirCall`        | `ICall`                          |
-/// | `Call`            | `Call`             | `Call`                           |
+/// | `Call(false)`     | `Call`             | `Call`                           |
+/// | `Call(true)`      | `Call`             | `CCall`                          |
 /// | `Uncond`          | `Jump`             | `Branch`                         |
 /// | `Cond`            | `Cond`             | `CBranch`                        |
 /// | _                 | `DeadEnd`          | non-control-flow is allowed\*    |
@@ -256,10 +257,16 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 				"for `BBTerm::Indir`, the terminating instruction should have \
 				been `IrInstKind::ICall`, but found this instead: {:?}", inst.kind());
 		}
-		Call {..} => {
-			assert!(matches!(inst.kind(), IrInstKind::Call { .. }),
-				"for `BBTerm::Call`, the terminating instruction should have \
-				been `IrInstKind::Call`, but found this instead: {:?}", inst.kind());
+		Call { cond, .. } => {
+			if *cond {
+				assert!(matches!(inst.kind(), IrInstKind::CCall { .. }),
+					"for `BBTerm::Call {{ cond: true }}`, the terminating instruction should have \
+					been `IrInstKind::CCall`, but found this instead: {:?}", inst.kind());
+			} else {
+				assert!(matches!(inst.kind(), IrInstKind::Call { .. }),
+					"for `BBTerm::Call {{ cond: false }}`, the terminating instruction should have \
+					been `IrInstKind::Call`, but found this instead: {:?}", inst.kind());
+			}
 		}
 		Jump(..) => {
 			assert!(matches!(inst.kind(), IrInstKind::Branch { .. }),

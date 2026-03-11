@@ -1032,7 +1032,15 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		Jump(ea) => {
 			print_divider_if_diff_funcs(prog, bb_ea, *ea, "Tailcall", Color::Yellow);
 		}
-		Call { ret, .. } | IndirCall { ret, .. } => {
+		Call { ret, cond, .. } => {
+			if *cond {
+				print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through with cond call",
+					Color::Yellow);
+			} else {
+				print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through", Color::Yellow);
+			}
+		}
+		IndirCall { ret, .. } => {
 			print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through", Color::Yellow);
 		}
 		Cond { t, f } => {

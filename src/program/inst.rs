@@ -143,12 +143,13 @@ pub enum RefPart {
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone)]
+#[display("{:?}")]
 /// What rough class of instruction one is.
 pub enum InstructionKind {
 	/// Something else.
 	Other,
-	/// Control flow - function call.
-	Call,
+	/// Control flow - function call. The `bool` is whether or not it's conditional.
+	Call(bool),
 	/// Control flow - function return.
 	Ret,
 	/// Control flow - conditional jump/branch.
@@ -171,8 +172,8 @@ impl InstructionKind {
 	pub fn has_control_target(&self) -> bool {
 		use InstructionKind::*;
 		match self {
-			Call | Cond | Uncond | Indir | IndirCall => true,
-			Ret | Halt | Other                       => false,
+			Call(_) | Cond | Uncond | Indir | IndirCall => true,
+			Ret | Halt | Other                          => false,
 		}
 	}
 }
@@ -278,7 +279,7 @@ impl Instruction {
 	/// Is this some other kind of instruction?
 	pub fn is_other(&self) -> bool { matches!(self.kind(), InstructionKind::Other) }
 	/// Is this a function call?
-	pub fn is_call(&self) -> bool { matches!(self.kind(), InstructionKind::Call) }
+	pub fn is_call(&self) -> bool { matches!(self.kind(), InstructionKind::Call(_)) }
 	/// Is this a function return ?
 	pub fn is_ret(&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
 	/// Is this a conditional jump/branch?

@@ -7,27 +7,30 @@
 
 # Imminent tasks!
 
-- **Add IR instructions:**
-	- bit set/get 
-		- needed for Mos65xx flags, Mos65xx `BIT`, GB `CB`-prefixed bitwise instructions...
-	- unpair
-		- needed for e.g. doing a 16-bit load into 2 8-bit registers
-	- rotate left/right
-		- since this seems to be pretty common in these older arches
-		- and rust does actually have rotate methods
 - **Conditional calls/returns**
 	- 8080/Z80 is fuckin weird and lets you do this??
 	- in analysis, treat conditional return as a conditional branch
 		- end BB, and push next instruction as potential BB
 	- `InstructionKind` needs to represent these
 		- as a field of `Call/Ret`? as different variants (`CondCall/CondRet`)?
-		- really a conditional call isn't *that* different and might not need any special consideration. either it happens and we carry on, or it doesn't happen and we carry on. either way, the control flow analysis remains the same.
-			- though there would probably need to be a `ccall` IR instruction by analogy to `cbranch` so it can participate in const prop and "always-taken" analysis
 		- a conditional *return* really is a different kind of control flow.
 			- I think a new `bool` in `InstructionKind::Ret` would make sense
 			- and `BBTerm::Ret` would get a `bool` saying whether it's conditional.
 			- and finally, `cret` in the IR
 				- tho we don't need like "IR control flow" to support it - it'd be handled by the IR CFG instead
+		- a conditional call doesn't seem *that* different, but at the IR level, it DOES differ from a normal call since it *only pushes its ret addr if the condition is true.* 
+			- so similarly, `InstructionKind::Call` needs a `bool`
+			- `BBTerm::Call` gets a `bool`
+			- and finally, a `ccall` IR instruction by analogy to `cbranch` so it can participate in const prop and "always-taken" analysis
+- **Add IR instructions:**
+	- `ccall` and `cret`
+	- bit set/get 
+		- needed for Mos65xx flags and `BIT`, GB flags and `CB`-prefixed bitwise instructions...
+	- unpair
+		- needed for e.g. doing a 16-bit load into 2 8-bit registers
+	- rotate left/right
+		- since this seems to be pretty common in these older arches
+		- and rust does actually have rotate methods
 - **Write GB IR compiler**
 - **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
 	- is it possible to rearchitect it so it doesn't?

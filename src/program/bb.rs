@@ -224,8 +224,8 @@ pub enum BBTerm {
 	FallThru(EA),
 	/// Unconditional jump.
 	Jump(EA),
-	/// Function call (dst = function called, ret = return location).
-	Call { dst: EA, ret: EA },
+	/// Function call (dst = function called, ret = return location, cond: if it's conditional).
+	Call { dst: EA, ret: EA, cond: bool },
 	/// Indirect function call (dst = any number of destinations, empty for unknown;
 	/// ret = return location).
 	IndirCall { dst: Vec<EA>, ret: EA },
@@ -252,7 +252,7 @@ impl BBTerm {
 			DeadEnd | Return | Halt => None     .into_iter().chain(&[]),
 			FallThru(ea) | Jump(ea) |
 			StateChange(ea, _)      => Some(ea) .into_iter().chain(&[]),
-			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_ref(ret)),
+			Call { dst, ret, .. }   => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
 			JumpTbl(eas)            => None     .into_iter().chain(eas),
 			IndirCall { dst, ret }  => Some(ret).into_iter().chain(dst),
@@ -267,7 +267,7 @@ impl BBTerm {
 			DeadEnd | Return | Halt => None     .into_iter().chain([].iter_mut()),
 			FallThru(ea) | Jump(ea) |
 			StateChange(ea, _)      => Some(ea) .into_iter().chain([].iter_mut()),
-			Call { dst, ret }       => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
+			Call { dst, ret, .. }   => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
 			JumpTbl(eas)            => None     .into_iter().chain(eas.iter_mut()),
 			IndirCall { dst, ret }  => Some(ret).into_iter().chain(dst),

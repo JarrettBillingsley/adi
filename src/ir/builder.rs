@@ -308,6 +308,12 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
+	pub(crate) fn ccall(&mut self, ea: EA, cond: impl Into<IrSrc>, target: EA,
+		condn: i8, targetn: i8) -> usize {
+		self.inst(IrInst::ccall(ea, cond.into(), target, condn, targetn))
+	}
+
+	/// TODO: docme
 	pub(crate) fn icall(&mut self, ea: EA, target: impl Into<IrSrc>, targetn: i8) -> usize {
 		self.inst(IrInst::icall(ea, target.into(), targetn))
 	}
