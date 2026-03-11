@@ -5,7 +5,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::toy::{ ToyArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId,
 	EA };
-use crate::program::{ Program, NameKind };
+use crate::program::{ Program };
 
 // ------------------------------------------------------------------------------------------------
 // ToyPlatform
@@ -74,8 +74,8 @@ impl ILoader for ToyLoader {
 		let mut prog = Program::new(mem, ToyPlatform::new().into());
 
 		let state = prog.initial_mmu_state();
-		prog.add_name_va("BANK", state, VA(0xFFFF), NameKind::Hardware);
-		prog.add_name_va("WEIRDBANK", state, VA(0xFFFE), NameKind::Hardware);
+		prog.add_hardware_name_va("BANK", state, VA(0xFFFF));
+		prog.add_hardware_name_va("WEIRDBANK", state, VA(0xFFFE));
 
 		let reset = prog.ea_from_va(state, VA(0x0000));
 		Ok((prog, reset))

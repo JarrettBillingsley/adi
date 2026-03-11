@@ -373,7 +373,7 @@ impl Program {
 		seg.span_make_data(ea, size, did);
 
 		if let Some(name) = name {
-			self.add_name(name, ea, NameKind::User);
+			self.add_name(name, ea, false);
 		}
 
 		did
@@ -384,9 +384,6 @@ impl Program {
 
 	delegate! {
 		to self.names {
-			/// Assigns a name to a given EA. Renames it if it already has one.
-			#[call(add)]
-			pub fn add_name(&mut self, name: &str, ea: EA, kind: NameKind);
 			/// Removes a name. Panics if the name doesn't exist.
 			pub fn remove_name(&mut self, name: &str);
 			/// Removes the name from an EA. Panics if there is no name.
@@ -415,10 +412,26 @@ impl Program {
 		}
 	}
 
+	/// Assigns a name to a given EA. Renames it if it already has one.
+	pub fn add_name(&mut self, name: &str, ea: EA, is_local: bool) {
+		self.names.add(name, ea, if is_local { NameKind::Local } else { NameKind::User });
+	}
+
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique EA.
-	pub fn add_name_va(&mut self, name: &str, state: MmuState, va: VA, kind: NameKind) {
+	pub fn add_name_va(&mut self, name: &str, state: MmuState, va: VA, is_local: bool) {
 		let ea = self.mem.ea_for_va(state, va).unwrap();
-		self.add_name(name, ea, kind);
+		self.add_name(name, ea, is_local);
+	}
+
+	/// Assigns a name to a given EA. Renames it if it already has one.
+	pub(crate) fn add_hardware_name(&mut self, name: &str, ea: EA) {
+		self.names.add(name, ea, NameKind::Hardware);
+	}
+
+	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique EA.
+	pub(crate) fn add_hardware_name_va(&mut self, name: &str, state: MmuState, va: VA) {
+		let ea = self.mem.ea_for_va(state, va).unwrap();
+		self.add_hardware_name(name, ea);
 	}
 
 	/// Gets the name for an EA. Panics if it has none.

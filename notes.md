@@ -3,13 +3,13 @@
 
 # Imminent tasks!
 
+- **Automatically add names for functions**
+	- like when it adds refs
 - **Function-local labels**
 	- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
 	- how to keep it globally-unique for the `NameMap` tho?
 		- well, could leave that to the frontend to deal with it
 		- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
-- **Automatically add names for functions**
-	- like when it adds refs
 - **Add IR rotate left/right ops**
 	- since this seems to be pretty common in these older arches
 	- and rust does actually have rotate methods

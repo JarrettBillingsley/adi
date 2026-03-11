@@ -387,11 +387,11 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	let test = toy_test_state_change();
 
 	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
-	prog.add_name("main", start_ea, NameKind::User);
+	prog.add_name("main", start_ea, false);
 	let state = prog.initial_mmu_state();
 
 	for (name, va) in test.labels {
-		prog.add_name_va(&name, state, va, NameKind::User);
+		prog.add_name_va(&name, state, va, false);
 	}
 
 	println!("{}", prog);
