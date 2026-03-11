@@ -128,6 +128,7 @@ impl Program {
 				.get_opinfo_mut(opn) = replacement;
 		}
 
+		self.add_autogen_func_name(fid);
 		for (src, dst) in refs.into_iter() { self.add_ref(src, dst); }
 		for t in jumptables.into_iter()    { self.enqueue_jump_table(t);  }
 		for (f, s) in funcs.into_iter()    { self.enqueue_new_func(s, f); }

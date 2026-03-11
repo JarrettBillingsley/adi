@@ -84,12 +84,12 @@ impl NameMap {
 
 	/// Given a `base` (usually a segment name) and an `addr` (an address represented as a string),
 	/// returns a name of the form `BASE_loc_ADDR`.
-	pub fn generate_name(&self, base: impl Into<String>, addr: impl Into<String>) -> String {
+	pub fn generate_name(base: impl Into<String>, addr: impl Into<String>) -> String {
 		format!("{}_{}_{}", base.into(), AUTOGEN_NAME_PREFIX, addr.into())
 	}
 
 	/// Like `generate_name`, but in the form `BASE_func_ADDR`.
-	pub fn generate_func_name(&self, base: impl Into<String>, addr: impl Into<String>) -> String {
+	pub fn generate_func_name(base: impl Into<String>, addr: impl Into<String>) -> String {
 		format!("{}_{}_{}", base.into(), AUTOGEN_FUNC_PREFIX, addr.into())
 	}
 

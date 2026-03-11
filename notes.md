@@ -3,8 +3,6 @@
 
 # Imminent tasks!
 
-- **Automatically add names for functions**
-	- like when it adds refs
 - **Function-local labels**
 	- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
 	- how to keep it globally-unique for the `NameMap` tho?

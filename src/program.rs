@@ -434,6 +434,25 @@ impl Program {
 		self.add_hardware_name(name, ea);
 	}
 
+	/// Adds an automatically-generated name for a function to the name map.
+	pub(crate) fn add_autogen_func_name(&mut self, fid: FuncId) {
+		let func = self.get_func(fid);
+		let ea = func.ea();
+
+		if self.names.name_for_ea(ea).is_none() {
+			let seg = self.mem.segment_from_ea(ea);
+			let va = if let Some(state) = self.mmu_state_at(ea) {
+				self.va_from_ea(state, ea)
+			} else if let Some(va) = self.va_for_ea(self.initial_mmu_state(), ea) {
+				va
+			} else {
+				panic!("this should not be possible. the EA was resolved!");
+			};
+			let name = NameMap::generate_func_name(seg.name(), self.mem.fmt_addr(va.0));
+			self.names.add(name, ea, NameKind::AutoGen);
+		}
+	}
+
 	/// Gets the name for an EA. Panics if it has none.
 	pub fn name_from_ea(&self, ea: EA) -> Name<'_> {
 		self.names.name_for_ea(ea).unwrap()
@@ -477,6 +496,7 @@ impl Program {
 		let base_name = if let Some(name) = self.names.name_for_ea(ea) {
 			name.into()
 		} else if ea.is_unresolved() {
+			// name it like "UNRESOLVED_loc_0C30"
 			self.generate_name("UNRESOLVED", VA(ea.offs()))
 		} else {
 			// what span is here?
@@ -495,7 +515,7 @@ impl Program {
 			} else if let Some(va) = self.va_for_ea(self.initial_mmu_state(), ea) {
 				va
 			} else {
-				VA(ea.offs()) // can this ever happen?
+				panic!("this should not be possible. the EA was resolved!");
 			};
 
 			let start = seg.span_at_ea(ea).start();
@@ -557,7 +577,7 @@ impl Program {
 
 	fn generate_name(&self, base: &str, va: VA) -> Name<'_> {
 		Name {
-			name: Cow::Owned(self.names.generate_name(base, self.mem.fmt_addr(va.0))),
+			name: Cow::Owned(NameMap::generate_name(base, self.mem.fmt_addr(va.0))),
 			kind: NameKind::AutoGen,
 		}
 	}
