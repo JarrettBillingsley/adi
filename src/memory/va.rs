@@ -12,8 +12,14 @@ use crate::memory::{ EA };
 // ------------------------------------------------------------------------------------------------
 
 /// newtype for virtual addresses.
-#[derive(Debug, Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Display, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct VA(pub usize);
+
+impl Debug for VA {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "VA(0x{:04X})", self.0)
+	}
+}
 
 impl TryFrom<EA> for VA {
 	type Error = ();

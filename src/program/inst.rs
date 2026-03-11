@@ -1,4 +1,6 @@
 
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
+
 use parse_display::Display;
 
 use crate::memory::{ EA, VA, MemAccess };
@@ -182,7 +184,7 @@ impl InstructionKind {
 const MAX_OPS:   usize = 3; // ? we'll see
 const MAX_BYTES: usize = 8;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Instruction {
 	va:        VA,
 	ea:        EA,
@@ -196,6 +198,32 @@ pub struct Instruction {
 	bytes:     [u8; MAX_BYTES],
 	num_ops:   u8,
 	num_bytes: u8,
+}
+
+struct InstBytes<'a>(&'a [u8]);
+
+impl<'a> Debug for InstBytes<'a> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "[0x{:02X}", self.0[0])?;
+		for byte in self.0[1..].iter() {
+			write!(f, ", 0x{:02X}", byte)?;
+		}
+		write!(f, "]")
+	}
+}
+
+impl Debug for Instruction {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		f.debug_struct("Instruction")
+			.field("va", &self.va)
+			.field("ea", &self.ea)
+			.field("kind", &self.kind)
+			.field("target", &self.target)
+			.field("ops", &&self.ops[..self.num_ops as usize])
+			.field("opinfo", &&self.opinfo[..self.num_ops as usize])
+			.field("bytes", &InstBytes(&self.bytes[..self.num_bytes as usize]))
+			.finish_non_exhaustive()
+	}
 }
 
 impl Instruction {
