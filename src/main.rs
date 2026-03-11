@@ -419,6 +419,96 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 
 	let state = prog.initial_mmu_state();
 	prog.enqueue_new_func(state, prog.ea_from_name("RESET"));
+
+	// TETRIS
+	{
+		// from rst 0x28 at ROM0:02FA
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1BCE)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1CE2)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1244)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x127B)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1D06)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1D26)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x03AE)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0479)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1444)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x148C)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1A07)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1DC0)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1F16)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1F1F)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1525)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x14B0)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x157B)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x15BF)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1629)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x167A)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x16EB)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1913)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0677)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x072C)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0825)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x08E4)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0B31)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0CEB)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0AD2)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0D32)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0E23)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1112)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0D99)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0E8A)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1DCE)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1E41)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0369)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0393)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1167)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x11E6)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x11FC)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x121C)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x05C7)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x05F7)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x12B3)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1305)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1324)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1351)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1367)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x137E)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x13B5)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x13E5)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x131B)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x03A0)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x27EA)));
+
+		let ty = Type::array(Type::U16, 41);
+		prog.new_data(None, prog.ea_from_va(state, VA(0x6480)), ty.clone(), ty.size().fixed());
+
+		// from jump table at ROM1:6480
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65AA)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65C6)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x66FC)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6628)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6734)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x66AF)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65F1)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6654)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65B2)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65CE)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6714)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65CE)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65CE)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x66C3)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65F7)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6660)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67D4)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67DC)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x679D)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67A5)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67E4)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67E4)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67E4)));
+		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67AD)));
+	}
+
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
@@ -714,12 +804,12 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 			}
 		}
 
-		Array(at) => {
-			let mut ret = String::with_capacity(at.len() * 4);
-			let sub_ty = at.ty();
+		Array(arrty) => {
+			let mut ret = String::with_capacity(arrty.len() * 4);
+			let sub_ty = arrty.ty();
 			let stride = sub_ty.size().fixed();
 
-			for i in 0 .. at.len() {
+			for i in 0 .. arrty.len() {
 				let offs = i * stride;
 				let sub_slice = slice.image_slice(offs .. offs + stride);
 				let sub_str = interpret_data(prog, radix, sub_ty, &sub_slice);

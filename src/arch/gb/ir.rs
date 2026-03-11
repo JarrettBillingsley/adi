@@ -107,6 +107,7 @@ impl InstDesc {
 			// Computation
 
 			ADD => {
+				b.nop(ea); // TODO
 				// a += r8
 					// {Z*, N0, H*, C*} 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x87 (add a, r)
 					// InstDesc(   0x80, ADD,  &[Srg(A), Srg(B)],         Other,  Imp),
@@ -130,6 +131,7 @@ impl InstDesc {
 					// InstDesc(   0xE8, ADD,  &[Srg(SP), Op],            Other,  SImm8),
 			}
 			ADC => {
+				b.nop(ea); // TODO
 				// a += r8 + cf
 					// {Z*, N0, H*, C*} 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8F (adc a, r)
 					// InstDesc(   0x88, ADC,  &[Srg(A), Srg(B)],         Other,  Imp),
@@ -144,6 +146,7 @@ impl InstDesc {
 					// InstDesc(   0xCE, ADC,  &[Srg(A), Op],             Other,  UImm8),
 			}
 			SUB => {
+				b.nop(ea); // TODO
 				// a -= r8
 					// {Z*, N1, H*, C*} 0x90, 0x91, 0x92, 0x93, 0x94, 0x95 (sub a, r)
 					// {Z1, N1, H0, C0} 0x97 (sub a, a) (just a special case?)
@@ -159,6 +162,7 @@ impl InstDesc {
 					// InstDesc(   0xD6, SUB,  &[Srg(A), Op],             Other,  UImm8),
 			}
 			SBC => {
+				b.nop(ea); // TODO
 				// a -= r8 - cf
 					// {Z*, N1, H*, C*} 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D (sbc a, r)
 					// {Z*, N1, H*, C-} 0x9F (sbc a, a) (just a special case?)
@@ -174,6 +178,7 @@ impl InstDesc {
 					// InstDesc(   0xDE, SBC,  &[Srg(A), Op],             Other,  UImm8),
 			}
 			AND => {
+				b.nop(ea); // TODO
 				// a &= r8
 					// {Z*, N0, H1, C0} 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA7 (and a, r)
 					// InstDesc(   0xA0, AND,  &[Srg(A), Srg(B)],         Other,  Imp),
@@ -188,6 +193,7 @@ impl InstDesc {
 					// InstDesc(   0xE6, AND,  &[Srg(A), Op],             Other,  UImm8),
 			}
 			OR => {
+				b.nop(ea); // TODO
 				// a |= r8
 					// {Z*, N0, H0, C0} 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB7 (or a, r)
 					// InstDesc(   0xB0, OR,   &[Srg(A), Srg(B)],         Other,  Imp),
@@ -202,6 +208,7 @@ impl InstDesc {
 					// InstDesc(   0xF6, OR,   &[Srg(A), Op],             Other,  UImm8),
 			}
 			XOR => {
+				b.nop(ea); // TODO
 				// a ^= r8
 					// {Z*, N0, H0, C0} 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD (xor a, r)
 					// {Z1, N0, H0, C0} 0xAF (xor a, a) (just a special case?)
@@ -217,6 +224,7 @@ impl InstDesc {
 					// InstDesc(   0xEE, XOR,  &[Srg(A), Op],             Other,  UImm8),
 			}
 			CP => {
+				b.nop(ea); // TODO
 				// a - r8
 					// {Z*, N1, H*, C*} 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD (cp a, r)
 					// {Z1, N1, H0, C0} 0xBF (cp a, a) (just a special case?)
@@ -232,6 +240,7 @@ impl InstDesc {
 					// InstDesc(   0xFE, CP,   &[Srg(A), Op],             Other,  UImm8),
 			}
 			INC => {
+				b.nop(ea); // TODO
 				// r8++
 					// {Z*, N0, H*, C-} 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C (inc r)
 					// InstDesc(   0x04, INC,  &[Srg(B)],                 Other,  Imp),
@@ -247,6 +256,7 @@ impl InstDesc {
 					// ...
 			}
 			DEC => {
+				b.nop(ea); // TODO
 
 				// r8--
 					// {Z*, N1, H*, C-} 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D (dec r)
@@ -263,9 +273,11 @@ impl InstDesc {
 					// ...
 			}
 			CPL => {
+				b.nop(ea); // TODO
 				// {Z-, N1, H1, C-} 0x2F (cpl)
 			}
 			DA => {
+				b.nop(ea); // TODO
 				// {Z*, N-, H0, C*} 0x27 (da a)
 			}
 
@@ -273,6 +285,7 @@ impl InstDesc {
 			// Bitwise
 
 			SLA => {
+				b.nop(ea); // TODO
 				// r8 <<= 1
 					// {Z*, N0, H0, C*} 0xCB_{0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x27} (sla r)
 					// InstDesc(0xCB_20, SLA,  &[Srg(B)],                 Other,  Imp),
@@ -283,6 +296,7 @@ impl InstDesc {
 					// InstDesc(0xCB_26, SLA,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			SRA => {
+				b.nop(ea); // TODO
 				// r8 >>= 1
 					// {Z*, N0, H0, C*} 0xCB_{0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2F} (sra r)
 					// InstDesc(0xCB_28, SRA,  &[Srg(B)],                 Other,  Imp),
@@ -293,6 +307,7 @@ impl InstDesc {
 					// InstDesc(0xCB_2E, SRA,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			SRL => {
+				b.nop(ea); // TODO
 				// r8 >>>= 1
 					// {Z*, N0, H0, C*} 0xCB_{0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3F} (srl r)
 					// InstDesc(0xCB_38, SRL,  &[Srg(B)],                 Other,  Imp),
@@ -303,9 +318,11 @@ impl InstDesc {
 					// InstDesc(0xCB_3E, SRL,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			RLA => {
+				b.nop(ea); // TODO
 				// {Z0, N0, H0, C*} 0x17 (rla)
 			}
 			RL => {
+				b.nop(ea); // TODO
 				// rol(r8)
 					// {Z*, N0, H0, C*} 0xCB_{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x17} (rl r)
 					// InstDesc(   0x17, RL,   &[Srg(A)],                 Other,  Imp),
@@ -317,9 +334,11 @@ impl InstDesc {
 					// InstDesc(0xCB_16, RL,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			RLCA => {
+				b.nop(ea); // TODO
 				// {Z0, N0, H0, C*} 0x07 (rlca)
 			}
 			RLC => {
+				b.nop(ea); // TODO
 				// rolc(r8)
 					// {Z*, N0, H0, C*} 0xCB_{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x07} (rlc r)
 					// InstDesc(   0x07, RLC,  &[Srg(A)],                 Other,  Imp),
@@ -331,9 +350,11 @@ impl InstDesc {
 					// InstDesc(0xCB_06, RLC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			RRA => {
+				b.nop(ea); // TODO
 				// {Z0, N0, H0, C*} 0x1F (rra)
 			}
 			RR => {
+				b.nop(ea); // TODO
 				// ror(r8)
 					// {Z*, N0, H0, C*} 0xCB_{0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1F} (rr r)
 					// InstDesc(   0x1F, RR,   &[Srg(A)],                 Other,  Imp),
@@ -345,9 +366,11 @@ impl InstDesc {
 					// InstDesc(0xCB_1E, RR,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			RRCA => {
+				b.nop(ea); // TODO
 				// {Z0, N0, H0, C*} 0x0F (rrca)
 			}
 			RRC => {
+				b.nop(ea); // TODO
 				// rorc(r8)
 					// {Z*, N0, H0, C*} 0xCB_{0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0F} (rrc r)
 					// InstDesc(   0x0F, RRC,  &[Srg(A)],                 Other,  Imp),
@@ -359,6 +382,7 @@ impl InstDesc {
 					// InstDesc(0xCB_0E, RRC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			SWAP => {
+				b.nop(ea); // TODO
 				// swap(r8)
 					// {Z*, N0, H0, C0} 0xCB_{0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x37} (swap r)
 					// InstDesc(0xCB_30, SWAP, &[Srg(B)],                 Other,  Imp),
@@ -369,6 +393,7 @@ impl InstDesc {
 					// InstDesc(0xCB_36, SWAP, &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
 			BIT => {
+				b.nop(ea); // TODO
 				// zf <- r8.n
 					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{^6,E}}} (bit n, r)
 					// InstDesc(0xCB_40, BIT,  &[Op, Srg(B)],             Other,  Imp),
@@ -379,6 +404,7 @@ impl InstDesc {
 					// InstDesc(0xCB_46, BIT,  &[Op, IndReg(HL)],         Other,  Ind(HL, R)),
 			}
 			RES => {
+				b.nop(ea); // TODO
 				// r8.n <- 0
 					// no flag changes
 					// InstDesc(0xCB_80, RES,  &[Op, Srg(B)],             Other,  Imp),
@@ -389,6 +415,7 @@ impl InstDesc {
 					// InstDesc(0xCB_86, RES,  &[Op, IndReg(HL)],         Other,  Ind(HL, RW)),
 			}
 			SET => {
+				b.nop(ea); // TODO
 				// r8.n <- 1
 					// no flag changes
 					// InstDesc(0xCB_C0, SET,  &[Op, Srg(B)],             Other,  Imp),
@@ -403,9 +430,11 @@ impl InstDesc {
 			// Flag manipulation
 
 			CCF => {
+				b.nop(ea); // TODO
 				// {Z-, N0, H0, C*} 0x3F (ccf)
 			}
 			SCF => {
+				b.nop(ea); // TODO
 				// {Z-, N0, H0, C1} 0x37 (scf)
 			}
 
@@ -413,6 +442,7 @@ impl InstDesc {
 			// Control flow
 
 			JP => {
+				b.nop(ea); // TODO
 				// no flag changes
 
 				// pc <- uimm16
@@ -426,6 +456,7 @@ impl InstDesc {
 					// ...
 			}
 			JR => {
+				b.nop(ea); // TODO
 				// no flag changes
 
 				// pc += imm8
@@ -436,6 +467,7 @@ impl InstDesc {
 					// ...
 			}
 			CALL => {
+				b.nop(ea); // TODO
 				// no flag changes
 
 				// push(pc + 3), pc <- uimm16
@@ -446,6 +478,7 @@ impl InstDesc {
 					// ...
 			}
 			RET => {
+				b.nop(ea); // TODO
 				// no flag changes
 
 				// pc <- pop()
@@ -456,6 +489,7 @@ impl InstDesc {
 					// ...
 			}
 			RST => {
+				b.nop(ea); // TODO
 				// no flag changes
 
 				// pc <- rst_target()
@@ -463,6 +497,7 @@ impl InstDesc {
 					// ...
 			}
 			RETI => {
+				b.nop(ea); // TODO
 				// no flag changes
 			}
 
@@ -470,6 +505,7 @@ impl InstDesc {
 			// Data transfer
 
 			LD => {
+				b.nop(ea); // TODO
 				// no flag changes EXCEPT for 0xF8
 
 				// REG <- REG
@@ -527,6 +563,7 @@ impl InstDesc {
 
 			}
 			LDH => {
+				b.nop(ea); // TODO
 				// no flag changes
 
 				// [MEM] <- REG
@@ -538,11 +575,13 @@ impl InstDesc {
 					// InstDesc(   0xF2, LDH,  &[Srg(A), IndReg(C)],      Other,  IndHi(R)),
 			}
 			PUSH => {
+				b.nop(ea); // TODO
 				// no flag changes
 				// InstDesc(   0xC5, PUSH, &[Srg(BC)],                Other,  Ind(SP, W)),
 				// ...
 			}
 			POP => {
+				b.nop(ea); // TODO
 				// no flag changes EXCEPT for 0xF1
 				// {Z*, N*, H*, C*} 0xF1 (pop af)
 
