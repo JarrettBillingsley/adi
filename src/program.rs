@@ -1,7 +1,7 @@
 
+use std::borrow::{ Cow };
 use std::collections::{
 	btree_map::Iter as BTreeIter,
-	btree_map::Range as BTreeRange,
 	hash_map::Iter as HashIter,
 	HashMap,
 	HashSet,
@@ -365,15 +365,15 @@ impl Program {
 		Some(self.data.get(data_id))
 	}
 
-	/// Creates a new data item at the given EA. Returns its ID.
-	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: Type, size: usize)
-	-> DataId {
+	/// Creates a new data item at the given EA. If a `name` is given, adds that name as a
+	/// `NameKind::User` name. Returns its ID.
+	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: Type, size: usize) -> DataId {
 		let did = self.data.new_item(ea, ty, size);
 		let seg = self.segment_from_ea_mut(ea);
 		seg.span_make_data(ea, size, did);
 
 		if let Some(name) = name {
-			self.add_name(name, ea);
+			self.add_name(name, ea, NameKind::User);
 		}
 
 		did
@@ -386,52 +386,64 @@ impl Program {
 		to self.names {
 			/// Assigns a name to a given EA. Renames it if it already has one.
 			#[call(add)]
-			pub fn add_name(&mut self, name: &str, ea: EA);
+			pub fn add_name(&mut self, name: &str, ea: EA, kind: NameKind);
 			/// Removes a name. Panics if the name doesn't exist.
 			pub fn remove_name(&mut self, name: &str);
 			/// Removes the name from an EA. Panics if there is no name.
 			#[call(remove_ea)]
 			pub fn remove_name_from_ea(&mut self, ea: EA);
-			/// Gets the EA for a name, if one of that name exists.
-			pub fn ea_for_name(&self, name: &str) -> Option<EA>;
+			/// Gets both the EA and `NameKind` of a name, if that name exists.
+			#[call(ea_and_kind_for_name)]
+			pub fn ea_and_name_kind_for_name(&self, name: &str) -> Option<(EA, NameKind)>;
 			/// Gets the name for an EA, if there is one.
-			pub fn name_for_ea(&self, ea: EA) -> Option<&String>;
+			pub fn name_for_ea(&self, ea: EA) -> Option<Name<'_>>;
 			/// Whether this name exists.
 			pub fn has_name(&self, name: &str) -> bool;
 			/// Whether this EA has a name.
 			#[call(has_ea)]
 			pub fn has_name_for_ea(&self, ea: EA) -> bool;
-			/// All (name, EA) pairs in arbitrary order.
+			/// All `(name, (EA, NameKind))` pairs in arbitrary order.
 			#[call(names)]
-			pub fn all_names(&self) -> HashIter<'_, String, EA>;
-			/// All (EA, name) pairs in EA order.
+			pub fn all_names(&self) -> HashIter<'_, String, (EA, NameKind)>;
+			/// All `(EA, Name)` pairs in EA order.
 			#[call(eas)]
-			pub fn all_names_by_ea(&self) -> BTreeIter<'_, EA, String>;
-			/// All (EA, name) pairs in a given range of EAs, in EA order.
+			pub fn all_names_by_ea(&self) -> impl Iterator<Item = (EA, Name<'_>)>;
+			/// All `(EA, Name)` pairs in a given range of EAs, in EA order.
 			#[call(names_in_range)]
 			pub fn names_in_range(&self, range: impl RangeBounds<EA>)
-			-> BTreeRange<'_, EA, String>;
+			-> impl Iterator<Item = (EA, Name<'_>)>;
 		}
 	}
 
 	/// Assigns a name to a given VA. Panics if the VA doesn't map to a unique EA.
-	pub fn add_name_va(&mut self, name: &str, state: MmuState, va: VA) {
+	pub fn add_name_va(&mut self, name: &str, state: MmuState, va: VA, kind: NameKind) {
 		let ea = self.mem.ea_for_va(state, va).unwrap();
-		self.add_name(name, ea);
+		self.add_name(name, ea, kind);
 	}
 
 	/// Gets the name for an EA. Panics if it has none.
-	pub fn name_from_ea(&self, ea: EA) -> &str {
+	pub fn name_from_ea(&self, ea: EA) -> Name<'_> {
 		self.names.name_for_ea(ea).unwrap()
 	}
 
+	/// Gets the EA for a name, if that name exists.
+	pub fn ea_for_name(&self, name: &str) -> Option<EA> {
+		self.names.ea_and_kind_for_name(name).map(|n| n.0)
+	}
+
+
 	/// Gets the EA for a name. Panics if the name doesn't exist.
 	pub fn ea_from_name(&self, name: &str) -> EA {
-		self.names.ea_for_name(name).unwrap()
+		self.names.ea_and_kind_for_name(name).unwrap().0
+	}
+
+	/// Gets both the EA and `NameKind` of a name. Panics if the name doesn't exist.
+	pub fn ea_and_name_kind_from_name(&self, name: &str) -> (EA, NameKind) {
+		self.names.ea_and_kind_for_name(name).unwrap()
 	}
 
 	/// Gets the name of a given VA if one exists, or generates one if not.
-	pub fn name_of_va(&self, state: MmuState, va: VA) -> String {
+	pub fn name_of_va(&self, state: MmuState, va: VA) -> Name<'_> {
 		if let Some(ea) = self.mem.ea_for_va(state, va) {
 			self.name_of_ea(ea)
 		} else {
@@ -440,7 +452,7 @@ impl Program {
 	}
 
 	/// Gets the name of a given EA if one exists, or generates one if not.
-	pub fn name_of_ea(&self, given_ea: EA) -> String {
+	pub fn name_of_ea(&self, given_ea: EA) -> Name<'_> {
 		// TODO: uhhhh Functions and DataItems have their own name fields. how does
 		// that interact with this? (should they even have name fields?)
 
@@ -478,7 +490,7 @@ impl Program {
 			match self.names.name_for_ea(start) {
 				Some(name) =>
 					// there's already a name, so name it like "main_loc_0C30"
-					self.generate_name(name, va),
+					self.generate_name(&name.name, va),
 				None =>
 					// no name, so name it "SEGNAME_loc_0C30"
 					self.generate_name(seg.name(), va),
@@ -498,8 +510,8 @@ impl Program {
 
 	/// All (EA, name) pairs in a given range of VAs, in EA order.
 	pub fn names_in_va_range(&self, state: MmuState, range: impl RangeBounds<VA>)
-	-> BTreeRange<'_, EA, String> {
-		let range = va_range_to_ea_range(range, |va| self.mem.ea_for_va(state, va).unwrap());
+	-> impl Iterator<Item = (EA, Name<'_>)> {
+		let range = va_range_to_ea_range(range, move |va| self.mem.ea_for_va(state, va).unwrap());
 		self.names_in_range(range)
 	}
 
@@ -530,18 +542,22 @@ impl Program {
 	// ---------------------------------------------------------------------------------------------
 	// Private
 
-	fn generate_name(&self, base: &str, va: VA) -> String {
-		format!("{}_{}_{}", base, AUTOGEN_NAME_PREFIX, self.mem.fmt_addr(va.0))
+	fn generate_name(&self, base: &str, va: VA) -> Name<'_> {
+		Name {
+			name: Cow::Owned(format!("{}_{}_{}",
+				base, AUTOGEN_NAME_PREFIX, self.mem.fmt_addr(va.0))),
+			kind: None,
+		}
 	}
 }
 
 impl INameLookup for Program {
 	fn lookup(&self, state: MmuState, addr: VA) -> Option<String> {
-		Some(self.name_of_va(state, addr))
+		Some(self.name_of_va(state, addr).name.into_owned())
 	}
 
 	fn lookup_ea(&self, ea: EA) -> String {
-		self.name_of_ea(ea)
+		self.name_of_ea(ea).name.into_owned()
 	}
 }
 

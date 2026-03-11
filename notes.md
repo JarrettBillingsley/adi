@@ -3,11 +3,11 @@
 
 # Imminent tasks!
 
-- **Names should be more than just Strings**
-	- `Name::Hardware` (for MMIO regs, vector locations etc)
-	- `Name::AutoGen` (not actually in the name table, just used for display)
-	- `Name::User` (user-given)
-	- `Name::Local` (local to a function)
+- **Function-local labels**
+	- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
+	- how to keep it globally-unique for the `NameMap` tho?
+		- well, could leave that to the frontend to deal with it
+		- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
 - **Automatically add names for functions**
 	- like when it adds refs
 - **Add IR rotate left/right ops**
@@ -80,9 +80,6 @@
 		- INDENTATION is what shows control flow
 		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
 		- but maybe this can fall under the same sorta thing as line comments
-	- **Function-local labels**
-		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
-			- *this would also imply another variant of `Name` like `Name::Local`*
 
 - **Design issues**
 	- **Should IrFunction hold a ref to the owning function?**

@@ -7,7 +7,7 @@ use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::gb::{ GBArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId, EA };
-use crate::program::{ Program };
+use crate::program::{ Program, NameKind };
 
 // ------------------------------------------------------------------------------------------------
 // GBPlatform
@@ -423,7 +423,7 @@ fn setup_gb_labels(prog: &mut Program) {
 	let state = prog.initial_mmu_state();
 
 	for StdName(name, addr) in STD_NAMES {
-		prog.add_name_va(name, state, VA(*addr));
+		prog.add_name_va(name, state, VA(*addr), NameKind::Hardware);
 	}
 
 	// TODO: CGB names (if it's a CGB cart)

@@ -387,11 +387,11 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	let test = toy_test_state_change();
 
 	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
-	prog.add_name("main", start_ea);
+	prog.add_name("main", start_ea, NameKind::User);
 	let state = prog.initial_mmu_state();
 
 	for (name, va) in test.labels {
-		prog.add_name_va(&name, state, va);
+		prog.add_name_va(&name, state, va, NameKind::User);
 	}
 
 	println!("{}", prog);
@@ -781,7 +781,7 @@ fn show_data(prog: &Program, data: &DataItem) {
 
 	println!("{}", divider);
 	let msg = format!("; {} byte(s), type {}", size, data.ty());
-	println!("{}: {}", prog.name_of_ea(start).truecolor(127, 63, 0), msg.green());
+	println!("{}: {}", prog.name_of_ea(start).name.truecolor(127, 63, 0), msg.green());
 
 	let seg = prog.segment_from_ea(start);
 
@@ -913,7 +913,7 @@ fn show_func_cfg(prog: &Program, func: &Function) {
 	for bb in bbs {
 		let bb_ea = bb.ea();
 
-		print!("{}", prog.name_of_ea(bb_ea).truecolor(127, 63, 0));
+		print!("{}", prog.name_of_ea(bb_ea).name.truecolor(127, 63, 0));
 
 		// S U C C
 		let succ = bb.successors().collect::<Vec<_>>();
@@ -936,7 +936,7 @@ fn show_func_piece_header(prog: &Program, func: &Function) {
 
 	println!("{}", divider);
 	let name = prog.name_of_ea(func.ea());
-	println!("{}{}{}", "; (Piece of function ".green(), name.green(), ")".green());
+	println!("{}{}{}", "; (Piece of function ".green(), name.name.green(), ")".green());
 }
 
 fn show_func_header(prog: &Program, func: &Function) {
@@ -946,7 +946,7 @@ fn show_func_header(prog: &Program, func: &Function) {
 	println!("{}", divider);
 
 	let name = prog.name_of_ea(func.ea());
-	println!("{}{}", "; Function ".green(), name.green());
+	println!("{}{}", "; Function ".green(), name.name.green());
 
 	if !func.attrs().is_empty() {
 		let attrs = format!("{:?}", func.attrs());
@@ -959,7 +959,7 @@ fn show_func_header(prog: &Program, func: &Function) {
 		print!("{}", "; Entry points: ".green());
 
 		for ea in entrypoints {
-			print!("{} ", prog.name_of_ea(ea).green());
+			print!("{} ", prog.name_of_ea(ea).name.green());
 		}
 
 		println!();
@@ -983,12 +983,12 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 		print!("{:20}{}", "", ";".green());
 
 		for &r in ir {
-			print!(" {}{}", "<-".green(), prog.name_of_ea(r).green());
+			print!(" {}{}", "<-".green(), prog.name_of_ea(r).name.green());
 		}
 
 		println!();
 
-		println!("{:20}{}:", "", prog.name_of_ea(bb_ea).truecolor(127, 63, 0));
+		println!("{:20}{}:", "", prog.name_of_ea(bb_ea).name.truecolor(127, 63, 0));
 	}
 
 	// MMU state
@@ -1026,7 +1026,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 			print!(" {}", ";".green());
 
 			for &r in or {
-				print!(" {}{}", "->".green(), prog.name_of_ea(r).green());
+				print!(" {}{}", "->".green(), prog.name_of_ea(r).name.green());
 			}
 		}
 

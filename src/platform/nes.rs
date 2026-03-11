@@ -12,7 +12,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture, VEC_NMI, VEC_IRQ, VEC_RESET };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
 	SegId, EA };
-use crate::program::{ Program };
+use crate::program::{ Program, NameKind };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -172,7 +172,7 @@ fn setup_nes_labels(prog: &mut Program) {
 	let state = prog.initial_mmu_state();
 
 	for StdName(name, addr) in NES_STD_NAMES {
-		prog.add_name_va(name, state, VA(*addr));
+		prog.add_name_va(name, state, VA(*addr), NameKind::Hardware);
 	}
 
 	for StdName(name, addr) in NES_INT_VECS {
@@ -183,7 +183,7 @@ fn setup_nes_labels(prog: &mut Program) {
 
 		// sometimes two+ vectors can be pointing at the same EA.
 		if !prog.has_name_for_ea(dst_ea) {
-			prog.add_name_va(name, state, dst_va);
+			prog.add_name_va(name, state, dst_va, NameKind::Hardware);
 		}
 
 		// TODO: add a data item for each of these EAs
