@@ -10,8 +10,9 @@ use std::ops::RangeBounds;
 
 use crate::memory::EA;
 
-// TODO: make this parameterizable
+// TODO: make these parameterizable
 pub const AUTOGEN_NAME_PREFIX: &str = "loc";
+pub const AUTOGEN_FUNC_PREFIX: &str = "func";
 
 // ------------------------------------------------------------------------------------------------
 // Name, NameKind
@@ -20,6 +21,8 @@ pub const AUTOGEN_NAME_PREFIX: &str = "loc";
 /// Different kinds of names.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NameKind {
+	/// An automatically-generated name.
+	AutoGen,
 	/// The name of a hardware register or similar. Created automatically by platforms.
 	Hardware,
 	/// A name assigned by the user.
@@ -40,15 +43,14 @@ impl NameKind {
 pub struct Name<'a> {
 	/// The name.
 	pub name: Cow<'a, String>,
-	/// What kind of name it is, or `None` if it was auto-generated. (Auto-generated names do not
-	/// appear in the `NameMap` and instead are only returned as temporary values from functions.)
-	pub kind: Option<NameKind>,
+	/// What kind of name it is.
+	pub kind: NameKind,
 }
 
 impl<'a> Name<'a> {
 	/// Is this name user-defined?
 	pub fn is_user(&self) -> bool {
-		self.kind.map_or(false, |k| k.is_user())
+		self.kind.is_user()
 	}
 }
 
@@ -75,6 +77,20 @@ impl NameMap {
 			names_to_eas: HashMap::new(),
 			eas_to_names: BTreeMap::new(),
 		}
+	}
+
+	// --------------------------------------------------------------------------------------------
+	// Generating names
+
+	/// Given a `base` (usually a segment name) and an `addr` (an address represented as a string),
+	/// returns a name of the form `BASE_loc_ADDR`.
+	pub fn generate_name(&self, base: impl Into<String>, addr: impl Into<String>) -> String {
+		format!("{}_{}_{}", base.into(), AUTOGEN_NAME_PREFIX, addr.into())
+	}
+
+	/// Like `generate_name`, but in the form `BASE_func_ADDR`.
+	pub fn generate_func_name(&self, base: impl Into<String>, addr: impl Into<String>) -> String {
+		format!("{}_{}_{}", base.into(), AUTOGEN_FUNC_PREFIX, addr.into())
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -114,7 +130,7 @@ impl NameMap {
 	pub fn name_for_ea(&self, ea: EA) -> Option<Name<'_>> {
 		self.eas_to_names.get(&ea).map(|(name, kind)| Name {
 			name: Cow::Borrowed(name),
-			kind: Some(*kind),
+			kind: *kind,
 		})
 	}
 
@@ -140,7 +156,7 @@ impl NameMap {
 	pub fn eas(&self) -> impl Iterator<Item = (EA, Name<'_>)> {
 		self.eas_to_names.iter().map(|(ea, (name, kind))| (*ea, Name {
 			name: Cow::Borrowed(name),
-			kind: Some(*kind),
+			kind: *kind,
 		}))
 	}
 
@@ -149,7 +165,7 @@ impl NameMap {
 	-> impl Iterator<Item = (EA, Name<'_>)> {
 		self.eas_to_names.range(range).map(|(ea, (name, kind))| (*ea, Name {
 			name: Cow::Borrowed(name),
-			kind: Some(*kind),
+			kind: *kind,
 		}))
 	}
 }

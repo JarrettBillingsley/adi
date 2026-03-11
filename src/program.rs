@@ -557,9 +557,8 @@ impl Program {
 
 	fn generate_name(&self, base: &str, va: VA) -> Name<'_> {
 		Name {
-			name: Cow::Owned(format!("{}_{}_{}",
-				base, AUTOGEN_NAME_PREFIX, self.mem.fmt_addr(va.0))),
-			kind: None,
+			name: Cow::Owned(self.names.generate_name(base, self.mem.fmt_addr(va.0))),
+			kind: NameKind::AutoGen,
 		}
 	}
 }
