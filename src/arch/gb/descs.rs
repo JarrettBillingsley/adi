@@ -146,7 +146,7 @@ pub(super) enum SynOp {
 	Op2,
 	IndOp,
 	SpPlusOp,
-	Srg(Reg), // not named Reg cause that name has enough meanings already
+	Srg(Reg), // not named Reg cause that name has enough meanings already - Srg for "syntax reg"
 	IndReg(Reg),
 	IndHlPlus,
 	IndHlMinus,
@@ -242,7 +242,6 @@ const UCALL: InstructionKind = InstructionKind::Call(false);
 const CCALL: InstructionKind = InstructionKind::Call(true);
 const URET:  InstructionKind = InstructionKind::Ret(false);
 const CRET:  InstructionKind = InstructionKind::Ret(true);
-
 
 const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x00, NOP,  &[],                       Other,  Imp),

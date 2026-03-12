@@ -264,20 +264,20 @@ impl InstDesc {
 
 		let ea = i.ea();
 
-		match self.meta_op() {
-			UNK => { panic!("what the hell is an unknown instruction doing in a BB?"); }
+		match (self.meta_op(), self.syn_ops().get(0).copied()) {
+			(UNK, _) => { panic!("what the hell is an unknown instruction doing in a BB?"); }
 
 			// for all these, have to emit *something* to avoid empty IR BBs.
-			NOP  => { b.nop(ea); } // no flag changes
-			DI   => { b.nop(ea); } // no flag changes
-			EI   => { b.nop(ea); } // no flag changes
-			HALT => { b.nop(ea); } // no flag changes
-			STOP => { b.nop(ea); } // no flag changes
+			(NOP,  None) => { b.nop(ea); } // no flag changes
+			(DI,   None) => { b.nop(ea); } // no flag changes
+			(EI,   None) => { b.nop(ea); } // no flag changes
+			(HALT, None) => { b.nop(ea); } // no flag changes
+			(STOP, None) => { b.nop(ea); } // no flag changes
 
 			// ------------------------------------------------------------------------------------
 			// Computation
 
-			ADD => {
+			(ADD, _) => {
 				b.nop(ea); // TODO
 				// a += r8
 					// {Z*, N0, H*, C*} 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x87 (add a, r)
@@ -301,7 +301,7 @@ impl InstDesc {
 					// {Z0, N0, H*, C*} 0xE8 (add sp, imm)
 					// InstDesc(   0xE8, ADD,  &[Srg(SP), Op],            Other,  SImm8),
 			}
-			ADC => {
+			(ADC, _) => {
 				b.nop(ea); // TODO
 				// a += r8 + cf
 					// {Z*, N0, H*, C*} 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8F (adc a, r)
@@ -316,7 +316,7 @@ impl InstDesc {
 					// {Z*, N0, H*, C*} 0xCE (adc a, imm8)
 					// InstDesc(   0xCE, ADC,  &[Srg(A), Op],             Other,  UImm8),
 			}
-			SUB => {
+			(SUB, _) => {
 				b.nop(ea); // TODO
 				// a -= r8
 					// {Z*, N1, H*, C*} 0x90, 0x91, 0x92, 0x93, 0x94, 0x95 (sub a, r)
@@ -332,7 +332,7 @@ impl InstDesc {
 					// {Z*, N1, H*, C*} 0xD6 (sub a, imm8)
 					// InstDesc(   0xD6, SUB,  &[Srg(A), Op],             Other,  UImm8),
 			}
-			SBC => {
+			(SBC, _) => {
 				b.nop(ea); // TODO
 				// a -= r8 - cf
 					// {Z*, N1, H*, C*} 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D (sbc a, r)
@@ -348,7 +348,7 @@ impl InstDesc {
 					// {Z*, N1, H*, C*} 0xDE (sbc a, imm8)
 					// InstDesc(   0xDE, SBC,  &[Srg(A), Op],             Other,  UImm8),
 			}
-			AND => {
+			(AND, _) => {
 				b.nop(ea); // TODO
 				// a &= r8
 					// {Z*, N0, H1, C0} 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA7 (and a, r)
@@ -363,7 +363,7 @@ impl InstDesc {
 					// {Z*, N0, H1, C0} 0xE6 (and a, imm)
 					// InstDesc(   0xE6, AND,  &[Srg(A), Op],             Other,  UImm8),
 			}
-			OR => {
+			(OR, _) => {
 				b.nop(ea); // TODO
 				// a |= r8
 					// {Z*, N0, H0, C0} 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB7 (or a, r)
@@ -378,7 +378,7 @@ impl InstDesc {
 					// {Z*, N0, H0, C0} 0xF6 (or a, imm8)
 					// InstDesc(   0xF6, OR,   &[Srg(A), Op],             Other,  UImm8),
 			}
-			XOR => {
+			(XOR, _) => {
 				b.nop(ea); // TODO
 				// a ^= r8
 					// {Z*, N0, H0, C0} 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD (xor a, r)
@@ -394,7 +394,7 @@ impl InstDesc {
 					// {Z*, N0, H0, C0} 0xEE (xor a, imm8)
 					// InstDesc(   0xEE, XOR,  &[Srg(A), Op],             Other,  UImm8),
 			}
-			CP => {
+			(CP, _) => {
 				b.nop(ea); // TODO
 				// a - r8
 					// {Z*, N1, H*, C*} 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD (cp a, r)
@@ -410,7 +410,7 @@ impl InstDesc {
 					// {Z*, N1, H*, C*} 0xFE (cp a, imm8)
 					// InstDesc(   0xFE, CP,   &[Srg(A), Op],             Other,  UImm8),
 			}
-			INC => {
+			(INC, _) => {
 				b.nop(ea); // TODO
 				// r8++
 					// {Z*, N0, H*, C-} 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C (inc r)
@@ -426,7 +426,7 @@ impl InstDesc {
 					// InstDesc(   0x03, INC,  &[Srg(BC)],                Other,  Imp),
 					// ...
 			}
-			DEC => {
+			(DEC, _) => {
 				b.nop(ea); // TODO
 
 				// r8--
@@ -443,11 +443,11 @@ impl InstDesc {
 					// InstDesc(   0x0B, DEC,  &[Srg(BC)],                Other,  Imp),
 					// ...
 			}
-			CPL => {
+			(CPL, _) => {
 				b.nop(ea); // TODO
 				// {Z-, N1, H1, C-} 0x2F (cpl)
 			}
-			DA => {
+			(DA, _) => {
 				b.nop(ea); // TODO
 				// {Z*, N-, H0, C*} 0x27 (da a)
 			}
@@ -455,7 +455,7 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Bitwise
 
-			SLA => {
+			(SLA, _) => {
 				b.nop(ea); // TODO
 				// r8 <<= 1
 					// {Z*, N0, H0, C*} 0xCB_{0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x27} (sla r)
@@ -466,7 +466,7 @@ impl InstDesc {
 					// {Z*, N0, H0, C*} 0xCB_26 (sla [hl])
 					// InstDesc(0xCB_26, SLA,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			SRA => {
+			(SRA, _) => {
 				b.nop(ea); // TODO
 				// r8 >>= 1
 					// {Z*, N0, H0, C*} 0xCB_{0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2F} (sra r)
@@ -477,7 +477,7 @@ impl InstDesc {
 					// {Z*, N0, H0, C*} 0xCB_2E (sra [hl])
 					// InstDesc(0xCB_2E, SRA,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			SRL => {
+			(SRL, _) => {
 				b.nop(ea); // TODO
 				// r8 >>>= 1
 					// {Z*, N0, H0, C*} 0xCB_{0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3F} (srl r)
@@ -488,75 +488,31 @@ impl InstDesc {
 					// {Z*, N0, H0, C*} 0xCB_3E (srl [hl])
 					// InstDesc(0xCB_3E, SRL,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			RLA => { // {Z0, N0, H0, C*}
-				// rla
-				b.rol_carry(ea, REG_A, false);
-			}
-			RL => { // {Z*, N0, H0, C*}
-				match self.syn_ops()[0] {
-					SynOp::Srg(Reg::HL) => {
-						// rl [hl]
-						hl_rmw(b, ea, |b, tmp| b.rol_carry(ea, tmp, true));
-					}
-					SynOp::Srg(reg) => {
-						// rl r
-						b.rol_carry(ea, reg, true);
-					}
-					_ => panic!(),
-				}
-			}
-			RLCA => { // {Z0, N0, H0, C*}
-				// rlca
-				b.rol_no_carry(ea, REG_A, false);
-			}
-			RLC => { // {Z*, N0, H0, C*}
-				match self.syn_ops()[0] {
-					SynOp::Srg(Reg::HL) => {
-						// rlc [hl]
-						hl_rmw(b, ea, |b, tmp| b.rol_no_carry(ea, tmp, true));
-					}
-					SynOp::Srg(reg) => {
-						// rlc r
-						b.rol_no_carry(ea, reg, true);
-					}
-					_ => panic!(),
-				}
-			}
-			RRA => { // {Z0, N0, H0, C*}
-				// rra
-				b.ror_carry(ea, REG_A, false);
-			}
-			RR => { // {Z*, N0, H0, C*}
-				match self.syn_ops()[0] {
-					SynOp::Srg(Reg::HL) => {
-						// rr [hl]
-						hl_rmw(b, ea, |b, tmp| b.ror_carry(ea, tmp, true));
-					}
-					SynOp::Srg(reg) => {
-						// rr r
-						b.ror_carry(ea, reg, true);
-					}
-					_ => panic!(),
-				}
-			}
-			RRCA => { // {Z0, N0, H0, C*}
-				// rrca
-				b.ror_no_carry(ea, REG_A, false);
-			}
-			RRC => { // {Z*, N0, H0, C*}
-				match self.syn_ops()[0] {
-					SynOp::Srg(Reg::HL) => {
-						// rrc [hl]
-						hl_rmw(b, ea, |b, tmp| b.ror_no_carry(ea, tmp, true));
-					}
-					SynOp::Srg(reg) => {
-						// rrc r
-						b.ror_no_carry(ea, reg, true);
-					}
-					_ => panic!(),
-				}
-			}
-			SWAP => {
+			(RLA, None) =>                                               // {Z0, N0, H0, C*}
+				b.rol_carry(ea, REG_A, false),
+			(RL, Some(SynOp::Srg(Reg::HL))) =>                           // {Z*, N0, H0, C*}
+				hl_rmw(b, ea, |b, tmp| b.rol_carry(ea, tmp, true)),
+			(RL, Some(SynOp::Srg(reg))) =>                               // {Z*, N0, H0, C*}
+				b.rol_carry(ea, reg, true),
+			(RLCA, None) =>                                              // {Z0, N0, H0, C*}
+				b.rol_no_carry(ea, REG_A, false),
+			(RLC, Some(SynOp::Srg(Reg::HL))) =>                          // {Z*, N0, H0, C*}
+				hl_rmw(b, ea, |b, tmp| b.rol_no_carry(ea, tmp, true)),
+			(RLC, Some(SynOp::Srg(reg))) =>                              // {Z*, N0, H0, C*}
+				b.rol_no_carry(ea, reg, true),
+			(RRA, None) =>                                               // {Z0, N0, H0, C*}
+				b.ror_carry(ea, REG_A, false),
+			(RR, Some(SynOp::Srg(Reg::HL))) =>                           // {Z*, N0, H0, C*}
+				hl_rmw(b, ea, |b, tmp| b.ror_carry(ea, tmp, true)),
+			(RR, Some(SynOp::Srg(reg))) =>                               // {Z*, N0, H0, C*}
+				b.ror_carry(ea, reg, true),
+			(RRCA, None) =>                                              // {Z0, N0, H0, C*}
+				b.ror_no_carry(ea, REG_A, false),
+			(RRC, Some(SynOp::Srg(Reg::HL))) =>                          // {Z*, N0, H0, C*}
+				hl_rmw(b, ea, |b, tmp| b.ror_no_carry(ea, tmp, true)),
+			(RRC, Some(SynOp::Srg(reg))) =>                              // {Z*, N0, H0, C*}
+				b.ror_no_carry(ea, reg, true),
+			(SWAP, _) => {
 				b.nop(ea); // TODO
 				// swap(r8)
 					// {Z*, N0, H0, C0} 0xCB_{0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x37} (swap r)
@@ -567,7 +523,7 @@ impl InstDesc {
 					// {Z*, N0, H0, C0} 0xCB_36 (swap [hl])
 					// InstDesc(0xCB_36, SWAP, &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			BIT => {
+			(BIT, _) => {
 				b.nop(ea); // TODO
 				// zf <- r8.n
 					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{^6,E}}} (bit n, r)
@@ -578,7 +534,7 @@ impl InstDesc {
 					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{6,E}}} (bit n, [hl])
 					// InstDesc(0xCB_46, BIT,  &[Op, IndReg(HL)],         Other,  Ind(HL, R)),
 			}
-			RES => {
+			(RES, _) => {
 				b.nop(ea); // TODO
 				// r8.n <- 0
 					// no flag changes
@@ -589,7 +545,7 @@ impl InstDesc {
 					// no flag changes
 					// InstDesc(0xCB_86, RES,  &[Op, IndReg(HL)],         Other,  Ind(HL, RW)),
 			}
-			SET => {
+			(SET, _) => {
 				b.nop(ea); // TODO
 				// r8.n <- 1
 					// no flag changes
@@ -604,11 +560,11 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Flag manipulation
 
-			CCF => {
+			(CCF, _) => {
 				b.nop(ea); // TODO
 				// {Z-, N0, H0, C*} 0x3F (ccf)
 			}
-			SCF => {
+			(SCF, _) => {
 				b.nop(ea); // TODO
 				// {Z-, N0, H0, C1} 0x37 (scf)
 			}
@@ -616,77 +572,57 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Control flow
 
-			JP => { // no flag changes
-				match self.syn_ops()[0] {
-					SynOp::Op => {
-						// jp nn
-						b.branch(ea, target.unwrap(), 0);
-					}
-					SynOp::Srg(Reg::HL) => {
-						// jp hl
-						b.rr     (ea, Reg::HL);
-						b.ibranch(ea, REG_HL_TMP, 0);
-					}
-					SynOp::Cc(cond) => {
-						// jp cc, nn
-						let cond = b.cc(ea, cond);
-						b.cbranch(ea, cond, target.unwrap(), -1, 0);
-					}
-					_ => panic!(),
-				}
+			(JP, Some(SynOp::Op)) => { // no flag changes
+				// jp nn
+				b.branch(ea, target.unwrap(), 0);
 			}
-			JR => { // no flag changes
-				match self.syn_ops()[0] {
-					SynOp::Op => {
-						// jr e
-						b.branch(ea, target.unwrap(), 0);
-					}
-					SynOp::Cc(cond) => {
-						// jr cc, e
-						let cond = b.cc(ea, cond);
-						b.cbranch(ea, cond, target.unwrap(), -1, 0);
-					}
-					_ => panic!()
-				}
+			(JP, Some(SynOp::Srg(Reg::HL))) => { // no flag changes
+				// jp hl
+				b.rr     (ea, Reg::HL);
+				b.ibranch(ea, REG_HL_TMP, 0);
 			}
-			CALL => { // no flag changes
-				match self.syn_ops()[0] {
-					SynOp::Op => {
-						// call nn
-						b.push_return_addr(ea, i.next_va());
-						b.call(ea, target.unwrap(), 0);
-					}
-					SynOp::Cc(cond) => {
-						// call cc, nn
-						let cond = b.not_cc(ea, cond);
-						b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
-						b.push_return_addr (ea, i.next_va());
-						b.call             (ea, target.unwrap(),   0);
-					}
-					_ => panic!()
-				}
+			(JP, Some(SynOp::Cc(cond))) => { // no flag changes
+				// jp cc, nn
+				let cond = b.cc(ea, cond);
+				b.cbranch(ea, cond, target.unwrap(), -1, 0);
 			}
-			RET => { // no flag changes
-				match self.syn_ops().get(0) {
-					None => {
-						// ret
-						b.return_(ea);
-					}
-					Some(SynOp::Cc(cond)) => {
-						// ret cc
-						let cond = b.not_cc(ea, *cond);
-						b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
-						b.return_(ea);
-					}
-					_ => panic!()
-				}
+			(JR, Some(SynOp::Op)) => { // no flag changes
+				// jr e
+				b.branch(ea, target.unwrap(), 0);
 			}
-			RST => { // no flag changes
+			(JR, Some(SynOp::Cc(cond))) => { // no flag changes
+				// jr cc, e
+				let cond = b.cc(ea, cond);
+				b.cbranch(ea, cond, target.unwrap(), -1, 0);
+			}
+			(CALL, Some(SynOp::Op)) => { // no flag changes
+				// call nn
+				b.push_return_addr(ea, i.next_va());
+				b.call(ea, target.unwrap(), 0);
+			}
+			(CALL, Some(SynOp::Cc(cond))) => { // no flag changes
+				// call cc, nn
+				let cond = b.not_cc(ea, cond);
+				b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
+				b.push_return_addr (ea, i.next_va());
+				b.call             (ea, target.unwrap(),   0);
+			}
+			(RET, None) => { // no flag changes
+				// ret
+				b.return_(ea);
+			}
+			(RET, Some(SynOp::Cc(cond))) => { // no flag changes
+				// ret cc
+				let cond = b.not_cc(ea, cond);
+				b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
+				b.return_(ea);
+			}
+			(RST, Some(_)) => { // no flag changes
 				// rst n
 				b.push_return_addr(ea, i.next_va());
 				b.call            (ea, target.unwrap(), 0);
 			}
-			RETI => { // no flag changes
+			(RETI, None) => { // no flag changes
 				// reti
 				b.return_(ea);
 			}
@@ -694,7 +630,7 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Data transfer
 
-			LD => {
+			(LD, _) => {
 				b.nop(ea); // TODO
 				// no flag changes EXCEPT for 0xF8
 
@@ -752,7 +688,7 @@ impl InstDesc {
 						// InstDesc(   0x36, LD,   &[IndReg(HL), Op2],        Other,  LdHlImm),
 
 			}
-			LDH => {
+			(LDH, _) => {
 				b.nop(ea); // TODO
 				// no flag changes
 
@@ -764,19 +700,22 @@ impl InstDesc {
 					// InstDesc(   0xF0, LDH,  &[Srg(A), IndOp],          Other,  AddHi(R)),
 					// InstDesc(   0xF2, LDH,  &[Srg(A), IndReg(C)],      Other,  IndHi(R)),
 			}
-			PUSH => {
+			(PUSH, _) => {
 				b.nop(ea); // TODO
 				// no flag changes
 				// InstDesc(   0xC5, PUSH, &[Srg(BC)],                Other,  Ind(SP, W)),
 				// ...
 			}
-			POP => {
+			(POP, _) => {
 				b.nop(ea); // TODO
 				// no flag changes EXCEPT for 0xF1
 				// {Z*, N*, H*, C*} 0xF1 (pop af)
 
 				// InstDesc(   0xC1, POP,  &[Srg(BC)],                Other,  Ind(SP, R)),
 				// ...
+			}
+			_ => {
+				panic!("IR unimplemented: {:?}", self);
 			}
 		}
 	}
