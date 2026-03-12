@@ -65,32 +65,27 @@ static ARG_REGS: &[IrReg] =
 static RETURN_REGS: &[IrReg] =
 	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF, REG_SP];
 
-fn reg_to_ir_reg(reg: u8) -> IrReg {
-	match Reg::from(reg) {
-		Reg::A  => REG_A,
-		Reg::B  => REG_B,
-		Reg::C  => REG_C,
-		Reg::D  => REG_D,
-		Reg::E  => REG_E,
-		Reg::H  => REG_H,
-		Reg::L  => REG_L,
-		Reg::SP => REG_SP,
-		_ => panic!(),
+impl From<Reg> for IrReg {
+	fn from(reg: Reg) -> IrReg {
+		match reg {
+			Reg::A  => REG_A,
+			Reg::B  => REG_B,
+			Reg::C  => REG_C,
+			Reg::D  => REG_D,
+			Reg::E  => REG_E,
+			Reg::H  => REG_H,
+			Reg::L  => REG_L,
+			Reg::SP => REG_SP,
+
+			// don't actually *want* AF, BC, DE, HL or F to be easily-convertible, since they all
+			// need to be synthesized from other registers
+			_ => panic!("hey. hey. did you synthesize the paired register?"),
+		}
 	}
 }
 
 impl IrBuilder {
-	// /// Do an addition and set flags according to the result.
-	// fn add_(&self, dst: IrReg, src: impl Into<IrSrc>, dstn: i8, srcn: i8, i: &Instruction,
-	// b: &mut IrBuilder) {
-	// 	let ea = i.ea();
-	// 	let src = src.into();
-
-	// 	b.iuadd (ea, dst,    dst, src,               dstn, dstn, srcn);
-	// 	b.icarry(ea, REG_CF, dst, src,               -1, -1, -1);
-	// 	b.ieq   (ea, REG_ZF, dst, IrConst::ZERO_8,   -1, -1, -1);
-	// }
-
+	/// Evaluate the condition code `cc` and return a register which contains its truth value.
 	fn cc(&mut self, ea: EA, cc: Cc) -> IrReg {
 		match cc {
 			Cc::C  => REG_CF,
@@ -106,6 +101,8 @@ impl IrBuilder {
 		}
 	}
 
+	/// Evaluate the logical inversion of the condition code `cc` and return a register which
+	/// contains the inverted truth value.
 	fn not_cc(&mut self, ea: EA, cc: Cc) -> IrReg {
 		match cc {
 			Cc::C  => self.cc(ea, Cc::NC),
@@ -115,10 +112,19 @@ impl IrBuilder {
 		}
 	}
 
-	fn hl(&mut self, ea: EA) {
-		self.ipair(ea, REG_HL_TMP, REG_H, REG_L,  -1, -1, -1);
+	/// Pair the constituent registers of a paired register into its corresponding `REG_XX_TMP`.
+	/// Named `rr` to match the ISA docs.
+	fn rr(&mut self, ea: EA, reg: Reg) {
+		match reg {
+			// Reg::AF => self.ipair(ea, REG_AF_TMP, REG_A, REG_F,  -1, -1, -1),
+			Reg::BC => self.ipair(ea, REG_BC_TMP, REG_B, REG_C,  -1, -1, -1),
+			Reg::DE => self.ipair(ea, REG_DE_TMP, REG_D, REG_E,  -1, -1, -1),
+			Reg::HL => self.ipair(ea, REG_HL_TMP, REG_H, REG_L,  -1, -1, -1),
+			_ => panic!("given something other than a paired register"),
+		};
 	}
 
+	/// Pair `REG_W` with `REG_Z` into `REG_WZ_TMP`.
 	fn wz(&mut self, ea: EA) {
 		self.ipair(ea, REG_WZ_TMP, REG_W, REG_Z,  -1, -1, -1);
 	}
@@ -131,14 +137,15 @@ impl IrBuilder {
 	}
 
 	/// Pop an 8-bit value off the stack into `dst`.
-	fn pop8(&mut self, dst: IrReg, ea: EA) {
+	fn pop8(&mut self, dst: impl Into<IrReg>, ea: EA) {
+		let dst = dst.into();
 		// full stack convention - load before adding
 		self.load (ea, dst,    REG_SP,                   -1, -1);
 		self.iuadd(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
 	}
 
 	/// Pop a 16-bit value off the stack as two 8-bit halves into `dstlo` and `dsthi`.
-	fn pop16(&mut self, dsthi: IrReg, dstlo: IrReg, ea: EA) {
+	fn pop16(&mut self, dsthi: impl Into<IrReg>, dstlo: impl Into<IrReg>, ea: EA) {
 		self.pop8(dstlo, ea);
 		self.pop8(dsthi, ea);
 	}
@@ -169,6 +176,86 @@ impl IrBuilder {
 		self.assign(ea, REG_NF, IrConst::ZERO_8,  -1, -1);
 		self.assign(ea, REG_HF, IrConst::ZERO_8,  -1, -1);
 	}
+
+	/// Set the N and H flags to 0, and the Z flag to whether or not `reg == 0`.
+	fn z_n0h0(&mut self, ea: EA, reg: impl Into<IrReg>) {
+		let reg = reg.into();
+		self.ieq   (ea, REG_ZF, reg, IrConst::ZERO_8,  -1, -1, -1);
+		self.assign(ea, REG_NF, IrConst::ZERO_8,       -1, -1);
+		self.assign(ea, REG_HF, IrConst::ZERO_8,       -1, -1);
+	}
+
+	/// Rotate the given `reg` left. The carry flag is set to the MSB of `reg`, but otherwise does
+	/// not participate. If `set_zero_flag`, the zero flag will be set if the result is 0;
+	/// otherwise the zero flag will be set to 0 always.
+	fn rol_no_carry(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool) {
+		let reg = reg.into();
+		self.ibit(ea, REG_CF, reg, IrConst::_8(7),  -1, -1, -1);
+		self.irol(ea, reg,    reg, IrConst::ONE_8,  -1, -1, -1);
+
+		if set_zero_flag {
+			self.z_n0h0(ea, reg)
+		} else {
+			self.z0n0h0(ea);
+		}
+	}
+
+	/// Rotate the given `reg` right. The carry flag is set to the MSB of `reg`, but otherwise does
+	/// not participate. If `set_zero_flag`, the zero flag will be set if the result is 0;
+	/// otherwise the zero flag will be set to 0 always.
+	fn ror_no_carry(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool) {
+		let reg = reg.into();
+		self.ibit(ea, REG_CF, reg, IrConst::_8(7),  -1, -1, -1);
+		self.iror(ea, reg,    reg, IrConst::ONE_8,  -1, -1, -1);
+
+		if set_zero_flag {
+			self.z_n0h0(ea, reg)
+		} else {
+			self.z0n0h0(ea);
+		}
+	}
+
+	/// Rotate the given `reg` left through the carry flag. If `set_zero_flag`, the zero flag will
+	/// be set if the result is 0; otherwise the zero flag will be set to 0 always.
+	fn rol_carry(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool) {
+		let reg = reg.into();
+		self.assign (ea, REG_Z,  REG_CF,                       -1, -1);
+		self.ibit   (ea, REG_CF, reg, IrConst::_8(7),          -1, -1, -1);
+		self.irol   (ea, reg,    reg, IrConst::ONE_8,          -1, -1, -1);
+		self.ibitset(ea, reg,    reg, IrConst::ZERO_8, REG_Z,  -1, -1, -1, -1);
+
+		if set_zero_flag {
+			self.z_n0h0(ea, reg)
+		} else {
+			self.z0n0h0(ea);
+		}
+	}
+
+	/// Rotate the given `reg` right through the carry flag. If `set_zero_flag`, the zero flag will
+	/// be set if the result is 0; otherwise the zero flag will be set to 0 always.
+	fn ror_carry(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool) {
+		let reg = reg.into();
+		self.assign (ea, REG_Z,  REG_CF,                        -1, -1);
+		self.ibit   (ea, REG_CF, reg,   IrConst::ZERO_8,        -1, -1, -1);
+		self.iror   (ea, reg,    reg,   IrConst::ONE_8,         -1, -1, -1);
+		self.ibitset(ea, reg,    reg,   IrConst::_8(7), REG_Z,  -1, -1, -1, -1);
+
+		if set_zero_flag {
+			self.z_n0h0(ea, reg)
+		} else {
+			self.z0n0h0(ea);
+		}
+	}
+}
+
+/// Perform some read-modify-write operation using `[hl]` as the source/dest. `f` is passed
+/// a temporary register containing the 8-bit value loaded from `[hl]`; it must place the
+/// result back into this same register.
+fn hl_rmw(b: &mut IrBuilder, ea: EA, f: impl Fn(&mut IrBuilder, IrReg)) {
+	b.rr   (ea, Reg::HL);
+	b.load (ea, REG_Z, REG_HL_TMP, -1, 0);
+	f      (b,  REG_Z);
+	b.store(ea, REG_HL_TMP, REG_Z, 0, -1);
 }
 
 impl InstDesc {
@@ -403,97 +490,71 @@ impl InstDesc {
 			}
 			RLA => { // {Z0, N0, H0, C*}
 				// rla
-
-				// backup old carry flag
-				b.assign (ea, REG_Z,  REG_CF,                        -1, -1);
-				// C <- a.7
-				b.ibit   (ea, REG_CF, REG_A, IrConst::_8(7),        -1, -1, -1);
-				// a <- rol(a, 1)
-				b.irol   (ea, REG_A,  REG_A, IrConst::ONE_8,         -1, -1, -1);
-				// a.0 <- old carry
-				b.ibitset(ea, REG_A,  REG_A, IrConst::ZERO_8, REG_Z,  -1, -1, -1, -1);
-				// Z <- 0, N <- 0, H <- 0
-				b.z0n0h0 (ea);
+				b.rol_carry(ea, REG_A, false);
 			}
 			RL => { // {Z*, N0, H0, C*}
-				b.nop(ea); // TODO
-				// rol(r8)
-					// 0xCB_{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x17} (rl r)
-					// InstDesc(   0x17, RL,   &[Srg(A)],                 Other,  Imp),
-					// InstDesc(0xCB_17, RL,   &[Srg(A)],                 Other,  Imp),
-					// ...
-
-				// rol([hl])
-					// 0xCB_16 (rl [hl])
-					// InstDesc(0xCB_16, RL,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
+				match self.syn_ops()[0] {
+					SynOp::Srg(Reg::HL) => {
+						// rl [hl]
+						hl_rmw(b, ea, |b, tmp| b.rol_carry(ea, tmp, true));
+					}
+					SynOp::Srg(reg) => {
+						// rl r
+						b.rol_carry(ea, reg, true);
+					}
+					_ => panic!(),
+				}
 			}
 			RLCA => { // {Z0, N0, H0, C*}
 				// rlca
-				// C <- a.7
-				b.ibit  (ea, REG_CF, REG_A, IrConst::_8(7),  -1, -1, -1);
-				// a <- rol(a, 1)
-				b.irol  (ea, REG_A,  REG_A, IrConst::ONE_8,  -1, -1, -1);
-				// Z <- 0, N <- 0, H <- 0
-				b.z0n0h0(ea);
+				b.rol_no_carry(ea, REG_A, false);
 			}
-			RLC => {
-				b.nop(ea); // TODO
-				// rolc(r8)
-					// {Z*, N0, H0, C*} 0xCB_{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x07} (rlc r)
-					// InstDesc(   0x07, RLC,  &[Srg(A)],                 Other,  Imp),
-					// InstDesc(0xCB_07, RLC,  &[Srg(A)],                 Other,  Imp),
-					// ...
-
-				// rolc([hl])
-					// {Z*, N0, H0, C*} 0xCB_06 (rlc [hl])
-					// InstDesc(0xCB_06, RLC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			RLC => { // {Z*, N0, H0, C*}
+				match self.syn_ops()[0] {
+					SynOp::Srg(Reg::HL) => {
+						// rlc [hl]
+						hl_rmw(b, ea, |b, tmp| b.rol_no_carry(ea, tmp, true));
+					}
+					SynOp::Srg(reg) => {
+						// rlc r
+						b.rol_no_carry(ea, reg, true);
+					}
+					_ => panic!(),
+				}
 			}
 			RRA => { // {Z0, N0, H0, C*}
 				// rra
-
-				// backup old carry flag
-				b.assign (ea, REG_Z,  REG_CF,                        -1, -1);
-				// C <- a.0
-				b.ibit   (ea, REG_CF, REG_A, IrConst::ZERO_8,        -1, -1, -1);
-				// a <- ror(a, 1)
-				b.iror   (ea, REG_A,  REG_A, IrConst::ONE_8,         -1, -1, -1);
-				// a.7 <- old carry
-				b.ibitset(ea, REG_A,  REG_A, IrConst::_8(7), REG_Z,  -1, -1, -1, -1);
-				// Z <- 0, N <- 0, H <- 0
-				b.z0n0h0 (ea);
+				b.ror_carry(ea, REG_A, false);
 			}
-			RR => {
-				b.nop(ea); // TODO
-				// ror(r8)
-					// {Z*, N0, H0, C*} 0xCB_{0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1F} (rr r)
-					// InstDesc(   0x1F, RR,   &[Srg(A)],                 Other,  Imp),
-					// InstDesc(0xCB_1F, RR,   &[Srg(A)],                 Other,  Imp),
-					// ...
-
-				// ror([hl])
-					// {Z*, N0, H0, C*} 0xCB_1E (rr [hl])
-					// InstDesc(0xCB_1E, RR,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			RR => { // {Z*, N0, H0, C*}
+				match self.syn_ops()[0] {
+					SynOp::Srg(Reg::HL) => {
+						// rr [hl]
+						hl_rmw(b, ea, |b, tmp| b.ror_carry(ea, tmp, true));
+					}
+					SynOp::Srg(reg) => {
+						// rr r
+						b.ror_carry(ea, reg, true);
+					}
+					_ => panic!(),
+				}
 			}
 			RRCA => { // {Z0, N0, H0, C*}
 				// rrca
-				// C <- a.0
-				b.ibit  (ea, REG_CF, REG_A, IrConst::ZERO_8,  -1, -1, -1);
-				// a <- ror(a, 1)
-				b.iror  (ea, REG_A,  REG_A, IrConst::ONE_8,  -1, -1, -1);
-				// Z <- 0, N <- 0, H <- 0
-				b.z0n0h0(ea);
+				b.ror_no_carry(ea, REG_A, false);
 			}
-			RRC => {
-				b.nop(ea); // TODO
-				// rorc(r8)
-					// {Z*, N0, H0, C*} 0xCB_{0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0F} (rrc r)
-					// InstDesc(   0x0F, RRC,  &[Srg(A)],                 Other,  Imp),
-					// InstDesc(0xCB_0F, RRC,  &[Srg(A)],                 Other,  Imp),
-					// ...
-
-				// rorc([hl])
-					// {Z*, N0, H0, C*} 0xCB_0E (rrc [hl])
-					// InstDesc(0xCB_0E, RRC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			RRC => { // {Z*, N0, H0, C*}
+				match self.syn_ops()[0] {
+					SynOp::Srg(Reg::HL) => {
+						// rrc [hl]
+						hl_rmw(b, ea, |b, tmp| b.ror_no_carry(ea, tmp, true));
+					}
+					SynOp::Srg(reg) => {
+						// rrc r
+						b.ror_no_carry(ea, reg, true);
+					}
+					_ => panic!(),
+				}
 			}
 			SWAP => {
 				b.nop(ea); // TODO
@@ -563,7 +624,7 @@ impl InstDesc {
 					}
 					SynOp::Srg(Reg::HL) => {
 						// jp hl
-						b.hl(ea);
+						b.rr     (ea, Reg::HL);
 						b.ibranch(ea, REG_HL_TMP, 0);
 					}
 					SynOp::Cc(cond) => {
