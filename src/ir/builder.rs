@@ -8,21 +8,45 @@ use crate::memory::{ EA };
 
 /// Helper for building blocks of IR instructions.
 pub(crate) struct IrBuilder {
-	insts: Vec<IrInst>,
+	insts: [Vec<IrInst>; 2],
+	cur:   bool,
 }
 
 impl IrBuilder {
 	/// Constructor.
 	pub(crate) fn new() -> Self {
 		Self {
-			insts: Vec::with_capacity(8),
+			insts: [Vec::with_capacity(8), vec![]],
+			cur:   false,
 		}
 	}
 
-	/// Finish building and get the finished vec of instructions.
-	pub(crate) fn finish(mut self) -> Vec<IrInst> {
-		self.insts.shrink_to_fit();
-		self.insts
+	/// Finish building and get the finished vecs of instructions. (There can be more than one, if
+	/// the `split_bb` method was called.)
+	pub(crate) fn finish(self) -> (Vec<IrInst>, Option<Vec<IrInst>>) {
+		let Self { insts: [mut ret1, mut ret2], cur } = self;
+
+		ret1.shrink_to_fit();
+		if cur {
+			ret2.shrink_to_fit();
+			(ret1, Some(ret2))
+		} else {
+			(ret1, None)
+		}
+	}
+
+	/// Finish building, assert there is only one vec of instructions, and get it.
+	pub(crate) fn finish_one(self) -> Vec<IrInst> {
+		let Self { insts: [mut ret, _], cur } = self;
+		assert_eq!(cur, false);
+		ret.shrink_to_fit();
+		ret
+	}
+
+	fn inst(&mut self, inst: IrInst) -> usize {
+		let ret = self.insts[self.cur as usize].len();
+		self.insts[self.cur as usize].push(inst);
+		ret
 	}
 }
 
@@ -298,6 +322,15 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
+	pub(crate) fn cbranch_and_split(&mut self, ea: EA, cond: impl Into<IrSrc>, target: EA,
+		condn: i8, targetn: i8) -> usize {
+		assert_eq!(self.cur, false);
+		self.inst(IrInst::cbranch(ea, cond.into(), target, condn, targetn));
+		self.cur = true;
+		0
+	}
+
+	/// TODO: docme
 	pub(crate) fn ibranch(&mut self, ea: EA, target: impl Into<IrSrc>, targetn: i8) -> usize {
 		self.inst(IrInst::ibranch(ea, target.into(), targetn))
 	}
@@ -308,12 +341,6 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
-	pub(crate) fn ccall(&mut self, ea: EA, cond: impl Into<IrSrc>, target: EA,
-		condn: i8, targetn: i8) -> usize {
-		self.inst(IrInst::ccall(ea, cond.into(), target, condn, targetn))
-	}
-
-	/// TODO: docme
 	pub(crate) fn icall(&mut self, ea: EA, target: impl Into<IrSrc>, targetn: i8) -> usize {
 		self.inst(IrInst::icall(ea, target.into(), targetn))
 	}
@@ -321,11 +348,5 @@ impl IrBuilder {
 	/// TODO: docme
 	pub(crate) fn ret(&mut self, ea: EA, target: impl Into<IrSrc>, targetn: i8) -> usize {
 		self.inst(IrInst::ret(ea, target.into(), targetn))
-	}
-
-	fn inst(&mut self, inst: IrInst) -> usize {
-		let ret = self.insts.len();
-		self.insts.push(inst);
-		ret
 	}
 }

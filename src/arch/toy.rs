@@ -55,7 +55,8 @@ enum MetaOp {
 	CMP,  CMC,           // compare (and with carry)
 	BLT,  BLE, BEQ, BNE, // branch on flags
 	JMP,  JMPI,          // jumps
-	CALL, CALI, RET,     // function calls
+	CALL, CALI, CALZ,    // calls (call, call indirect, call if ZF is set)
+	RET,                 // returns
 	LD,   ST,            // memory
 }
 
@@ -70,7 +71,8 @@ impl MetaOp {
 			CMP  => "cmp",  CMC  => "cmc",
 			BLT  => "blt",  BLE  => "ble",  BEQ => "beq", BNE => "bne",
 			JMP  => "jmp",  JMPI => "jmpi",
-			CALL => "call", CALI => "cali", RET => "ret",
+			CALL => "call", CALI => "cali", CALZ => "calz",
+			RET => "ret",
 			LD   => "ld",   ST   => "st",
 		}
 	}
@@ -80,7 +82,7 @@ impl MetaOp {
 		match self {
 			LD => Some(MemAccess::R),
 			ST => Some(MemAccess::W),
-			BLT | BLE | BEQ | BNE | JMP | JMPI | CALL | CALI =>
+			BLT | BLE | BEQ | BNE | JMP | JMPI | CALL | CALI | CALZ =>
 				Some(MemAccess::Target),
 			_ => None,
 		}
@@ -129,7 +131,8 @@ pub enum Opcode {
 	CMP_RR, CMP_RI8, CMC_RR, CMC_RI8,
 	BLT_S8, BLE_S8, BEQ_S8, BNE_S8,
 	JMP_I16, JMPI_IMPDC,
-	CALL_I16, CALI_IMPDC, RET_IMP,
+	CALL_I16, CALI_IMPDC, CALZ_I16,
+	RET_IMP,
 	LD_RI16, LD_RR, ST_RI16, ST_RR,
 }
 
@@ -211,6 +214,7 @@ mod descs {
 		InstDesc(JMPI_IMPDC, JMPI, IMPDC,  Indir),
 		InstDesc(CALL_I16,   CALL, I16,    Call(false)),
 		InstDesc(CALI_IMPDC, CALI, IMPDC,  IndirCall),
+		InstDesc(CALZ_I16,   CALZ, I16,    Call(true)),
 		InstDesc(RET_IMP,    RET,  IMP,    Ret),
 		InstDesc(LD_RI16,    LD,   RI16,   Other),
 		InstDesc(LD_RR,      LD,   RR,     Other),

@@ -90,8 +90,6 @@ pub(crate) enum IrInstKind {
 
 	Call    { target: EA,              // pc = target (but it's a call)
 		targetn: i8, },
-	CCall   { cond: IrSrc, target: EA, // if(cond) pc = target (but it's a call)
-		condn: i8, targetn: i8, },
 
 	ICall   { target: IrSrc,           // pc = target (but it's an indirect call)
 		targetn: i8, },
@@ -145,8 +143,6 @@ impl Debug for IrInstKind {
 				write!(f, "ibranch   [{:?}{:?}]", target, Opn(targetn)),
 			Call { target, targetn } =>
 				write!(f, "call      {}{:?}", target, Opn(targetn)),
-			CCall { cond, target, condn, targetn } =>
-				write!(f, "ccall     {:?}{:?}, {}{:?}", cond, Opn(condn), target, Opn(targetn)),
 			ICall { target, targetn } =>
 				write!(f, "icall     [{:?}{:?}]", target, Opn(targetn)),
 			Ret { target, targetn } =>
@@ -587,12 +583,6 @@ impl IrInst {
 	}
 
 	/// TODO: docme
-	pub(crate) fn ccall(ea: EA, cond: IrSrc, target: EA,
-		condn: i8, targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::CCall { cond, target, condn, targetn } }
-	}
-
-	/// TODO: docme
 	pub(crate) fn icall(ea: EA, target: IrSrc,
 		targetn: i8) -> Self {
 		Self { ea, kind: IrInstKind::ICall { target, targetn } }
@@ -634,7 +624,6 @@ impl IrInst {
 			Load      { dst, .. }  => dst.size(), // yes, it's weird
 			Store     { src, .. }  => src.size(),
 			CBranch   { cond, .. } => cond.size(),
-			CCall     { cond, .. } => cond.size(),
 			Unary     { src, .. }  => src.size(),
 			Binary    { src1, .. } => src1.size(),
 			Ternary   { src1, .. } => src1.size(),
@@ -651,7 +640,6 @@ impl IrInst {
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
-			| CCall { .. }
 			| ICall { .. }
 			| Ret { .. }
 			| CBranch { .. }
@@ -681,7 +669,6 @@ impl IrInst {
 			Load { dst, addr, .. }   => { f(dst); addr.regs(&mut f); }
 			Store { addr,  src, .. } => { addr.regs(&mut f); src.regs(&mut f); }
 			CBranch { cond, .. }     => { cond.regs(&mut f); }
-			CCall { cond, .. }       => { cond.regs(&mut f); }
 			ICall { target, .. }     => { target.regs(&mut f); }
 			Ret { target, .. }       => { target.regs(&mut f); }
 			Unary { dst, src, .. }   => { f(dst); src.regs(&mut f); }
@@ -706,7 +693,7 @@ impl IrInst {
 
 		match &self.kind {
 			Nop | Use { .. } | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. }
-			| IBranch { .. } | Store { .. } | Call { .. } | CCall { .. } => false,
+			| IBranch { .. } | Store { .. } | Call { .. } => false,
 
 			Assign { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
 			| Ternary { dst, .. } => *dst == reg,
@@ -727,7 +714,6 @@ impl IrInst {
 			Load { addr, .. }       => { addr.visit_use(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use(&mut f); src.visit_use(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use(&mut f); }
-			CCall { cond, .. }      => { cond.visit_use(&mut f); }
 			IBranch { target, .. }  => { target.visit_use(&mut f); }
 			ICall { target, .. }    => { target.visit_use(&mut f); }
 			Ret { target, .. }      => { target.visit_use(&mut f); }
@@ -758,7 +744,6 @@ impl IrInst {
 			Load { addr, .. }       => { addr.visit_use_mut(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use_mut(&mut f); }
-			CCall { cond, .. }      => { cond.visit_use_mut(&mut f); }
 			IBranch { target, .. }  => { target.visit_use_mut(&mut f); }
 			ICall { target, .. }    => { target.visit_use_mut(&mut f); }
 			Ret { target, .. }      => { target.visit_use_mut(&mut f); }
@@ -785,7 +770,6 @@ impl IrInst {
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
-			| CCall { .. }
 			| ICall { .. }
 			| Ret { .. }
 			| Store { .. }
@@ -809,7 +793,6 @@ impl IrInst {
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
-			| CCall { .. }
 			| ICall { .. }
 			| Ret { .. }
 			| Store { .. }

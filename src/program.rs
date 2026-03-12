@@ -180,14 +180,14 @@ impl Program {
 
 	/// Does the given `ea` refer to a basic block that belongs to the function `fid`? Also works if
 	/// `ea` refers to the middle of a BB within that function.
-	pub(crate) fn ea_is_bb_in_function(&self, ea: EA, fid: FuncId) -> bool {
+	pub(crate) fn ea_is_bb_in_function(&self, ea: EA, fid: FuncId) -> Option<BBId> {
 		if let Some(bbid) = self.span_at_ea(ea).bb() {
 			if self.bbidx.get(bbid).func() == fid {
-				return true;
+				return Some(bbid);
 			}
 		}
 
-		false
+		None
 	}
 
 	pub(crate) fn span_begin_analysis(&mut self, ea: EA) {
@@ -234,13 +234,8 @@ impl Program {
 		let fid = bb.func();
 
 		for &ea in bb.successors() {
-			// would like to use ea_is_bb_in_function here but it doesn't give the successor ID
-			if let Some(succ_id) = self.span_at_ea(ea).bb() {
-				// assert!(self.bbidx.get(succ_id).ea() != ea, "ea points inside basic block");
-
-				if self.bbidx.get(succ_id).func() == fid {
-					visit(succ_id);
-				}
+			if let Some(succ_id) = self.ea_is_bb_in_function(ea, fid) {
+				visit(succ_id);
 			}
 		}
 	}
@@ -250,7 +245,7 @@ impl Program {
 		let bb = self.bbidx.get(bbid);
 		let fid = bb.func();
 
-		bb.successors().all(|&ea| { self.ea_is_bb_in_function(ea, fid) })
+		bb.successors().all(|&ea| { self.ea_is_bb_in_function(ea, fid).is_some() })
 	}
 
 	/// Iterator over all functions in the program, in arbitrary order.

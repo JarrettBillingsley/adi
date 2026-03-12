@@ -256,14 +256,14 @@ impl Program {
 
 			match bb.term() {
 				BBTerm::Call { dst, .. } => {
-					if self.ea_is_bb_in_function(*dst, fid) {
+					if self.ea_is_bb_in_function(*dst, fid).is_some() {
 						ret.push(*dst);
 					}
 				}
 
 				BBTerm::IndirCall { dst, .. } => {
 					for ea in dst {
-						if self.ea_is_bb_in_function(*ea, fid) {
+						if self.ea_is_bb_in_function(*ea, fid).is_some() {
 							ret.push(*ea);
 						}
 					}

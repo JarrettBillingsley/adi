@@ -53,8 +53,11 @@ const REG_SP: IrReg = IrReg::reg16(11);
 const REG_W:  IrReg = IrReg::reg8(13); // 8-bit temporary
 const REG_Z:  IrReg = IrReg::reg8(14); // 8-bit temporary
 
-// const REG_TMP16: IrReg = IrReg::reg16(15); // 16-bit temporary
-// const REG_TMP16_2: IrReg = IrReg::reg16(17); // 16-bit temporary
+const REG_AF_TMP: IrReg = IrReg::reg16(15); // 16-bit temporary
+const REG_BC_TMP: IrReg = IrReg::reg16(17); // 16-bit temporary
+const REG_DE_TMP: IrReg = IrReg::reg16(19); // 16-bit temporary
+const REG_HL_TMP: IrReg = IrReg::reg16(21); // 16-bit temporary
+const REG_WZ_TMP: IrReg = IrReg::reg16(23); // 16-bit temporary
 
 static ARG_REGS: &[IrReg] =
 	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF];
@@ -77,18 +80,61 @@ fn reg_to_ir_reg(reg: u8) -> IrReg {
 }
 
 impl InstDesc {
-	/// Do an addition and set flags according to the result.
-	fn add_(&self, dst: IrReg, src: impl Into<IrSrc>, dstn: i8, srcn: i8, i: &Instruction,
-	b: &mut IrBuilder) {
-		let ea = i.ea();
-		let src = src.into();
+	// /// Do an addition and set flags according to the result.
+	// fn add_(&self, dst: IrReg, src: impl Into<IrSrc>, dstn: i8, srcn: i8, i: &Instruction,
+	// b: &mut IrBuilder) {
+	// 	let ea = i.ea();
+	// 	let src = src.into();
 
-		b.iuadd (ea, dst,    dst, src,               dstn, dstn, srcn);
-		b.icarry(ea, REG_CF, dst, src,               -1, -1, -1);
-		b.ieq   (ea, REG_ZF, dst, IrConst::ZERO_8,   -1, -1, -1);
+	// 	b.iuadd (ea, dst,    dst, src,               dstn, dstn, srcn);
+	// 	b.icarry(ea, REG_CF, dst, src,               -1, -1, -1);
+	// 	b.ieq   (ea, REG_ZF, dst, IrConst::ZERO_8,   -1, -1, -1);
+	// }
+
+	fn cc(&self, cc: Cc, i: &Instruction, b: &mut IrBuilder) -> IrReg {
+		match cc {
+			Cc::C  => REG_CF,
+			Cc::Z  => REG_ZF,
+			Cc::NC => {
+				b.bnot(i.ea(), REG_Z, REG_CF, -1, -1);
+				REG_Z
+			}
+			Cc::NZ => {
+				b.bnot(i.ea(), REG_Z, REG_ZF, -1, -1);
+				REG_Z
+			}
+		}
 	}
 
-	pub(super) fn build_ir(&self, i: &Instruction, _target: Option<EA>, b: &mut IrBuilder) {
+	fn hl(&self, i: &Instruction, b: &mut IrBuilder) {
+		b.ipair(i.ea(), REG_HL_TMP, REG_H, REG_L,  -1, -1, -1);
+	}
+
+	/// Push an 8-bit value `src` onto the stack.
+	fn push8(&self, src: impl Into<IrSrc>, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		// full stack convention - subtract before storing
+		b.iusub(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
+		b.store(ea, REG_SP, src,                      -1, -1);
+	}
+
+	/// Pop an 8-bit value off the stack into `dst`.
+	fn pop8(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		let ea = i.ea();
+		// full stack convention - load before adding
+		b.load (ea, dst,    REG_SP,                   -1, -1);
+		b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
+	}
+
+	/// Push the return address to the stack.
+	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
+	 	let ret_addr = i.next_va().0 as u16;
+		// push hi then lo
+		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), i, b);
+		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), i, b);
+	}
+
+	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
 		let ea = i.ea();
@@ -442,40 +488,59 @@ impl InstDesc {
 			// Control flow
 
 			JP => {
-				b.nop(ea); // TODO
 				// no flag changes
-
-				// pc <- uimm16
-					// InstDesc(   0xC3, JP,   &[Op],                     Uncond, Add16(Target)),
-
-				// pc <- hl
-					// InstDesc(   0xE9, JP,   &[Srg(HL)],                Indir,  Imp),
-
-				// if cc { pc <- uimm16 }
-					// InstDesc(   0xC2, JP,   &[CC_NZ, Op],              Cond,   Add16(Target)),
-					// ...
+				match self.syn_ops()[0] {
+					SynOp::Op => {
+						// jp nn
+						b.branch(ea, target.unwrap(), 0);
+					}
+					SynOp::Srg(Reg::HL) => {
+						// jp hl
+						self.hl(i, b);
+						b.ibranch(ea, REG_HL_TMP, 0);
+					}
+					SynOp::Cc(cond) => {
+						// jp cc, nn
+						let cond = self.cc(cond, i, b);
+						b.cbranch(ea, cond, target.unwrap(), -1, 0);
+					}
+					_ => panic!(),
+				}
 			}
 			JR => {
-				b.nop(ea); // TODO
 				// no flag changes
-
-				// pc += imm8
-					// InstDesc(   0x18, JR,   &[Op],                     Uncond, Rel),
-
-				// if cc { pc += imm8 }
-					// InstDesc(   0x20, JR,   &[CC_NZ, Op],              Cond,   Rel),
-					// ...
+				match self.syn_ops()[0] {
+					SynOp::Op => {
+						// jr e
+						b.branch(ea, target.unwrap(), 0);
+					}
+					SynOp::Cc(cond) => {
+						// jr cc, e
+						let cond = self.cc(cond, i, b);
+						b.cbranch(ea, cond, target.unwrap(), -1, 0);
+					}
+					_ => panic!()
+				}
 			}
 			CALL => {
-				b.nop(ea); // TODO
 				// no flag changes
 
-				// push(pc + 3), pc <- uimm16
-					// InstDesc(   0xCD, CALL, &[Op],                     Call,   Add16(Target)),
+				match self.syn_ops()[0] {
+					SynOp::Op => {
+						// call nn
+						self.push_return_addr(i, b);
+						b.call(ea, target.unwrap(), 0);
+					}
+					SynOp::Cc(cond) => {
+						// call cc, nn
 
-				// if cc { push(pc + 3), pc <- uimm16
-					// InstDesc(   0xC4, CALL, &[CC_NZ, Op],              Call,   Add16(Target)),
-					// ...
+						// let cond = self.cc(cond, i, b);
+						// b.cbranch(ea, cond, i.next_ea(), -1, -1);
+						// self.push_return_addr(i, b);
+						// b.ccall(ea, cond, target.unwrap(), -1, 0);
+					}
+					_ => panic!()
+				}
 			}
 			RET => {
 				b.nop(ea); // TODO
@@ -526,7 +591,7 @@ impl InstDesc {
 						// InstDesc(   0x06, LD,   &[Srg(B), Op],             Other,  UImm8),
 						// ...
 
-					// r16 <- imm16
+					// r16 <- nn
 						// InstDesc(   0x01, LD,   &[Srg(BC), Op],            Other,  Imm16),
 						// ...
 
@@ -539,7 +604,7 @@ impl InstDesc {
 						// InstDesc(   0x2A, LD,   &[Srg(A), IndHlPlus],      Other,  Ind(HL, R)),
 						// InstDesc(   0x3A, LD,   &[Srg(A), IndHlMinus],     Other,  Ind(HL, R)),
 
-					// a <- [imm16]
+					// a <- [nn]
 						// InstDesc(   0xFA, LD,   &[Srg(A), IndOp],          Other,  Add16(R)),
 
 				// [MEM] <- REG
@@ -551,10 +616,10 @@ impl InstDesc {
 						// InstDesc(   0x22, LD,   &[IndHlPlus, Srg(A)],      Other,  Ind(HL, W)),
 						// InstDesc(   0x32, LD,   &[IndHlMinus, Srg(A)],     Other,  Ind(HL, W)),
 
-					// [imm16] <- sp
+					// [nn] <- sp
 						// InstDesc(   0x08, LD,   &[IndOp, Srg(SP)],         Other,  Add16(W)),
 
-					// [imm16] <- a
+					// [nn] <- a
 						// InstDesc(   0xEA, LD,   &[IndOp, Srg(A)],          Other,  Add16(W)),
 
 				// [MEM] <- IMM

@@ -18,6 +18,7 @@
 			- and `BBTerm::Ret` would get a `bool` saying whether it's conditional.
 			- and finally, `cret` in the IR
 				- tho we don't need like "IR control flow" to support it - it'd be handled by the IR CFG instead
+			- the return addr is only popped if the condition is true!
 		- a conditional call doesn't seem *that* different, but at the IR level, it DOES differ from a normal call since it *only pushes its ret addr if the condition is true.* 
 			- so similarly, `InstructionKind::Call` needs a `bool`
 			- `BBTerm::Call` gets a `bool`

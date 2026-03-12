@@ -192,6 +192,13 @@ impl InstDesc {
 				b.ipair(ea, REG_TMP16, REG_D, REG_C, -1, -1, -1);
 				b.icall(ea, REG_TMP16, 0);
 			}
+			CALZ => {
+				b.bnot             (ea, REG_TMP, REG_ZF,                              -1, -1);
+				b.cbranch_and_split(ea, REG_TMP, i.next_ea(),                         -1, -1);
+				b.iusub            (ea, REG_SP,  REG_SP, IrConst::_16(2),             -1, -1, -1);
+				b.store            (ea, REG_SP,  IrConst::_16(i.next_va().0 as u16),  -1, -1);
+				b.call             (ea, target.unwrap(),                              0);
+			}
 			RET => {
 				b.load(ea,  REG_TMP16, REG_SP,               -1, -1);
 				b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);

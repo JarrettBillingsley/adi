@@ -185,7 +185,7 @@ fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 	let thing = match inst.kind() {
 		// no change!
 		Nop | Use { .. } | Store { .. } | Branch { .. } | CBranch { .. } | IBranch { .. }
-		| Call { .. } | CCall { .. } | ICall { .. } | Ret { .. } => None,
+		| Call { .. } | ICall { .. } | Ret { .. } => None,
 
 		Assign { dst, src, .. } => Some((dst, src_to_info(src, state))),
 		Load   { dst, .. }      => Some((dst, Info::Any)),

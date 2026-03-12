@@ -16,9 +16,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 
 	setup_panic();
-	test_gb()
+	// test_gb()
 	// test_nes()
-	// test_toy()
+	test_toy()
 }
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
@@ -40,7 +40,7 @@ fn setup_panic() {
 	PanicSettings::new()
 		.lineno_suffix(true)
 		.most_recent_first(false)
-		.verbosity(PanicVerbosity::Full)
+		.verbosity(PanicVerbosity::Medium)
 	.install();
 }
 
@@ -378,13 +378,40 @@ fn toy_test_state_change() -> ToyTest {
 	}
 }
 
+fn toy_test_ccall() -> ToyTest {
+	use adi::arch::toy::{ Reg, ToyBuilder };
+	use Reg::*;
+
+	const FUNC1: usize = 0x20;
+
+	let mut b = ToyBuilder::new();
+	b.ldi(A, 0x8000);
+	b.cmpi(A, 0x35);
+	b.calz_to(FUNC1);
+	b.sti(A, 0x8001);
+	b.ret();
+
+	b.org(FUNC1);
+	b.addi(A, 3);
+	b.ret();
+
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_ccall>",
+		labels: vec![
+			("func1".to_string(), VA(FUNC1)),
+		]
+	}
+}
+
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
 	// let test = toy_test_const_prop();
 	// let test = toy_test_calls();
 	// let test = toy_test_loop()
-	let test = toy_test_state_change();
+	// let test = toy_test_state_change();
+	let test = toy_test_ccall();
 
 	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
 	prog.add_name("main", start_ea, false);

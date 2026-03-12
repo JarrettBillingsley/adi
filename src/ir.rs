@@ -463,7 +463,7 @@ impl IrFunction {
 		mut bbs: Vec<IrBasicBlock>,
 		mut cfg: IrCfg
 	) -> Self {
-		perform_rewrites(compiler, rewrites, &mut bbs, &mut cfg);
+		IrRewriter::new(compiler, &mut bbs, &mut cfg).perform_rewrites(rewrites);
 		ssa::to_ssa(&mut bbs, &cfg);
 		Self {
 			real_fid,
@@ -507,7 +507,7 @@ impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		let DebugWorkaroundThing(cfg, bbs) = *self;
 		writeln!(f, "")?;
-		writeln!(f, "CFG (NOTE!!!! numbers in \"a ->b \" are NOT NECESSARILY BB NUMBERS,")?;
+		writeln!(f, "CFG (NOTE!!!! numbers in \"a -> b\" are NOT NECESSARILY BB NUMBERS,")?;
 		writeln!(f, "only trust the actual dot graph output or look at the successors")?;
 		writeln!(f, "at the end of the BBs below):")?;
 		writeln!(f, "")?;
@@ -696,89 +696,115 @@ impl<'func> ConstAddrsIter<'func> {
 // Rewrites
 // ------------------------------------------------------------------------------------------------
 
-fn perform_rewrites(
-	compiler: &impl IIrCompiler,
-	rewrites: Vec<(IrBBId, IrRewrite)>,
-	bbs: &mut Vec<IrBasicBlock>,
-	cfg: &mut IrCfg
-) {
-	let arg_regs = compiler.arg_regs();
-	let ret_regs = compiler.return_regs();
+struct IrRewriter<'a, C: IIrCompiler> {
+	compiler: &'a C,
+	bbs:      &'a mut Vec<IrBasicBlock>,
+	cfg:      &'a mut IrCfg,
+	new_bbs:  Vec<IrBasicBlock>,
+	new_bbid: IrBBId,
+}
 
-	// log::debug!("-------------BEFORE REWRITE----------------");
-	// debug_dump_ir_cfg_and_bbs(cfg, bbs);
-
-	// first pass: insert uses
-	for (irbbid, rewrite) in rewrites.iter() {
-		if let IrRewrite::Uses { before_last } = rewrite {
-			bbs[*irbbid].insert_dummy_uses(arg_regs, ret_regs, *before_last);
+impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
+	fn new(compiler: &'a C, bbs: &'a mut Vec<IrBasicBlock>, cfg: &'a mut IrCfg) -> Self {
+		Self {
+			new_bbs:  vec![],
+			new_bbid: bbs.len(),
+			compiler,
+			bbs,
+			cfg,
 		}
 	}
 
-	let mut new_bbs = vec![];
-	let mut new_bbid = bbs.len();
+	fn perform_rewrites(&mut self, rewrites: Vec<(IrBBId, IrRewrite)>) {
+		let arg_regs = self.compiler.arg_regs();
+		let ret_regs = self.compiler.return_regs();
 
-	// second pass: insert dummy BBs for return-uses after calls
-	for (irbbid, rewrite) in rewrites.into_iter() {
-		if matches!(rewrite, IrRewrite::Returns) {
-			let bb = &mut bbs[irbbid];
+		// log::debug!("-------------BEFORE REWRITE----------------");
+		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
 
-			// first update the cfg.
-			// println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
-			let targets = cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>();
-
-			let old_dest = match targets[..] {
-				[] => panic!("IrWrite::Returns put on a BB with no in-function successor"),
-				[target] => target, // ok cool beans
-				[target1, target2] => {
-					// this case can happen if a function is recursive, which is okay. but any
-					// NON-recursive call would be an error.
-					if target1 == 0 {
-						target2
-					} else if target2 == 0 {
-						target1
-					} else {
-						panic!("IrWrite::Returns put on BB @ {} where one of the call targets \
-							({}, {}) is self-call but NOT a recursive call. Why hasn't this \
-							function been split?",
-							bb.insts[0].ea(),
-							target1, target2);
-					}
-				}
-				_ => panic!("UHHHHHHHHHHHHHHHH TOO MANY EDGES"),
-			};
-
-			log::debug!("  changing bb{}'s dest from bb{} to bb{}", bb.id, old_dest, new_bbid);
-
-			assert!(cfg.remove_edge(bb.id, old_dest).is_some());
-			cfg.add_edge(bb.id, new_bbid, ());
-			cfg.add_edge(new_bbid, old_dest, ());
-
-			// now make the dummy BB.
-			// this unwrap is safe, because the rewrite_call_or_ret ensures it has at least 1 inst.
-			let ea = bb.insts.last().unwrap().ea();
-
-			let mut b = IrBuilder::new();
-
-			for &reg in ret_regs.iter() {
-				b.assign(ea, reg, IrSrc::Return(reg.size()), -1, -1);
+		// first pass: insert uses
+		for (irbbid, rewrite) in rewrites.iter() {
+			if let IrRewrite::Uses { before_last } = rewrite {
+				self.bbs[*irbbid].insert_dummy_uses(arg_regs, ret_regs, *before_last);
 			}
-
-			let new_bb = IrBasicBlock::new(new_bbid, bb.real_bbid, b.finish());
-			new_bbid += 1;
-			new_bbs.push(new_bb);
 		}
+
+		// log::debug!("-------------AFTER USE-INSERTION----------------");
+		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
+
+		// second pass: insert dummy BBs for return-uses after calls
+		for (irbbid, rewrite) in rewrites.into_iter() {
+			match rewrite {
+				IrRewrite::Uses { .. } => {} // already handled
+				IrRewrite::Returns => {
+					self.rewrite_returns(irbbid, ret_regs);
+				}
+			}
+		}
+
+		self.bbs.append(&mut self.new_bbs);
+
+		// log::debug!("-------------AFTER REWRITE----------------");
+		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
 	}
 
-	bbs.append(&mut new_bbs);
+	fn rewrite_returns(&mut self, irbbid: IrBBId, ret_regs: &[IrReg]) {
+		let bb = &self.bbs[irbbid];
 
-	// log::debug!("-------------AFTER REWRITE----------------");
-	// debug_dump_ir_cfg_and_bbs(cfg, bbs);
+		// first update the cfg.
+		// println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
+
+		let old_dest = self.get_old_dest(bb, "IrWrite::Returns");
+
+		log::debug!("  changing bb{}'s dest from bb{} to bb{}", bb.id, old_dest, self.new_bbid);
+
+		assert!(self.cfg.remove_edge(bb.id, old_dest).is_some());
+		self.cfg.add_edge(bb.id, self.new_bbid, ());
+		self.cfg.add_edge(self.new_bbid, old_dest, ());
+
+		// SAFETY: rewrite_call_or_ret ensures it has at least 1 inst.
+		let ea = bb.insts.last().unwrap().ea();
+
+		let mut b = IrBuilder::new();
+
+		for &reg in ret_regs.iter() {
+			b.assign(ea, reg, IrSrc::Return(reg.size()), -1, -1);
+		}
+
+		let real_bbid = bb.real_bbid;
+		let new_bb = IrBasicBlock::new(self.new_bbid, real_bbid, b.finish_one());
+		self.new_bbid += 1;
+		self.new_bbs.push(new_bb);
+	}
+
+	fn get_old_dest(&self, bb: &IrBasicBlock, kind: &'static str) -> usize {
+		let targets = self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>();
+		match targets[..] {
+			[]                 => panic!("{} put on a BB with no in-function successor", kind),
+			[target]           => target, // ok cool beans
+			[target1, target2] => {
+				// this case can happen if a function is recursive, which is okay. but any
+				// NON-recursive call would be an error.
+				if target1 == 0 {
+					target2
+				} else if target2 == 0 {
+					target1
+				} else {
+					panic!("{} put on BB @ {} where one of the call targets ({}, {}) is self-call \
+						but NOT a recursive call. Why hasn't this function been split?",
+						kind,
+						bb.insts[0].ea(),
+						target1, target2);
+				}
+			}
+			_ => panic!("UHHHHHHHHHHHHHHHH TOO MANY EDGES"),
+		}
+	}
 }
 
 impl IrBasicBlock {
 	fn insert_dummy_uses(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg], before_last: bool) {
-		// safe because `func_to_ir` checks that every IR BB has at least 1 instruction.
+		// SAFETY: `func_to_ir` checks that every IR BB has at least 1 instruction.
 		let (terminating_inst, _) = self.insts.split_last().unwrap();
 		let terminating_inst = *terminating_inst;
 

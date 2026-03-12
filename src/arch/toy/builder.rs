@@ -244,9 +244,18 @@ impl ToyBuilder {
 		self.append(&[encode_op(Opcode::CALI_IMPDC)])
 	}
 
+	pub fn calz(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::CALZ_I16), 0, 0])
+	}
+
 	pub fn call_to(&mut self, target: usize) -> usize {
 		let target = encode_16bit_addr(target);
 		self.append(&[encode_op(Opcode::CALL_I16), target[0], target[1]])
+	}
+
+	pub fn calz_to(&mut self, target: usize) -> usize {
+		let target = encode_16bit_addr(target);
+		self.append(&[encode_op(Opcode::CALZ_I16), target[0], target[1]])
 	}
 
 	pub fn ret(&mut self) -> usize {
