@@ -18,6 +18,26 @@ impl Reg {
 		&["a", "f", "b", "c", "d", "e", "h", "l",
 		"af", "bc", "de", "hl", "sp"]
 	}
+
+	pub(super) fn lo(&self) -> Reg {
+		match self {
+			Reg::AF => Reg::F,
+			Reg::BC => Reg::C,
+			Reg::DE => Reg::E,
+			Reg::HL => Reg::L,
+			_ => panic!(),
+		}
+	}
+
+	pub(super) fn hi(&self) -> Reg {
+		match self {
+			Reg::AF => Reg::A,
+			Reg::BC => Reg::B,
+			Reg::DE => Reg::D,
+			Reg::HL => Reg::H,
+			_ => panic!(),
+		}
+	}
 }
 
 // I think there is a crate that lets you derive this automatically but eh
