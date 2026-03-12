@@ -277,7 +277,9 @@ impl InstDesc {
 		b.load (ea, dst, REG_TMP16,                   -1, -1);
 	}
 
-	/// Push the return address to the stack. It's always the instruction's address + 2.
+	/// Push the return address to the stack. It's always the instruction's address + 2, despite the
+	/// address *actually* being 3 bytes away. This is fixed by `rts` which adds 1 to the pulled
+	/// address.
 	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
 	 	let ret_addr = (i.va().0 + 2) as u16;
 		// push hi then lo
@@ -285,13 +287,19 @@ impl InstDesc {
 		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), i, b);
 	}
 
-	/// Pop the return address from the stack and `ret` to it.
-	fn return_(&self, i: &Instruction, b: &mut IrBuilder) {
+	/// Pop the return address from the stack and `ret` to it. If `add_1` is true, adds 1 to the
+	/// popped address (`rts` does this, but `rti` does not).
+	fn return_(&self, i: &Instruction, b: &mut IrBuilder, add_1: bool) {
 		let ea = i.ea();
 		// pop lo then hi
 		self.pop8(REG_TMP2, i, b);
 		self.pop8(REG_TMP1, i, b);
 		b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
+
+		if add_1 {
+			b.iuadd(ea, REG_TMP16, REG_TMP16, IrConst::ONE_16,  -1, -1, -1);
+		}
+
 		b.ret  (ea, REG_TMP16,                     -1);
 	}
 
@@ -608,7 +616,7 @@ impl InstDesc {
 				b.call(ea, target.unwrap(), 0);
 			}
 			RTS => { // no flags changed
-				self.return_(i, b);
+				self.return_(i, b, true);
 			}
 			BRK => { // IF = 1
 				self.push_return_addr(i, b);
@@ -620,7 +628,7 @@ impl InstDesc {
 			}
 			RTI => { // flags set from stack
 				self.pop_flags(i, b);
-				self.return_(i, b);
+				self.return_(i, b, false);
 			}
 
 			// Branches
