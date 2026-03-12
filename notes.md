@@ -1,12 +1,10 @@
 
 # Yak stack
 
-- static analysis disabled
-	- uncomment pass_refs.rs:47
+- once GB IR is done, uncomment pass_refs.rs:47
 
 # Imminent tasks!
 
-- **Finish Mos65XX IR that required bit set/get IR insts**
 - **Add IR instructions:**
 	- rotate left/right with/without carry
 		- since this seems to be pretty common in these older arches

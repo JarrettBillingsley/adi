@@ -206,7 +206,7 @@ impl Debug for IrInstKind {
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntPair    => write!(f, "ipair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntBit     => write!(f, "ibit      {:?}{:?}, bit# = {:?}{:?}, val = {:?}{:?}",
+				IntBit     => write!(f, "ibit      {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				BoolXor    => write!(f, "bxor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
@@ -227,8 +227,7 @@ impl Debug for IrInstKind {
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 				IntSBorrowC => write!(f, "isborrowc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntBitSet   => write!(f, "ibitset   {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, \
-					val = {:?}{:?}",
+				IntBitSet   => write!(f, "ibitset   {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 			},
 		}

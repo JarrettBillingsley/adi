@@ -299,17 +299,16 @@ impl InstDesc {
 	///
 	/// Changes REG_TMP1.
 	fn push_flags(&self, i: &Instruction, b: &mut IrBuilder) {
-		// TODO: need bit set/get IR instructions...
+		let ea = i.ea();
 
-		// 0 Carry
-		// 1 Zero
-		// 2 Interrupt
-		// 3 Decimal
 		// the values of bits 4 and 5 (Break and Reserved) are always 1 when pushed.
-		// 6 oVerflow
-		// 7 Negative
-
-		b.assign(i.ea(), REG_TMP1, IrConst::ZERO_8, -1, -1);
+		b.assign (ea, REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
+		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(0), REG_CF,  -1, -1, -1, -1);
+		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(1), REG_ZF,  -1, -1, -1, -1);
+		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(2), REG_IF,  -1, -1, -1, -1);
+		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(3), REG_DF,  -1, -1, -1, -1);
+		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(6), REG_VF,  -1, -1, -1, -1);
+		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(7), REG_NF,  -1, -1, -1, -1);
 		self.push8(REG_TMP1, i, b);
 	}
 
@@ -319,16 +318,12 @@ impl InstDesc {
 	fn pop_flags(&self, i: &Instruction, b: &mut IrBuilder) {
 		let ea = i.ea();
 		self.pop8(REG_TMP1, i, b);
-
-		// TODO: need bit set/get IR instructions...
-
-		// temporarily assigning from TMP1 to prevent constprop from thinking these are constants
-		b.assign(ea, REG_CF, REG_TMP1, -1, -1); // 0 Carry
-		b.assign(ea, REG_ZF, REG_TMP1, -1, -1); // 1 Zero
-		b.assign(ea, REG_IF, REG_TMP1, -1, -1); // 2 Interrupt
-		b.assign(ea, REG_DF, REG_TMP1, -1, -1); // 3 Decimal
-		b.assign(ea, REG_VF, REG_TMP1, -1, -1); // 6 oVerflow
-		b.assign(ea, REG_NF, REG_TMP1, -1, -1); // 7 Negative
+		b.ibit(ea, REG_CF, REG_TMP1, IrConst::_8(0),  -1, -1, -1);
+		b.ibit(ea, REG_ZF, REG_TMP1, IrConst::_8(1),  -1, -1, -1);
+		b.ibit(ea, REG_IF, REG_TMP1, IrConst::_8(2),  -1, -1, -1);
+		b.ibit(ea, REG_DF, REG_TMP1, IrConst::_8(3),  -1, -1, -1);
+		b.ibit(ea, REG_VF, REG_TMP1, IrConst::_8(6),  -1, -1, -1);
+		b.ibit(ea, REG_NF, REG_TMP1, IrConst::_8(7),  -1, -1, -1);
 	}
 
 	/// Do a comparison and set flags according to the result.
@@ -480,14 +475,10 @@ impl InstDesc {
 			}
 			BIT => { // NZV (NF = mem.7, VF = mem.6, ZF = whether A&op is 0)
 				self.get_operand_value_into(REG_TMP1, i, b);
-
-				// TODO: need bit set/get IR instructions...
-				// temporarily doing this to prevent constprop from thinking these are constants
-				b.assign(ea, REG_NF,   REG_TMP1,                  -1, -1);
-				b.assign(ea, REG_VF,   REG_TMP1,                  -1, -1);
-
-				b.iand  (ea, REG_TMP1, REG_TMP1, REG_A,           -1, -1, -1);
-				b.ieq   (ea, REG_ZF,   REG_TMP1, IrConst::ZERO_8, -1, -1, -1);
+				b.ibit(ea, REG_NF,   REG_TMP1, IrConst::_8(7),  -1, -1, -1);
+				b.ibit(ea, REG_VF,   REG_TMP1, IrConst::_8(6),  -1, -1, -1);
+				b.iand(ea, REG_TMP1, REG_TMP1, REG_A,           -1, -1, -1);
+				b.ieq (ea, REG_ZF,   REG_TMP1, IrConst::ZERO_8, -1, -1, -1);
 			}
 
 			// Comparisons
@@ -621,6 +612,7 @@ impl InstDesc {
 			}
 			BRK => { // IF = 1
 				self.push_return_addr(i, b);
+				// pushed flags include break flag set to 1, which is what we want
 				self.push_flags(i, b);
 				b.assign (ea, REG_IF,    IrConst::ONE_8,        -1, -1); // set IF
 				b.load   (ea, REG_TMP16, IrConst::_16(VEC_IRQ), -1, -1); // read IRQ vector
