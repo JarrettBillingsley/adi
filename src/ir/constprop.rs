@@ -271,6 +271,18 @@ fn do_unop(op: IrUnOp, val: u64, src_size: ValSize, dst_size: ValSize) -> u64 {
 			}
 			ValSize::_64 => unreachable!(),
 		},
+		IntLo => match src_size {
+			ValSize::_8  => unreachable!(),
+			ValSize::_16 => val & 0xFF,
+			ValSize::_32 => val & 0xFFFF,
+			ValSize::_64 => val & 0xFFFFFFFF,
+		},
+		IntHi => match src_size {
+			ValSize::_8  => unreachable!(),
+			ValSize::_16 => (val >>  8) & 0xFF,
+			ValSize::_32 => (val >> 16) & 0xFFFF,
+			ValSize::_64 => (val >> 32) & 0xFFFFFFFF,
+		},
 		IntNeg => match src_size {
 			ValSize::_8 =>  (-(val as i8 )) as u8 as u64,
 			ValSize::_16 => (-(val as i16)) as u16 as u64,
@@ -715,10 +727,26 @@ mod tests {
 	}
 
 	#[test]
+	fn test_lo() {
+		use IrUnOp::*;
+		test_unop_16(      0x34, IntLo, 0x1234);
+		test_unop_32(    0x5678, IntLo, 0x12345678);
+		test_unop_64(0x9ABCDEF0, IntLo, 0x12345678_9ABCDEF0);
+	}
+
+	#[test]
+	fn test_hi() {
+		use IrUnOp::*;
+		test_unop_16(      0x12, IntHi, 0x1234);
+		test_unop_32(    0x1234, IntHi, 0x12345678);
+		test_unop_64(0x12345678, IntHi, 0x12345678_9ABCDEF0);
+	}
+
+	#[test]
 	fn test_neg() {
 		use IrUnOp::*;
-		test_unop_8(0xFE, IntNeg, 0x02);
-		test_unop_8(0x02, IntNeg, 0xFE);
+		test_unop_8 (0xFE, IntNeg, 0x02);
+		test_unop_8 (0x02, IntNeg, 0xFE);
 		test_unop_16(0xFFFE, IntNeg, 0x0002);
 		test_unop_16(0x0002, IntNeg, 0xFFFE);
 		test_unop_32(0xFFFFFFFE, IntNeg, 0x00000002);
@@ -730,8 +758,8 @@ mod tests {
 	#[test]
 	fn test_inot() {
 		use IrUnOp::*;
-		test_unop_8(0xFD, IntNot, 0x02);
-		test_unop_8(0x02, IntNot, 0xFD);
+		test_unop_8 (0xFD, IntNot, 0x02);
+		test_unop_8 (0x02, IntNot, 0xFD);
 		test_unop_16(0xFFFD, IntNot, 0x0002);
 		test_unop_16(0x0002, IntNot, 0xFFFD);
 		test_unop_32(0xFFFFFFFD, IntNot, 0x00000002);
@@ -760,11 +788,11 @@ mod tests {
 	#[test]
 	fn test_islt() {
 		use IrBinOp::*;
-		test_binop_8(1, IntSlt, 0xFF, 0x01);
-		test_binop_8(1, IntSlt, 0x03, 0x05);
-		test_binop_8(0, IntSlt, 0x01, 0xFF);
-		test_binop_8(0, IntSlt, 0x05, 0x03);
-		test_binop_8(0, IntSlt, 0x04, 0x04);
+		test_binop_8 (1, IntSlt, 0xFF, 0x01);
+		test_binop_8 (1, IntSlt, 0x03, 0x05);
+		test_binop_8 (0, IntSlt, 0x01, 0xFF);
+		test_binop_8 (0, IntSlt, 0x05, 0x03);
+		test_binop_8 (0, IntSlt, 0x04, 0x04);
 		test_binop_16(1, IntSlt, 0xFFFF, 0x0001);
 		test_binop_16(1, IntSlt, 0x0003, 0x0005);
 		test_binop_16(0, IntSlt, 0x0001, 0xFFFF);
@@ -785,11 +813,11 @@ mod tests {
 	#[test]
 	fn test_isle() {
 		use IrBinOp::*;
-		test_binop_8(1, IntSle, 0xFF, 0x01);
-		test_binop_8(1, IntSle, 0x03, 0x05);
-		test_binop_8(0, IntSle, 0x01, 0xFF);
-		test_binop_8(0, IntSle, 0x05, 0x03);
-		test_binop_8(1, IntSle, 0x04, 0x04);
+		test_binop_8 (1, IntSle, 0xFF, 0x01);
+		test_binop_8 (1, IntSle, 0x03, 0x05);
+		test_binop_8 (0, IntSle, 0x01, 0xFF);
+		test_binop_8 (0, IntSle, 0x05, 0x03);
+		test_binop_8 (1, IntSle, 0x04, 0x04);
 		test_binop_16(1, IntSle, 0xFFFF, 0x0001);
 		test_binop_16(1, IntSle, 0x0003, 0x0005);
 		test_binop_16(0, IntSle, 0x0001, 0xFFFF);
@@ -810,11 +838,11 @@ mod tests {
 	#[test]
 	fn test_iult() {
 		use IrBinOp::*;
-		test_binop_8(0, IntUlt, 0xFF, 0x01);
-		test_binop_8(1, IntUlt, 0x03, 0x05);
-		test_binop_8(1, IntUlt, 0x01, 0xFF);
-		test_binop_8(0, IntUlt, 0x05, 0x03);
-		test_binop_8(0, IntUlt, 0x04, 0x04);
+		test_binop_8 (0, IntUlt, 0xFF, 0x01);
+		test_binop_8 (1, IntUlt, 0x03, 0x05);
+		test_binop_8 (1, IntUlt, 0x01, 0xFF);
+		test_binop_8 (0, IntUlt, 0x05, 0x03);
+		test_binop_8 (0, IntUlt, 0x04, 0x04);
 		test_binop_16(0, IntUlt, 0xFFFF, 0x0001);
 		test_binop_16(1, IntUlt, 0x0003, 0x0005);
 		test_binop_16(1, IntUlt, 0x0001, 0xFFFF);
@@ -835,11 +863,11 @@ mod tests {
 	#[test]
 	fn test_iule() {
 		use IrBinOp::*;
-		test_binop_8(0, IntUle, 0xFF, 0x01);
-		test_binop_8(1, IntUle, 0x03, 0x05);
-		test_binop_8(1, IntUle, 0x01, 0xFF);
-		test_binop_8(0, IntUle, 0x05, 0x03);
-		test_binop_8(1, IntUle, 0x04, 0x04);
+		test_binop_8 (0, IntUle, 0xFF, 0x01);
+		test_binop_8 (1, IntUle, 0x03, 0x05);
+		test_binop_8 (1, IntUle, 0x01, 0xFF);
+		test_binop_8 (0, IntUle, 0x05, 0x03);
+		test_binop_8 (1, IntUle, 0x04, 0x04);
 		test_binop_16(0, IntUle, 0xFFFF, 0x0001);
 		test_binop_16(1, IntUle, 0x0003, 0x0005);
 		test_binop_16(1, IntUle, 0x0001, 0xFFFF);
@@ -860,12 +888,12 @@ mod tests {
 	#[test]
 	fn test_iuadd() {
 		use IrBinOp::*;
-		test_binop_8(0x08, IntUAdd, 0x03, 0x05);
+		test_binop_8 (0x08, IntUAdd, 0x03, 0x05);
 		test_binop_16(0x0008, IntUAdd, 0x0003, 0x0005);
 		test_binop_32(0x00000008, IntUAdd, 0x00000003, 0x00000005);
 		test_binop_64(0x00000000_00000008, IntUAdd, 0x00000000_00000003, 0x00000000_00000005);
 
-		test_binop_8(0x02, IntUAdd, 0xFD, 0x05);
+		test_binop_8 (0x02, IntUAdd, 0xFD, 0x05);
 		test_binop_16(0x0002, IntUAdd, 0xFFFD, 0x0005);
 		test_binop_32(0x00000002, IntUAdd, 0xFFFFFFFD, 0x00000005);
 		test_binop_64(0x00000000_00000002, IntUAdd, 0xFFFFFFFF_FFFFFFFD, 0x00000000_00000005);
@@ -874,12 +902,12 @@ mod tests {
 	#[test]
 	fn test_iusub() {
 		use IrBinOp::*;
-		test_binop_8(0x03, IntUSub, 0x08, 0x05);
+		test_binop_8 (0x03, IntUSub, 0x08, 0x05);
 		test_binop_16(0x0003, IntUSub, 0x0008, 0x0005);
 		test_binop_32(0x00000003, IntUSub, 0x00000008, 0x00000005);
 		test_binop_64(0x00000000_00000003, IntUSub, 0x00000000_00000008, 0x00000000_00000005);
 
-		test_binop_8(0xFE, IntUSub, 0x03, 0x05);
+		test_binop_8 (0xFE, IntUSub, 0x03, 0x05);
 		test_binop_16(0xFFFE, IntUSub, 0x0003, 0x0005);
 		test_binop_32(0xFFFFFFFE, IntUSub, 0x00000003, 0x00000005);
 		test_binop_64(0xFFFFFFFF_FFFFFFFE, IntUSub, 0x00000000_00000003, 0x00000000_00000005);
@@ -888,13 +916,13 @@ mod tests {
 	#[test]
 	fn test_iucarry() {
 		use IrBinOp::*;
-		test_binop_8(0, IntCarry, 0x08, 0x05);
+		test_binop_8 (0, IntCarry, 0x08, 0x05);
 		test_binop_16(0, IntCarry, 0x0008, 0x0005);
 		test_binop_32(0, IntCarry, 0x00000008, 0x00000005);
 		test_binop_64(0, IntCarry, 0x00000000_00000008, 0x00000000_00000005);
 
-		test_binop_8(0, IntCarry, 0x7F, 0x01);
-		test_binop_8(1, IntCarry, 0xFF, 0x01);
+		test_binop_8 (0, IntCarry, 0x7F, 0x01);
+		test_binop_8 (1, IntCarry, 0xFF, 0x01);
 		test_binop_16(0, IntCarry, 0x00FF, 0x0001);
 		test_binop_32(0, IntCarry, 0x000000FF, 0x00000001);
 		test_binop_64(0, IntCarry, 0x00000000_000000FF, 0x00000000_00000001);
@@ -915,19 +943,19 @@ mod tests {
 	#[test]
 	fn test_iscarry() {
 		use IrBinOp::*;
-		test_binop_8(0, IntSCarry, 0x08, 0x05);
+		test_binop_8 (0, IntSCarry, 0x08, 0x05);
 		test_binop_16(0, IntSCarry, 0x0008, 0x0005);
 		test_binop_32(0, IntSCarry, 0x00000008, 0x00000005);
 		test_binop_64(0, IntSCarry, 0x00000000_00000008, 0x00000000_00000005);
 
-		test_binop_8(0, IntSCarry, 0xFE, 0x05);
+		test_binop_8 (0, IntSCarry, 0xFE, 0x05);
 		test_binop_16(0, IntSCarry, 0xFFFE, 0x0005);
 		test_binop_32(0, IntSCarry, 0xFFFFFFFE, 0x00000005);
 		test_binop_64(0, IntSCarry, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005);
 
-		test_binop_8(1, IntSCarry, 0x7F, 0x01);
-		test_binop_8(1, IntSCarry, 0x80, 0xFF);
-		test_binop_8(0, IntSCarry, 0xFF, 0x01);
+		test_binop_8 (1, IntSCarry, 0x7F, 0x01);
+		test_binop_8 (1, IntSCarry, 0x80, 0xFF);
+		test_binop_8 (0, IntSCarry, 0xFF, 0x01);
 		test_binop_16(0, IntSCarry, 0x00FF, 0x0001);
 		test_binop_32(0, IntSCarry, 0x000000FF, 0x00000001);
 		test_binop_64(0, IntSCarry, 0x00000000_000000FF, 0x00000000_00000001);
@@ -951,19 +979,19 @@ mod tests {
 	#[test]
 	fn test_isborrow() {
 		use IrBinOp::*;
-		test_binop_8(0, IntSBorrow, 0x08, 0x05);
+		test_binop_8 (0, IntSBorrow, 0x08, 0x05);
 		test_binop_16(0, IntSBorrow, 0x0008, 0x0005);
 		test_binop_32(0, IntSBorrow, 0x00000008, 0x00000005);
 		test_binop_64(0, IntSBorrow, 0x00000000_00000008, 0x00000000_00000005);
 
-		test_binop_8(0, IntSBorrow, 0xFE, 0x05);
+		test_binop_8 (0, IntSBorrow, 0xFE, 0x05);
 		test_binop_16(0, IntSBorrow, 0xFFFE, 0x0005);
 		test_binop_32(0, IntSBorrow, 0xFFFFFFFE, 0x00000005);
 		test_binop_64(0, IntSBorrow, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005);
 
-		test_binop_8(1, IntSBorrow, 0x7F, 0xFF);
-		test_binop_8(1, IntSBorrow, 0x80, 0x01);
-		test_binop_8(0, IntSBorrow, 0xFF, 0xFF);
+		test_binop_8 (1, IntSBorrow, 0x7F, 0xFF);
+		test_binop_8 (1, IntSBorrow, 0x80, 0x01);
+		test_binop_8 (0, IntSBorrow, 0xFF, 0xFF);
 		test_binop_16(0, IntSBorrow, 0x00FF, 0x00FF);
 		test_binop_32(0, IntSBorrow, 0x000000FF, 0x000000FF);
 		test_binop_64(0, IntSBorrow, 0x00000000_000000FF, 0x00000000_000000FF);
@@ -988,19 +1016,19 @@ mod tests {
 	fn test_imul() {
 		use IrBinOp::*;
 
-		test_binop_8(33, IntMul, 11, 3);
+		test_binop_8 (33, IntMul, 11, 3);
 		test_binop_16(33, IntMul, 11, 3);
 		test_binop_32(33, IntMul, 11, 3);
 		test_binop_64(33, IntMul, 11, 3);
 
 		//          -15            -5  x  3
-		test_binop_8(0xF1, IntMul, 0xFB, 0x03);
+		test_binop_8 (0xF1, IntMul, 0xFB, 0x03);
 		test_binop_16(0xFFF1, IntMul, 0xFFFB, 0x0003);
 		test_binop_32(0xFFFFFFF1, IntMul, 0xFFFFFFFB, 0x00000003);
 		test_binop_64(0xFFFFFFFF_FFFFFFF1, IntMul, 0xFFFFFFFF_FFFFFFFB, 0x00000000_00000003);
 
 		//           15            -5  x -3
-		test_binop_8(0x0F, IntMul, 0xFB, 0xFD);
+		test_binop_8 (0x0F, IntMul, 0xFB, 0xFD);
 		test_binop_16(0x000F, IntMul, 0xFFFB, 0xFFFD);
 		test_binop_32(0x0000000F, IntMul, 0xFFFFFFFB, 0xFFFFFFFD);
 		test_binop_64(0x00000000_0000000F, IntMul, 0xFFFFFFFF_FFFFFFFB, 0xFFFFFFFF_FFFFFFFD);
@@ -1010,7 +1038,7 @@ mod tests {
 	fn test_iudiv() {
 		use IrBinOp::*;
 
-		test_binop_8(3, IntUDiv, 33, 11);
+		test_binop_8 (3, IntUDiv, 33, 11);
 		test_binop_16(3, IntUDiv, 33, 11);
 		test_binop_32(3, IntUDiv, 33, 11);
 		test_binop_64(3, IntUDiv, 33, 11);
@@ -1020,7 +1048,7 @@ mod tests {
 		test_binop_none(IntUDiv, 33, 0, ValSize::_32);
 		test_binop_none(IntUDiv, 33, 0, ValSize::_64);
 
-		test_binop_8(0x0F, IntUDiv, 0xFF, 0x11);
+		test_binop_8 (0x0F, IntUDiv, 0xFF, 0x11);
 		test_binop_16(0x0F, IntUDiv, 0xFFFF, 0x1111);
 		test_binop_32(0x0F, IntUDiv, 0xFFFFFFFF, 0x11111111);
 		test_binop_64(0x0F, IntUDiv, 0xFFFFFFFF_FFFFFFFF, 0x11111111_11111111);
@@ -1030,25 +1058,25 @@ mod tests {
 	fn test_isdiv() {
 		use IrBinOp::*;
 
-		test_binop_8(3, IntSDiv, 33, 11);
+		test_binop_8 (3, IntSDiv, 33, 11);
 		test_binop_16(3, IntSDiv, 33, 11);
 		test_binop_32(3, IntSDiv, 33, 11);
 		test_binop_64(3, IntSDiv, 33, 11);
 
 		//           -3            -33
-		test_binop_8(0xFD, IntSDiv, 0xDF, 11);
+		test_binop_8 (0xFD, IntSDiv, 0xDF, 11);
 		test_binop_16(0xFFFD, IntSDiv, 0xFFDF, 11);
 		test_binop_32(0xFFFFFFFD, IntSDiv, 0xFFFFFFDF, 11);
 		test_binop_64(0xFFFFFFFF_FFFFFFFD, IntSDiv, 0xFFFFFFFF_FFFFFFDF, 11);
 
 		//           -3                -11
-		test_binop_8(0xFD, IntSDiv, 33, 0xF5);
+		test_binop_8 (0xFD, IntSDiv, 33, 0xF5);
 		test_binop_16(0xFFFD, IntSDiv, 33, 0xFFF5);
 		test_binop_32(0xFFFFFFFD, IntSDiv, 33, 0xFFFFFFF5);
 		test_binop_64(0xFFFFFFFF_FFFFFFFD, IntSDiv, 33, 0xFFFFFFFF_FFFFFFF5);
 
 		//                    -33    -11
-		test_binop_8(3, IntSDiv, 0xDF, 0xF5);
+		test_binop_8 (3, IntSDiv, 0xDF, 0xF5);
 		test_binop_16(3, IntSDiv, 0xFFDF, 0xFFF5);
 		test_binop_32(3, IntSDiv, 0xFFFFFFDF, 0xFFFFFFF5);
 		test_binop_64(3, IntSDiv, 0xFFFFFFFF_FFFFFFDF, 0xFFFFFFFF_FFFFFFF5);
@@ -1058,7 +1086,7 @@ mod tests {
 		test_binop_none(IntSDiv, 33, 0, ValSize::_32);
 		test_binop_none(IntSDiv, 33, 0, ValSize::_64);
 
-		test_binop_8(0, IntSDiv, 0xFF, 0x11);
+		test_binop_8 (0, IntSDiv, 0xFF, 0x11);
 		test_binop_16(0, IntSDiv, 0xFFFF, 0x1111);
 		test_binop_32(0, IntSDiv, 0xFFFFFFFF, 0x11111111);
 		test_binop_64(0, IntSDiv, 0xFFFFFFFF_FFFFFFFF, 0x11111111_11111111);
@@ -1068,7 +1096,7 @@ mod tests {
 	fn test_iumod() {
 		use IrBinOp::*;
 
-		test_binop_8(0, IntUMod, 33, 11);
+		test_binop_8 (0, IntUMod, 33, 11);
 		test_binop_16(0, IntUMod, 33, 11);
 		test_binop_32(0, IntUMod, 33, 11);
 		test_binop_64(0, IntUMod, 33, 11);
@@ -1091,7 +1119,7 @@ mod tests {
 		test_binop_none(IntUMod, 33, 0, ValSize::_32);
 		test_binop_none(IntUMod, 33, 0, ValSize::_64);
 
-		test_binop_8(0, IntUMod, 0xFF, 0x11);
+		test_binop_8 (0, IntUMod, 0xFF, 0x11);
 		test_binop_16(0, IntUMod, 0xFFFF, 0x1111);
 		test_binop_32(0, IntUMod, 0xFFFFFFFF, 0x11111111);
 		test_binop_64(0, IntUMod, 0xFFFFFFFF_FFFFFFFF, 0x11111111_11111111);
@@ -1102,7 +1130,7 @@ mod tests {
 		use IrBinOp::*;
 
 		// on positives it should behave the same as iumod
-		test_binop_8(0, IntSMod, 33, 11);
+		test_binop_8 (0, IntSMod, 33, 11);
 		test_binop_16(0, IntSMod, 33, 11);
 		test_binop_32(0, IntSMod, 33, 11);
 		test_binop_64(0, IntSMod, 33, 11);
@@ -1126,7 +1154,7 @@ mod tests {
 		test_binop_none(IntSMod, 33, 0, ValSize::_64);
 
 		// -1 % whatever == -1
-		test_binop_8(0xFF, IntSMod, 0xFF, 0x11);
+		test_binop_8 (0xFF, IntSMod, 0xFF, 0x11);
 		test_binop_16(0xFFFF, IntSMod, 0xFFFF, 0x1111);
 		test_binop_32(0xFFFFFFFF, IntSMod, 0xFFFFFFFF, 0x11111111);
 		test_binop_64(0xFFFFFFFF_FFFFFFFF, IntSMod, 0xFFFFFFFF_FFFFFFFF, 0x11111111_11111111);
@@ -1172,17 +1200,17 @@ mod tests {
 	fn test_ixor_iand_ior() {
 		use IrBinOp::*;
 
-		test_binop_8(0b10101100, IntXor, 0b11001010, 0b01100110);
+		test_binop_8 (0b10101100, IntXor, 0b11001010, 0b01100110);
 		test_binop_16(0b10101100, IntXor, 0b11001010, 0b01100110);
 		test_binop_32(0b10101100, IntXor, 0b11001010, 0b01100110);
 		test_binop_64(0b10101100, IntXor, 0b11001010, 0b01100110);
 
-		test_binop_8(0b01000010, IntAnd, 0b11001010, 0b01100110);
+		test_binop_8 (0b01000010, IntAnd, 0b11001010, 0b01100110);
 		test_binop_16(0b01000010, IntAnd, 0b11001010, 0b01100110);
 		test_binop_32(0b01000010, IntAnd, 0b11001010, 0b01100110);
 		test_binop_64(0b01000010, IntAnd, 0b11001010, 0b01100110);
 
-		test_binop_8(0b11101110, IntOr,  0b11001010, 0b01100110);
+		test_binop_8 (0b11101110, IntOr,  0b11001010, 0b01100110);
 		test_binop_16(0b11101110, IntOr,  0b11001010, 0b01100110);
 		test_binop_32(0b11101110, IntOr,  0b11001010, 0b01100110);
 		test_binop_64(0b11101110, IntOr,  0b11001010, 0b01100110);
@@ -1351,7 +1379,7 @@ mod tests {
 	fn test_ipair() {
 		use IrBinOp::*;
 
-		test_binop_8(0x1234,              IntPair, 0x12,       0x34,     );
+		test_binop_8 (0x1234,               IntPair, 0x12,       0x34,     );
 		test_binop_16(0x12345678,          IntPair, 0x1234,     0x5678,   );
 		test_binop_32(0x12345678_ABCDEF97, IntPair, 0x12345678, 0xABCDEF97);
 	}
@@ -1359,14 +1387,14 @@ mod tests {
 	#[test]
 	fn test_ibit() {
 		use IrBinOp::*;
-		test_binop_8(1, IntBit, 0x15, 0);
-		test_binop_8(0, IntBit, 0x15, 1);
-		test_binop_8(1, IntBit, 0x15, 2);
-		test_binop_8(0, IntBit, 0x15, 3);
-		test_binop_8(1, IntBit, 0x15, 4);
-		test_binop_8(0, IntBit, 0x15, 5);
-		test_binop_8(0, IntBit, 0x15, 6);
-		test_binop_8(0, IntBit, 0x15, 7);
+		test_binop_8 (1, IntBit, 0x15, 0);
+		test_binop_8 (0, IntBit, 0x15, 1);
+		test_binop_8 (1, IntBit, 0x15, 2);
+		test_binop_8 (0, IntBit, 0x15, 3);
+		test_binop_8 (1, IntBit, 0x15, 4);
+		test_binop_8 (0, IntBit, 0x15, 5);
+		test_binop_8 (0, IntBit, 0x15, 6);
+		test_binop_8 (0, IntBit, 0x15, 7);
 		test_binop_16(1, IntBit, 0x1500, 8,);
 		test_binop_16(0, IntBit, 0x1500, 9,);
 		test_binop_16(1, IntBit, 0x1500, 10);
@@ -1394,7 +1422,7 @@ mod tests {
 	}
 
 	#[test] #[should_panic]
-	fn test_ibit_badpos_8() { test_binop_8(1, IrBinOp::IntBit, 0, 8); }
+	fn test_ibit_badpos_8 () { test_binop_8 (1, IrBinOp::IntBit, 0, 8); }
 	#[test] #[should_panic]
 	fn test_ibit_badpos_16() { test_binop_16(1, IrBinOp::IntBit, 0, 16); }
 	#[test] #[should_panic]
@@ -1427,7 +1455,7 @@ mod tests {
 	}
 
 	#[test] #[should_panic]
-	fn test_ibitset_badpos_8() { test_ternop_8(0, IrTernOp::IntBitSet, 0, 8, 0); }
+	fn test_ibitset_badpos_8 () { test_ternop_8 (0, IrTernOp::IntBitSet, 0, 8, 0); }
 	#[test] #[should_panic]
 	fn test_ibitset_badpos_16() { test_ternop_16(0, IrTernOp::IntBitSet, 0, 16, 0); }
 	#[test] #[should_panic]
@@ -1435,7 +1463,7 @@ mod tests {
 	#[test] #[should_panic]
 	fn test_ibitset_badpos_64() { test_ternop_64(0, IrTernOp::IntBitSet, 0, 64, 0); }
 	#[test] #[should_panic]
-	fn test_ibitset_badsrc() { test_ternop_8(0, IrTernOp::IntBitSet, 0, 0, 2); }
+	fn test_ibitset_badsrc   () { test_ternop_8 (0, IrTernOp::IntBitSet, 0, 0, 2); }
 
 	#[test]
 	fn test_bxor_band_bor() {
@@ -1460,10 +1488,10 @@ mod tests {
 	#[test]
 	fn test_iuaddc() {
 		use IrTernOp::*;
-		test_ternop_8(0x08, IntUAddC, 0x03, 0x05, 0);
-		test_ternop_8(0x09, IntUAddC, 0x03, 0x05, 1);
-		test_ternop_8(0xFF, IntUAddC, 0xFF, 0x00, 0);
-		test_ternop_8(0x00, IntUAddC, 0xFF, 0x00, 1);
+		test_ternop_8 (0x08, IntUAddC, 0x03, 0x05, 0);
+		test_ternop_8 (0x09, IntUAddC, 0x03, 0x05, 1);
+		test_ternop_8 (0xFF, IntUAddC, 0xFF, 0x00, 0);
+		test_ternop_8 (0x00, IntUAddC, 0xFF, 0x00, 1);
 		test_ternop_16(0x0008, IntUAddC, 0x0003, 0x0005, 0);
 		test_ternop_16(0x0009, IntUAddC, 0x0003, 0x0005, 1);
 		test_ternop_32(0x00000008, IntUAddC, 0x00000003, 0x00000005, 0);
@@ -1471,8 +1499,8 @@ mod tests {
 		test_ternop_64(0x00000000_00000008, IntUAddC, 0x00000000_00000003, 0x00000000_00000005, 0);
 		test_ternop_64(0x00000000_00000009, IntUAddC, 0x00000000_00000003, 0x00000000_00000005, 1);
 
-		test_ternop_8(0x02, IntUAddC, 0xFD, 0x05, 0);
-		test_ternop_8(0x03, IntUAddC, 0xFD, 0x05, 1);
+		test_ternop_8 (0x02, IntUAddC, 0xFD, 0x05, 0);
+		test_ternop_8 (0x03, IntUAddC, 0xFD, 0x05, 1);
 		test_ternop_16(0x0002, IntUAddC, 0xFFFD, 0x0005, 0);
 		test_ternop_16(0x0003, IntUAddC, 0xFFFD, 0x0005, 1);
 		test_ternop_32(0x00000002, IntUAddC, 0xFFFFFFFD, 0x00000005, 0);
@@ -1484,8 +1512,8 @@ mod tests {
 	#[test]
 	fn test_iusubb() {
 		use IrTernOp::*;
-		test_ternop_8(0x03, IntUSubB, 0x08, 0x05, 0);
-		test_ternop_8(0x02, IntUSubB, 0x08, 0x05, 1);
+		test_ternop_8 (0x03, IntUSubB, 0x08, 0x05, 0);
+		test_ternop_8 (0x02, IntUSubB, 0x08, 0x05, 1);
 		test_ternop_16(0x0003, IntUSubB, 0x0008, 0x0005, 0);
 		test_ternop_16(0x0002, IntUSubB, 0x0008, 0x0005, 1);
 		test_ternop_32(0x00000003, IntUSubB, 0x00000008, 0x00000005, 0);
@@ -1493,8 +1521,8 @@ mod tests {
 		test_ternop_64(0x00000000_00000003, IntUSubB, 0x00000000_00000008, 0x00000000_00000005, 0);
 		test_ternop_64(0x00000000_00000002, IntUSubB, 0x00000000_00000008, 0x00000000_00000005, 1);
 
-		test_ternop_8(0xFE, IntUSubB, 0x03, 0x05, 0);
-		test_ternop_8(0xFD, IntUSubB, 0x03, 0x05, 1);
+		test_ternop_8 (0xFE, IntUSubB, 0x03, 0x05, 0);
+		test_ternop_8 (0xFD, IntUSubB, 0x03, 0x05, 1);
 		test_ternop_16(0xFFFE, IntUSubB, 0x0003, 0x0005, 0);
 		test_ternop_16(0xFFFD, IntUSubB, 0x0003, 0x0005, 1);
 		test_ternop_32(0xFFFFFFFE, IntUSubB, 0x00000003, 0x00000005, 0);
@@ -1506,7 +1534,7 @@ mod tests {
 	#[test]
 	fn test_iucarryc() {
 		use IrTernOp::*;
-		test_ternop_8(0, IntCarryC, 0x08, 0x05, 0);
+		test_ternop_8 (0, IntCarryC, 0x08, 0x05, 0);
 		test_ternop_16(0, IntCarryC, 0x0008, 0x0005, 0);
 		test_ternop_32(0, IntCarryC, 0x00000008, 0x00000005, 0);
 		test_ternop_64(0, IntCarryC, 0x00000000_00000008, 0x00000000_00000005, 0);
@@ -1580,7 +1608,7 @@ mod tests {
 	#[test]
 	fn test_iscarryc() {
 		use IrTernOp::*;
-		test_ternop_8(0, IntSCarryC, 0x08, 0x05, 0);
+		test_ternop_8 (0, IntSCarryC, 0x08, 0x05, 0);
 		test_ternop_16(0, IntSCarryC, 0x0008, 0x0005, 0);
 		test_ternop_32(0, IntSCarryC, 0x00000008, 0x00000005, 0);
 		test_ternop_64(0, IntSCarryC, 0x00000000_00000008, 0x00000000_00000005, 0);
@@ -1609,16 +1637,16 @@ mod tests {
 		test_ternop_64(1, IntSCarryC, 0x80000000_00000000, 0xFFFFFFFF_FFFFFFFF, 0);
 		test_ternop_64(1, IntSCarryC, 0x80000000_00000000, 0xFFFFFFFF_FFFFFFFF, 1);
 
-		test_ternop_8(0, IntSCarryC, 0xFE, 0x05, 0);
+		test_ternop_8 (0, IntSCarryC, 0xFE, 0x05, 0);
 		test_ternop_16(0, IntSCarryC, 0xFFFE, 0x0005, 0);
 		test_ternop_32(0, IntSCarryC, 0xFFFFFFFE, 0x00000005, 0);
 		test_ternop_64(0, IntSCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 0);
 
-		test_ternop_8(1, IntSCarryC, 0x7F, 0x01, 0);
-		test_ternop_8(1, IntSCarryC, 0x7F, 0x00, 1);
-		test_ternop_8(1, IntSCarryC, 0x80, 0xFF, 0);
-		test_ternop_8(0, IntSCarryC, 0xFF, 0x01, 0);
-		test_ternop_8(0, IntSCarryC, 0xFF, 0x00, 1);
+		test_ternop_8 (1, IntSCarryC, 0x7F, 0x01, 0);
+		test_ternop_8 (1, IntSCarryC, 0x7F, 0x00, 1);
+		test_ternop_8 (1, IntSCarryC, 0x80, 0xFF, 0);
+		test_ternop_8 (0, IntSCarryC, 0xFF, 0x01, 0);
+		test_ternop_8 (0, IntSCarryC, 0xFF, 0x00, 1);
 		test_ternop_16(0, IntSCarryC, 0x00FF, 0x0001, 0);
 		test_ternop_16(0, IntSCarryC, 0x00FF, 0x0000, 1);
 		test_ternop_32(0, IntSCarryC, 0x000000FF, 0x00000001, 0);
@@ -1656,8 +1684,8 @@ mod tests {
 	#[test]
 	fn test_isborrowc() {
 		use IrTernOp::*;
-		test_ternop_8(0, IntSBorrowC, 0x08, 0x05, 0);
-		test_ternop_8(0, IntSBorrowC, 0x08, 0x05, 1);
+		test_ternop_8 (0, IntSBorrowC, 0x08, 0x05, 0);
+		test_ternop_8 (0, IntSBorrowC, 0x08, 0x05, 1);
 		test_ternop_16(0, IntSBorrowC, 0x0008, 0x0005, 0);
 		test_ternop_16(0, IntSBorrowC, 0x0008, 0x0005, 1);
 		test_ternop_32(0, IntSBorrowC, 0x00000008, 0x00000005, 0);
@@ -1665,8 +1693,8 @@ mod tests {
 		test_ternop_64(0, IntSBorrowC, 0x00000000_00000008, 0x00000000_00000005, 0);
 		test_ternop_64(0, IntSBorrowC, 0x00000000_00000008, 0x00000000_00000005, 1);
 
-		test_ternop_8(0, IntSBorrowC, 0xFE, 0x05, 0);
-		test_ternop_8(0, IntSBorrowC, 0xFE, 0x05, 1);
+		test_ternop_8 (0, IntSBorrowC, 0xFE, 0x05, 0);
+		test_ternop_8 (0, IntSBorrowC, 0xFE, 0x05, 1);
 		test_ternop_16(0, IntSBorrowC, 0xFFFE, 0x0005, 0);
 		test_ternop_16(0, IntSBorrowC, 0xFFFE, 0x0005, 1);
 		test_ternop_32(0, IntSBorrowC, 0xFFFFFFFE, 0x00000005, 0);
@@ -1674,10 +1702,10 @@ mod tests {
 		test_ternop_64(0, IntSBorrowC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 0);
 		test_ternop_64(0, IntSBorrowC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 1);
 
-		test_ternop_8(1, IntSBorrowC, 0x7F, 0xFF, 0);
-		test_ternop_8(1, IntSBorrowC, 0x80, 0x01, 0);
-		test_ternop_8(1, IntSBorrowC, 0x80, 0x00, 1);
-		test_ternop_8(0, IntSBorrowC, 0xFF, 0xFF, 0);
+		test_ternop_8 (1, IntSBorrowC, 0x7F, 0xFF, 0);
+		test_ternop_8 (1, IntSBorrowC, 0x80, 0x01, 0);
+		test_ternop_8 (1, IntSBorrowC, 0x80, 0x00, 1);
+		test_ternop_8 (0, IntSBorrowC, 0xFF, 0xFF, 0);
 		test_ternop_16(0, IntSBorrowC, 0x00FF, 0x00FF, 0);
 		test_ternop_32(0, IntSBorrowC, 0x000000FF, 0x000000FF, 0);
 		test_ternop_64(0, IntSBorrowC, 0x00000000_000000FF, 0x00000000_000000FF, 0);

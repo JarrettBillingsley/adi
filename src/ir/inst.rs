@@ -12,6 +12,8 @@ use super::*;
 pub(crate) enum IrUnOp {
 	IntZxt,  // dst = zxt(src)
 	IntSxt,  // dst = sxt(src)
+	IntLo,   // dst = lo(src) (half the number of bits)
+	IntHi,   // dst = hi(src) (half the number of bits)
 	IntNeg,  // dst = -src
 	IntNot,  // dst = ~src
 	BoolNot, // dst = not src
@@ -156,6 +158,8 @@ impl Debug for IrInstKind {
 			Unary { dst, op, src, dstn, srcn } => match op {
 				IntZxt  => write!(f, "izxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 				IntSxt  => write!(f, "isxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				IntLo   => write!(f, "ilo       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				IntHi   => write!(f, "ihi       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 				IntNeg  => write!(f, "ineg      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 				IntNot  => write!(f, "inot      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 				BoolNot => write!(f, "bnot      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
@@ -287,6 +291,20 @@ impl IrInst {
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() > src.size());
 		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntSxt, src, dstn, srcn } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn ilo(ea: EA, dst: IrReg, src: IrSrc,
+		dstn: i8, srcn: i8) -> Self {
+		assert!(src.size().is_twice(dst.size()));
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntLo, src, dstn, srcn } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn ihi(ea: EA, dst: IrReg, src: IrSrc,
+		dstn: i8, srcn: i8) -> Self {
+		assert!(src.size().is_twice(dst.size()));
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntHi, src, dstn, srcn } }
 	}
 
 	/// TODO: docme
