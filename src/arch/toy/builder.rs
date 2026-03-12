@@ -262,6 +262,10 @@ impl ToyBuilder {
 		self.append(&[encode_op(Opcode::RET_IMP)])
 	}
 
+	pub fn retz(&mut self) -> usize {
+		self.append(&[encode_op(Opcode::RETZ_IMP)])
+	}
+
 	pub fn ld(&mut self, dst: Reg, src: Reg) -> usize {
 		self.append(&[encode_opr0(Opcode::LD_RR, dst), encode_r1_any(src)])
 	}

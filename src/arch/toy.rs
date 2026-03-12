@@ -56,7 +56,7 @@ enum MetaOp {
 	BLT,  BLE, BEQ, BNE, // branch on flags
 	JMP,  JMPI,          // jumps
 	CALL, CALI, CALZ,    // calls (call, call indirect, call if ZF is set)
-	RET,                 // returns
+	RET,  RETZ,          // returns
 	LD,   ST,            // memory
 }
 
@@ -72,7 +72,7 @@ impl MetaOp {
 			BLT  => "blt",  BLE  => "ble",  BEQ => "beq", BNE => "bne",
 			JMP  => "jmp",  JMPI => "jmpi",
 			CALL => "call", CALI => "cali", CALZ => "calz",
-			RET => "ret",
+			RET  => "ret",  RETZ => "retz",
 			LD   => "ld",   ST   => "st",
 		}
 	}
@@ -132,7 +132,7 @@ pub enum Opcode {
 	BLT_S8, BLE_S8, BEQ_S8, BNE_S8,
 	JMP_I16, JMPI_IMPDC,
 	CALL_I16, CALI_IMPDC, CALZ_I16,
-	RET_IMP,
+	RET_IMP, RETZ_IMP,
 	LD_RI16, LD_RR, ST_RI16, ST_RR,
 }
 
@@ -215,7 +215,8 @@ mod descs {
 		InstDesc(CALL_I16,   CALL, I16,    Call(false)),
 		InstDesc(CALI_IMPDC, CALI, IMPDC,  IndirCall),
 		InstDesc(CALZ_I16,   CALZ, I16,    Call(true)),
-		InstDesc(RET_IMP,    RET,  IMP,    Ret),
+		InstDesc(RET_IMP,    RET,  IMP,    Ret(false)),
+		InstDesc(RETZ_IMP,   RETZ, IMP,    Ret(true)),
 		InstDesc(LD_RI16,    LD,   RI16,   Other),
 		InstDesc(LD_RR,      LD,   RR,     Other),
 		InstDesc(ST_RI16,    ST,   RI16,   Other),
@@ -285,7 +286,7 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 
 	match desc.addr_mode {
 		IMP => {
-			// only IMP instruction is ret.
+			// only IMP instructions are ret/retz.
 			(0, None)
 		}
 		IMPDC => {

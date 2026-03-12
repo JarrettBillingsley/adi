@@ -150,8 +150,8 @@ pub enum InstructionKind {
 	Other,
 	/// Control flow - function call. The `bool` is whether or not it's conditional.
 	Call(bool),
-	/// Control flow - function return.
-	Ret,
+	/// Control flow - function return. The `bool` is whether or not it's conditional.
+	Ret(bool),
 	/// Control flow - conditional jump/branch.
 	Cond,
 	/// Control flow - unconditional jump/branch.
@@ -173,7 +173,7 @@ impl InstructionKind {
 		use InstructionKind::*;
 		match self {
 			Call(_) | Cond | Uncond | Indir | IndirCall => true,
-			Ret | Halt | Other                          => false,
+			Ret(_) | Halt | Other                       => false,
 		}
 	}
 }
@@ -281,7 +281,7 @@ impl Instruction {
 	/// Is this a function call?
 	pub fn is_call(&self) -> bool { matches!(self.kind(), InstructionKind::Call(_)) }
 	/// Is this a function return ?
-	pub fn is_ret(&self) -> bool { matches!(self.kind(), InstructionKind::Ret) }
+	pub fn is_ret(&self) -> bool { matches!(self.kind(), InstructionKind::Ret(_)) }
 	/// Is this a conditional jump/branch?
 	pub fn is_cond(&self) -> bool { matches!(self.kind(), InstructionKind::Cond) }
 	/// Is this an unconditional jump/branch?

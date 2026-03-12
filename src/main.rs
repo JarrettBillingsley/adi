@@ -16,9 +16,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 
 	setup_panic();
-	// test_gb()
+	test_gb()
 	// test_nes()
-	test_toy()
+	// test_toy()
 }
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
@@ -378,7 +378,7 @@ fn toy_test_state_change() -> ToyTest {
 	}
 }
 
-fn toy_test_ccall() -> ToyTest {
+fn toy_test_ccall_cret() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
@@ -392,12 +392,15 @@ fn toy_test_ccall() -> ToyTest {
 	b.ret();
 
 	b.org(FUNC1);
-	b.addi(A, 3);
+	b.retz();
+	b.subi(A, 1);
+	b.retz();
+	b.add(A, A);
 	b.ret();
 
 	ToyTest {
 		image: b.finish(),
-		name:  "<toy_test_ccall>",
+		name:  "<toy_test_ccall_cret>",
 		labels: vec![
 			("func1".to_string(), VA(FUNC1)),
 		]
@@ -411,7 +414,7 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_calls();
 	// let test = toy_test_loop()
 	// let test = toy_test_state_change();
-	let test = toy_test_ccall();
+	let test = toy_test_ccall_cret();
 
 	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
 	prog.add_name("main", start_ea, false);
@@ -1051,7 +1054,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 				format!("---------- STATE CHANGE {:?} ----------", new_state)
 				.cyan().bold());
 		}
-		Halt | Return => {
+		Halt | Return { .. } => {
 		}
 		FallThru(ea) => {
 			print_divider_if_diff_funcs(prog, bb_ea, *ea, "Fall through", Color::Yellow);

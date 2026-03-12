@@ -160,21 +160,27 @@ impl Program {
 					// the Call at the end of insts_after
 					irbb_terminator_sanity_check(bb.term(), &insts_after);
 
-					// SAFETY: irbb_terminator_sanity_check above
-					let BBTerm::Call { ret: real_ret, .. } = bb.term else { panic!("impastabowl") };
+					let (next_ea, is_call) = match bb.term {
+						BBTerm::Call { ret, .. }            => (ret, true),
+						BBTerm::Return { cont: Some(cont) } => (cont, false),
+						_                                   => panic!("impastabowl"),
+					};
 
 					// push the first half as the "true" BB so other BBs will properly refer to it
 					// when using bbid_to_irbbid in the loop after this one.
 					//
 					// in the loop below, this will also add an edge from the first half to the
-					// next BB (the one at `real_ret`), which we do actually want.
+					// next BB (the one at `next_ea`), which we do actually want.
 					bbs.push(IrBasicBlock::new(irbbid, bbid, insts_before));
 					bbid_to_irbbid.insert(bbid, irbbid);
 
 					// add a new edge from the first half to the second
 					cfg.add_edge(irbbid, extra_irbbid, ());
-					// and push an extra edge from the second to the real_ret EA
-					extra_edges.insert(extra_irbbid, real_ret);
+
+					if is_call {
+						// and push an extra edge from the second to the next_ea EA
+						extra_edges.insert(extra_irbbid, next_ea);
+					}
 
 					// finally push the second part of the code as an extra bb
 					extra_bbs.push(IrBasicBlock::new(extra_irbbid, bbid, insts_after));
@@ -189,7 +195,7 @@ impl Program {
 				// never insert
 				DeadEnd | Halt => {}
 				// always insert, before final
-				Return => {
+				Return { .. } => {
 					// before, ret regs
 					rewrites.push((rewrite_irbbid, IrRewrite::Uses { before_last: true }));
 				}
@@ -295,7 +301,7 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 				_ => {} // yay
 			}
 		}
-		Return => {
+		Return { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::Ret { .. }),
 				"for `BBTerm::Return`, the terminating instruction should have \
 				been `IrInstKind::Ret`, but found this instead: {:?}", inst.kind());

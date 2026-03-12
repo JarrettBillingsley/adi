@@ -106,8 +106,21 @@ impl InstDesc {
 		}
 	}
 
+	fn not_cc(&self, cc: Cc, i: &Instruction, b: &mut IrBuilder) -> IrReg {
+		match cc {
+			Cc::C  => self.cc(Cc::NC, i, b),
+			Cc::Z  => self.cc(Cc::NZ, i, b),
+			Cc::NC => self.cc(Cc::C,  i, b),
+			Cc::NZ => self.cc(Cc::Z,  i, b),
+		}
+	}
+
 	fn hl(&self, i: &Instruction, b: &mut IrBuilder) {
 		b.ipair(i.ea(), REG_HL_TMP, REG_H, REG_L,  -1, -1, -1);
+	}
+
+	fn wz(&self, i: &Instruction, b: &mut IrBuilder) {
+		b.ipair(i.ea(), REG_WZ_TMP, REG_W, REG_Z,  -1, -1, -1);
 	}
 
 	/// Push an 8-bit value `src` onto the stack.
@@ -126,12 +139,29 @@ impl InstDesc {
 		b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
 	}
 
+	/// Pop a 16-bit value off the stack as two 8-bit halves into `dstlo` and `dsthi`.
+	fn pop16(&self, dsthi: IrReg, dstlo: IrReg, i: &Instruction, b: &mut IrBuilder) {
+		self.pop8(dstlo, i, b);
+		self.pop8(dsthi, i, b);
+	}
+
+	/// Pop a value into the WZ register and pair it, so it's ready to use as REG_WZ_TMP.
+	fn pop_wz(&self, i: &Instruction, b: &mut IrBuilder) {
+		self.pop16(REG_W, REG_Z, i, b);
+		self.wz(i, b);
+	}
+
 	/// Push the return address to the stack.
 	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
 	 	let ret_addr = i.next_va().0 as u16;
 		// push hi then lo
 		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), i, b);
 		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), i, b);
+	}
+
+	fn return_(&self, i: &Instruction, b: &mut IrBuilder) {
+		self.pop_wz(i, b);
+		b.ret(i.ea(), REG_WZ_TMP, -1);
 	}
 
 	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
@@ -524,7 +554,6 @@ impl InstDesc {
 			}
 			CALL => {
 				// no flag changes
-
 				match self.syn_ops()[0] {
 					SynOp::Op => {
 						// call nn
@@ -533,37 +562,40 @@ impl InstDesc {
 					}
 					SynOp::Cc(cond) => {
 						// call cc, nn
-
-						// let cond = self.cc(cond, i, b);
-						// b.cbranch(ea, cond, i.next_ea(), -1, -1);
-						// self.push_return_addr(i, b);
-						// b.ccall(ea, cond, target.unwrap(), -1, 0);
+						let cond = self.not_cc(cond, i, b);
+						b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
+						self.push_return_addr(i, b);
+						b.call             (ea, target.unwrap(),   0);
 					}
 					_ => panic!()
 				}
 			}
 			RET => {
-				b.nop(ea); // TODO
 				// no flag changes
-
-				// pc <- pop()
-					// InstDesc(   0xC9, RET,  &[],                       Ret,    Imp),
-
-				// if cc { pc <- pop() }
-					// InstDesc(   0xC0, RET,  &[CC_NZ],                  Ret,    Imp),
-					// ...
+				match self.syn_ops().get(0) {
+					None => {
+						// ret
+						self.return_(i, b);
+					}
+					Some(SynOp::Cc(cond)) => {
+						// ret cc
+						let cond = self.not_cc(*cond, i, b);
+						b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
+						self.return_(i, b);
+					}
+					_ => panic!()
+				}
 			}
 			RST => {
-				b.nop(ea); // TODO
 				// no flag changes
-
-				// pc <- rst_target()
-					// InstDesc(   0xC7, RST,  &[Op],                     Call,   Imp), // rst 0x00
-					// ...
+				// rst n
+				self.push_return_addr(i, b);
+				b.call(ea, target.unwrap(), 0);
 			}
 			RETI => {
-				b.nop(ea); // TODO
 				// no flag changes
+				// reti
+				self.return_(i, b);
 			}
 
 			// ------------------------------------------------------------------------------------

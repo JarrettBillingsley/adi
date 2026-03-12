@@ -204,6 +204,13 @@ impl InstDesc {
 				b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
 				b.ret(ea,   REG_TMP16,                       -1);
 			}
+			RETZ => {
+				b.bnot             (ea, REG_TMP, REG_ZF,                 -1, -1);
+				b.cbranch_and_split(ea, REG_TMP, i.next_ea(),            -1, -1);
+				b.load             (ea, REG_TMP16, REG_SP,               -1, -1);
+				b.iuadd            (ea, REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
+				b.ret              (ea, REG_TMP16,                       -1);
+			}
 			LD => {
 				let reg = r0();
 

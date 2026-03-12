@@ -240,6 +240,9 @@ use SynOp::*;
 const INVALID: InstDesc = InstDesc(0x00, UNK, &[], Other, Imp);
 const UCALL: InstructionKind = InstructionKind::Call(false);
 const CCALL: InstructionKind = InstructionKind::Call(true);
+const URET:  InstructionKind = InstructionKind::Ret(false);
+const CRET:  InstructionKind = InstructionKind::Ret(true);
+
 
 const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x00, NOP,  &[],                       Other,  Imp),
@@ -434,7 +437,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0xBD, CP,   &[Srg(A), Srg(L)],         Other,  Imp),
 	InstDesc(   0xBE, CP,   &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
 	InstDesc(   0xBF, CP,   &[Srg(A), Srg(A)],         Other,  Imp),
-	InstDesc(   0xC0, RET,  &[CC_NZ],                  Ret,    Imp),
+	InstDesc(   0xC0, RET,  &[CC_NZ],                  CRET,   Imp),
 	InstDesc(   0xC1, POP,  &[Srg(BC)],                Other,  Ind(SP, R)),
 	InstDesc(   0xC2, JP,   &[CC_NZ, Op],              Cond,   Add16(Target)),
 	InstDesc(   0xC3, JP,   &[Op],                     Uncond, Add16(Target)),
@@ -442,15 +445,15 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0xC5, PUSH, &[Srg(BC)],                Other,  Ind(SP, W)),
 	InstDesc(   0xC6, ADD,  &[Srg(A), Op],             Other,  UImm8),
 	InstDesc(   0xC7, RST,  &[Op],                     UCALL,  Imp), // rst 0x00
-	InstDesc(   0xC8, RET,  &[CC_Z],                   Ret,    Imp),
-	InstDesc(   0xC9, RET,  &[],                       Ret,    Imp),
+	InstDesc(   0xC8, RET,  &[CC_Z],                   CRET,   Imp),
+	InstDesc(   0xC9, RET,  &[],                       URET,   Imp),
 	InstDesc(   0xCA, JP,   &[CC_Z, Op],               Cond,   Add16(Target)),
 	INVALID,
 	InstDesc(   0xCC, CALL, &[CC_Z, Op],               CCALL,  Add16(Target)),
 	InstDesc(   0xCD, CALL, &[Op],                     UCALL,  Add16(Target)),
 	InstDesc(   0xCE, ADC,  &[Srg(A), Op],             Other,  UImm8),
 	InstDesc(   0xCF, RST,  &[Op],                     UCALL,  Imp), // rst 0x08
-	InstDesc(   0xD0, RET,  &[CC_NC],                  Ret,    Imp),
+	InstDesc(   0xD0, RET,  &[CC_NC],                  CRET,   Imp),
 	InstDesc(   0xD1, POP,  &[Srg(DE)],                Other,  Ind(SP, R)),
 	InstDesc(   0xD2, JP,   &[CC_NC, Op],              Cond,   Add16(Target)),
 	INVALID,
@@ -458,8 +461,8 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0xD5, PUSH, &[Srg(DE)],                Other,  Ind(SP, W)),
 	InstDesc(   0xD6, SUB,  &[Srg(A), Op],             Other,  UImm8),
 	InstDesc(   0xD7, RST,  &[Op],                     UCALL,  Imp), // rst 0x10
-	InstDesc(   0xD8, RET,  &[CC_C],                   Ret,    Imp),
-	InstDesc(   0xD9, RETI, &[],                       Ret,    Imp),
+	InstDesc(   0xD8, RET,  &[CC_C],                   CRET,   Imp),
+	InstDesc(   0xD9, RETI, &[],                       URET,   Imp),
 	InstDesc(   0xDA, JP,   &[CC_C, Op],               Cond,   Add16(Target)),
 	INVALID,
 	InstDesc(   0xDC, CALL, &[CC_C, Op],               CCALL,  Add16(Target)),

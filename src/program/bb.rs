@@ -109,7 +109,7 @@ impl BasicBlock {
 		match self.term() {
 			BBTerm::DeadEnd
 			| BBTerm::Halt
-			| BBTerm::Return
+			| BBTerm::Return { .. }
 			| BBTerm::FallThru(..)
 			| BBTerm::StateChange(..) => None,
 
@@ -218,8 +218,9 @@ pub enum BBTerm {
 	DeadEnd,
 	/// A halt instruction.
 	Halt,
-	/// A return instruction.
-	Return,
+	/// A return instruction. If `cont.is_some()`, this is a conditional return, and `cont` is where
+	/// the code will continue from if the return does not happen.
+	Return { cont: Option<EA> },
 	/// Execution falls through to the next BB.
 	FallThru(EA),
 	/// Unconditional jump.
@@ -249,8 +250,9 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return | Halt => None     .into_iter().chain(&[]),
-			FallThru(ea) | Jump(ea) |
+			DeadEnd | Halt |
+			Return { cont: None }   => None     .into_iter().chain(&[]),
+			Return { cont: Some(ea) } | FallThru(ea) | Jump(ea) |
 			StateChange(ea, _)      => Some(ea) .into_iter().chain(&[]),
 			Call { dst, ret, .. }   => Some(dst).into_iter().chain(slice::from_ref(ret)),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
@@ -264,8 +266,9 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return | Halt => None     .into_iter().chain([].iter_mut()),
-			FallThru(ea) | Jump(ea) |
+			DeadEnd | Return { cont: None } |
+			Halt                    => None     .into_iter().chain([].iter_mut()),
+			Return { cont: Some(ea) } | FallThru(ea) | Jump(ea) |
 			StateChange(ea, _)      => Some(ea) .into_iter().chain([].iter_mut()),
 			Call { dst, ret, .. }   => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
 			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
@@ -280,9 +283,9 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return | Halt | FallThru(..) |
+			DeadEnd | Return { cont: None } | Halt | FallThru(..) |
 			StateChange(..) | IndirCall { .. }       => None     .into_iter().chain(&[]),
-			Jump(ea)                                 => Some(ea) .into_iter().chain(&[]),
+			Return { cont: Some(ea) } | Jump(ea)     => Some(ea) .into_iter().chain(&[]),
 			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
 			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),
 			JumpTbl(eas)                             => None     .into_iter().chain(eas),

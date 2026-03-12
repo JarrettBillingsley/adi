@@ -65,12 +65,14 @@ impl Program {
 						insts.push(inst);
 						continue 'instloop;
 					}
-					Ret => {
-						// TODO: what about e.g. Z80 where you can have conditional returns?
-						// should that end a BB?
-						// well I think it should be like a conditional - yes, end this
-						// BB, but push another BB of the next instruction.
-						term = Some(BBTerm::Return);
+					Ret(cond) => {
+						if cond {
+							let next = inst.next_ea();
+							potential_bbs.push_back(next);
+							term = Some(BBTerm::Return { cont: Some(next) });
+						} else {
+							term = Some(BBTerm::Return { cont: None });
+						}
 					}
 					Halt => {
 						term = Some(BBTerm::Halt);
