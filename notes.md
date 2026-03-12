@@ -2,6 +2,7 @@
 # Yak stack
 
 - once GB IR is done, uncomment pass_refs.rs:47
+- once ir rolc/rorc implemented, reimplement Mos65xx rotates
 
 # Imminent tasks!
 

@@ -435,6 +435,22 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 				.unwrap_or(if (val1 as i64) < 0 { -1 } else { 0 }) as u64,
 		}
 
+		// TODO: all rotates interpret distance modulo number of bits in source, so e.g. for an
+		// 8-bit value, rotating left by 0, 8, 16, 24 etc. all give the same value. I don't think
+		// this is really a problem, but it's something to be aware of/specify.
+		IntRol => match size {
+			ValSize::_8  => (val1 as u8).rotate_left(val2 as u32) as u64,
+			ValSize::_16 => (val1 as u16).rotate_left(val2 as u32) as u64,
+			ValSize::_32 => (val1 as u32).rotate_left(val2 as u32) as u64,
+			ValSize::_64 => val1.rotate_left(val2 as u32),
+		}
+		IntRor => match size {
+			ValSize::_8  => (val1 as u8).rotate_right(val2 as u32) as u64,
+			ValSize::_16 => (val1 as u16).rotate_right(val2 as u32) as u64,
+			ValSize::_32 => (val1 as u32).rotate_right(val2 as u32) as u64,
+			ValSize::_64 => val1.rotate_right(val2 as u32),
+		}
+
 		IntPair => (val1 << size as u32) | val2,
 
 		IntBit => {
@@ -1201,6 +1217,74 @@ mod tests {
 		test_binop(0x00000000_00000000, IntSShr, 0x7FFFFFFF_FFFFFFFF, 0x40, _64);
 		test_binop(0xFFFFFFFF_FFFFFFFF, IntSShr, 0xFFFFFFFF_FFFFFFFF, 0x40, _64);
 		test_binop(0xFFFFFFFF_C0DEBEEF, IntSShr, 0xC0DEBEEF_FACECACE, 0x20, _64);
+	}
+
+	#[test]
+	fn test_irol() {
+		use { IrBinOp::*, ValSize::* };
+		test_binop(0b00010011, IntRol, 0b00010011, 0, _8);
+		test_binop(0b00100110, IntRol, 0b00010011, 1, _8);
+		test_binop(0b01001100, IntRol, 0b00010011, 2, _8);
+		test_binop(0b10011000, IntRol, 0b00010011, 3, _8);
+		test_binop(0b00110001, IntRol, 0b00010011, 4, _8);
+		test_binop(0b01100010, IntRol, 0b00010011, 5, _8);
+		test_binop(0b11000100, IntRol, 0b00010011, 6, _8);
+		test_binop(0b10001001, IntRol, 0b00010011, 7, _8);
+		test_binop(0b00010011, IntRol, 0b00010011, 8, _8);
+
+		test_binop(0b1011000100010011, IntRol, 0b1011000100010011,  0, _16);
+		test_binop(0b0110001000100111, IntRol, 0b1011000100010011,  1, _16);
+		test_binop(0b1100010001001110, IntRol, 0b1011000100010011,  2, _16);
+		test_binop(0b1000100010011101, IntRol, 0b1011000100010011,  3, _16);
+		test_binop(0b0001000100111011, IntRol, 0b1011000100010011,  4, _16);
+		test_binop(0b0010001001110110, IntRol, 0b1011000100010011,  5, _16);
+		test_binop(0b0100010011101100, IntRol, 0b1011000100010011,  6, _16);
+		test_binop(0b1000100111011000, IntRol, 0b1011000100010011,  7, _16);
+		test_binop(0b0001001110110001, IntRol, 0b1011000100010011,  8, _16);
+		test_binop(0b0010011101100010, IntRol, 0b1011000100010011,  9, _16);
+		test_binop(0b0100111011000100, IntRol, 0b1011000100010011, 10, _16);
+		test_binop(0b1001110110001000, IntRol, 0b1011000100010011, 11, _16);
+		test_binop(0b0011101100010001, IntRol, 0b1011000100010011, 12, _16);
+		test_binop(0b0111011000100010, IntRol, 0b1011000100010011, 13, _16);
+		test_binop(0b1110110001000100, IntRol, 0b1011000100010011, 14, _16);
+		test_binop(0b1101100010001001, IntRol, 0b1011000100010011, 15, _16);
+		test_binop(0b1011000100010011, IntRol, 0b1011000100010011, 16, _16);
+
+		// if you wanna add tests for 32- and 64-bit be my guest lol
+	}
+
+	#[test]
+	fn test_iror() {
+		use { IrBinOp::*, ValSize::* };
+		test_binop(0b00010011, IntRor, 0b00010011, 0, _8);
+		test_binop(0b10001001, IntRor, 0b00010011, 1, _8);
+		test_binop(0b11000100, IntRor, 0b00010011, 2, _8);
+		test_binop(0b01100010, IntRor, 0b00010011, 3, _8);
+		test_binop(0b00110001, IntRor, 0b00010011, 4, _8);
+		test_binop(0b10011000, IntRor, 0b00010011, 5, _8);
+		test_binop(0b01001100, IntRor, 0b00010011, 6, _8);
+		test_binop(0b00100110, IntRor, 0b00010011, 7, _8);
+		test_binop(0b00010011, IntRor, 0b00010011, 8, _8);
+
+		test_binop(0b1011000100010011, IntRor, 0b1011000100010011,  0, _16);
+		test_binop(0b1101100010001001, IntRor, 0b1011000100010011,  1, _16);
+		test_binop(0b1110110001000100, IntRor, 0b1011000100010011,  2, _16);
+		test_binop(0b0111011000100010, IntRor, 0b1011000100010011,  3, _16);
+		test_binop(0b0011101100010001, IntRor, 0b1011000100010011,  4, _16);
+		test_binop(0b1001110110001000, IntRor, 0b1011000100010011,  5, _16);
+		test_binop(0b0100111011000100, IntRor, 0b1011000100010011,  6, _16);
+		test_binop(0b0010011101100010, IntRor, 0b1011000100010011,  7, _16);
+		test_binop(0b0001001110110001, IntRor, 0b1011000100010011,  8, _16);
+		test_binop(0b1000100111011000, IntRor, 0b1011000100010011,  9, _16);
+		test_binop(0b0100010011101100, IntRor, 0b1011000100010011, 10, _16);
+		test_binop(0b0010001001110110, IntRor, 0b1011000100010011, 11, _16);
+		test_binop(0b0001000100111011, IntRor, 0b1011000100010011, 12, _16);
+		test_binop(0b1000100010011101, IntRor, 0b1011000100010011, 13, _16);
+		test_binop(0b1100010001001110, IntRor, 0b1011000100010011, 14, _16);
+		test_binop(0b0110001000100111, IntRor, 0b1011000100010011, 15, _16);
+		test_binop(0b1011000100010011, IntRor, 0b1011000100010011, 16, _16);
+
+		// if you wanna add tests for 32- and 64-bit be my guest lol
 	}
 
 	#[test]

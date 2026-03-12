@@ -275,6 +275,18 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
+	pub(crate) fn irol(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> usize {
+		self.inst(IrInst::irol(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	}
+
+	/// TODO: docme
+	pub(crate) fn iror(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> usize {
+		self.inst(IrInst::iror(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	}
+
+	/// TODO: docme
 	pub(crate) fn ipair(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
 		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> usize {
 		self.inst(IrInst::ipair(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))

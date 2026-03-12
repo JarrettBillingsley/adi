@@ -45,6 +45,8 @@ pub(crate) enum IrBinOp {
 	IntShl,     // dst = s1 << s2
 	IntUShr,    // dst = s1 >> s2 (unsigned/logical)
 	IntSShr,    // dst = s1 >> s2 (signed/arithmetic)
+	IntRol,     // dst = s1.rotate_left(s2)
+	IntRor,     // dst = s1.rotate_right(s2)
 
 	IntPair,    // dst = (s1 in upper bits, s2 in lower bits)
 	IntBit,     // dst = (s1 & (1 << s2)) ? 1 : 0;
@@ -203,6 +205,10 @@ impl Debug for IrInstKind {
 				IntUShr    => write!(f, "iushr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntSShr    => write!(f, "isshr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+				IntRol     => write!(f, "irol      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+				IntRor     => write!(f, "iror      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntPair    => write!(f, "ipair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
@@ -518,6 +524,22 @@ impl IrInst {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
 			dst, src1, op: IrBinOp::IntSShr, src2, dstn, src1n, src2n } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn irol(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Binary {
+			dst, src1, op: IrBinOp::IntRol, src2, dstn, src1n, src2n } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn iror(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Binary {
+			dst, src1, op: IrBinOp::IntRor, src2, dstn, src1n, src2n } }
 	}
 
 	/// TODO: docme
