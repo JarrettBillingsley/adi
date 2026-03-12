@@ -79,7 +79,7 @@ fn reg_to_ir_reg(reg: u8) -> IrReg {
 	}
 }
 
-impl InstDesc {
+impl IrBuilder {
 	// /// Do an addition and set flags according to the result.
 	// fn add_(&self, dst: IrReg, src: impl Into<IrSrc>, dstn: i8, srcn: i8, i: &Instruction,
 	// b: &mut IrBuilder) {
@@ -91,79 +91,87 @@ impl InstDesc {
 	// 	b.ieq   (ea, REG_ZF, dst, IrConst::ZERO_8,   -1, -1, -1);
 	// }
 
-	fn cc(&self, cc: Cc, i: &Instruction, b: &mut IrBuilder) -> IrReg {
+	fn cc(&mut self, ea: EA, cc: Cc) -> IrReg {
 		match cc {
 			Cc::C  => REG_CF,
 			Cc::Z  => REG_ZF,
 			Cc::NC => {
-				b.bnot(i.ea(), REG_Z, REG_CF, -1, -1);
+				self.bnot(ea, REG_Z, REG_CF, -1, -1);
 				REG_Z
 			}
 			Cc::NZ => {
-				b.bnot(i.ea(), REG_Z, REG_ZF, -1, -1);
+				self.bnot(ea, REG_Z, REG_ZF, -1, -1);
 				REG_Z
 			}
 		}
 	}
 
-	fn not_cc(&self, cc: Cc, i: &Instruction, b: &mut IrBuilder) -> IrReg {
+	fn not_cc(&mut self, ea: EA, cc: Cc) -> IrReg {
 		match cc {
-			Cc::C  => self.cc(Cc::NC, i, b),
-			Cc::Z  => self.cc(Cc::NZ, i, b),
-			Cc::NC => self.cc(Cc::C,  i, b),
-			Cc::NZ => self.cc(Cc::Z,  i, b),
+			Cc::C  => self.cc(ea, Cc::NC),
+			Cc::Z  => self.cc(ea, Cc::NZ),
+			Cc::NC => self.cc(ea, Cc::C),
+			Cc::NZ => self.cc(ea, Cc::Z),
 		}
 	}
 
-	fn hl(&self, i: &Instruction, b: &mut IrBuilder) {
-		b.ipair(i.ea(), REG_HL_TMP, REG_H, REG_L,  -1, -1, -1);
+	fn hl(&mut self, ea: EA) {
+		self.ipair(ea, REG_HL_TMP, REG_H, REG_L,  -1, -1, -1);
 	}
 
-	fn wz(&self, i: &Instruction, b: &mut IrBuilder) {
-		b.ipair(i.ea(), REG_WZ_TMP, REG_W, REG_Z,  -1, -1, -1);
+	fn wz(&mut self, ea: EA) {
+		self.ipair(ea, REG_WZ_TMP, REG_W, REG_Z,  -1, -1, -1);
 	}
 
 	/// Push an 8-bit value `src` onto the stack.
-	fn push8(&self, src: impl Into<IrSrc>, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
+	fn push8(&mut self, src: impl Into<IrSrc>, ea: EA) {
 		// full stack convention - subtract before storing
-		b.iusub(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
-		b.store(ea, REG_SP, src,                      -1, -1);
+		self.iusub(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
+		self.store(ea, REG_SP, src,                      -1, -1);
 	}
 
 	/// Pop an 8-bit value off the stack into `dst`.
-	fn pop8(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
+	fn pop8(&mut self, dst: IrReg, ea: EA) {
 		// full stack convention - load before adding
-		b.load (ea, dst,    REG_SP,                   -1, -1);
-		b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
+		self.load (ea, dst,    REG_SP,                   -1, -1);
+		self.iuadd(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
 	}
 
 	/// Pop a 16-bit value off the stack as two 8-bit halves into `dstlo` and `dsthi`.
-	fn pop16(&self, dsthi: IrReg, dstlo: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		self.pop8(dstlo, i, b);
-		self.pop8(dsthi, i, b);
+	fn pop16(&mut self, dsthi: IrReg, dstlo: IrReg, ea: EA) {
+		self.pop8(dstlo, ea);
+		self.pop8(dsthi, ea);
 	}
 
 	/// Pop a value into the WZ register and pair it, so it's ready to use as REG_WZ_TMP.
-	fn pop_wz(&self, i: &Instruction, b: &mut IrBuilder) {
-		self.pop16(REG_W, REG_Z, i, b);
-		self.wz(i, b);
+	fn pop_wz(&mut self, ea: EA) {
+		self.pop16(REG_W, REG_Z, ea);
+		self.wz(ea);
 	}
 
 	/// Push the return address to the stack.
-	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
-	 	let ret_addr = i.next_va().0 as u16;
+	fn push_return_addr(&mut self, ea: EA, ret_addr: VA) {
+	 	let ret_addr = ret_addr.0 as u16;
 		// push hi then lo
-		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), i, b);
-		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), i, b);
+		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), ea);
+		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), ea);
 	}
 
-	fn return_(&self, i: &Instruction, b: &mut IrBuilder) {
-		self.pop_wz(i, b);
-		b.ret(i.ea(), REG_WZ_TMP, -1);
+	/// Pop the return address and `ret` to it.
+	fn return_(&mut self, ea: EA) {
+		self.pop_wz(ea);
+		self.ret(ea, REG_WZ_TMP, -1);
 	}
 
+	/// Set the Z, N, and H flags to 0.
+	fn z0n0h0(&mut self, ea: EA) {
+		self.assign(ea, REG_ZF, IrConst::ZERO_8,  -1, -1);
+		self.assign(ea, REG_NF, IrConst::ZERO_8,  -1, -1);
+		self.assign(ea, REG_HF, IrConst::ZERO_8,  -1, -1);
+	}
+}
+
+impl InstDesc {
 	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
@@ -393,25 +401,40 @@ impl InstDesc {
 					// {Z*, N0, H0, C*} 0xCB_3E (srl [hl])
 					// InstDesc(0xCB_3E, SRL,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			RLA => {
-				b.nop(ea); // TODO
-				// {Z0, N0, H0, C*} 0x17 (rla)
+			RLA => { // {Z0, N0, H0, C*}
+				// rla
+
+				// backup old carry flag
+				b.assign (ea, REG_Z,  REG_CF,                        -1, -1);
+				// C <- a.7
+				b.ibit   (ea, REG_CF, REG_A, IrConst::_8(7),        -1, -1, -1);
+				// a <- rol(a, 1)
+				b.irol   (ea, REG_A,  REG_A, IrConst::ONE_8,         -1, -1, -1);
+				// a.0 <- old carry
+				b.ibitset(ea, REG_A,  REG_A, IrConst::ZERO_8, REG_Z,  -1, -1, -1, -1);
+				// Z <- 0, N <- 0, H <- 0
+				b.z0n0h0 (ea);
 			}
-			RL => {
+			RL => { // {Z*, N0, H0, C*}
 				b.nop(ea); // TODO
 				// rol(r8)
-					// {Z*, N0, H0, C*} 0xCB_{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x17} (rl r)
+					// 0xCB_{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x17} (rl r)
 					// InstDesc(   0x17, RL,   &[Srg(A)],                 Other,  Imp),
 					// InstDesc(0xCB_17, RL,   &[Srg(A)],                 Other,  Imp),
 					// ...
 
 				// rol([hl])
-					// {Z*, N0, H0, C*} 0xCB_16 (rl [hl])
+					// 0xCB_16 (rl [hl])
 					// InstDesc(0xCB_16, RL,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			RLCA => {
-				b.nop(ea); // TODO
-				// {Z0, N0, H0, C*} 0x07 (rlca)
+			RLCA => { // {Z0, N0, H0, C*}
+				// rlca
+				// C <- a.7
+				b.ibit  (ea, REG_CF, REG_A, IrConst::_8(7),  -1, -1, -1);
+				// a <- rol(a, 1)
+				b.irol  (ea, REG_A,  REG_A, IrConst::ONE_8,  -1, -1, -1);
+				// Z <- 0, N <- 0, H <- 0
+				b.z0n0h0(ea);
 			}
 			RLC => {
 				b.nop(ea); // TODO
@@ -425,9 +448,19 @@ impl InstDesc {
 					// {Z*, N0, H0, C*} 0xCB_06 (rlc [hl])
 					// InstDesc(0xCB_06, RLC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			RRA => {
-				b.nop(ea); // TODO
-				// {Z0, N0, H0, C*} 0x1F (rra)
+			RRA => { // {Z0, N0, H0, C*}
+				// rra
+
+				// backup old carry flag
+				b.assign (ea, REG_Z,  REG_CF,                        -1, -1);
+				// C <- a.0
+				b.ibit   (ea, REG_CF, REG_A, IrConst::ZERO_8,        -1, -1, -1);
+				// a <- ror(a, 1)
+				b.iror   (ea, REG_A,  REG_A, IrConst::ONE_8,         -1, -1, -1);
+				// a.7 <- old carry
+				b.ibitset(ea, REG_A,  REG_A, IrConst::_8(7), REG_Z,  -1, -1, -1, -1);
+				// Z <- 0, N <- 0, H <- 0
+				b.z0n0h0 (ea);
 			}
 			RR => {
 				b.nop(ea); // TODO
@@ -441,9 +474,14 @@ impl InstDesc {
 					// {Z*, N0, H0, C*} 0xCB_1E (rr [hl])
 					// InstDesc(0xCB_1E, RR,   &[IndReg(HL)],             Other,  Ind(HL, RW)),
 			}
-			RRCA => {
-				b.nop(ea); // TODO
-				// {Z0, N0, H0, C*} 0x0F (rrca)
+			RRCA => { // {Z0, N0, H0, C*}
+				// rrca
+				// C <- a.0
+				b.ibit  (ea, REG_CF, REG_A, IrConst::ZERO_8,  -1, -1, -1);
+				// a <- ror(a, 1)
+				b.iror  (ea, REG_A,  REG_A, IrConst::ONE_8,  -1, -1, -1);
+				// Z <- 0, N <- 0, H <- 0
+				b.z0n0h0(ea);
 			}
 			RRC => {
 				b.nop(ea); // TODO
@@ -517,8 +555,7 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Control flow
 
-			JP => {
-				// no flag changes
+			JP => { // no flag changes
 				match self.syn_ops()[0] {
 					SynOp::Op => {
 						// jp nn
@@ -526,19 +563,18 @@ impl InstDesc {
 					}
 					SynOp::Srg(Reg::HL) => {
 						// jp hl
-						self.hl(i, b);
+						b.hl(ea);
 						b.ibranch(ea, REG_HL_TMP, 0);
 					}
 					SynOp::Cc(cond) => {
 						// jp cc, nn
-						let cond = self.cc(cond, i, b);
+						let cond = b.cc(ea, cond);
 						b.cbranch(ea, cond, target.unwrap(), -1, 0);
 					}
 					_ => panic!(),
 				}
 			}
-			JR => {
-				// no flag changes
+			JR => { // no flag changes
 				match self.syn_ops()[0] {
 					SynOp::Op => {
 						// jr e
@@ -546,56 +582,52 @@ impl InstDesc {
 					}
 					SynOp::Cc(cond) => {
 						// jr cc, e
-						let cond = self.cc(cond, i, b);
+						let cond = b.cc(ea, cond);
 						b.cbranch(ea, cond, target.unwrap(), -1, 0);
 					}
 					_ => panic!()
 				}
 			}
-			CALL => {
-				// no flag changes
+			CALL => { // no flag changes
 				match self.syn_ops()[0] {
 					SynOp::Op => {
 						// call nn
-						self.push_return_addr(i, b);
+						b.push_return_addr(ea, i.next_va());
 						b.call(ea, target.unwrap(), 0);
 					}
 					SynOp::Cc(cond) => {
 						// call cc, nn
-						let cond = self.not_cc(cond, i, b);
+						let cond = b.not_cc(ea, cond);
 						b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
-						self.push_return_addr(i, b);
+						b.push_return_addr (ea, i.next_va());
 						b.call             (ea, target.unwrap(),   0);
 					}
 					_ => panic!()
 				}
 			}
-			RET => {
-				// no flag changes
+			RET => { // no flag changes
 				match self.syn_ops().get(0) {
 					None => {
 						// ret
-						self.return_(i, b);
+						b.return_(ea);
 					}
 					Some(SynOp::Cc(cond)) => {
 						// ret cc
-						let cond = self.not_cc(*cond, i, b);
+						let cond = b.not_cc(ea, *cond);
 						b.cbranch_and_split(ea, cond, i.next_ea(), -1, -1);
-						self.return_(i, b);
+						b.return_(ea);
 					}
 					_ => panic!()
 				}
 			}
-			RST => {
-				// no flag changes
+			RST => { // no flag changes
 				// rst n
-				self.push_return_addr(i, b);
-				b.call(ea, target.unwrap(), 0);
+				b.push_return_addr(ea, i.next_va());
+				b.call            (ea, target.unwrap(), 0);
 			}
-			RETI => {
-				// no flag changes
+			RETI => { // no flag changes
 				// reti
-				self.return_(i, b);
+				b.return_(ea);
 			}
 
 			// ------------------------------------------------------------------------------------

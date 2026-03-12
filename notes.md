@@ -1,16 +1,12 @@
 
 # Yak stack
 
-- once GB IR is done, uncomment pass_refs.rs:47
-- once ir rolc/rorc implemented, reimplement Mos65xx rotates
+- reimplement Mos65xx rotates
 
 # Imminent tasks!
 
-- **Add IR instructions:**
-	- rotate left/right with/without carry
-		- since this seems to be pretty common in these older arches
-		- and rust does actually have rotate methods
 - **Write GB IR compiler**
+	- once GB IR is done, uncomment pass_refs.rs:47
 - **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
 	- is it possible to rearchitect it so it doesn't?
 - **Function-local labels**

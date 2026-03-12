@@ -72,7 +72,7 @@ impl MetaOp {
 			LD   => "ld",   LDH  => "ldh",  NOP  => "nop",  OR  => "or",
 			POP  => "pop",  PUSH => "push", RES  => "res",  RET => "ret",
 			RETI => "reti", RL   => "rl",   RLA  => "rla",  RLC => "rlc",
-			RLCA => "rlca", RR   => "rr",   RRA  => "RRA",  RRC => "rrc",
+			RLCA => "rlca", RR   => "rr",   RRA  => "rra",  RRC => "rrc",
 			RRCA => "rrca", RST  => "rst",  SBC  => "sbc",  SCF => "scf",
 			SET  => "set",  SLA  => "sla",  SRA  => "sra",  SRL => "srl",
 			STOP => "stop", SUB  => "sub",  SWAP => "swap", XOR => "xor",
