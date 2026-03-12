@@ -281,6 +281,20 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
+	pub(crate) fn ibit(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> usize {
+		self.inst(IrInst::ibit(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	}
+
+	/// TODO: docme
+	pub(crate) fn ibitset(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
+		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> usize {
+		self.inst(IrInst::ibitset(ea, dst, src1.into(), src2.into(), src3.into(),
+			dstn, src1n, src2n, src3n))
+	}
+
+	/// TODO: docme
 	pub(crate) fn bxor(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
 		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> usize {
 		self.inst(IrInst::bxor(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))

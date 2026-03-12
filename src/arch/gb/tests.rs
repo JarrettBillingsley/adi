@@ -94,11 +94,11 @@ fn mem(addr: usize, acc: MemAccess) -> Operand {
 }
 
 fn uimm(val: usize) -> Operand {
-	Operand::UImm(val as u64, None)
+	Operand::UImm(val as u64)
 }
 
 fn simm(val: isize) -> Operand {
-	Operand::SImm(val as i64, None)
+	Operand::SImm(val as i64)
 }
 
 fn fmt_inst(p: &GBPrinter, i: &Instruction, state: MmuState) -> String {

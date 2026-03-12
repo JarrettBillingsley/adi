@@ -2,17 +2,13 @@
 # Yak stack
 
 - static analysis disabled
-	- uncomment pass_staticfuncanalysis.rs:40-48
 	- uncomment pass_refs.rs:47
 
 # Imminent tasks!
 
+- **Finish Mos65XX IR that required bit set/get IR insts**
 - **Add IR instructions:**
-	- bit set/get
-		- needed for Mos65xx flags and `BIT`, GB flags and `CB`-prefixed bitwise instructions...
-	- unpair
-		- needed for e.g. doing a 16-bit load into 2 8-bit registers
-	- rotate left/right
+	- rotate left/right with/without carry
 		- since this seems to be pretty common in these older arches
 		- and rust does actually have rotate methods
 - **Write GB IR compiler**

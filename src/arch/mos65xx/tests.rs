@@ -91,7 +91,7 @@ fn mem(addr: usize, acc: MemAccess) -> Operand {
 }
 
 fn uimm(val: usize) -> Operand {
-	Operand::UImm(val as u64, None)
+	Operand::UImm(val as u64)
 }
 
 fn fmt_inst(p: &Mos65xxPrinter, i: &Instruction, state: MmuState) -> String {
@@ -256,7 +256,7 @@ fn printing() {
 
 	let tests: &[(Instruction, &str, &str)] = &[
 		(disas(0, &[CLC_IMP as u8]),             "clc ",            "clr c"                ),
-		(disas(0, &[BRK_IMM as u8, 3]),          "brk 3",           "brk 3"                ),
+		(disas(0, &[BRK_IMM as u8, 3]),          "brk #3",          "brk 3"                ),
 		(disas(0, &[LDA_IMM as u8, 0xEF]),       "lda #$EF",        "li  a, 0xEF"          ),
 		(disas(0, &[ADC_ABS as u8, 0x56, 0x34]), "adc $3456",       "adc a, [0x3456]"      ),
 		(disas(0, &[STY_ZPG as u8, 0x33]),       "sty $33",         "st  y, [0x33]"        ),

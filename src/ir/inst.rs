@@ -47,6 +47,7 @@ pub(crate) enum IrBinOp {
 	IntSShr,    // dst = s1 >> s2 (signed/arithmetic)
 
 	IntPair,    // dst = (s1 in upper bits, s2 in lower bits)
+	IntBit,     // dst = (s1 & (1 << s2)) ? 1 : 0;
 
 	BoolXor,    // dst = s1 != s2
 	BoolAnd,    // dst = s1 and s2
@@ -62,6 +63,8 @@ pub(crate) enum IrTernOp {
 	IntCarryC,   // dst = true if unsigned sum(s1, s2, s3) has carry-out
 	IntSCarryC,  // dst = true if signed sum(s1, s2, s3) has carry-out
 	IntSBorrowC, // dst = true if signed (s1 - s2 - s3) has borrow-out
+
+	IntBitSet,   // dst = (s1 & ~(1 << s2)) | (s3 << s2) (s3 must be 0 or 1)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -203,6 +206,8 @@ impl Debug for IrInstKind {
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntPair    => write!(f, "ipair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+				IntBit     => write!(f, "ibit      {:?}{:?}, bit# = {:?}{:?}, val = {:?}{:?}",
+					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				BoolXor    => write!(f, "bxor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				BoolAnd    => write!(f, "band      {:?}{:?}, {:?}{:?}, {:?}{:?}",
@@ -221,6 +226,9 @@ impl Debug for IrInstKind {
 				IntSCarryC  => write!(f, "iscarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 				IntSBorrowC => write!(f, "isborrowc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+				IntBitSet   => write!(f, "ibitset   {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, \
+					val = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 			},
 		}
@@ -520,6 +528,20 @@ impl IrInst {
 		assert!(dst.size().is_twice(src1.size()));
 		Self { ea, kind: IrInstKind::Binary {
 			dst, src1, op: IrBinOp::IntPair, src2, dstn, src1n, src2n } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn ibit(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		Self { ea, kind: IrInstKind::Binary {
+			dst, src1, op: IrBinOp::IntBit, src2, dstn, src1n, src2n } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn ibitset(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+		Self { ea, kind: IrInstKind::Ternary {
+			dst, src1, op: IrTernOp::IntBitSet, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
 	/// TODO: docme

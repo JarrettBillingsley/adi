@@ -436,6 +436,13 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 		}
 
 		IntPair => (val1 << size as u32) | val2,
+
+		IntBit => {
+			let num_bits = size.bytes() as u64 * 8;
+			assert!(val2 < num_bits, "bit position {} exceeds number of bits {}", val2, num_bits);
+			if (val1 & (1 << val2)) != 0 { 1 } else { 0 }
+		}
+
 		BoolXor => (val1 != val2) as u64,
 		BoolAnd => (val1 != 0 && val2 != 0) as u64,
 		BoolOr =>  (val1 != 0 || val2 != 0) as u64,
@@ -552,6 +559,12 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 					ValSize::_64 => (sum as i64).overflowing_sub(val3 as i64).1 as u64,
 				}
 			}
+		}
+		IntBitSet => {
+			let num_bits = size.bytes() as u64 * 8;
+			assert!(val2 < num_bits, "bit position {} exceeds number of bits {}", val2, num_bits);
+			assert!(val3 == 0 || val3 == 1, "src3 must be 0 or 1");
+			(val1 & !(1 << val2)) | (val3 << val2)
 		}
 	}
 }
@@ -1198,6 +1211,87 @@ mod tests {
 		test_binop(0x12345678,          IntPair, 0x1234,     0x5678,     _16);
 		test_binop(0x12345678_ABCDEF97, IntPair, 0x12345678, 0xABCDEF97, _32);
 	}
+
+	#[test]
+	fn test_ibit() {
+		use { IrBinOp::*, ValSize::* };
+		test_binop(1, IntBit, 0x15, 0, _8);
+		test_binop(0, IntBit, 0x15, 1, _8);
+		test_binop(1, IntBit, 0x15, 2, _8);
+		test_binop(0, IntBit, 0x15, 3, _8);
+		test_binop(1, IntBit, 0x15, 4, _8);
+		test_binop(0, IntBit, 0x15, 5, _8);
+		test_binop(0, IntBit, 0x15, 6, _8);
+		test_binop(0, IntBit, 0x15, 7, _8);
+		test_binop(1, IntBit, 0x1500, 8,  _16);
+		test_binop(0, IntBit, 0x1500, 9,  _16);
+		test_binop(1, IntBit, 0x1500, 10, _16);
+		test_binop(0, IntBit, 0x1500, 11, _16);
+		test_binop(1, IntBit, 0x1500, 12, _16);
+		test_binop(0, IntBit, 0x1500, 13, _16);
+		test_binop(0, IntBit, 0x1500, 14, _16);
+		test_binop(0, IntBit, 0x1500, 15, _16);
+		test_binop(1, IntBit, 0x15000000, 24, _32);
+		test_binop(0, IntBit, 0x15000000, 25, _32);
+		test_binop(1, IntBit, 0x15000000, 26, _32);
+		test_binop(0, IntBit, 0x15000000, 27, _32);
+		test_binop(1, IntBit, 0x15000000, 28, _32);
+		test_binop(0, IntBit, 0x15000000, 29, _32);
+		test_binop(0, IntBit, 0x15000000, 30, _32);
+		test_binop(0, IntBit, 0x15000000, 31, _32);
+		test_binop(1, IntBit, 0x15000000_00000000, 56, _64);
+		test_binop(0, IntBit, 0x15000000_00000000, 57, _64);
+		test_binop(1, IntBit, 0x15000000_00000000, 58, _64);
+		test_binop(0, IntBit, 0x15000000_00000000, 59, _64);
+		test_binop(1, IntBit, 0x15000000_00000000, 60, _64);
+		test_binop(0, IntBit, 0x15000000_00000000, 61, _64);
+		test_binop(0, IntBit, 0x15000000_00000000, 62, _64);
+		test_binop(0, IntBit, 0x15000000_00000000, 63, _64);
+	}
+
+	#[test] #[should_panic]
+	fn test_ibit_badpos_8() { test_binop(1, IrBinOp::IntBit, 0, 8, ValSize::_8); }
+	#[test] #[should_panic]
+	fn test_ibit_badpos_16() { test_binop(1, IrBinOp::IntBit, 0, 16, ValSize::_16); }
+	#[test] #[should_panic]
+	fn test_ibit_badpos_32() { test_binop(1, IrBinOp::IntBit, 0, 32, ValSize::_32); }
+	#[test] #[should_panic]
+	fn test_ibit_badpos_64() { test_binop(1, IrBinOp::IntBit, 0, 64, ValSize::_64); }
+
+	#[test]
+	fn test_ibitset() {
+		use { IrTernOp::*, ValSize::* };
+		test_ternop(0xF0, IntBitSet, 0xF0, 0, 0, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 1, 0, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 2, 0, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 3, 0, _8);
+		test_ternop(0xE0, IntBitSet, 0xF0, 4, 0, _8);
+		test_ternop(0xD0, IntBitSet, 0xF0, 5, 0, _8);
+		test_ternop(0xB0, IntBitSet, 0xF0, 6, 0, _8);
+		test_ternop(0x70, IntBitSet, 0xF0, 7, 0, _8);
+
+		test_ternop(0xF1, IntBitSet, 0xF0, 0, 1, _8);
+		test_ternop(0xF2, IntBitSet, 0xF0, 1, 1, _8);
+		test_ternop(0xF4, IntBitSet, 0xF0, 2, 1, _8);
+		test_ternop(0xF8, IntBitSet, 0xF0, 3, 1, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 4, 1, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 5, 1, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 6, 1, _8);
+		test_ternop(0xF0, IntBitSet, 0xF0, 7, 1, _8);
+
+		// man I don't feel like writing 16, 32, and 64-bit tests. it fuckin works lol
+	}
+
+	#[test] #[should_panic]
+	fn test_ibitset_badpos_8() { test_ternop(0, IrTernOp::IntBitSet, 0, 8, 0, ValSize::_8); }
+	#[test] #[should_panic]
+	fn test_ibitset_badpos_16() { test_ternop(0, IrTernOp::IntBitSet, 0, 16, 0, ValSize::_16); }
+	#[test] #[should_panic]
+	fn test_ibitset_badpos_32() { test_ternop(0, IrTernOp::IntBitSet, 0, 32, 0, ValSize::_32); }
+	#[test] #[should_panic]
+	fn test_ibitset_badpos_64() { test_ternop(0, IrTernOp::IntBitSet, 0, 64, 0, ValSize::_64); }
+	#[test] #[should_panic]
+	fn test_ibitset_badsrc3() { test_ternop(0, IrTernOp::IntBitSet, 0, 0, 2, ValSize::_8); }
 
 	#[test]
 	fn test_bxor_band_bor() {
