@@ -121,8 +121,8 @@ fn disasm_success() {
 	check_disas(0, &[0x01, 0xAD, 0xDE],   LD,   &[uimm(0xDEAD)]                ); // Imm16
 	check_disas(0, &[0xE8, 0x13],         ADD,  &[simm(0x13)]                  ); // SImm8
 	check_disas(0, &[0xE8, 0xFE],         ADD,  &[simm(-2)]                    );
-	check_disas(0, &[0xF8, 0x13],         LD,   &[indrd(Reg::SP, 0x13, R)]     ); // SPImm
-	check_disas(0, &[0xF8, 0xFE],         LD,   &[indrd(Reg::SP,   -2, R)]     );
+	check_disas(0, &[0xF8, 0x13],         LD,   &[simm(0x13)]                  );
+	check_disas(0, &[0xF8, 0xFE],         LD,   &[simm(-2)]                    );
 	check_disas(0, &[0xF0, 0x34],         LDH,  &[mem(0xFF34, R)]              ); // AddHi
 	check_disas(0, &[0xE0, 0x34],         LDH,  &[mem(0xFF34, W)]              );
 	check_disas(0, &[0xF2],               LDH,  &[indrd(Reg::C, 0xFF00, R)]    ); // IndHi

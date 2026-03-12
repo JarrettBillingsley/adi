@@ -86,7 +86,7 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 -> (usize, Option<VA>) {
 	use GBOpKind::*;
 	use Operand::{ UImm, SImm, Indir, Mem };
-	use MemAccess::{ R, W, Target };
+	use MemAccess::{ W, Target };
 
 	if let Some(bit) = desc.bit_operand() {
 		ops[0] = UImm(bit);
@@ -107,7 +107,6 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		UImm8     => { ops[0] = UImm(img[1] as u64);                           (1, None) }
 		Imm16     => { ops[0] = UImm((img[2] as u64) << 8 | (img[1] as u64));  (1, None) }
 		SImm8     => { ops[0] = SImm(img[1] as i8 as i64);                     (1, None) }
-		SPImm     => { ops[0] = Indir(rdisp(Reg::SP, img[1] as i8 as i64), R); (1, None) }
 		AddHi(a)  => { ops[0] = Mem(VA(0xFF00 + (img[1] as usize)), a);        (1, None) }
 		IndHi(a)  => { ops[0] = Indir(rdisp(Reg::C, 0xFF00), a);               (1, None) }
 		Ind(r, a) => { ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);      (1, None) }
@@ -226,7 +225,7 @@ impl IPrinter for GBPrinter {
 					ctx.write_char(']')?;
 				}
 				SynOp::SpPlusOp => {
-					// dispatches to print_indir_reg_disp
+					ctx.write_str("sp + ")?;
 					self.print_operand(ctx, 0)?;
 				}
 				SynOp::Srg(r) => {

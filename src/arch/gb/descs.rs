@@ -93,7 +93,6 @@ pub(super) enum GBOpKind {
 	Imm16,               // ld hl, imm
 
 	Rel,                 // jr offs; access always Target
-	SPImm,               // ld hl, [sp+imm]; access always R
 	Add16(MemAccess),    // could be R, W, or Target
 	AddHi(MemAccess),    // ldh
 	Ind(Reg, MemAccess), // [bc], [de], [hl]
@@ -107,9 +106,9 @@ impl GBOpKind {
 		use GBOpKind::*;
 
 		match self {
-			Imp | Ind(..) | IndHi(..)                                 => 0,
-			Dummy | UImm8 | SImm8 | SPImm | AddHi(..) | Rel | LdHlImm => 1,
-			Imm16 | Add16(..)                                         => 2,
+			Imp | Ind(..) | IndHi(..)                         => 0,
+			Dummy | UImm8 | SImm8 | AddHi(..) | Rel | LdHlImm => 1,
+			Imm16 | Add16(..)                                 => 2,
 		}
 	}
 
@@ -119,7 +118,6 @@ impl GBOpKind {
 		match self {
 			Ind(_, a) | AddHi(a) | Add16(a) => Some(*a),
 			LdHlImm                         => Some(MemAccess::W),
-			SPImm                           => Some(MemAccess::R),
 			Rel                             => Some(MemAccess::Target),
 			_                               => None,
 		}
@@ -492,7 +490,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0xF5, PUSH, &[Srg(AF)],                Other,  Ind(SP, W)),
 	InstDesc(   0xF6, OR,   &[Srg(A), Op],             Other,  UImm8),
 	InstDesc(   0xF7, RST,  &[Op],                     UCALL,  Imp), // rst 0x30
-	InstDesc(   0xF8, LD,   &[Srg(HL), SpPlusOp],      Other,  SPImm),
+	InstDesc(   0xF8, LD,   &[Srg(HL), SpPlusOp],      Other,  SImm8),
 	InstDesc(   0xF9, LD,   &[Srg(SP), Srg(HL)],       Other,  Imp),
 	InstDesc(   0xFA, LD,   &[Srg(A), IndOp],          Other,  Add16(R)),
 	InstDesc(   0xFB, EI,   &[],                       Other,  Imp),
