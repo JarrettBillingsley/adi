@@ -238,14 +238,14 @@ impl InstDesc {
 // InstDesc tables
 // ------------------------------------------------------------------------------------------------
 
-pub(super) fn lookup_desc(opcode: u8) -> Option<InstDesc> {
+pub(super) fn lookup_desc(opcode: u8) -> Option<&'static InstDesc> {
 	assert!(opcode != 0xCB);
-	let ret = INST_DESCS[opcode as usize];
+	let ret = &INST_DESCS[opcode as usize];
 	if ret.meta_op() == UNK { None } else { Some(ret) }
 }
 
-pub(super) fn lookup_desc_cb(opcode: u8) -> InstDesc {
-	INST_DESCS_CB[opcode as usize]
+pub(super) fn lookup_desc_cb(opcode: u8) -> &'static InstDesc {
+	&INST_DESCS_CB[opcode as usize]
 }
 
 use GBOpKind::*;

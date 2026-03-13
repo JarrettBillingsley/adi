@@ -82,7 +82,7 @@ fn rdisp(reg: Reg, disp: i64) -> MemIndir {
 }
 
 /// decode operands into `ops`. returns (number of operands, control flow target)
-fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
+fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 -> (usize, Option<VA>) {
 	use GBOpKind::*;
 	use Operand::{ UImm, SImm, Indir, Mem };
@@ -159,11 +159,11 @@ impl GBPrinter {
 		Self { }
 	}
 
-	fn lookup_desc(self, bytes: &[u8]) -> InstDesc {
-		if bytes[0] == 0xCB {
-			lookup_desc_cb(bytes[1])
-		} else {
-			lookup_desc(bytes[0]).expect("ono")
+	fn lookup_desc(self, bytes: &[u8]) -> &'static InstDesc {
+		match bytes {
+			&[0xCB, byte2, ..] => lookup_desc_cb(byte2),
+			&[byte1, ..]       => lookup_desc(byte1).expect("ono"),
+			_                  => unreachable!(),
 		}
 	}
 }

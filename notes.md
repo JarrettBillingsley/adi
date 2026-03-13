@@ -5,7 +5,10 @@
 # Imminent tasks!
 
 - why aren't `icarry[c]/IntCarry[C]` called `iucarry[c]/IntUCarry[C]`?? 
-- reimplement Mos65xx rotates and uses of `iand` which could be bit instructions
+- GB inst descs - `Imp`, `Ind`, and maybe `Add16` have annoying special cases. split em
+- Mos65xx IR:
+	- reimplement rotates and uses of `iand` which could be bit instructions
+	- cleanup/reorganize to match GB IR compiler (methods on `IrBuilder`, free function instead of method on `InstDesc`)
 - put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction*
 	- ...and that all operands in the source instruction are referenced by the IR
 - GB IR stress test - test *all* possible opcodes
