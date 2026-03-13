@@ -129,15 +129,39 @@ impl IrBuilder {
 		self.ipair(ea, REG_WZ_TMP, REG_W, REG_Z,  -1, -1, -1);
 	}
 
+	/// Combine all the flag registers into an 8-bit value in `dst`.
+	fn merge_flags(&mut self, ea: EA, dst: IrReg) {
+		self.assign (ea, dst, IrConst::ZERO_8,                -1, -1);
+		self.ibitset(ea, dst, dst, IrConst::_8(4), REG_CF,  -1, -1, -1, -1);
+		self.ibitset(ea, dst, dst, IrConst::_8(5), REG_HF,  -1, -1, -1, -1);
+		self.ibitset(ea, dst, dst, IrConst::_8(6), REG_NF,  -1, -1, -1, -1);
+		self.ibitset(ea, dst, dst, IrConst::_8(7), REG_ZF,  -1, -1, -1, -1);
+	}
+
+	/// Extracts all the flag values from `src` into the flag registers.
+	fn extract_flags(&mut self, ea: EA, src: IrReg) {
+		self.ibit(ea, REG_CF, src, IrConst::_8(4),  -1, -1, -1);
+		self.ibit(ea, REG_HF, src, IrConst::_8(5),  -1, -1, -1);
+		self.ibit(ea, REG_NF, src, IrConst::_8(6),  -1, -1, -1);
+		self.ibit(ea, REG_ZF, src, IrConst::_8(7),  -1, -1, -1);
+	}
+
 	/// Push an 8-bit value `src` onto the stack.
-	fn push8(&mut self, src: impl Into<IrSrc>, ea: EA) {
+	fn push8(&mut self, ea: EA, src: impl Into<IrSrc>) {
 		// full stack convention - subtract before storing
 		self.iusub(ea, REG_SP, REG_SP, IrConst::_16(1),  -1, -1, -1);
 		self.store(ea, REG_SP, src,                      -1, -1);
 	}
 
+	/// Push a 16-bit value onto the stack as two 8-bit halves, pushing the high half first so that
+	/// the resultant value is little-endian in memory.
+	fn push16(&mut self, ea: EA, srchi: impl Into<IrSrc>, srclo: impl Into<IrSrc>) {
+		self.push8(ea, srchi);
+		self.push8(ea, srclo);
+	}
+
 	/// Pop an 8-bit value off the stack into `dst`.
-	fn pop8(&mut self, dst: impl Into<IrReg>, ea: EA) {
+	fn pop8(&mut self, ea: EA, dst: impl Into<IrReg>) {
 		let dst = dst.into();
 		// full stack convention - load before adding
 		self.load (ea, dst,    REG_SP,                   -1, -1);
@@ -145,23 +169,23 @@ impl IrBuilder {
 	}
 
 	/// Pop a 16-bit value off the stack as two 8-bit halves into `dstlo` and `dsthi`.
-	fn pop16(&mut self, dsthi: impl Into<IrReg>, dstlo: impl Into<IrReg>, ea: EA) {
-		self.pop8(dstlo, ea);
-		self.pop8(dsthi, ea);
+	fn pop16(&mut self, ea: EA, dsthi: impl Into<IrReg>, dstlo: impl Into<IrReg>) {
+		self.pop8(ea, dstlo);
+		self.pop8(ea, dsthi);
 	}
 
 	/// Pop a value into the WZ register and pair it, so it's ready to use as REG_WZ_TMP.
 	fn pop_wz(&mut self, ea: EA) {
-		self.pop16(REG_W, REG_Z, ea);
-		self.wz(ea);
+		self.pop16(ea, REG_W, REG_Z);
+		self.wz   (ea);
 	}
 
 	/// Push the return address to the stack.
 	fn push_return_addr(&mut self, ea: EA, ret_addr: VA) {
 	 	let ret_addr = ret_addr.0 as u16;
 		// push hi then lo
-		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), ea);
-		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), ea);
+		self.push8(ea, IrConst::_8((ret_addr >> 8  ) as u8));
+		self.push8(ea, IrConst::_8((ret_addr & 0xFF) as u8));
 	}
 
 	fn call_(&mut self, ea: EA, ret_addr: VA, target: EA, targetn: i8) {
@@ -172,7 +196,7 @@ impl IrBuilder {
 	/// Pop the return address and `ret` to it.
 	fn return_(&mut self, ea: EA) {
 		self.pop_wz(ea);
-		self.ret(ea, REG_WZ_TMP, -1);
+		self.ret   (ea, REG_WZ_TMP, -1);
 	}
 
 	/// Set the Z, N, and H flags to 0.
@@ -738,7 +762,14 @@ impl InstDesc {
 				// ld [nn], sp (0x08)
 				(IndOp, Srg(Reg::SP)) => {
 					let Operand::Mem(dst, _) = i.ops()[0] else { panic!() };
-					b.store(ea, IrConst::_16(dst.0 as u16), REG_SP,  -1, 0);
+
+					// split it into two 8-bit stores, little-endian
+					b.ilo  (ea, REG_Z, REG_SP,                      -1, -1);
+					b.store(ea, IrConst::_16(dst.0 as u16), REG_Z,   0, -1);
+					b.ihi  (ea, REG_W, REG_SP,                      -1, -1);
+					// since "dst+1" isn't what they wrote in the operand, we don't associate
+					// the IR operand with it; only on the first store.
+					b.store(ea, IrConst::_16((dst.0 + 1) as u16), REG_W,  -1, -1);
 				}
 
 				_ => panic!("`ld` IR unimplemented: {:?}", self),
@@ -771,23 +802,34 @@ impl InstDesc {
 
 				_ => panic!("`ldh` IR unimplemented: {:?}", self),
 			}
-			(PUSH, _) => {
-				b.nop(ea); // TODO
-				// no flag changes
-				// InstDesc(   0xC5, PUSH, &[Srg(BC)],                Other,  Ind(SP, W)),
-				// ...
-			}
-			(POP, _) => {
-				b.nop(ea); // TODO
-				// no flag changes EXCEPT for 0xF1
-				// {Z*, N*, H*, C*} 0xF1 (pop af)
 
-				// InstDesc(   0xC1, POP,  &[Srg(BC)],                Other,  Ind(SP, R)),
-				// ...
+			// push bc (0xC5)
+			// push de (0xD5)
+			// push hl (0xE5)
+			(PUSH, Some(Srg(reg @ (Reg::BC | Reg::DE | Reg::HL)))) => { // no flag changes
+				b.push16(ea, IrReg::from(reg.hi()), IrReg::from(reg.lo()));
 			}
-			_ => {
-				panic!("IR unimplemented: {:?}", self);
+
+			// push af (0xF5)
+			(PUSH, Some(Srg(Reg::AF))) => { // no flag changes
+				b.merge_flags(ea, REG_Z);
+				b.push16     (ea, REG_A, REG_Z);
 			}
+
+			// pop bc (0xC1)
+			// pop de (0xD1)
+			// pop hl (0xE1)
+			(POP, Some(Srg(reg @ (Reg::BC | Reg::DE | Reg::HL)))) => { // no flag changes
+				b.pop16(ea, IrReg::from(reg.hi()), IrReg::from(reg.lo()));
+			}
+
+			// pop af (0xF1)
+			(POP, Some(Srg(Reg::AF))) => { // {Z*, N*, H*, C*}
+				b.pop16        (ea, REG_A, REG_Z);
+				b.extract_flags(ea, REG_Z)
+			}
+
+			_ => panic!("IR unimplemented: {:?}", self),
 		}
 	}
 }
