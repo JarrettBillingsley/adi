@@ -81,7 +81,8 @@ impl Program {
 
 			// let's double-check to make sure the arch is implemented properly.
 			assert!(matches!(inst.get_op(opn), Operand::Mem(_, _) | Operand::Indir(_, _)),
-				"only Mem and Indir operands are allowed to have constant addresses");
+				"only Mem and Indir operands are allowed to have constant addresses. \
+				inst = {:?}", inst);
 
 			// have to see if there is already a ref here - if it's to the same address, we may be
 			// just accessing it in a different way (e.g. for an increment instruction, the IR will

@@ -188,6 +188,7 @@ impl IrBuilder {
 		self.push8(ea, IrConst::_8((ret_addr & 0xFF) as u8));
 	}
 
+	/// Push `ret_addr` to the stack, and then call `target`.
 	fn call_(&mut self, ea: EA, ret_addr: VA, target: EA, targetn: i8) {
 		self.push_return_addr(ea, ret_addr);
 		self.call            (ea, target, targetn);
@@ -199,19 +200,35 @@ impl IrBuilder {
 		self.ret   (ea, REG_WZ_TMP, -1);
 	}
 
-	/// Set the Z, N, and H flags to 0.
-	fn z0n0h0(&mut self, ea: EA) {
-		self.assign(ea, REG_ZF, IrConst::_8(0),  -1, -1);
+	/// Set the Z flag to whether or not `reg == 0`.
+	fn z_(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
+		let reg = reg.into();
+		self.ieq(ea, REG_ZF, reg, IrConst::_8(0),  -1, regn, -1);
+	}
+
+	/// Set the N and H flags to 0.
+	fn n0h0(&mut self, ea: EA) {
 		self.assign(ea, REG_NF, IrConst::_8(0),  -1, -1);
 		self.assign(ea, REG_HF, IrConst::_8(0),  -1, -1);
 	}
 
+	/// Set the Z, N, and H flags to 0.
+	fn z0n0h0(&mut self, ea: EA) {
+		self.assign(ea, REG_ZF, IrConst::_8(0),  -1, -1);
+		self.n0h0  (ea);
+	}
+
 	/// Set the N and H flags to 0, and the Z flag to whether or not `reg == 0`.
 	fn z_n0h0(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
-		let reg = reg.into();
-		self.ieq   (ea, REG_ZF, reg, IrConst::_8(0),  -1, regn, -1);
-		self.assign(ea, REG_NF, IrConst::_8(0),       -1, -1);
-		self.assign(ea, REG_HF, IrConst::_8(0),       -1, -1);
+		self.z_  (ea, reg, regn);
+		self.n0h0(ea);
+	}
+
+	/// Set the N, H, and C flags to 0, and the Z flag to whether or not `reg == 0`.
+	fn z_n0h0c0(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
+		self.z_    (ea, reg, regn);
+		self.n0h0  (ea);
+		self.assign(ea, REG_CF, IrConst::_8(0),       -1, -1);
 	}
 
 	/// Shift the given `reg` left. The carry flag is set to the MSB of `reg`, and the zero flag is
@@ -305,6 +322,14 @@ impl IrBuilder {
 		}
 	}
 
+	/// Swap the nybbles of the given register. The zero flag is set according to whether the result
+	/// is zero, and the N, H, and C flags are all set to 0.
+	fn swap(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
+		let reg = reg.into();
+		self.irol    (ea, reg, reg, IrConst::_8(4),  regn, regn, -1);
+		self.z_n0h0c0(ea, reg,                       regn);
+	}
+
 	/// Do a conditional branch using the condition code `cc`.
 	fn cc_branch(&mut self, ea: EA, cc: Cc, target: EA, targetn: i8) {
 		let cond = self.cc(ea, cc);
@@ -351,10 +376,9 @@ impl IrBuilder {
 /// a temporary register containing the 8-bit value loaded from `[hl]`; it must place the
 /// result back into this same register.
 fn hl_rmw(b: &mut IrBuilder, ea: EA, f: impl Fn(&mut IrBuilder, IrReg), hln: i8) {
-	b.rr   (ea, Reg::HL);
-	b.load (ea, REG_Z, REG_HL_TMP, -1, hln);
-	f      (b,  REG_Z);
-	b.store(ea, REG_HL_TMP, REG_Z, hln, -1);
+	b.load_ind(ea, REG_Z, Reg::HL,    hln);
+	f         (b,  REG_Z);
+	b.store   (ea, REG_HL_TMP, REG_Z, hln, -1);
 }
 
 impl InstDesc {
@@ -546,7 +570,7 @@ impl InstDesc {
 				b.nop(ea); // TODO
 				// {Z-, N1, H1, C-} 0x2F (cpl)
 			}
-			(DA, _) => {
+			(DAA, None) => {
 				b.nop(ea); // TODO
 				// {Z*, N-, H0, C*} 0x27 (da a)
 			}
@@ -577,61 +601,73 @@ impl InstDesc {
 			(RRC, Some(Srg(Reg::HL))) => hl_rmw(b, ea, |b, reg| b.ror (ea, reg, true, -1), 0),
 			(RRC, Some(Srg(reg)))     =>                        b.ror (ea, reg, true,  0),
 
-			(SWAP, _) => {
-				b.nop(ea); // TODO
-				// swap(r8)
-					// {Z*, N0, H0, C0} 0xCB_{0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x37} (swap r)
-					// InstDesc(0xCB_30, SWAP, &[Srg(B)],                 Other,  Imp),
-					// ...
+			// {Z*, N0, H0, C0}
+			(SWAP, Some(Srg(reg)))        =>                        b.swap(ea, reg, -1),
+			(SWAP, Some(IndReg(Reg::HL))) => hl_rmw(b, ea, |b, reg| b.swap(ea, reg, -1), 0),
 
-				// swap([hl])
-					// {Z*, N0, H0, C0} 0xCB_36 (swap [hl])
-					// InstDesc(0xCB_36, SWAP, &[IndReg(HL)],             Other,  Ind(HL, RW)),
+			// {Z*, N0, H1, C-}
+			(BIT, Some(Op)) => match self.syn_ops()[1] {
+				Srg(reg) => {
+					let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+					let bit = IrConst::_8(bit as u8);
+					let reg = IrReg::from(reg);
+					b.ibit(ea, REG_ZF, reg, bit, -1, -1, -1);
+				}
+				IndReg(Reg::HL) => {
+					let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+					let bit = IrConst::_8(bit as u8);
+					// operand 0 is the bit number, operand 1 is [hl]
+					b.load_ind(ea, REG_Z,  Reg::HL,     1);
+					b.ibit    (ea, REG_ZF, REG_Z, bit, -1, -1, -1);
+				}
+				_ => panic!("`res` IR unimplemented: {:?}", self),
 			}
-			(BIT, _) => {
-				b.nop(ea); // TODO
-				// zf <- r8.n
-					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{^6,E}}} (bit n, r)
-					// InstDesc(0xCB_40, BIT,  &[Op, Srg(B)],             Other,  Imp),
-					// ...
 
-				// zf <- [hl].n
-					// {Z*, N0, H1, C-} 0xCB_{{4,5,6,7}{6,E}}} (bit n, [hl])
-					// InstDesc(0xCB_46, BIT,  &[Op, IndReg(HL)],         Other,  Ind(HL, R)),
+			// no flag changes
+			(RES, Some(Op)) => match self.syn_ops()[1] {
+				Srg(reg) => {
+					let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+					let bit = IrConst::_8(bit as u8);
+					let reg = IrReg::from(reg);
+					b.ibitset(ea, reg, reg, bit, IrConst::ZERO_8,  -1, -1, -1, -1);
+				}
+				IndReg(Reg::HL) => {
+					let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+					let bit = IrConst::_8(bit as u8);
+					hl_rmw(b, ea, |b, reg| {
+						b.ibitset(ea, reg, reg, bit, IrConst::ZERO_8, -1, -1, -1, -1);
+					}, 1); // operand 0 is the bit number, operand 1 is [hl]
+				}
+				_ => panic!("`res` IR unimplemented: {:?}", self),
 			}
-			(RES, _) => {
-				b.nop(ea); // TODO
-				// r8.n <- 0
-					// no flag changes
-					// InstDesc(0xCB_80, RES,  &[Op, Srg(B)],             Other,  Imp),
-					// ...
 
-				// [hl].n <- 0
-					// no flag changes
-					// InstDesc(0xCB_86, RES,  &[Op, IndReg(HL)],         Other,  Ind(HL, RW)),
-			}
-			(SET, _) => {
-				b.nop(ea); // TODO
-				// r8.n <- 1
-					// no flag changes
-					// InstDesc(0xCB_C0, SET,  &[Op, Srg(B)],             Other,  Imp),
-					// ...
-
-				// [hl].n <- 1
-					// no flag changes
-					// InstDesc(0xCB_C6, SET,  &[Op, IndReg(HL)],         Other,  Ind(HL, RW)),
+			(SET, Some(Op)) => match self.syn_ops()[1] {
+				Srg(reg) => {
+					let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+					let bit = IrConst::_8(bit as u8);
+					let reg = IrReg::from(reg);
+					b.ibitset(ea, reg, reg, bit, IrConst::ONE_8,  -1, -1, -1, -1);
+				}
+				IndReg(Reg::HL) => {
+					let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+					let bit = IrConst::_8(bit as u8);
+					hl_rmw(b, ea, |b, reg| {
+						b.ibitset(ea, reg, reg, bit, IrConst::ONE_8, -1, -1, -1, -1);
+					}, 1); // operand 0 is the bit number, operand 1 is [hl]
+				}
+				_ => panic!("`set` IR unimplemented: {:?}", self),
 			}
 
 			// ------------------------------------------------------------------------------------
 			// Flag manipulation
 
-			(CCF, _) => {
-				b.nop(ea); // TODO
-				// {Z-, N0, H0, C*} 0x3F (ccf)
+			(CCF, None) => { // {Z-, N0, H0, C*}
+				b.n0h0(ea);
+				b.bnot(ea, REG_CF, REG_CF,  -1, -1);
 			}
-			(SCF, _) => {
-				b.nop(ea); // TODO
-				// {Z-, N0, H0, C1} 0x37 (scf)
+			(SCF, None) => { // {Z-, N0, H0, C1}
+				b.n0h0(ea);
+				b.assign(ea, REG_CF, IrConst::ONE_8,  -1, -1);
 			}
 
 			// ------------------------------------------------------------------------------------

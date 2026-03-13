@@ -72,7 +72,7 @@ pub(super) enum MetaOp {
 	#[default]
 	UNK,
 	ADC,  ADD, AND, BIT, CALL, CCF,  CP,   CPL,
-	DA,   DEC, DI,  EI,  HALT, INC,  JP,   JR,
+	DAA,  DEC, DI,  EI,  HALT, INC,  JP,   JR,
 	LD,   LDH, NOP, OR,  POP,  PUSH, RES,  RET,
 	RETI, RL,  RLA, RLC, RLCA, RR,   RRA,  RRC,
 	RRCA, RST, SBC, SCF, SET,  SLA,  SRA,  SRL,
@@ -87,7 +87,7 @@ impl MetaOp {
 			UNK  => "???",
 			ADC  => "adc",  ADD  => "add",  AND  => "and",  BIT => "bit",
 			CALL => "call", CCF  => "ccf",  CP   => "cp",   CPL => "cpl",
-			DA   => "da",   DEC  => "dec",  DI   => "di",   EI  => "ei",
+			DAA  => "daa",  DEC  => "dec",  DI   => "di",   EI  => "ei",
 			HALT => "halt", INC  => "inc",  JP   => "jp",   JR  => "jr",
 			LD   => "ld",   LDH  => "ldh",  NOP  => "nop",  OR  => "or",
 			POP  => "pop",  PUSH => "push", RES  => "res",  RET => "ret",
@@ -118,7 +118,7 @@ pub(super) enum GBOpKind {
 	Ind(Reg, MemAccess), // [bc], [de], [hl]
 	IndHi(MemAccess),    // [0xFF00 + c]
 
-	LdHlImm,             // `ld [hl], imm` - only instruction with TWO operands
+	LdHlImm,             // ld [hl], imm
 }
 
 impl GBOpKind {
@@ -301,7 +301,7 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc(   0x24, INC,  &[Srg(H)],                 Other,  Imp),
 	InstDesc(   0x25, DEC,  &[Srg(H)],                 Other,  Imp),
 	InstDesc(   0x26, LD,   &[Srg(H), Op],             Other,  UImm8),
-	InstDesc(   0x27, DA,   &[Srg(A)],                 Other,  Imp),
+	InstDesc(   0x27, DAA,  &[],                       Other,  Imp),
 	InstDesc(   0x28, JR,   &[CC_Z, Op],               Cond,   Rel),
 	InstDesc(   0x29, ADD,  &[Srg(HL), Srg(HL)],       Other,  Imp),
 	InstDesc(   0x2A, LD,   &[Srg(A), IndHlPlus],      Other,  Ind(HL, R)),

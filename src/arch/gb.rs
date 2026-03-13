@@ -88,28 +88,36 @@ fn decode_operands(desc: InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 	use Operand::{ UImm, SImm, Indir, Mem };
 	use MemAccess::{ W, Target };
 
-	if let Some(bit) = desc.bit_operand() {
-		ops[0] = UImm(bit);
-		return (1, None);
-	}
-
 	match desc.op_kind() {
-		Imp => {
-			if let Some(addr) = desc.rst_target() {
-				let addr = VA(addr as usize);
-				ops[0] = Mem(addr, Target);
-				(1, Some(addr))
-			} else {
-				(0, None)
-			}
-		}
 		Dummy     => (0, None),
 		UImm8     => { ops[0] = UImm(img[1] as u64);                           (1, None) }
 		Imm16     => { ops[0] = UImm((img[2] as u64) << 8 | (img[1] as u64));  (1, None) }
 		SImm8     => { ops[0] = SImm(img[1] as i8 as i64);                     (1, None) }
 		AddHi(a)  => { ops[0] = Mem(VA(0xFF00 + (img[1] as usize)), a);        (1, None) }
 		IndHi(a)  => { ops[0] = Indir(rdisp(Reg::C, 0xFF00), a);               (1, None) }
-		Ind(r, a) => { ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);      (1, None) }
+
+		Imp => {
+			if let Some(addr) = desc.rst_target() {
+				let addr = VA(addr as usize);
+				ops[0] = Mem(addr, Target);
+				(1, Some(addr))
+			} else if let Some(bit) = desc.bit_operand() {
+				ops[0] = UImm(bit);
+				(1, None)
+			} else {
+				(0, None)
+			}
+		}
+		Ind(r, a) => {
+			if let Some(bit) = desc.bit_operand() {
+				ops[0] = UImm(bit);
+				ops[1] = Indir(MemIndir::Reg { reg: r as u8 }, a);
+				(2, None)
+			} else {
+				ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);
+				(1, None)
+			}
+		}
 
 		LdHlImm => {
 			ops[0] = Indir(MemIndir::Reg { reg: Reg::HL as u8 }, W);
