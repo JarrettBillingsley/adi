@@ -275,8 +275,7 @@ impl IrBuilder {
 /// Perform some read-modify-write operation using `[hl]` as the source/dest. `callback` is passed a
 /// temporary register containing the 8-bit value loaded from `[hl]`; it must place the result back
 /// into this same register, and it must not modify `REG_HL`.
-fn hl_rmw(b: &mut IrBuilder, callback: impl Fn(&mut IrBuilder, IrReg) -> &mut IrBuilder,
-hln: i8) { // TODO: this should not be last arg
+fn hl_rmw(b: &mut IrBuilder, hln: i8, callback: impl Fn(&mut IrBuilder, IrReg) -> &mut IrBuilder) {
 	b.load_ind(REG_Z, Reg::HL,  hln);
 	callback  (b,  REG_Z);
 	b.store   (REG_HL, REG_Z,   hln, -1);
@@ -736,7 +735,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 
 		// inc [hl]
 		(INC, [IndReg(HL)]) => {  // {Z*, N0, H*, C-}
-			hl_rmw(b, |b, reg| b.inc_dec(reg, 1, true), 0);
+			hl_rmw(b, 0, |b, reg| b.inc_dec(reg, 1, true));
 		}
 
 		// dec bc, inc de, inc hl
@@ -761,7 +760,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 
 		// dec [hl]
 		(DEC, [IndReg(HL)]) => {  // {Z*, N0, H*, C-}
-			hl_rmw(b, |b, reg| b.inc_dec(reg, -1, true), 0);
+			hl_rmw(b, 0, |b, reg| b.inc_dec(reg, -1, true));
 		}
 
 		// cpl a
@@ -840,25 +839,25 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(RRCA, []) => { b.ror (REG_A, false, -1); }
 
 		// {Z*, N0, H0, C*}
-		(SLA, &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.sla(reg, -1), 0);        }
-		(SLA, &[Srg(reg)]) => {                        b.sla(reg,  0);            }
-		(SRA, &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.sra(reg, -1), 0);        }
-		(SRA, &[Srg(reg)]) => {                        b.sra(reg,  0);            }
-		(SRL, &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.srl(reg, -1), 0);        }
-		(SRL, &[Srg(reg)]) => {                        b.srl(reg,  0);            }
+		(SLA, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.sla(reg, -1)); }
+		(SLA, &[Srg(reg)]) => {                       b.sla(reg,  0);  }
+		(SRA, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.sra(reg, -1)); }
+		(SRA, &[Srg(reg)]) => {                       b.sra(reg,  0);  }
+		(SRL, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.srl(reg, -1)); }
+		(SRL, &[Srg(reg)]) => {                       b.srl(reg,  0);  }
 
-		(RL,  &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.rolc(reg, true, -1), 0); }
-		(RL,  &[Srg(reg)]) => {                        b.rolc(reg, true,  0);     }
-		(RLC, &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.rol (reg, true, -1), 0); }
-		(RLC, &[Srg(reg)]) => {                        b.rol (reg, true,  0);     }
-		(RR,  &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.rorc(reg, true, -1), 0); }
-		(RR,  &[Srg(reg)]) => {                        b.rorc(reg, true,  0);     }
-		(RRC, &[Srg(HL)])  => { hl_rmw(b, |b, reg| b.ror (reg, true, -1), 0); }
-		(RRC, &[Srg(reg)]) => {                        b.ror (reg, true,  0);     }
+		(RL,  &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rolc(reg, true, -1)); }
+		(RL,  &[Srg(reg)]) => {                       b.rolc(reg, true,  0);  }
+		(RLC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rol (reg, true, -1)); }
+		(RLC, &[Srg(reg)]) => {                       b.rol (reg, true,  0);  }
+		(RR,  &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rorc(reg, true, -1)); }
+		(RR,  &[Srg(reg)]) => {                       b.rorc(reg, true,  0);  }
+		(RRC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.ror (reg, true, -1)); }
+		(RRC, &[Srg(reg)]) => {                       b.ror (reg, true,  0);  }
 
 		// {Z*, N0, H0, C0}
-		(SWAP, &[Srg(reg)])   => {                        b.swap(reg, -1);     }
-		(SWAP, &[IndReg(HL)]) => { hl_rmw(b, |b, reg| b.swap(reg, -1), 0); }
+		(SWAP, &[Srg(reg)])   => {                       b.swap(reg, -1);  }
+		(SWAP, &[IndReg(HL)]) => { hl_rmw(b, 0, |b, reg| b.swap(reg, -1)); }
 
 		// {Z*, N0, H1, C-}
 		(BIT, &[Op, Srg(reg)]) => {
@@ -886,9 +885,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(RES, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let bit = IrConst::_8(bit as u8);
-			hl_rmw(b, |b, reg| {
-				b.ibset(reg, reg, bit, IrConst::ZERO_8, -1, -1, -1, -1)
-			}, 1); // operand 0 is the bit number, operand 1 is [hl]
+			// operand 0 is the bit number, operand 1 is [hl]
+			hl_rmw(b, 1, |b, reg| b.ibset(reg, reg, bit, IrConst::ZERO_8, -1, -1, -1, -1));
 		}
 
 		// no flag changes
@@ -901,23 +899,24 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(SET, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let bit = IrConst::_8(bit as u8);
-			hl_rmw(b, |b, reg| {
-				b.ibset(reg, reg, bit, IrConst::ONE_8, -1, -1, -1, -1)
-			}, 1); // operand 0 is the bit number, operand 1 is [hl]
+			// operand 0 is the bit number, operand 1 is [hl]
+			hl_rmw(b, 1, |b, reg| b.ibset(reg, reg, bit, IrConst::ONE_8, -1, -1, -1, -1));
 		}
 
 		// ------------------------------------------------------------------------------------
 		// Flag manipulation
 
 		(CCF, []) => { // {Z-, N0, H0, C*}
-			b.n0 ()
+			b
+			.n0  ()
 			.h0  ()
 			.bnot(REG_CF, REG_CF,  -1, -1);
 		}
 		(SCF, []) => { // {Z-, N0, H0, C1}
-			b.n0()
-			.h0 ()
-			.c1 ();
+			b
+			.n0()
+			.h0()
+			.c1();
 		}
 
 		// ------------------------------------------------------------------------------------
