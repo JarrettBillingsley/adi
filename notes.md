@@ -129,6 +129,8 @@
 	- **Custom IR instructions?**
 		- How are multi-step instruction (e.g. 68K `movem`, Z80 `ldir`) represented/handled in the IR? Since they can't cause "real" control flow, maybe they can be represented by just recording their "end-state" effects, like "now BC = 0" etc.
 		- because of that, might be useful to have a custom IR instruction type for things like this. I think Ghidra Pcode does.
+		- already running into a case where I wish I had this (GB `daa`, god the logic is gross to express in vanilla IR)
+		- but **I think I'd wanna put this off until after const prop builds ASTs** - not sure what the implications are for custom IR instructions if that's the case
 
 - **Analysis**
 	- **Make const prop build ASTs for constant provenance**

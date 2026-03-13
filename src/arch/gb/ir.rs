@@ -412,29 +412,30 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Computation
 
-			(ADD, _) => {
+			(ADD, Some(Srg(Reg::A))) => match self.syn_ops()[1] { // {Z*, N0, H*, C*}
+				// add r
+				Srg(_reg) => {
+					b.nop(ea); // TODO
+				}
+				// add [hl]
+				IndReg(Reg::HL) => {
+					b.nop(ea); // TODO
+				}
+				// add n
+				Op => {
+					b.nop(ea); // TODO
+				}
+				_ => panic!("`add` IR unimplemented: {:?}", self),
+			}
+
+			// add hl, rr
+			(ADD, Some(Srg(Reg::HL))) => { // {Z-, N0, H*, C*}
 				b.nop(ea); // TODO
-				// a += r8
-					// {Z*, N0, H*, C*} 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x87 (add a, r)
-					// InstDesc(   0x80, ADD,  &[Srg(A), Srg(B)],         Other,  Imp),
-					// ...
+			}
 
-				// a += [hl]
-					// {Z*, N0, H*, C*} 0x86 (add a, [hl])
-					// InstDesc(   0x86, ADD,  &[Srg(A), IndReg(HL)],     Other,  Ind(HL, R)),
-
-				// a += uimm8
-					// {Z*, N0, H*, C*} 0xC6 (add a, imm8)
-					// InstDesc(   0xC6, ADD,  &[Srg(A), Op],             Other,  UImm8),
-
-				// hl += r16
-					// {Z-, N0, H*, C*} 0x09, 0x19, 0x29, 0x39 (add hl, rr)
-					// InstDesc(   0x09, ADD,  &[Srg(HL), Srg(BC)],       Other,  Imp),
-					// ...
-
-				// sp += simm8
-					// {Z0, N0, H*, C*} 0xE8 (add sp, imm)
-					// InstDesc(   0xE8, ADD,  &[Srg(SP), Op],            Other,  SImm8),
+			// add sp, e
+			(ADD, Some(Srg(Reg::SP))) => { // {Z0, N0, H*, C*}
+				b.nop(ea); // TODO
 			}
 			(ADC, _) => {
 				b.nop(ea); // TODO
