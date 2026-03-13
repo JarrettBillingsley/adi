@@ -16,6 +16,7 @@ pub(crate) struct Mos65xxIrCompiler;
 
 impl IIrCompiler for Mos65xxIrCompiler {
 	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+		b.set_ea(i.ea());
 		lookup_desc(i.bytes()[0]).build_ir(i, target, b);
 	}
 
@@ -77,7 +78,6 @@ impl InstDesc {
 	///
 	/// Panics if called on an instruction with implicit addressing. Caller is responsible for that.
 	fn get_operand(&self, i: &Instruction, b: &mut IrBuilder) -> IrSrc {
-		let ea = i.ea();
 		use AddrMode::*;
 		use MemIndir::*;
 
@@ -103,7 +103,7 @@ impl InstDesc {
 
 				// using tmp2 here so that resulting address is in the range [0, 255].
 				// tmp2 = reg + disp
-				b.iuadd(ea, REG_TMP2, reg_to_ir_reg(reg), IrConst::_8(disp as u8), -1, -1,  0);
+				b.iuadd(REG_TMP2, reg_to_ir_reg(reg), IrConst::_8(disp as u8), -1, -1,  0);
 				REG_TMP2.into()
 			}
 			// Absolute (2 bytes), e.g. `lda $8040`.
@@ -121,8 +121,8 @@ impl InstDesc {
 
 				// tmp16 = zxt(reg)
 				// tmp16 += disp
-				b.izxt(ea,  REG_TMP16, reg_to_ir_reg(reg), -1, -1);
-				b.iuadd(ea, REG_TMP16, REG_TMP16, IrConst::_16(disp as u16), -1, -1, 0);
+				b.izxt( REG_TMP16, reg_to_ir_reg(reg), -1, -1);
+				b.iuadd(REG_TMP16, REG_TMP16, IrConst::_16(disp as u16), -1, -1, 0);
 				REG_TMP16.into()
 			}
 			// Indirect (2 bytes); used only for indirect jump i.e. `jmp ($2000)`.
@@ -142,14 +142,14 @@ impl InstDesc {
 					// tmp2  = lo
 					// tmp1  = hi
 					// tmp16 = tmp1:tmp2
-					b.load (ea, REG_TMP2,  IrConst::_16(va),          -1, -1);
-					b.load (ea, REG_TMP1,  IrConst::_16(va & 0xFF00), -1, -1);
-					b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2,        -1, -1, -1);
+					b.load (REG_TMP2,  IrConst::_16(va),          -1, -1);
+					b.load (REG_TMP1,  IrConst::_16(va & 0xFF00), -1, -1);
+					b.ipair(REG_TMP16, REG_TMP1, REG_TMP2,        -1, -1, -1);
 				} else {
 					// ez mode
 
 					// tmp16 = *va
-					b.load(ea, REG_TMP16, IrConst::_16(va), -1, 0);
+					b.load(REG_TMP16, IrConst::_16(va), -1, 0);
 				}
 				REG_TMP16.into()
 			}
@@ -165,20 +165,20 @@ impl InstDesc {
 				let Operand::Indir(RegDisp { disp, .. }, _) = i.ops()[0] else { panic!() };
 
 				// tmp2 = X + disp  (wraps at 8 bits)
-				b.iuadd(ea, REG_TMP2, REG_X, IrConst::_8(disp as u8), -1, -1,  0);
+				b.iuadd(REG_TMP2, REG_X, IrConst::_8(disp as u8), -1, -1,  0);
 
 				// now tmp2 points to a location in the zero page, but we don't statically know
 				// whether tmp2 + 1 would wrap around or not, so we have to do it the Long Way.
 
 				// tmp1 = tmp2 + 1  (wraps at 8 bits)
-				b.iuadd(ea, REG_TMP1, REG_TMP2, IrConst::ONE_8, -1, -1, -1);
+				b.iuadd(REG_TMP1, REG_TMP2, IrConst::ONE_8, -1, -1, -1);
 
 				// tmp2 = *tmp2  (lo)
 				// tmp1 = *tmp1  (hi)
 				// tmp16 = tmp1:tmp2
-				b.load (ea, REG_TMP2,  REG_TMP2,           -1, -1);
-				b.load (ea, REG_TMP1,  REG_TMP1,           -1, -1);
-				b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
+				b.load (REG_TMP2,  REG_TMP2,           -1, -1);
+				b.load (REG_TMP1,  REG_TMP1,           -1, -1);
+				b.ipair(REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
 				REG_TMP16.into()
 			}
 			// "Indirect Indexed" - double-indirect zero-page Y-indexed (1 byte), e.g. `lda
@@ -198,18 +198,18 @@ impl InstDesc {
 					// tmp2  = *0x00FF  (lo)
 					// tmp1  = *0x0000  (hi)
 					// tmp16 = tmp1:tmp2
-					b.load (ea, REG_TMP2,  IrConst::_8(0xFF),  -1, 0);
-					b.load (ea, REG_TMP1,  IrConst::ZERO_8,    -1, 0);
-					b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
+					b.load (REG_TMP2,  IrConst::_8(0xFF),  -1, 0);
+					b.load (REG_TMP1,  IrConst::ZERO_8,    -1, 0);
+					b.ipair(REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
 				} else {
 					// tmp16 = *va
-					b.load(ea, REG_TMP16, IrConst::_8(va as u8), -1, 0);
+					b.load(REG_TMP16, IrConst::_8(va as u8), -1, 0);
 				}
 
 				// tmp16_2 = zxt(Y)
 				// tmp16 = tmp16 + tmp16_2
-				b.izxt(ea,  REG_TMP16_2, REG_Y, -1, -1);
-				b.iuadd(ea, REG_TMP16, REG_TMP16, REG_TMP16_2, -1, -1, -1);
+				b.izxt( REG_TMP16_2, REG_Y, -1, -1);
+				b.iuadd(REG_TMP16, REG_TMP16, REG_TMP16_2, -1, -1, -1);
 				REG_TMP16.into()
 			}
 			// PC-relative (1 byte), e.g. `bcc whatever`.
@@ -233,7 +233,6 @@ impl InstDesc {
 	/// Gets the actual value of the operand, performing a load if needed, and places the value
 	/// into `dst`.
 	fn get_operand_value_into(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
 
 		use AddrMode::*;
 
@@ -244,37 +243,35 @@ impl InstDesc {
 			IMM => {
 				// just a constant, assign it
 				let val = self.get_operand(i, b);
-				b.mov(ea, dst, val, -1, 0);
+				b.mov(dst, val, -1, 0);
 			}
 			ZPG | ABS => {
 				// needs a load, and that load references the operand
 				let addr = self.get_operand(i, b);
-				b.load(ea, dst, addr, -1, 0);
+				b.load(dst, addr, -1, 0);
 			}
 			ZPX | ZPY | ABX | ABY | IZX | IZY => {
 				// needs a load, but that load does *not* reference the operand
 				let addr = self.get_operand(i, b);
-				b.load(ea, dst, addr, -1, -1);
+				b.load(dst, addr, -1, -1);
 			}
 		}
 	}
 
 	/// Push an 8-bit value `src` onto the stack.
-	fn push8(&self, src: impl Into<IrSrc>, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
+	fn push8(&self, src: impl Into<IrSrc>, b: &mut IrBuilder) {
 		// empty stack convention - store before subtracting
-		b.ipair(ea, REG_TMP16, IrConst::ONE_8, REG_S, -1, -1, -1);
-		b.store(ea, REG_TMP16, src,                   -1, -1);
-		b.iusub(ea, REG_S, REG_S, IrConst::_8(1),     -1, -1, -1);
+		b.ipair(REG_TMP16, IrConst::ONE_8, REG_S, -1, -1, -1);
+		b.store(REG_TMP16, src,                   -1, -1);
+		b.iusub(REG_S, REG_S, IrConst::_8(1),     -1, -1, -1);
 	}
 
 	/// Pop an 8-bit value off the stack into `dst`.
-	fn pop8(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
+	fn pop8(&self, dst: IrReg, b: &mut IrBuilder) {
 		// empty stack convention - add before loading
-		b.iuadd(ea, REG_S, REG_S, IrConst::_8(1),     -1, -1, -1);
-		b.ipair(ea, REG_TMP16, IrConst::ONE_8, REG_S, -1, -1, -1);
-		b.load (ea, dst, REG_TMP16,                   -1, -1);
+		b.iuadd(REG_S, REG_S, IrConst::_8(1),     -1, -1, -1);
+		b.ipair(REG_TMP16, IrConst::ONE_8, REG_S, -1, -1, -1);
+		b.load (dst, REG_TMP16,                   -1, -1);
 	}
 
 	/// Push the return address to the stack. It's always the instruction's address + 2, despite the
@@ -283,88 +280,81 @@ impl InstDesc {
 	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
 	 	let ret_addr = (i.va().0 + 2) as u16;
 		// push hi then lo
-		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), i, b);
-		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), i, b);
+		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), b);
+		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), b);
 	}
 
 	/// Pop the return address from the stack and `ret` to it. If `add_1` is true, adds 1 to the
 	/// popped address (`rts` does this, but `rti` does not).
-	fn return_(&self, i: &Instruction, b: &mut IrBuilder, add_1: bool) {
-		let ea = i.ea();
+	fn return_(&self, b: &mut IrBuilder, add_1: bool) {
 		// pop lo then hi
-		self.pop8(REG_TMP2, i, b);
-		self.pop8(REG_TMP1, i, b);
-		b.ipair(ea, REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
+		self.pop8(REG_TMP2, b);
+		self.pop8(REG_TMP1, b);
+		b.ipair(REG_TMP16, REG_TMP1, REG_TMP2, -1, -1, -1);
 
 		if add_1 {
-			b.iuadd(ea, REG_TMP16, REG_TMP16, IrConst::ONE_16,  -1, -1, -1);
+			b.iuadd(REG_TMP16, REG_TMP16, IrConst::ONE_16,  -1, -1, -1);
 		}
 
-		b.ret  (ea, REG_TMP16,                     -1);
+		b.ret  (REG_TMP16,                     -1);
 	}
 
 	/// Combine all flags IR regs into a single 8-bit value and push it.
 	///
 	/// Changes REG_TMP1.
-	fn push_flags(&self, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
-
+	fn push_flags(&self, b: &mut IrBuilder) {
 		// the values of bits 4 and 5 (Break and Reserved) are always 1 when pushed.
-		b.mov  (ea, REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
-		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(0), REG_CF,  -1, -1, -1, -1);
-		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(1), REG_ZF,  -1, -1, -1, -1);
-		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(2), REG_IF,  -1, -1, -1, -1);
-		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(3), REG_DF,  -1, -1, -1, -1);
-		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(6), REG_VF,  -1, -1, -1, -1);
-		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(7), REG_NF,  -1, -1, -1, -1);
-		self.push8(REG_TMP1, i, b);
+		b.mov  (REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
+		b.ibset(REG_TMP1, REG_TMP1, IrConst::_8(0), REG_CF,  -1, -1, -1, -1);
+		b.ibset(REG_TMP1, REG_TMP1, IrConst::_8(1), REG_ZF,  -1, -1, -1, -1);
+		b.ibset(REG_TMP1, REG_TMP1, IrConst::_8(2), REG_IF,  -1, -1, -1, -1);
+		b.ibset(REG_TMP1, REG_TMP1, IrConst::_8(3), REG_DF,  -1, -1, -1, -1);
+		b.ibset(REG_TMP1, REG_TMP1, IrConst::_8(6), REG_VF,  -1, -1, -1, -1);
+		b.ibset(REG_TMP1, REG_TMP1, IrConst::_8(7), REG_NF,  -1, -1, -1, -1);
+		self.push8(REG_TMP1, b);
 	}
 
 	/// Pop a value off the stack and split it into the various IR flag regs.
 	///
 	/// Changes REG_TMP1.
-	fn pop_flags(&self, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
-		self.pop8(REG_TMP1, i, b);
-		b.ibit(ea, REG_CF, REG_TMP1, IrConst::_8(0),  -1, -1, -1);
-		b.ibit(ea, REG_ZF, REG_TMP1, IrConst::_8(1),  -1, -1, -1);
-		b.ibit(ea, REG_IF, REG_TMP1, IrConst::_8(2),  -1, -1, -1);
-		b.ibit(ea, REG_DF, REG_TMP1, IrConst::_8(3),  -1, -1, -1);
-		b.ibit(ea, REG_VF, REG_TMP1, IrConst::_8(6),  -1, -1, -1);
-		b.ibit(ea, REG_NF, REG_TMP1, IrConst::_8(7),  -1, -1, -1);
+	fn pop_flags(&self, b: &mut IrBuilder) {
+		self.pop8(REG_TMP1, b);
+		b.ibit(REG_CF, REG_TMP1, IrConst::_8(0),  -1, -1, -1);
+		b.ibit(REG_ZF, REG_TMP1, IrConst::_8(1),  -1, -1, -1);
+		b.ibit(REG_IF, REG_TMP1, IrConst::_8(2),  -1, -1, -1);
+		b.ibit(REG_DF, REG_TMP1, IrConst::_8(3),  -1, -1, -1);
+		b.ibit(REG_VF, REG_TMP1, IrConst::_8(6),  -1, -1, -1);
+		b.ibit(REG_NF, REG_TMP1, IrConst::_8(7),  -1, -1, -1);
 	}
 
 	/// Do a comparison and set flags according to the result.
-	fn cmp(&self, src1: IrReg, src2: IrReg, src2n: i8, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
-		b.iusub(ea, REG_TMP1, src1, src2, -1, -1, src2n);
+	fn cmp(&self, src1: IrReg, src2: IrReg, src2n: i8, b: &mut IrBuilder) {
+		b.iusub(REG_TMP1, src1, src2, -1, -1, src2n);
 		// CF = not(src1 <u src2)
-		b.iult (ea, REG_CF,   src1, src2, -1, -1, -1);
-		b.bnot (ea, REG_CF,   REG_CF,     -1, -1);
-		self.set_nz(REG_TMP1, i, b);
+		b.iult (REG_CF,   src1, src2, -1, -1, -1);
+		b.bnot (REG_CF,   REG_CF,     -1, -1);
+		self.set_nz(REG_TMP1, b);
 	}
 
 	/// Do an addition and set flags according to the result.
-	fn add_(&self, src: impl Into<IrSrc>, srcn: i8, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
+	fn add_(&self, src: impl Into<IrSrc>, srcn: i8, b: &mut IrBuilder) {
 		let src = src.into();
 
-		b.iscarryc(ea, REG_VF, REG_A, src, REG_CF, -1, -1,   -1, -1);
-		b.iucarryc(ea, REG_CF, REG_A, src, REG_CF, -1, -1,   -1, -1);
-		b.iuaddc  (ea, REG_A,  REG_A, src, REG_CF, -1, -1, srcn, -1);
-		self.set_nz(REG_A, i, b);
+		b.iscarryc(REG_VF, REG_A, src, REG_CF, -1, -1,   -1, -1);
+		b.iucarryc(REG_CF, REG_A, src, REG_CF, -1, -1,   -1, -1);
+		b.iuaddc  (REG_A,  REG_A, src, REG_CF, -1, -1, srcn, -1);
+		self.set_nz(REG_A, b);
 	}
 
 	/// Sets the Negative and Zero flags based on the value of the given `reg`.
-	fn set_nz(&self, reg: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		let ea = i.ea();
-		b.islt(ea, REG_NF, reg, IrConst::ZERO_8,   -1, -1, -1);
-		b.ieq (ea, REG_ZF, reg, IrConst::ZERO_8,   -1, -1, -1);
+	fn set_nz(&self, reg: IrReg, b: &mut IrBuilder) {
+		b.islt(REG_NF, reg, IrConst::ZERO_8,   -1, -1, -1);
+		b.ieq (REG_ZF, reg, IrConst::ZERO_8,   -1, -1, -1);
 	}
 
 	/// Sets the Carry flag to 1 if MSB of `reg` is 1.
-	fn set_c(&self, reg: IrReg, i: &Instruction, b: &mut IrBuilder) {
-		b.islt(i.ea(), REG_CF, reg, IrConst::ZERO_8,   -1, -1, -1);
+	fn set_c(&self, reg: IrReg, b: &mut IrBuilder) {
+		b.islt(REG_CF, reg, IrConst::ZERO_8,   -1, -1, -1);
 	}
 
 	// TODO: are dummy reads/writes worth implementing? at least on the NES there seems to be only
@@ -377,20 +367,19 @@ impl InstDesc {
 	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
-		let ea = i.ea();
 
 		match self.meta_op {
 			UNK => { panic!("what the hell is an unknown instruction doing in a BB?"); }
 
 			HLT => {
 				// the CFG will handle this.
-				b.nop(ea);
+				b.nop();
 			}
 
 			// NOPs
 			NOP | DOP => { // no flags changed
 				// have to emit *something* or else we can end up with empty IR BBs.
-				b.nop(ea);
+				b.nop();
 			}
 
 			// ------------------------------------------------------------------------------------
@@ -400,200 +389,200 @@ impl InstDesc {
 			ADC => { // NZCV
 				if self.addr_mode == AddrMode::IMM {
 					let val = self.get_operand(i, b);
-					self.add_(val, 0, i, b);
+					self.add_(val, 0, b);
 				} else {
 					self.get_operand_value_into(REG_TMP1, i, b);
-					self.add_(REG_TMP1, -1, i, b);
+					self.add_(REG_TMP1, -1, b);
 				}
 			}
 			SBC => { // NZCV
 				if self.addr_mode == AddrMode::IMM {
 					let val = self.get_operand(i, b);
-					b.inot(ea, REG_TMP1, val, -1, -1);
-					self.add_(REG_TMP1, 0, i, b);
+					b.inot(REG_TMP1, val, -1, -1);
+					self.add_(REG_TMP1, 0, b);
 				} else {
 					self.get_operand_value_into(REG_TMP1, i, b);
-					b.inot(ea, REG_TMP1, REG_TMP1, -1, -1);
-					self.add_(REG_TMP1, -1, i, b);
+					b.inot(REG_TMP1, REG_TMP1, -1, -1);
+					self.add_(REG_TMP1, -1, b);
 				}
 			}
 
 			// 'crements
 			DEC => { // NZ
 				let addr = self.get_operand(i, b);
-				b.load (ea, REG_TMP1, addr,                     -1, 0);
-				b.iusub(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
-				b.store(ea, addr, REG_TMP1,                     0, -1);
-				self.set_nz(REG_TMP1, i, b);
+				b.load (REG_TMP1, addr,                     -1, 0);
+				b.iusub(REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				b.store(addr, REG_TMP1,                     0, -1);
+				self.set_nz(REG_TMP1, b);
 			}
 			DEX => { // NZ
-				b.iusub(ea, REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_X, i, b);
+				b.iusub(REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_X, b);
 			}
 			DEY => { // NZ
-				b.iusub(ea, REG_Y, REG_Y, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_Y, i, b);
+				b.iusub(REG_Y, REG_Y, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_Y, b);
 			}
 			INC => { // NZ
 				let addr = self.get_operand(i, b);
-				b.load (ea, REG_TMP1, addr,                     -1, 0);
-				b.iuadd(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
-				b.store(ea, addr, REG_TMP1,                     0, -1);
-				self.set_nz(REG_TMP1, i, b);
+				b.load (REG_TMP1, addr,                     -1, 0);
+				b.iuadd(REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				b.store(addr, REG_TMP1,                     0, -1);
+				self.set_nz(REG_TMP1, b);
 			}
 			INX => { // NZ
-				b.iuadd(ea, REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_X, i, b);
+				b.iuadd(REG_X, REG_X, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_X, b);
 			}
 			INY => { // NZ
-				b.iuadd(ea, REG_Y, REG_Y, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_Y, i, b);
+				b.iuadd(REG_Y, REG_Y, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_Y, b);
 			}
 
 			// Bitwise ALU
 			AND => { // NZ
 				if self.addr_mode == AddrMode::IMM {
 					let src = self.get_operand(i, b);
-					b.iand(ea, REG_A, REG_A, src, -1, -1, 0);
+					b.iand(REG_A, REG_A, src, -1, -1, 0);
 				} else {
 					self.get_operand_value_into(REG_TMP1, i, b);
-					b.iand(ea, REG_A, REG_A, REG_TMP1, -1, -1, -1);
+					b.iand(REG_A, REG_A, REG_TMP1, -1, -1, -1);
 				}
-				self.set_nz(REG_A, i, b);
+				self.set_nz(REG_A, b);
 			}
 			ORA => { // NZ
 				if self.addr_mode == AddrMode::IMM {
 					let src = self.get_operand(i, b);
-					b.ior(ea, REG_A, REG_A, src, -1, -1, 0);
+					b.ior(REG_A, REG_A, src, -1, -1, 0);
 				} else {
 					self.get_operand_value_into(REG_TMP1, i, b);
-					b.ior(ea, REG_A, REG_A, REG_TMP1, -1, -1, -1);
+					b.ior(REG_A, REG_A, REG_TMP1, -1, -1, -1);
 				}
-				self.set_nz(REG_A, i, b);
+				self.set_nz(REG_A, b);
 			}
 			EOR => { // NZ
 				if self.addr_mode == AddrMode::IMM {
 					let src = self.get_operand(i, b);
-					b.ixor(ea, REG_A, REG_A, src, -1, -1, 0);
+					b.ixor(REG_A, REG_A, src, -1, -1, 0);
 				} else {
 					self.get_operand_value_into(REG_TMP1, i, b);
-					b.ixor(ea, REG_A, REG_A, REG_TMP1, -1, -1, -1);
+					b.ixor(REG_A, REG_A, REG_TMP1, -1, -1, -1);
 				}
-				self.set_nz(REG_A, i, b);
+				self.set_nz(REG_A, b);
 			}
 			BIT => { // NZV (NF = mem.7, VF = mem.6, ZF = whether A&op is 0)
 				self.get_operand_value_into(REG_TMP1, i, b);
-				b.ibit(ea, REG_NF,   REG_TMP1, IrConst::_8(7),  -1, -1, -1);
-				b.ibit(ea, REG_VF,   REG_TMP1, IrConst::_8(6),  -1, -1, -1);
-				b.iand(ea, REG_TMP1, REG_TMP1, REG_A,           -1, -1, -1);
-				b.ieq (ea, REG_ZF,   REG_TMP1, IrConst::ZERO_8, -1, -1, -1);
+				b.ibit(REG_NF,   REG_TMP1, IrConst::_8(7),  -1, -1, -1);
+				b.ibit(REG_VF,   REG_TMP1, IrConst::_8(6),  -1, -1, -1);
+				b.iand(REG_TMP1, REG_TMP1, REG_A,           -1, -1, -1);
+				b.ieq (REG_ZF,   REG_TMP1, IrConst::ZERO_8, -1, -1, -1);
 			}
 
 			// Comparisons
 			CMP => { // NZC
 				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
 				self.get_operand_value_into(REG_TMP1, i, b);
-				self.cmp(REG_A, REG_TMP1, opn, i, b);
+				self.cmp(REG_A, REG_TMP1, opn, b);
 			}
 			CPX => { // NZC
 				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
 				self.get_operand_value_into(REG_TMP1, i, b);
-				self.cmp(REG_X, REG_TMP1, opn, i, b);
+				self.cmp(REG_X, REG_TMP1, opn, b);
 			}
 			CPY => { // NZC
 				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
 				self.get_operand_value_into(REG_TMP1, i, b);
-				self.cmp(REG_Y, REG_TMP1, opn, i, b);
+				self.cmp(REG_Y, REG_TMP1, opn, b);
 			}
 
 			// Shifts and rotates
 			// TODO: BOY this stuff is begging to be abstracted
 			ASL => { // NZC
 				let addr = self.get_operand(i, b);
-				b.load (ea, REG_TMP1, addr,                     -1, 0);
+				b.load (REG_TMP1, addr,                     -1, 0);
 
 				// if the number is "negative" then the MSB is 1 so set the carry flag
-				self.set_c(REG_TMP1, i, b);
-				b.ishl(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8,  -1, -1, -1);
-				self.set_nz(REG_TMP1, i, b);
+				self.set_c(REG_TMP1, b);
+				b.ishl(REG_TMP1, REG_TMP1, IrConst::ONE_8,  -1, -1, -1);
+				self.set_nz(REG_TMP1, b);
 
-				b.store(ea, addr, REG_TMP1,                     0, -1);
+				b.store(addr, REG_TMP1,                     0, -1);
 			}
 			ASLA => { // NZC
-				self.set_c(REG_A, i, b);
-				b.ishl(ea, REG_A, REG_A, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_A, i, b);
+				self.set_c(REG_A, b);
+				b.ishl(REG_A, REG_A, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_A, b);
 			}
 			LSR => { // NZC (NF = 0, hardcoded)
 				let addr = self.get_operand(i, b);
-				b.load (ea, REG_TMP1, addr, -1, 0);
+				b.load (REG_TMP1, addr, -1, 0);
 
 				// cf = (tmp1 & 1) (i.e. if LSB is 1, set CF)
-				b.iand (ea, REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1);
-				b.iushr(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_TMP1, i, b);
+				b.iand (REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				b.iushr(REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_TMP1, b);
 
-				b.store(ea, addr, REG_TMP1, 0, -1);
+				b.store(addr, REG_TMP1, 0, -1);
 			}
 			LSRA => { // NZC (NF = 0, hardcoded)
 				// cf = (A & 1) (i.e. if LSB is 1, set CF)
-				b.iand (ea, REG_CF, REG_A, IrConst::ONE_8, -1, -1, -1);
-				b.iushr(ea, REG_A,  REG_A, IrConst::ONE_8, -1, -1, -1);
-				self.set_nz(REG_A, i, b);
+				b.iand (REG_CF, REG_A, IrConst::ONE_8, -1, -1, -1);
+				b.iushr(REG_A,  REG_A, IrConst::ONE_8, -1, -1, -1);
+				self.set_nz(REG_A, b);
 			}
 			ROL => { // NZC
 				let addr = self.get_operand(i, b);
-				b.load (ea, REG_TMP1, addr, -1, 0);
+				b.load (REG_TMP1, addr, -1, 0);
 
-				b.mov(ea, REG_TMP2, REG_CF, -1, -1);                     // tmp2 = cf
-				self.set_c(REG_TMP1, i, b);                                 // cf = (a < 0)
-				b.ishl(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
-				b.ior (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
-				self.set_nz(REG_TMP1, i, b);
+				b.mov(REG_TMP2, REG_CF, -1, -1);                     // tmp2 = cf
+				self.set_c(REG_TMP1, b);                                 // cf = ( 0)
+				b.ishl(REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				b.ior (REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_TMP1, b);
 
-				b.store(ea, addr, REG_TMP1, 0, -1);
+				b.store(addr, REG_TMP1, 0, -1);
 			}
 			ROLA => { // NZC
-				b.mov(ea, REG_TMP2, REG_CF, -1, -1);               // tmp2 = cf
-				self.set_c(REG_A, i, b);                              // cf = (a < 0)
-				b.ishl(ea, REG_A, REG_A, IrConst::ONE_8, -1, -1, -1); // a = a << 1
-				b.ior (ea, REG_A, REG_A, REG_TMP2,       -1, -1, -1); // a = a | tmp2
-				self.set_nz(REG_A, i, b);
+				b.mov(REG_TMP2, REG_CF, -1, -1);               // tmp2 = cf
+				self.set_c(REG_A, b);                              // cf = ( 0)
+				b.ishl(REG_A, REG_A, IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				b.ior (REG_A, REG_A, REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_A, b);
 			}
 			ROR => { // NZC
 				let addr = self.get_operand(i, b);
-				b.load (ea, REG_TMP1, addr, -1, 0);
+				b.load (REG_TMP1, addr, -1, 0);
 
-				b.mov(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
-				b.iand  (ea, REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1); // cf = (tmp1 & 1)
-				b.iushr (ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				b.mov(REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
+				b.iand  (REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1); // cf = (tmp1 & 1)
+				b.iushr (REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
 				// TODO: do this with bit set/get IR instructions
-				b.ishl  (ea, REG_TMP2, REG_TMP2, IrConst::_8(7), -1, -1, -1); // tmp2 <<= 7
-				b.ior   (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
-				self.set_nz(REG_TMP1, i, b);
+				b.ishl  (REG_TMP2, REG_TMP2, IrConst::_8(7), -1, -1, -1); // tmp2 <<= 7
+				b.ior   (REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_TMP1, b);
 
-				b.store(ea, addr, REG_TMP1, 0, -1);
+				b.store(addr, REG_TMP1, 0, -1);
 			}
 			RORA  => { // NZC
-				b.mov(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
-				b.iand  (ea, REG_CF,   REG_A,    IrConst::ONE_8, -1, -1, -1); // cf = (A & 1)
-				b.iushr (ea, REG_A,    REG_A,    IrConst::ONE_8, -1, -1, -1); // a = a << 1
+				b.mov(REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
+				b.iand  (REG_CF,   REG_A,    IrConst::ONE_8, -1, -1, -1); // cf = (A & 1)
+				b.iushr (REG_A,    REG_A,    IrConst::ONE_8, -1, -1, -1); // a = a << 1
 				// TODO: do this with bit set/get IR instructions
-				b.ishl  (ea, REG_TMP2, REG_TMP2, IrConst::_8(7), -1, -1, -1); // tmp2 <<= 7
-				b.ior   (ea, REG_A,    REG_A,    REG_TMP2,       -1, -1, -1); // a = a | tmp2
-				self.set_nz(REG_A, i, b);
+				b.ishl  (REG_TMP2, REG_TMP2, IrConst::_8(7), -1, -1, -1); // tmp2 <<= 7
+				b.ior   (REG_A,    REG_A,    REG_TMP2,       -1, -1, -1); // a = a | tmp2
+				self.set_nz(REG_A, b);
 			}
 
 			// ------------------------------------------------------------------------------------
 			// Flag manipulation
 
-			CLC => { b.mov(ea, REG_CF, IrConst::ZERO_8, -1, -1); }
-			CLD => { b.mov(ea, REG_DF, IrConst::ZERO_8, -1, -1); }
-			CLI => { b.mov(ea, REG_IF, IrConst::ZERO_8, -1, -1); }
-			CLV => { b.mov(ea, REG_VF, IrConst::ZERO_8, -1, -1); }
-			SEC => { b.mov(ea, REG_CF, IrConst::ONE_8,  -1, -1); }
-			SED => { b.mov(ea, REG_DF, IrConst::ONE_8,  -1, -1); }
-			SEI => { b.mov(ea, REG_IF, IrConst::ONE_8,  -1, -1); }
+			CLC => { b.mov(REG_CF, IrConst::ZERO_8, -1, -1); }
+			CLD => { b.mov(REG_DF, IrConst::ZERO_8, -1, -1); }
+			CLI => { b.mov(REG_IF, IrConst::ZERO_8, -1, -1); }
+			CLV => { b.mov(REG_VF, IrConst::ZERO_8, -1, -1); }
+			SEC => { b.mov(REG_CF, IrConst::ONE_8,  -1, -1); }
+			SED => { b.mov(REG_DF, IrConst::ONE_8,  -1, -1); }
+			SEI => { b.mov(REG_IF, IrConst::ONE_8,  -1, -1); }
 
 			// ------------------------------------------------------------------------------------
 			// Control flow
@@ -602,63 +591,63 @@ impl InstDesc {
 			JMP => { // no flags changed
 				match self.addr_mode {
 					AddrMode::LAB => {
-						b.branch(ea, target.unwrap(), 0);
+						b.branch(target.unwrap(), 0);
 					}
 					AddrMode::IND => {
 						let target_ind = self.get_operand(i, b);
-						b.ibranch(ea, target_ind, -1);
+						b.ibranch(target_ind, -1);
 					}
 					_ => panic!(),
 				}
 			}
 			JSR => { // no flags changed
 				self.push_return_addr(i, b);
-				b.call(ea, target.unwrap(), 0);
+				b.call(target.unwrap(), 0);
 			}
 			RTS => { // no flags changed
-				self.return_(i, b, true);
+				self.return_(b, true);
 			}
 			BRK => { // IF = 1
 				self.push_return_addr(i, b);
 				// pushed flags include break flag set to 1, which is what we want
-				self.push_flags(i, b);
-				b.mov    (ea, REG_IF,    IrConst::ONE_8,        -1, -1); // set IF
-				b.load   (ea, REG_TMP16, IrConst::_16(VEC_IRQ), -1, -1); // read IRQ vector
-				b.ibranch(ea, REG_TMP16,                        -1);     // jump to it
+				self.push_flags(b);
+				b.mov    (REG_IF,    IrConst::ONE_8,        -1, -1); // set IF
+				b.load   (REG_TMP16, IrConst::_16(VEC_IRQ), -1, -1); // read IRQ vector
+				b.ibranch(REG_TMP16,                        -1);     // jump to it
 			}
 			RTI => { // flags set from stack
-				self.pop_flags(i, b);
-				self.return_(i, b, false);
+				self.pop_flags(b);
+				self.return_(b, false);
 			}
 
 			// Branches
 			BCC => { // no flags changed
-				b.bnot   (ea, REG_TMP1, REG_CF,          -1, -1);
-				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
+				b.bnot   (REG_TMP1, REG_CF,          -1, -1);
+				b.cbranch(REG_TMP1, target.unwrap(), -1, 0);
 			}
 			BCS => { // no flags changed
-				b.cbranch(ea, REG_CF,   target.unwrap(), -1, 0);
+				b.cbranch(REG_CF,   target.unwrap(), -1, 0);
 			}
 			BNE => { // no flags changed
-				b.bnot   (ea, REG_TMP1, REG_ZF,          -1, -1);
-				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
+				b.bnot   (REG_TMP1, REG_ZF,          -1, -1);
+				b.cbranch(REG_TMP1, target.unwrap(), -1, 0);
 			}
 			BEQ => { // no flags changed
-				b.cbranch(ea, REG_ZF,   target.unwrap(), -1, 0);
+				b.cbranch(REG_ZF,   target.unwrap(), -1, 0);
 			}
 			BPL => { // no flags changed
-				b.bnot   (ea, REG_TMP1, REG_NF,          -1, -1);
-				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
+				b.bnot   (REG_TMP1, REG_NF,          -1, -1);
+				b.cbranch(REG_TMP1, target.unwrap(), -1, 0);
 			}
 			BMI => { // no flags changed
-				b.cbranch(ea, REG_NF,   target.unwrap(), -1, 0);
+				b.cbranch(REG_NF,   target.unwrap(), -1, 0);
 			}
 			BVC => { // no flags changed
-				b.bnot   (ea, REG_TMP1, REG_VF,          -1, -1);
-				b.cbranch(ea, REG_TMP1, target.unwrap(), -1, 0);
+				b.bnot   (REG_TMP1, REG_VF,          -1, -1);
+				b.cbranch(REG_TMP1, target.unwrap(), -1, 0);
 			}
 			BVS => { // no flags changed
-				b.cbranch(ea, REG_VF,   target.unwrap(), -1, 0);
+				b.cbranch(REG_VF,   target.unwrap(), -1, 0);
 			}
 
 			// ------------------------------------------------------------------------------------
@@ -667,67 +656,67 @@ impl InstDesc {
 			// Loads and sores
 			LDA | LDAI => { // NZ
 				self.get_operand_value_into(REG_A, i, b);
-				self.set_nz(REG_A, i, b);
+				self.set_nz(REG_A, b);
 			}
 			LDX | LDXI => { // NZ
 				self.get_operand_value_into(REG_X, i, b);
-				self.set_nz(REG_X, i, b);
+				self.set_nz(REG_X, b);
 			}
 			LDY | LDYI => { // NZ
 				self.get_operand_value_into(REG_Y, i, b);
-				self.set_nz(REG_Y, i, b);
+				self.set_nz(REG_Y, b);
 			}
 			STA => { // no flags changed
 				let addr = self.get_operand(i, b);
-				b.store(ea, addr, REG_A, 0, -1);
+				b.store(addr, REG_A, 0, -1);
 			}
 			STX => { // no flags changed
 				let addr = self.get_operand(i, b);
-				b.store(ea, addr, REG_X, 0, -1);
+				b.store(addr, REG_X, 0, -1);
 			}
 			STY => { // no flags changed
 				let addr = self.get_operand(i, b);
-				b.store(ea, addr, REG_Y, 0, -1);
+				b.store(addr, REG_Y, 0, -1);
 			}
 
 			// Pushes and pops
 			PHA => { // no flags changed
-				self.push8(REG_A, i, b);
+				self.push8(REG_A, b);
 			}
 			PHP => { // no flags changed
-				self.push_flags(i, b);
+				self.push_flags(b);
 			}
 			PLA => { // NZ
-				self.pop8  (REG_A, i, b);
-				self.set_nz(REG_A, i, b);
+				self.pop8  (REG_A, b);
+				self.set_nz(REG_A, b);
 			}
 			PLP => { // flags set from stack
-				self.pop_flags(i, b);
+				self.pop_flags(b);
 			}
 
 			// Transfers
 			TAX => { // NZ
-				b.mov(ea, REG_X, REG_A, -1, -1);
-				self.set_nz(REG_X, i, b);
+				b.mov(REG_X, REG_A, -1, -1);
+				self.set_nz(REG_X, b);
 			}
 			TAY => { // NZ
-				b.mov(ea, REG_Y, REG_A, -1, -1);
-				self.set_nz(REG_Y, i, b);
+				b.mov(REG_Y, REG_A, -1, -1);
+				self.set_nz(REG_Y, b);
 			}
 			TSX => { // NZ
-				b.mov(ea, REG_X, REG_S, -1, -1);
-				self.set_nz(REG_X, i, b);
+				b.mov(REG_X, REG_S, -1, -1);
+				self.set_nz(REG_X, b);
 			}
 			TXA => { // NZ
-				b.mov(ea, REG_A, REG_X, -1, -1);
-				self.set_nz(REG_A, i, b);
+				b.mov(REG_A, REG_X, -1, -1);
+				self.set_nz(REG_A, b);
 			}
 			TXS => {  // no flags changed
-				b.mov(ea, REG_S, REG_X, -1, -1);
+				b.mov(REG_S, REG_X, -1, -1);
 			}
 			TYA => { // NZ
-				b.mov(ea, REG_A, REG_Y, -1, -1);
-				self.set_nz(REG_A, i, b);
+				b.mov(REG_A, REG_Y, -1, -1);
+				self.set_nz(REG_A, b);
 			}
 		}
 	}

@@ -5,7 +5,6 @@
 # Imminent tasks!
 
 - IR
-	- also maybe `IrBuilder` should remember the current instruction's EA so it doesn't have to be passed to *every fuckin method*
 	- also maybe we need a `carries` instruction which gives you a value where each bit is the carry-out of that column?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 - GB

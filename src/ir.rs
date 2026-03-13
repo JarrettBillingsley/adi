@@ -767,13 +767,12 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		self.cfg.add_edge(bb.id, self.new_bbid, ());
 		self.cfg.add_edge(self.new_bbid, old_dest, ());
 
-		// SAFETY: rewrite_call_or_ret ensures it has at least 1 inst.
-		let ea = bb.insts.last().unwrap().ea();
-
 		let mut b = IrBuilder::new();
+		// SAFETY: rewrite_call_or_ret ensures it has at least 1 inst.
+		b.set_ea(bb.insts.last().unwrap().ea());
 
 		for &reg in ret_regs.iter() {
-			b.mov(ea, reg, IrSrc::Return(reg.size()), -1, -1);
+			b.mov(reg, IrSrc::Return(reg.size()), -1, -1);
 		}
 
 		let real_bbid = bb.real_bbid;

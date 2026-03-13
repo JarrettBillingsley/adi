@@ -11,6 +11,7 @@ pub(crate) struct ToyIrCompiler;
 
 impl IIrCompiler for ToyIrCompiler {
 	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+		b.set_ea(i.ea());
 		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, target, b);
 	}
 
@@ -94,146 +95,144 @@ impl InstDesc {
 			self.r1(i)
 		};
 
-		let ea = i.ea();
-
 		match self.meta_op {
 			MOV => {
-				b.mov(ea, r0(), r1(), 0, 1);
+				b.mov(r0(), r1(), 0, 1);
 			}
 			ADD => {
 				let op0 = r0();
 				let op1 = r1();
-				b.iucarry(ea, REG_CF, op0, op1,   -1, 0, 1);
-				b.iuadd(ea,  op0,    op0, op1,    0, 0, 1);
+				b.iucarry(REG_CF, op0, op1,   -1, 0, 1);
+				b.iuadd( op0,    op0, op1,    0, 0, 1);
 			}
 			ADC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.mov(ea,  REG_TMPCF, REG_CF,               -1, -1);
-				b.iucarryc(ea, REG_CF,    op0, op1, REG_CF,     -1,  0,  1, -1);
-				b.iuaddc(ea,  op0,       op0, op1, REG_TMPCF,   0,  0,  1, -1);
+				b.mov( REG_TMPCF, REG_CF,               -1, -1);
+				b.iucarryc(REG_CF,    op0, op1, REG_CF,     -1,  0,  1, -1);
+				b.iuaddc( op0,       op0, op1, REG_TMPCF,   0,  0,  1, -1);
 			}
 			SUB => {
 				let op0 = r0();
 				let op1 = r1();
-				b.isborrow(ea, REG_CF, op0, op1,   -1, 0, 1);
-				b.iusub(ea,    op0,    op0, op1,    0, 0, 1);
+				b.isborrow(REG_CF, op0, op1,   -1, 0, 1);
+				b.iusub(   op0,    op0, op1,    0, 0, 1);
 			}
 			SBC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.mov(ea,       REG_TMPCF, REG_CF,                -1, -1);
-				b.isborrowc(ea, REG_CF,    op0, op1, REG_CF,      -1,  0, 1, -1);
-				b.iusubb(ea,    op0,       op0, op1, REG_TMPCF,    0,  0, 1, -1);
+				b.mov(      REG_TMPCF, REG_CF,                -1, -1);
+				b.isborrowc(REG_CF,    op0, op1, REG_CF,      -1,  0, 1, -1);
+				b.iusubb(   op0,       op0, op1, REG_TMPCF,    0,  0, 1, -1);
 			}
 			AND => {
 				let op0 = r0();
 				let op1 = r1();
-				b.iand(ea, op0, op0, op1, 0, 0, 1);
+				b.iand(op0, op0, op1, 0, 0, 1);
 			}
 			OR => {
 				let op0 = r0();
 				let op1 = r1();
-				b.ior(ea, op0, op0, op1, 0, 0, 1);
+				b.ior(op0, op0, op1, 0, 0, 1);
 			}
 			XOR => {
 				let op0 = r0();
 				let op1 = r1();
-				b.ixor(ea, op0, op0, op1, 0, 0, 1);
+				b.ixor(op0, op0, op1, 0, 0, 1);
 			}
 			NOT => {
 				let op0 = r0();
 				let op1 = r1();
-				b.inot(ea, op0, op1, 0, 1);
+				b.inot(op0, op1, 0, 1);
 			}
 			CMP => {
 				let op0 = r0();
 				let op1 = r1();
-				b.ieq(ea,  REG_ZF, op0, op1,   -1, 0, 1);
-				b.islt(ea, REG_NF, op0, op1,   -1, 0, 1);
-				b.iult(ea, REG_CF, op0, op1,   -1, 0, 1);
+				b.ieq( REG_ZF, op0, op1,   -1, 0, 1);
+				b.islt(REG_NF, op0, op1,   -1, 0, 1);
+				b.iult(REG_CF, op0, op1,   -1, 0, 1);
 			}
 			CMC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.mov(ea,       REG_TMPCF, REG_CF,                -1, -1);
-				b.isborrowc(ea, REG_CF,    op0, op1, REG_CF,      -1,  0,  1, -1);
-				b.iusubb(ea,    REG_TMP,   op0, op1, REG_TMPCF,   -1,  0,  1, -1);
-				b.ieq(ea,       REG_ZF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);
-				b.islt(ea,      REG_NF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);
+				b.mov(      REG_TMPCF, REG_CF,                -1, -1);
+				b.isborrowc(REG_CF,    op0, op1, REG_CF,      -1,  0,  1, -1);
+				b.iusubb(   REG_TMP,   op0, op1, REG_TMPCF,   -1,  0,  1, -1);
+				b.ieq(      REG_ZF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);
+				b.islt(     REG_NF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);
 			}
 			BLT => {
-				b.cbranch(ea, REG_NF, target.unwrap(), -1, 0);
+				b.cbranch(REG_NF, target.unwrap(), -1, 0);
 			}
 			BLE => {
-				b.bor(ea,     REG_TMP, REG_CF, REG_ZF,   -1, -1, -1);
-				b.cbranch(ea, REG_TMP, target.unwrap(),  -1,  0);
+				b.bor(    REG_TMP, REG_CF, REG_ZF,   -1, -1, -1);
+				b.cbranch(REG_TMP, target.unwrap(),  -1,  0);
 			}
 			BEQ => {
-				b.cbranch(ea, REG_ZF, target.unwrap(), -1, 0);
+				b.cbranch(REG_ZF, target.unwrap(), -1, 0);
 			}
 			BNE => {
-				b.bnot(ea,    REG_TMP, REG_ZF,           -1, -1);
-				b.cbranch(ea, REG_TMP, target.unwrap(),  -1,  0);
+				b.bnot(   REG_TMP, REG_ZF,           -1, -1);
+				b.cbranch(REG_TMP, target.unwrap(),  -1,  0);
 			}
 			JMP => {
-				b.branch(ea, target.unwrap(), 0);
+				b.branch(target.unwrap(), 0);
 			}
 			JMPI => {
-				b.ipair(ea,   REG_TMP16, REG_D, REG_C, -1, -1, -1);
-				b.ibranch(ea, REG_TMP16, 0);
+				b.ipair(  REG_TMP16, REG_D, REG_C, -1, -1, -1);
+				b.ibranch(REG_TMP16, 0);
 			}
 			CALL => {
-				b.iusub(ea, REG_SP, REG_SP, IrConst::_16(2),             -1, -1, -1);
-				b.store(ea, REG_SP, IrConst::_16(i.next_va().0 as u16),  -1, -1);
-				b.call(ea, target.unwrap(),                               0);
+				b.iusub(REG_SP, REG_SP, IrConst::_16(2),             -1, -1, -1);
+				b.store(REG_SP, IrConst::_16(i.next_va().0 as u16),  -1, -1);
+				b.call(target.unwrap(),                               0);
 			}
 			CALI => {
-				b.ipair(ea, REG_TMP16, REG_D, REG_C, -1, -1, -1);
-				b.icall(ea, REG_TMP16, 0);
+				b.ipair(REG_TMP16, REG_D, REG_C, -1, -1, -1);
+				b.icall(REG_TMP16, 0);
 			}
 			CALZ => {
-				b.bnot             (ea, REG_TMP, REG_ZF,                              -1, -1);
-				b.cbranch_and_split(ea, REG_TMP, i.next_ea(),                         -1, -1);
-				b.iusub            (ea, REG_SP,  REG_SP, IrConst::_16(2),             -1, -1, -1);
-				b.store            (ea, REG_SP,  IrConst::_16(i.next_va().0 as u16),  -1, -1);
-				b.call             (ea, target.unwrap(),                              0);
+				b.bnot             (REG_TMP, REG_ZF,                              -1, -1);
+				b.cbranch_and_split(REG_TMP, i.next_ea(),                         -1, -1);
+				b.iusub            (REG_SP,  REG_SP, IrConst::_16(2),             -1, -1, -1);
+				b.store            (REG_SP,  IrConst::_16(i.next_va().0 as u16),  -1, -1);
+				b.call             (target.unwrap(),                              0);
 			}
 			RET => {
-				b.load(ea,  REG_TMP16, REG_SP,               -1, -1);
-				b.iuadd(ea, REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
-				b.ret(ea,   REG_TMP16,                       -1);
+				b.load( REG_TMP16, REG_SP,               -1, -1);
+				b.iuadd(REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
+				b.ret(  REG_TMP16,                       -1);
 			}
 			RETZ => {
-				b.bnot             (ea, REG_TMP, REG_ZF,                 -1, -1);
-				b.cbranch_and_split(ea, REG_TMP, i.next_ea(),            -1, -1);
-				b.load             (ea, REG_TMP16, REG_SP,               -1, -1);
-				b.iuadd            (ea, REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
-				b.ret              (ea, REG_TMP16,                       -1);
+				b.bnot             (REG_TMP, REG_ZF,                 -1, -1);
+				b.cbranch_and_split(REG_TMP, i.next_ea(),            -1, -1);
+				b.load             (REG_TMP16, REG_SP,               -1, -1);
+				b.iuadd            (REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
+				b.ret              (REG_TMP16,                       -1);
 			}
 			LD => {
 				let reg = r0();
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
-					b.ipair(ea, REG_TMP16, REG_D, REG_C, -1, -1, -1);
+					b.ipair(REG_TMP16, REG_D, REG_C, -1, -1, -1);
 					REG_TMP16.into()
 				} else {
 					r1()
 				};
 
-				b.load(ea, reg, addr, 0, 1);
+				b.load(reg, addr, 0, 1);
 			}
 			ST => {
 				let reg = r0();
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
-					b.ipair(ea, REG_TMP16, REG_D, REG_C, -1, -1, -1);
+					b.ipair(REG_TMP16, REG_D, REG_C, -1, -1, -1);
 					REG_TMP16.into()
 				} else {
 					r1()
 				};
 
-				b.store(ea, addr, reg, 1, 0);
+				b.store(addr, reg, 1, 0);
 			}
 		}
 	}
