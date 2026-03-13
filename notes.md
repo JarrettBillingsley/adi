@@ -5,7 +5,6 @@
 # Imminent tasks!
 
 - IR
-	- why aren't `icarry[c]/IntCarry[C]` called `iucarry[c]/IntUCarry[C]`?? 
 	- also `IrBuilder::assign` bugs me. just call it `mov`
 	- also maybe have every `IrBuilder` method return `&mut Self` for chaining
 	- also maybe we need a `carries` instruction which gives you a value where each bit is the carry-out of that column?

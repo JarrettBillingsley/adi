@@ -126,14 +126,14 @@ impl IrBuilder {
 	/// Set the C flag to the carry out of unsigned `src1 + src2`.
 	fn c_(&mut self, ea: EA, src1: impl Into<IrSrc>, src2: impl Into<IrSrc>, src1n: i8, src2n: i8)
 	-> &mut Self {
-		self.icarry(ea, REG_CF, src1.into(), src2.into(),  -1, src1n, src2n);
+		self.iucarry(ea, REG_CF, src1.into(), src2.into(),  -1, src1n, src2n);
 		self
 	}
 
 	/// Set the C flag to the carry out of unsigned `src1 + src2 + C`.
 	fn c_c(&mut self, ea: EA, src1: impl Into<IrSrc>, src2: impl Into<IrSrc>, src1n: i8, src2n: i8)
 	-> &mut Self {
-		self.icarryc(ea, REG_CF, src1.into(), src2.into(), REG_CF,  -1, src1n, src2n, -1);
+		self.iucarryc(ea, REG_CF, src1.into(), src2.into(), REG_CF,  -1, src1n, src2n, -1);
 		self
 	}
 

@@ -103,14 +103,14 @@ impl InstDesc {
 			ADD => {
 				let op0 = r0();
 				let op1 = r1();
-				b.icarry(ea, REG_CF, op0, op1,   -1, 0, 1);
+				b.iucarry(ea, REG_CF, op0, op1,   -1, 0, 1);
 				b.iuadd(ea,  op0,    op0, op1,    0, 0, 1);
 			}
 			ADC => {
 				let op0 = r0();
 				let op1 = r1();
 				b.assign(ea,  REG_TMPCF, REG_CF,               -1, -1);
-				b.icarryc(ea, REG_CF,    op0, op1, REG_CF,     -1,  0,  1, -1);
+				b.iucarryc(ea, REG_CF,    op0, op1, REG_CF,     -1,  0,  1, -1);
 				b.iuaddc(ea,  op0,       op0, op1, REG_TMPCF,   0,  0,  1, -1);
 			}
 			SUB => {

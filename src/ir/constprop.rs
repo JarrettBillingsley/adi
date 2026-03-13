@@ -334,7 +334,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			ValSize::_32 => (val1 as u32).wrapping_sub(val2 as u32) as u64,
 			ValSize::_64 => val1.wrapping_sub(val2),
 		}
-		IntCarry => match size {
+		IntUCarry => match size {
 			ValSize::_8  => (val1 as u8).overflowing_add(val2 as u8).1 as u64,
 			ValSize::_16 => (val1 as u16).overflowing_add(val2 as u16).1 as u64,
 			ValSize::_32 => (val1 as u32).overflowing_add(val2 as u32).1 as u64,
@@ -495,7 +495,7 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 			ValSize::_32 => (val1 as u32).wrapping_sub(val2 as u32).wrapping_sub(val3 as u32) as u64,
 			ValSize::_64 => val1.wrapping_sub(val2).wrapping_sub(val3),
 		},
-		IntCarryC => {
+		IntUCarryC => {
 			let (sum, carry) = match size {
 				ValSize::_8 => {
 					let (sum, carry) = (val1 as u8).overflowing_add(val2 as u8);
@@ -916,28 +916,28 @@ mod tests {
 	#[test]
 	fn test_iucarry() {
 		use IrBinOp::*;
-		test_binop_8 (0, IntCarry, 0x08, 0x05);
-		test_binop_16(0, IntCarry, 0x0008, 0x0005);
-		test_binop_32(0, IntCarry, 0x00000008, 0x00000005);
-		test_binop_64(0, IntCarry, 0x00000000_00000008, 0x00000000_00000005);
+		test_binop_8 (0, IntUCarry, 0x08, 0x05);
+		test_binop_16(0, IntUCarry, 0x0008, 0x0005);
+		test_binop_32(0, IntUCarry, 0x00000008, 0x00000005);
+		test_binop_64(0, IntUCarry, 0x00000000_00000008, 0x00000000_00000005);
 
-		test_binop_8 (0, IntCarry, 0x7F, 0x01);
-		test_binop_8 (1, IntCarry, 0xFF, 0x01);
-		test_binop_16(0, IntCarry, 0x00FF, 0x0001);
-		test_binop_32(0, IntCarry, 0x000000FF, 0x00000001);
-		test_binop_64(0, IntCarry, 0x00000000_000000FF, 0x00000000_00000001);
+		test_binop_8 (0, IntUCarry, 0x7F, 0x01);
+		test_binop_8 (1, IntUCarry, 0xFF, 0x01);
+		test_binop_16(0, IntUCarry, 0x00FF, 0x0001);
+		test_binop_32(0, IntUCarry, 0x000000FF, 0x00000001);
+		test_binop_64(0, IntUCarry, 0x00000000_000000FF, 0x00000000_00000001);
 
-		test_binop_16(0, IntCarry, 0x7FFF, 0x0001);
-		test_binop_16(1, IntCarry, 0xFFFF, 0x0001);
-		test_binop_32(0, IntCarry, 0x0000FFFF, 0x00000001);
-		test_binop_64(0, IntCarry, 0x00000000_0000FFFF, 0x00000000_00000001);
+		test_binop_16(0, IntUCarry, 0x7FFF, 0x0001);
+		test_binop_16(1, IntUCarry, 0xFFFF, 0x0001);
+		test_binop_32(0, IntUCarry, 0x0000FFFF, 0x00000001);
+		test_binop_64(0, IntUCarry, 0x00000000_0000FFFF, 0x00000000_00000001);
 
-		test_binop_32(0, IntCarry, 0x7FFFFFFF, 0x00000001);
-		test_binop_32(1, IntCarry, 0xFFFFFFFF, 0x00000001);
-		test_binop_64(0, IntCarry, 0x00000000_FFFFFFFF, 0x00000000_00000001);
+		test_binop_32(0, IntUCarry, 0x7FFFFFFF, 0x00000001);
+		test_binop_32(1, IntUCarry, 0xFFFFFFFF, 0x00000001);
+		test_binop_64(0, IntUCarry, 0x00000000_FFFFFFFF, 0x00000000_00000001);
 
-		test_binop_64(0, IntCarry, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001);
-		test_binop_64(1, IntCarry, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001);
+		test_binop_64(0, IntUCarry, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001);
+		test_binop_64(1, IntUCarry, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001);
 	}
 
 	#[test]
@@ -1534,75 +1534,75 @@ mod tests {
 	#[test]
 	fn test_iucarryc() {
 		use IrTernOp::*;
-		test_ternop_8 (0, IntCarryC, 0x08, 0x05, 0);
-		test_ternop_16(0, IntCarryC, 0x0008, 0x0005, 0);
-		test_ternop_32(0, IntCarryC, 0x00000008, 0x00000005, 0);
-		test_ternop_64(0, IntCarryC, 0x00000000_00000008, 0x00000000_00000005, 0);
+		test_ternop_8 (0, IntUCarryC, 0x08, 0x05, 0);
+		test_ternop_16(0, IntUCarryC, 0x0008, 0x0005, 0);
+		test_ternop_32(0, IntUCarryC, 0x00000008, 0x00000005, 0);
+		test_ternop_64(0, IntUCarryC, 0x00000000_00000008, 0x00000000_00000005, 0);
 
-		test_ternop_8(0, IntCarryC, 0x7F, 0x01, 0);
-		test_ternop_8(0, IntCarryC, 0x7F, 0x00, 1);
-		test_ternop_8(0, IntCarryC, 0x7F, 0x01, 1);
+		test_ternop_8(0, IntUCarryC, 0x7F, 0x01, 0);
+		test_ternop_8(0, IntUCarryC, 0x7F, 0x00, 1);
+		test_ternop_8(0, IntUCarryC, 0x7F, 0x01, 1);
 
-		test_ternop_8(0, IntCarryC, 0xFF, 0x00, 0);
-		test_ternop_8(1, IntCarryC, 0xFF, 0x01, 0);
-		test_ternop_8(1, IntCarryC, 0xFF, 0x00, 1);
-		test_ternop_8(1, IntCarryC, 0xFF, 0x01, 1);
+		test_ternop_8(0, IntUCarryC, 0xFF, 0x00, 0);
+		test_ternop_8(1, IntUCarryC, 0xFF, 0x01, 0);
+		test_ternop_8(1, IntUCarryC, 0xFF, 0x00, 1);
+		test_ternop_8(1, IntUCarryC, 0xFF, 0x01, 1);
 
-		test_ternop_8(0, IntCarryC, 0xFE, 0x00, 0);
-		test_ternop_8(0, IntCarryC, 0xFE, 0x00, 1);
-		test_ternop_8(0, IntCarryC, 0xFE, 0x01, 0);
-		test_ternop_8(1, IntCarryC, 0xFE, 0x01, 1);
+		test_ternop_8(0, IntUCarryC, 0xFE, 0x00, 0);
+		test_ternop_8(0, IntUCarryC, 0xFE, 0x00, 1);
+		test_ternop_8(0, IntUCarryC, 0xFE, 0x01, 0);
+		test_ternop_8(1, IntUCarryC, 0xFE, 0x01, 1);
 
-		test_ternop_16(0, IntCarryC, 0x00FF, 0x0001, 0);
-		test_ternop_32(0, IntCarryC, 0x000000FF, 0x00000001, 0);
-		test_ternop_64(0, IntCarryC, 0x00000000_000000FF, 0x00000000_00000001, 0);
+		test_ternop_16(0, IntUCarryC, 0x00FF, 0x0001, 0);
+		test_ternop_32(0, IntUCarryC, 0x000000FF, 0x00000001, 0);
+		test_ternop_64(0, IntUCarryC, 0x00000000_000000FF, 0x00000000_00000001, 0);
 
-		test_ternop_16(0, IntCarryC, 0x7FFF, 0x0001, 0);
-		test_ternop_16(0, IntCarryC, 0x7FFF, 0x0000, 1);
-		test_ternop_16(0, IntCarryC, 0x7FFF, 0x0001, 1);
+		test_ternop_16(0, IntUCarryC, 0x7FFF, 0x0001, 0);
+		test_ternop_16(0, IntUCarryC, 0x7FFF, 0x0000, 1);
+		test_ternop_16(0, IntUCarryC, 0x7FFF, 0x0001, 1);
 
-		test_ternop_16(0, IntCarryC, 0xFFFF, 0x0000, 0);
-		test_ternop_16(1, IntCarryC, 0xFFFF, 0x0001, 0);
-		test_ternop_16(1, IntCarryC, 0xFFFF, 0x0000, 1);
-		test_ternop_16(1, IntCarryC, 0xFFFF, 0x0001, 1);
+		test_ternop_16(0, IntUCarryC, 0xFFFF, 0x0000, 0);
+		test_ternop_16(1, IntUCarryC, 0xFFFF, 0x0001, 0);
+		test_ternop_16(1, IntUCarryC, 0xFFFF, 0x0000, 1);
+		test_ternop_16(1, IntUCarryC, 0xFFFF, 0x0001, 1);
 
-		test_ternop_16(0, IntCarryC, 0xFFFE, 0x0000, 0);
-		test_ternop_16(0, IntCarryC, 0xFFFE, 0x0001, 0);
-		test_ternop_16(0, IntCarryC, 0xFFFE, 0x0000, 1);
-		test_ternop_16(1, IntCarryC, 0xFFFE, 0x0001, 1);
+		test_ternop_16(0, IntUCarryC, 0xFFFE, 0x0000, 0);
+		test_ternop_16(0, IntUCarryC, 0xFFFE, 0x0001, 0);
+		test_ternop_16(0, IntUCarryC, 0xFFFE, 0x0000, 1);
+		test_ternop_16(1, IntUCarryC, 0xFFFE, 0x0001, 1);
 
-		test_ternop_32(0, IntCarryC, 0x0000FFFF, 0x00000001, 0);
-		test_ternop_64(0, IntCarryC, 0x00000000_0000FFFF, 0x00000000_00000001, 0);
+		test_ternop_32(0, IntUCarryC, 0x0000FFFF, 0x00000001, 0);
+		test_ternop_64(0, IntUCarryC, 0x00000000_0000FFFF, 0x00000000_00000001, 0);
 
-		test_ternop_32(0, IntCarryC, 0x7FFFFFFF, 0x00000001, 0);
-		test_ternop_32(0, IntCarryC, 0x7FFFFFFF, 0x00000000, 1);
-		test_ternop_32(0, IntCarryC, 0x7FFFFFFF, 0x00000001, 1);
+		test_ternop_32(0, IntUCarryC, 0x7FFFFFFF, 0x00000001, 0);
+		test_ternop_32(0, IntUCarryC, 0x7FFFFFFF, 0x00000000, 1);
+		test_ternop_32(0, IntUCarryC, 0x7FFFFFFF, 0x00000001, 1);
 
-		test_ternop_32(0, IntCarryC, 0xFFFFFFFF, 0x00000000, 0);
-		test_ternop_32(1, IntCarryC, 0xFFFFFFFF, 0x00000001, 0);
-		test_ternop_32(1, IntCarryC, 0xFFFFFFFF, 0x00000000, 1);
-		test_ternop_32(1, IntCarryC, 0xFFFFFFFF, 0x00000001, 1);
+		test_ternop_32(0, IntUCarryC, 0xFFFFFFFF, 0x00000000, 0);
+		test_ternop_32(1, IntUCarryC, 0xFFFFFFFF, 0x00000001, 0);
+		test_ternop_32(1, IntUCarryC, 0xFFFFFFFF, 0x00000000, 1);
+		test_ternop_32(1, IntUCarryC, 0xFFFFFFFF, 0x00000001, 1);
 
-		test_ternop_32(0, IntCarryC, 0xFFFFFFFE, 0x00000000, 0);
-		test_ternop_32(0, IntCarryC, 0xFFFFFFFE, 0x00000001, 0);
-		test_ternop_32(0, IntCarryC, 0xFFFFFFFE, 0x00000000, 1);
-		test_ternop_32(1, IntCarryC, 0xFFFFFFFE, 0x00000001, 1);
+		test_ternop_32(0, IntUCarryC, 0xFFFFFFFE, 0x00000000, 0);
+		test_ternop_32(0, IntUCarryC, 0xFFFFFFFE, 0x00000001, 0);
+		test_ternop_32(0, IntUCarryC, 0xFFFFFFFE, 0x00000000, 1);
+		test_ternop_32(1, IntUCarryC, 0xFFFFFFFE, 0x00000001, 1);
 
-		test_ternop_64(0, IntCarryC, 0x00000000_FFFFFFFF, 0x00000000_00000001, 0);
+		test_ternop_64(0, IntUCarryC, 0x00000000_FFFFFFFF, 0x00000000_00000001, 0);
 
-		test_ternop_64(0, IntCarryC, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001, 0);
-		test_ternop_64(0, IntCarryC, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000000, 1);
-		test_ternop_64(0, IntCarryC, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001, 1);
+		test_ternop_64(0, IntUCarryC, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001, 0);
+		test_ternop_64(0, IntUCarryC, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000000, 1);
+		test_ternop_64(0, IntUCarryC, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001, 1);
 
-		test_ternop_64(0, IntCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000, 0);
-		test_ternop_64(1, IntCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 0);
-		test_ternop_64(1, IntCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000, 1);
-		test_ternop_64(1, IntCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 1);
+		test_ternop_64(0, IntUCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000, 0);
+		test_ternop_64(1, IntUCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 0);
+		test_ternop_64(1, IntUCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000, 1);
+		test_ternop_64(1, IntUCarryC, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 1);
 
-		test_ternop_64(0, IntCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000000, 0);
-		test_ternop_64(0, IntCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000001, 0);
-		test_ternop_64(0, IntCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000000, 1);
-		test_ternop_64(1, IntCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000001, 1);
+		test_ternop_64(0, IntUCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000000, 0);
+		test_ternop_64(0, IntUCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000001, 0);
+		test_ternop_64(0, IntUCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000000, 1);
+		test_ternop_64(1, IntUCarryC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000001, 1);
 	}
 
 	#[test]
