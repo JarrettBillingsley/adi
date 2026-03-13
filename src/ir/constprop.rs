@@ -187,8 +187,8 @@ fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 		Nop | Use { .. } | Store { .. } | Branch { .. } | CBranch { .. } | IBranch { .. }
 		| Call { .. } | ICall { .. } | Ret { .. } => None,
 
-		Assign { dst, src, .. } => Some((dst, src_to_info(src, state))),
-		Load   { dst, .. }      => Some((dst, Info::Any)),
+		Mov  { dst, src, .. } => Some((dst, src_to_info(src, state))),
+		Load { dst, .. }      => Some((dst, Info::Any)),
 
 		Unary { dst, op, src, .. } => {
 			let src_info = src_to_info(src, state);

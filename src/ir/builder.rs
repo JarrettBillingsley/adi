@@ -65,9 +65,9 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
-	pub(crate) fn assign(&mut self, ea: EA, dst: IrReg, src: impl Into<IrSrc>,
+	pub(crate) fn mov(&mut self, ea: EA, dst: IrReg, src: impl Into<IrSrc>,
 		dstn: i8, srcn: i8) {
-		self.inst(IrInst::assign(ea, dst, src.into(), dstn, srcn));
+		self.inst(IrInst::mov(ea, dst, src.into(), dstn, srcn));
 	}
 
 	/// TODO: docme

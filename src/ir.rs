@@ -773,7 +773,7 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		let mut b = IrBuilder::new();
 
 		for &reg in ret_regs.iter() {
-			b.assign(ea, reg, IrSrc::Return(reg.size()), -1, -1);
+			b.mov(ea, reg, IrSrc::Return(reg.size()), -1, -1);
 		}
 
 		let real_bbid = bb.real_bbid;

@@ -244,7 +244,7 @@ impl InstDesc {
 			IMM => {
 				// just a constant, assign it
 				let val = self.get_operand(i, b);
-				b.assign(ea, dst, val, -1, 0);
+				b.mov(ea, dst, val, -1, 0);
 			}
 			ZPG | ABS => {
 				// needs a load, and that load references the operand
@@ -310,7 +310,7 @@ impl InstDesc {
 		let ea = i.ea();
 
 		// the values of bits 4 and 5 (Break and Reserved) are always 1 when pushed.
-		b.assign (ea, REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
+		b.mov    (ea, REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
 		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(0), REG_CF,  -1, -1, -1, -1);
 		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(1), REG_ZF,  -1, -1, -1, -1);
 		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(2), REG_IF,  -1, -1, -1, -1);
@@ -545,7 +545,7 @@ impl InstDesc {
 				let addr = self.get_operand(i, b);
 				b.load (ea, REG_TMP1, addr, -1, 0);
 
-				b.assign(ea, REG_TMP2, REG_CF, -1, -1);                     // tmp2 = cf
+				b.mov(ea, REG_TMP2, REG_CF, -1, -1);                     // tmp2 = cf
 				self.set_c(REG_TMP1, i, b);                                 // cf = (a < 0)
 				b.ishl(ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
 				b.ior (ea, REG_TMP1, REG_TMP1, REG_TMP2,       -1, -1, -1); // a = a | tmp2
@@ -554,7 +554,7 @@ impl InstDesc {
 				b.store(ea, addr, REG_TMP1, 0, -1);
 			}
 			ROLA => { // NZC
-				b.assign(ea, REG_TMP2, REG_CF, -1, -1);               // tmp2 = cf
+				b.mov(ea, REG_TMP2, REG_CF, -1, -1);               // tmp2 = cf
 				self.set_c(REG_A, i, b);                              // cf = (a < 0)
 				b.ishl(ea, REG_A, REG_A, IrConst::ONE_8, -1, -1, -1); // a = a << 1
 				b.ior (ea, REG_A, REG_A, REG_TMP2,       -1, -1, -1); // a = a | tmp2
@@ -564,7 +564,7 @@ impl InstDesc {
 				let addr = self.get_operand(i, b);
 				b.load (ea, REG_TMP1, addr, -1, 0);
 
-				b.assign(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
+				b.mov(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
 				b.iand  (ea, REG_CF,   REG_TMP1, IrConst::ONE_8, -1, -1, -1); // cf = (tmp1 & 1)
 				b.iushr (ea, REG_TMP1, REG_TMP1, IrConst::ONE_8, -1, -1, -1); // a = a << 1
 				// TODO: do this with bit set/get IR instructions
@@ -575,7 +575,7 @@ impl InstDesc {
 				b.store(ea, addr, REG_TMP1, 0, -1);
 			}
 			RORA  => { // NZC
-				b.assign(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
+				b.mov(ea, REG_TMP2, REG_CF,                   -1, -1);     // tmp2 = cf
 				b.iand  (ea, REG_CF,   REG_A,    IrConst::ONE_8, -1, -1, -1); // cf = (A & 1)
 				b.iushr (ea, REG_A,    REG_A,    IrConst::ONE_8, -1, -1, -1); // a = a << 1
 				// TODO: do this with bit set/get IR instructions
@@ -587,13 +587,13 @@ impl InstDesc {
 			// ------------------------------------------------------------------------------------
 			// Flag manipulation
 
-			CLC => { b.assign(ea, REG_CF, IrConst::ZERO_8, -1, -1); }
-			CLD => { b.assign(ea, REG_DF, IrConst::ZERO_8, -1, -1); }
-			CLI => { b.assign(ea, REG_IF, IrConst::ZERO_8, -1, -1); }
-			CLV => { b.assign(ea, REG_VF, IrConst::ZERO_8, -1, -1); }
-			SEC => { b.assign(ea, REG_CF, IrConst::ONE_8,  -1, -1); }
-			SED => { b.assign(ea, REG_DF, IrConst::ONE_8,  -1, -1); }
-			SEI => { b.assign(ea, REG_IF, IrConst::ONE_8,  -1, -1); }
+			CLC => { b.mov(ea, REG_CF, IrConst::ZERO_8, -1, -1); }
+			CLD => { b.mov(ea, REG_DF, IrConst::ZERO_8, -1, -1); }
+			CLI => { b.mov(ea, REG_IF, IrConst::ZERO_8, -1, -1); }
+			CLV => { b.mov(ea, REG_VF, IrConst::ZERO_8, -1, -1); }
+			SEC => { b.mov(ea, REG_CF, IrConst::ONE_8,  -1, -1); }
+			SED => { b.mov(ea, REG_DF, IrConst::ONE_8,  -1, -1); }
+			SEI => { b.mov(ea, REG_IF, IrConst::ONE_8,  -1, -1); }
 
 			// ------------------------------------------------------------------------------------
 			// Control flow
@@ -622,7 +622,7 @@ impl InstDesc {
 				self.push_return_addr(i, b);
 				// pushed flags include break flag set to 1, which is what we want
 				self.push_flags(i, b);
-				b.assign (ea, REG_IF,    IrConst::ONE_8,        -1, -1); // set IF
+				b.mov    (ea, REG_IF,    IrConst::ONE_8,        -1, -1); // set IF
 				b.load   (ea, REG_TMP16, IrConst::_16(VEC_IRQ), -1, -1); // read IRQ vector
 				b.ibranch(ea, REG_TMP16,                        -1);     // jump to it
 			}
@@ -707,26 +707,26 @@ impl InstDesc {
 
 			// Transfers
 			TAX => { // NZ
-				b.assign(ea, REG_X, REG_A, -1, -1);
+				b.mov(ea, REG_X, REG_A, -1, -1);
 				self.set_nz(REG_X, i, b);
 			}
 			TAY => { // NZ
-				b.assign(ea, REG_Y, REG_A, -1, -1);
+				b.mov(ea, REG_Y, REG_A, -1, -1);
 				self.set_nz(REG_Y, i, b);
 			}
 			TSX => { // NZ
-				b.assign(ea, REG_X, REG_S, -1, -1);
+				b.mov(ea, REG_X, REG_S, -1, -1);
 				self.set_nz(REG_X, i, b);
 			}
 			TXA => { // NZ
-				b.assign(ea, REG_A, REG_X, -1, -1);
+				b.mov(ea, REG_A, REG_X, -1, -1);
 				self.set_nz(REG_A, i, b);
 			}
 			TXS => {  // no flags changed
-				b.assign(ea, REG_S, REG_X, -1, -1);
+				b.mov(ea, REG_S, REG_X, -1, -1);
 			}
 			TYA => { // NZ
-				b.assign(ea, REG_A, REG_Y, -1, -1);
+				b.mov(ea, REG_A, REG_Y, -1, -1);
 				self.set_nz(REG_A, i, b);
 			}
 		}

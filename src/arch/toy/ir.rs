@@ -98,7 +98,7 @@ impl InstDesc {
 
 		match self.meta_op {
 			MOV => {
-				b.assign(ea, r0(), r1(), 0, 1);
+				b.mov(ea, r0(), r1(), 0, 1);
 			}
 			ADD => {
 				let op0 = r0();
@@ -109,7 +109,7 @@ impl InstDesc {
 			ADC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.assign(ea,  REG_TMPCF, REG_CF,               -1, -1);
+				b.mov(ea,  REG_TMPCF, REG_CF,               -1, -1);
 				b.iucarryc(ea, REG_CF,    op0, op1, REG_CF,     -1,  0,  1, -1);
 				b.iuaddc(ea,  op0,       op0, op1, REG_TMPCF,   0,  0,  1, -1);
 			}
@@ -122,7 +122,7 @@ impl InstDesc {
 			SBC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.assign(ea,    REG_TMPCF, REG_CF,                -1, -1);
+				b.mov(ea,       REG_TMPCF, REG_CF,                -1, -1);
 				b.isborrowc(ea, REG_CF,    op0, op1, REG_CF,      -1,  0, 1, -1);
 				b.iusubb(ea,    op0,       op0, op1, REG_TMPCF,    0,  0, 1, -1);
 			}
@@ -156,7 +156,7 @@ impl InstDesc {
 			CMC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.assign(ea,    REG_TMPCF, REG_CF,                -1, -1);
+				b.mov(ea,       REG_TMPCF, REG_CF,                -1, -1);
 				b.isborrowc(ea, REG_CF,    op0, op1, REG_CF,      -1,  0,  1, -1);
 				b.iusubb(ea,    REG_TMP,   op0, op1, REG_TMPCF,   -1,  0,  1, -1);
 				b.ieq(ea,       REG_ZF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);

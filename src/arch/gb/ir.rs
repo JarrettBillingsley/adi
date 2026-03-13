@@ -94,7 +94,7 @@ impl IrBuilder {
 
 	/// Combine all the flag registers into an 8-bit value in `dst`.
 	fn combine_flags(&mut self, ea: EA, dst: IrReg) {
-		self.assign (ea, dst, IrConst::ZERO_8,                -1, -1);
+		self.mov    (ea, dst, IrConst::ZERO_8,                -1, -1);
 		self.ibitset(ea, dst, dst, IrConst::_8(4), REG_CF,  -1, -1, -1, -1);
 		self.ibitset(ea, dst, dst, IrConst::_8(5), REG_HF,  -1, -1, -1, -1);
 		self.ibitset(ea, dst, dst, IrConst::_8(6), REG_NF,  -1, -1, -1, -1);
@@ -119,7 +119,7 @@ impl IrBuilder {
 	/// Set the N flag to a given value.
 	fn nx(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
 		let src = src.into();
-		self.assign(ea, REG_NF, src,  -1, srcn);
+		self.mov(ea, REG_NF, src,  -1, srcn);
 		self
 	}
 
@@ -152,20 +152,20 @@ impl IrBuilder {
 	}
 
 	/// Set the Z flag to 0.
-	fn z0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_ZF, IrConst::_8(0), -1, -1); self }
+	fn z0(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_ZF, IrConst::_8(0), -1, -1); self }
 	/// Set the N flag to 0.
-	fn n0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_NF, IrConst::_8(0), -1, -1); self }
+	fn n0(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_NF, IrConst::_8(0), -1, -1); self }
 	/// Set the H flag to 0.
-	fn h0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_HF, IrConst::_8(0), -1, -1); self }
+	fn h0(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_HF, IrConst::_8(0), -1, -1); self }
 	/// Set the C flag to 0.
-	fn c0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_CF, IrConst::_8(0), -1, -1); self }
+	fn c0(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_CF, IrConst::_8(0), -1, -1); self }
 
 	/// Set the N flag to 1.
-	fn n1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_NF, IrConst::_8(1), -1, -1); self }
+	fn n1(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_NF, IrConst::_8(1), -1, -1); self }
 	/// Set the H flag to 1.
-	fn h1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_HF, IrConst::_8(1), -1, -1); self }
+	fn h1(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_HF, IrConst::_8(1), -1, -1); self }
 	/// Set the C flag to 1.
-	fn c1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_CF, IrConst::_8(1), -1, -1); self }
+	fn c1(&mut self, ea: EA) -> &mut Self { self.mov(ea, REG_CF, IrConst::_8(1), -1, -1); self }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -349,7 +349,7 @@ impl IrBuilder {
 	/// are set to 0.
 	fn rolc(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool, regn: i8) {
 		let reg = reg.into();
-		self.assign (ea, REG_Z,  REG_CF,                        -1,   -1);
+		self.mov    (ea, REG_Z,  REG_CF,                        -1,   -1);
 		self.ibit   (ea, REG_CF, reg, IrConst::_8(7),           -1, regn, -1);
 		self.irol   (ea, reg,    reg, IrConst::_8(1),         regn, regn, -1);
 		self.ibitset(ea, reg,    reg, IrConst::_8(0), REG_Z,  regn, regn, -1, -1);
@@ -368,7 +368,7 @@ impl IrBuilder {
 	/// are set to 0.
 	fn rorc(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool, regn: i8) {
 		let reg = reg.into();
-		self.assign (ea, REG_Z,  REG_CF,                          -1,   -1);
+		self.mov    (ea, REG_Z,  REG_CF,                          -1,   -1);
 		self.ibit   (ea, REG_CF, reg,   IrConst::_8(0),           -1, regn, -1);
 		self.iror   (ea, reg,    reg,   IrConst::_8(1),         regn, regn, -1);
 		self.ibitset(ea, reg,    reg,   IrConst::_8(7), REG_Z,  regn, regn, -1, -1);
@@ -788,10 +788,10 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			b.iuadd  (ea, Z, Z, W,     -1, -1, -1);     // Z = NF ? Z : W (effectively)
 
 			// now we can do the actual addition and set the flags
-			b.c_     (ea,     A, Z,         -1, -1);
-			b.iuadd  (ea, A,  A, Z,     -1, -1, -1);
-			b.ieq    (ea, ZF, A, c(0),  -1, -1, -1);
-			b.assign (ea, HF, c(0),     -1, -1);
+			b.c_   (ea,     A, Z,         -1, -1);
+			b.iuadd(ea, A,  A, Z,     -1, -1, -1);
+			b.ieq  (ea, ZF, A, c(0),  -1, -1, -1);
+			b.mov  (ea, HF, c(0),     -1, -1);
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -920,13 +920,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 
 		// ld sp, hl (0xF9)
 		(LD, &[Srg(SP), Srg(HL)]) => { // no flag changes
-			b.rr    (ea, HL);
-			b.assign(ea, REG_SP, REG_HL,  -1, -1);
+			b.rr (ea, HL);
+			b.mov(ea, REG_SP, REG_HL,  -1, -1);
 		}
 
 		// ld r, r (many, many opcodes in [0x40 .. 0x7F] range)
 		(LD, &[Srg(dst), Srg(src)]) => { // no flag changes
-			b.assign(ea, dst.into(), IrReg::from(src),  -1, -1);
+			b.mov(ea, dst.into(), IrReg::from(src),  -1, -1);
 		}
 
 		// ld hl, sp+e (0xF8)
@@ -942,21 +942,21 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			let Operand::UImm(val) = i.ops()[0] else { panic!() };
 			// seems silly to do this, but it's to preserve the original source operand in the IR,
 			// for later tracing back and marking this operand as a reference
-			b.assign(ea, REG_WZ, IrConst::_16(val as u16),  -1,  0);
-			b.ihi   (ea, dst.hi().into(), REG_WZ,           -1, -1);
-			b.ilo   (ea, dst.lo().into(), REG_WZ,           -1, -1);
+			b.mov(ea, REG_WZ, IrConst::_16(val as u16),  -1,  0);
+			b.ihi(ea, dst.hi().into(), REG_WZ,           -1, -1);
+			b.ilo(ea, dst.lo().into(), REG_WZ,           -1, -1);
 		}
 
 		// ld sp, nn (0x31) (same as above but SP is represented differently)
 		(LD, &[Srg(SP), Op]) => { // no flag changes
 			let Operand::UImm(val) = i.ops()[0] else { panic!() };
-			b.assign(ea, REG_SP, IrConst::_16(val as u16),  -1,  0);
+			b.mov(ea, REG_SP, IrConst::_16(val as u16),  -1,  0);
 		}
 
 		// ld r, n (various)
 		(LD, &[Srg(dst), Op]) => { // no flag changes
 			let Operand::UImm(val) = i.ops()[0] else { panic!() };
-			b.assign(ea, dst.into(), IrConst::_8(val as u8),  -1, 0);
+			b.mov(ea, dst.into(), IrConst::_8(val as u8),  -1, 0);
 		}
 
 		// ld r, [rr] (various)

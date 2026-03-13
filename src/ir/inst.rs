@@ -81,7 +81,7 @@ pub(crate) enum IrInstKind {
 	Nop,
 
 	Use     { reg: IrReg },            // dummy use of reg
-	Assign  { dst: IrReg, src: IrSrc,  // dst = src
+	Mov     { dst: IrReg, src: IrSrc,  // dst = src
 		dstn: i8, srcn: i8, },
 	Load    { dst: IrReg, addr: IrSrc, // dst = *addr
 		dstn: i8, addrn: i8, },
@@ -136,7 +136,7 @@ impl Debug for IrInstKind {
 				write!(f, "nop"),
 			Use { reg } =>
 				write!(f, "use       {:?}", reg),
-			Assign { dst, src, dstn, srcn } =>
+			Mov { dst, src, dstn, srcn } =>
 				write!(f, "mov       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 			Load { dst, addr, dstn, addrn } =>
 				write!(f, "load      {:?}{:?}, [{:?}{:?}]", dst, Opn(dstn), addr, Opn(addrn)),
@@ -273,10 +273,10 @@ impl IrInst {
 	}
 
 	/// TODO: docme
-	pub(crate) fn assign(ea: EA, dst: IrReg, src: IrSrc,
+	pub(crate) fn mov(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
-		Self { ea, kind: IrInstKind::Assign { dst, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Mov { dst, src, dstn, srcn } }
 	}
 
 	/// TODO: docme
@@ -681,7 +681,7 @@ impl IrInst {
 			| Ret { .. } => panic!("no source"),
 
 			Use       { reg }      => reg.size(),
-			Assign    { src, .. }  => src.size(),
+			Mov       { src, .. }  => src.size(),
 			Load      { dst, .. }  => dst.size(), // yes, it's weird
 			Store     { src, .. }  => src.size(),
 			CBranch   { cond, .. } => cond.size(),
@@ -706,7 +706,7 @@ impl IrInst {
 			| CBranch { .. }
 			| Use { .. } => panic!("no destination"),
 
-			Assign  { dst, .. } => dst.size(),
+			Mov     { dst, .. } => dst.size(),
 			Load    { dst, .. } => dst.size(),
 			Store   { src, .. } => src.size(), // yes, it's weird
 			Unary   { dst, .. } => dst.size(),
@@ -726,7 +726,7 @@ impl IrInst {
 			| Call { .. } => {}
 
 			Use { reg }              => { f(reg); }
-			Assign { dst, src, .. }  => { f(dst); src.regs(&mut f); }
+			Mov { dst, src, .. }  => { f(dst); src.regs(&mut f); }
 			Load { dst, addr, .. }   => { f(dst); addr.regs(&mut f); }
 			Store { addr,  src, .. } => { addr.regs(&mut f); src.regs(&mut f); }
 			CBranch { cond, .. }     => { cond.regs(&mut f); }
@@ -756,7 +756,7 @@ impl IrInst {
 			Nop | Use { .. } | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. }
 			| IBranch { .. } | Store { .. } | Call { .. } => false,
 
-			Assign { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
+			Mov { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
 			| Ternary { dst, .. } => *dst == reg,
 		}
 	}
@@ -771,7 +771,7 @@ impl IrInst {
 			| Call { .. } => {}
 
 			Use { reg }             => { f(*reg); }
-			Assign { src, .. }      => { src.visit_use(&mut f); }
+			Mov { src, .. }         => { src.visit_use(&mut f); }
 			Load { addr, .. }       => { addr.visit_use(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use(&mut f); src.visit_use(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use(&mut f); }
@@ -801,7 +801,7 @@ impl IrInst {
 			| Call { .. } => {}
 
 			Use { reg }             => { f(reg); }
-			Assign { src, .. }      => { src.visit_use_mut(&mut f); }
+			Mov { src, .. }         => { src.visit_use_mut(&mut f); }
 			Load { addr, .. }       => { addr.visit_use_mut(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use_mut(&mut f); }
@@ -836,7 +836,7 @@ impl IrInst {
 			| Store { .. }
 			| CBranch { .. } => None,
 
-			Assign  { dst, .. }
+			Mov  { dst, .. }
 			| Load    { dst, .. }
 			| Unary   { dst, .. }
 			| Binary  { dst, .. }
@@ -859,7 +859,7 @@ impl IrInst {
 			| Store { .. }
 			| CBranch { .. } => None,
 
-			Assign  { dst, .. }
+			Mov  { dst, .. }
 			| Load    { dst, .. }
 			| Unary   { dst, .. }
 			| Binary  { dst, .. }
