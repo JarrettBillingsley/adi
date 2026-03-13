@@ -4,9 +4,15 @@
 
 # Imminent tasks!
 
-- why aren't `icarry[c]/IntCarry[C]` called `iucarry[c]/IntUCarry[C]`?? 
-	- also `.assign` bugs me. just call it `.mov`
-- GB inst descs - `Imp`, `Ind`, and maybe `Add16` have annoying special cases. split em
+- IR
+	- why aren't `icarry[c]/IntCarry[C]` called `iucarry[c]/IntUCarry[C]`?? 
+	- also `IrBuilder::assign` bugs me. just call it `mov`
+	- also maybe have every `IrBuilder` method return `&mut Self` for chaining
+	- also maybe we need a `carries` instruction which gives you a value where each bit is the carry-out of that column?
+	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
+- GB
+	- inst descs - `Imp`, `Ind`, and maybe `Add16` have annoying special cases. split em
+	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
 - Mos65xx IR:
 	- reimplement rotates and uses of `iand` which could be bit instructions
 	- cleanup/reorganize to match GB IR compiler (methods on `IrBuilder`, free function instead of method on `InstDesc`)

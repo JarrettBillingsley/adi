@@ -116,27 +116,41 @@ impl IrBuilder {
 		self
 	}
 
-	/// Sets the N flag to a given value.
+	/// Set the N flag to a given value.
 	fn nx(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
 		let src = src.into();
 		self.assign(ea, REG_NF, src,  -1, srcn);
 		self
 	}
 
-	/// Sets the Z flag to 0.
+	/// Set the C flag to the carry out of unsigned `src1 + src2`.
+	fn cx(&mut self, ea: EA, src1: impl Into<IrSrc>, src2: impl Into<IrSrc>, src1n: i8, src2n: i8)
+	-> &mut Self {
+		self.icarry(ea, REG_CF, src1.into(), src2.into(),  -1, src1n, src2n);
+		self
+	}
+
+	/// Set the C flag to the carry out of unsigned `src1 + src2 + C`.
+	fn cxc(&mut self, ea: EA, src1: impl Into<IrSrc>, src2: impl Into<IrSrc>, src1n: i8, src2n: i8)
+	-> &mut Self {
+		self.icarryc(ea, REG_CF, src1.into(), src2.into(), REG_CF,  -1, src1n, src2n, -1);
+		self
+	}
+
+	/// Set the Z flag to 0.
 	fn z0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_ZF, IrConst::_8(0), -1, -1); self }
-	/// Sets the N flag to 0.
+	/// Set the N flag to 0.
 	fn n0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_NF, IrConst::_8(0), -1, -1); self }
-	/// Sets the H flag to 0.
+	/// Set the H flag to 0.
 	fn h0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_HF, IrConst::_8(0), -1, -1); self }
-	/// Sets the C flag to 0.
+	/// Set the C flag to 0.
 	fn c0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_CF, IrConst::_8(0), -1, -1); self }
 
-	/// Sets the N flag to 1.
+	/// Set the N flag to 1.
 	fn n1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_NF, IrConst::_8(1), -1, -1); self }
-	/// Sets the H flag to 1.
+	/// Set the H flag to 1.
 	fn h1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_HF, IrConst::_8(1), -1, -1); self }
-	/// Sets the C flag to 1.
+	/// Set the C flag to 1.
 	fn c1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_CF, IrConst::_8(1), -1, -1); self }
 }
 
@@ -365,6 +379,19 @@ impl IrBuilder {
 		.c0      (ea);
 	}
 
+	/// Increment or decrement HL. Assumes HL has already been paired. Increments `REG_HL`, then
+	/// extracts the components into `REG_H` and `REG_L`.
+	fn inc_dec_hl(&mut self, ea: EA, plus: bool) {
+		if plus {
+			self.iuadd(ea, REG_HL, REG_HL, IrConst::ONE_16,  -1, -1, -1);
+		} else {
+			self.iusub(ea, REG_HL, REG_HL, IrConst::ONE_16,  -1, -1, -1);
+		}
+
+		self.ilo(ea, REG_L, REG_HL,  -1, -1);
+		self.ihi(ea, REG_H, REG_HL,  -1, -1);
+	}
+
 	/// Perform an increment or decrement on `reg`. `delta == 1` increments, `delta == -1`
 	/// decrements. If `change_flags`, the zero flag is set according to if `reg == 0` after the
 	/// crement; N is set to 0 if `delta == 1` and 1 otherwise; and H is set according to the
@@ -380,22 +407,57 @@ impl IrBuilder {
 		if change_flags {
 			self.z_(ea, reg, -1);
 			self.nx(ea, IrConst::_8(nf), -1);
-			// TODO: half carry
+			// TODO: half-carry
 			self.h0(ea);
 		}
 	}
 
-	/// Increment or decrement HL. Assumes HL has already been paired. Increments `REG_HL`, then
-	/// extracts the components into `REG_H` and `REG_L`.
-	fn inc_dec_hl(&mut self, ea: EA, plus: bool) {
-		if plus {
-			self.iuadd(ea, REG_HL, REG_HL, IrConst::ONE_16,  -1, -1, -1);
-		} else {
-			self.iusub(ea, REG_HL, REG_HL, IrConst::ONE_16,  -1, -1, -1);
-		}
+	/// Add paired register `reg` onto `HL` and update flags. Pairs both `HL` and `reg`, and
+	/// extracts results into `REG_H` and `REG_L` afterwards.
+	fn add_hl_rr(&mut self, ea: EA, reg: Reg) {
+		let src = self.rr(ea, reg);
+		self.rr    (ea, Reg::HL);
+		// TODO: half-carry
+		self.h0    (ea);
+		self.cx    (ea,         REG_HL, src,     -1, -1);
+		self.iuadd (ea, REG_HL, REG_HL, src, -1, -1, -1);
+		self.n0    (ea);
+		self.ihi   (ea, REG_H,  REG_HL,      -1, -1);
+		self.ilo   (ea, REG_L,  REG_HL,      -1, -1);
+	}
 
-		self.ilo(ea, REG_L, REG_HL,  -1, -1);
-		self.ihi(ea, REG_H, REG_HL,  -1, -1);
+	/// Add `REG_SP + val` (written `sp + e` in ISA docs), put result into `dst`, and update flags.
+	fn add_sp_e(&mut self, ea: EA, dst: IrReg, val: i64, valn: i8) {
+		// it adds the sign-extended operand to SP, as if it were unsigned.
+		let val = IrConst::_16((val as u64) as u16);
+		// TODO: half-carry (and carry; HF = carrybits.3, CF = carrybits.7)
+		self.h0   (ea);
+		self.c0   (ea);
+		self.iuadd(ea, dst, REG_SP, val,  -1, -1, valn);
+		self.z0   (ea);
+		self.n0   (ea);
+	}
+
+	/// Add `src` onto `REG_A` and update flags.
+	fn add_a(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) {
+		let src = src.into();
+		// TODO: half-carry
+		self.h0   (ea);
+		self.cx   (ea,         REG_A, src,      -1, srcn);
+		self.iuadd(ea, REG_A,  REG_A, src,  -1, -1, srcn);
+		self.n0   (ea);
+		self.z_   (ea, REG_A,               -1);
+	}
+
+	/// Add `src` onto `REG_A` with carry and update flags.
+	fn adc_a(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) {
+		let src = src.into();
+		// TODO: half-carry
+		self.h0    (ea);
+		self.cxc   (ea,         REG_A, src,          -1, srcn);
+		self.iuaddc(ea, REG_A,  REG_A, src, REG_CF,  -1, -1, srcn, -1);
+		self.n0    (ea);
+		self.z_    (ea, REG_A,                       -1);
 	}
 }
 
@@ -423,45 +485,44 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 
 		// add hl, rr
 		(ADD, &[Srg(HL), Srg(reg)]) => { // {Z-, N0, H*, C*}
-			b.rr(ea, HL);
-			let src = b.rr(ea, reg);
-			b.icarry(ea, REG_CF, REG_HL, src, -1, -1, -1);
-			b.iuadd (ea, REG_HL, REG_HL, src, -1, -1, -1);
-			b.ihi   (ea, REG_H,  REG_HL,      -1, -1);
-			b.ilo   (ea, REG_L,  REG_HL,      -1, -1);
-			b.n0    (ea);
-			// TODO: half-carry
-			b.h0    (ea);
+			b.add_hl_rr(ea, reg);
 		}
 		// add sp, e
 		(ADD, [Srg(SP), Op]) => { // {Z0, N0, H*, C*}
-			b.nop(ea); // TODO
+			let Operand::SImm(val) = i.ops()[0] else { panic!() };
+			b.add_sp_e(ea, REG_SP, val, 0);
 		}
 
 		// add r
-		(ADD, &[Srg(A), Srg(_reg)]) => { // {Z*, N0, H*, C*}
-			b.nop(ea); // TODO
+		(ADD, &[Srg(A), Srg(reg)]) => { // {Z*, N0, H*, C*}
+			b.add_a(ea, IrReg::from(reg), -1);
 		}
 		// add [hl]
 		(ADD, [Srg(A), IndReg(HL)]) => { // {Z*, N0, H*, C*}
-			b.nop(ea); // TODO
+			b.load_ind(ea, REG_Z, HL,   0);
+			b.add_a   (ea, REG_Z,      -1);
 		}
 		// add n
 		(ADD, [Srg(A), Op]) => { // {Z*, N0, H*, C*}
-			b.nop(ea); // TODO
+			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			b.add_a(ea, IrConst::_8(val as u8), -1);
 		}
+
 		// adc r
-		(ADC, &[Srg(A), Srg(_reg)]) => { // {Z*, N0, H*, C*}
-			b.nop(ea); // TODO
+		(ADC, &[Srg(A), Srg(reg)]) => { // {Z*, N0, H*, C*}
+			b.adc_a(ea, IrReg::from(reg), -1);
 		}
 		// adc [hl]
 		(ADC, [Srg(A), IndReg(HL)]) => { // {Z*, N0, H*, C*}
-			b.nop(ea); // TODO
+			b.load_ind(ea, REG_Z, HL,   0);
+			b.adc_a   (ea, REG_Z,      -1);
 		}
 		// adc n
 		(ADC, [Srg(A), Op]) => { // {Z*, N0, H*, C*}
-			b.nop(ea); // TODO
+			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			b.adc_a(ea, IrConst::_8(val as u8), -1);
 		}
+
 		// sub r
 		(SUB, &[Srg(A), Srg(_reg)]) => { // {Z*, N1, H*, C*}
 			b.nop(ea); // TODO
@@ -474,6 +535,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(SUB, [Srg(A), Op]) => { // {Z*, N1, H*, C*}
 			b.nop(ea); // TODO
 		}
+
 		// sbc r
 		(SBC, &[Srg(A), Srg(_reg)]) => { // {Z*, N1, H*, C*}
 			b.nop(ea); // TODO
@@ -645,7 +707,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			b.iuadd  (ea, Z, Z, W,     -1, -1, -1);     // Z = NF ? Z : W (effectively)
 
 			// now we can do the actual addition and set the flags
-			b.icarry (ea, CF, A, Z,     -1, -1, -1);
+			b.cx     (ea,     A, Z,         -1, -1);
 			b.iuadd  (ea, A,  A, Z,     -1, -1, -1);
 			b.ieq    (ea, ZF, A, c(0),  -1, -1, -1);
 			b.assign (ea, HF, c(0),     -1, -1);
@@ -789,16 +851,9 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		// ld hl, sp+e (0xF8)
 		(LD, &[Srg(HL), SpPlusOp]) => { // {Z0, N0, H]*, C*}
 			let Operand::SImm(val) = i.ops()[0] else { panic!() };
-			// it adds the sign-extended operand to SP, as if it were unsigned.
-			let val = IrConst::_16((val as u64) as u16);
-			b.iuadd (ea, REG_HL, REG_SP, val,       -1, -1, 0);
-			b.ilo   (ea, REG_L,  REG_HL,            -1, -1);
-			b.ihi   (ea, REG_H,  REG_HL,            -1, -1);
-			b.z0    (ea)
-			.n0     (ea)
-			// TODO: half-carry (and carry; HF = carrybits.3, CF = carrybits.7)
-			.h0     (ea)
-			.c0     (ea);
+			b.add_sp_e(ea, REG_HL, val, 0);
+			b.ilo     (ea, REG_L,  REG_HL,            -1, -1);
+			b.ihi     (ea, REG_H,  REG_HL,            -1, -1);
 		}
 
 		// ld rr, nn (0x01, 0x11, 0x21)
