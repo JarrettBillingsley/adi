@@ -616,46 +616,41 @@ impl InstDesc {
 				// REG_CF = REG_WZ.8
 				// REG_HF = 0
 
-				// All this is to make the actual code below more readable...
-				const C0:   IrConst = IrConst::_8(0);
-				const C4:   IrConst = IrConst::_8(4);
-				const C6:   IrConst = IrConst::_8(6);
-				const C9:   IrConst = IrConst::_8(9);
-				const CN6:  IrConst = IrConst::_8(-6i8 as u8);
-				const CXF:  IrConst = IrConst::_8(0x0F);
-				const CX99: IrConst = IrConst::_8(0x99);
+				// This stuff is to make the code below more readable
 				use { REG_A as A, REG_W as W, REG_X as X, REG_Y as Y, REG_Z as Z,
 					REG_NF as NF, REG_HF as HF, REG_CF as CF, REG_ZF as ZF };
+				const fn c(val: u8) -> IrConst { IrConst::_8(val) }
 
 				// Z = subtraction adjustment { 0x00, -0x06, -0x60, -0x66 }
-				b.band   (ea, Z, NF, HF,   -1, -1, -1);     // Z.0 = NF & HF
-				b.band   (ea, X, NF, CF,   -1, -1, -1);     // X   = NF & CF
-				b.ibitset(ea, Z, Z, C4, X, -1, -1, -1, -1); // Z.4 = NF & CF
-				b.imul   (ea, Z, Z, CN6,   -1, -1, -1);     // Z   = Z * -6
+				b.band   (ea, Z, NF, HF,            -1, -1, -1);     // Z.0 = NF & HF
+				b.band   (ea, X, NF, CF,            -1, -1, -1);     // X   = NF & CF
+				b.ibitset(ea, Z, Z, c(4), X,        -1, -1, -1, -1); // Z.4 = NF & CF
+				b.imul   (ea, Z, Z, c(-6i8 as u8),  -1, -1, -1);     // Z   = Z * -6
 
 				// W = addition adjustment { 0x00, 0x06, 0x60, 0x66 }
-				b.inot   (ea, X, NF,       -1, -1);         // X   = !NF
-				b.iand   (ea, Y, A, CXF,   -1, -1, -1);     // Y   = A & 0xF
-				b.iugt   (ea, Y, Y, C9,    -1, -1, -1);     // Y   = A & 0xF > 9
-				b.bor    (ea, Y, Y, HF,    -1, -1, -1);     // Y   = HF | (A & 0xF > 9)
-				b.band   (ea, W, X, Y,     -1, -1, -1);     // W.0 = !NF & (HF | (A & 0xF > 9))
-				b.iugt   (ea, Y, A, CX99,  -1, -1, -1);     // Y   = A > 0x99
-				b.bor    (ea, Y, Y, CF,    -1, -1, -1);     // Y   = CF | (A > 0x99)
-				b.band   (ea, Y, Y, X,     -1, -1, -1);     // Y   = !NF & (CF | (A > 0x99))
-				b.ibitset(ea, W, W, C4, Y, -1, -1, -1, -1); // W.4 = !NF & (CF | (A > 0x99))
-				b.imul   (ea, W, W, C6,    -1, -1, -1);     // W   = W * 6
+				b.inot   (ea, X, NF,          -1, -1);         // X   = !NF
+				b.iand   (ea, Y, A, c(0xF),   -1, -1, -1);     // Y   = A & 0xF
+				b.iugt   (ea, Y, Y, c(9),     -1, -1, -1);     // Y   = A & 0xF > 9
+				b.bor    (ea, Y, Y, HF,       -1, -1, -1);     // Y   = HF | (A & 0xF > 9)
+				b.band   (ea, W, X, Y,        -1, -1, -1);     // W.0 = !NF & (HF | (A & 0xF > 9))
+				b.iugt   (ea, Y, A, c(0x99),  -1, -1, -1);     // Y   = A > 0x99
+				b.bor    (ea, Y, Y, CF,       -1, -1, -1);     // Y   = CF | (A > 0x99)
+				b.band   (ea, Y, Y, X,        -1, -1, -1);     // Y   = !NF & (CF | (A > 0x99))
+				b.ibitset(ea, W, W, c(4), Y,  -1, -1, -1, -1); // W.4 = !NF & (CF | (A > 0x99))
+				b.imul   (ea, W, W, c(6),     -1, -1, -1);     // W   = W * 6
+
+				// because the above two values were calculated based on NF and !NF, either they are
+				// both 0 or exactly one is 0. so adding them together has the effect of choosing
+				// between them.
 
 				// Z = adjustment
-				// because the above two values were calculated based on NF and !NF, either
-				// they are both 0 or exactly one is 0. so adding them together has the effect
-				// of picking between them.
 				b.iuadd  (ea, Z, Z, W,     -1, -1, -1);     // Z = NF ? Z : W (effectively)
 
 				// now we can do the actual addition and set the flags
-				b.icarry (ea, CF, A, Z,    -1, -1, -1);
-				b.iuadd  (ea, A,  A, Z,    -1, -1, -1);
-				b.ieq    (ea, ZF, A, C0,   -1, -1, -1);
-				b.assign (ea, HF, C0,      -1, -1);
+				b.icarry (ea, CF, A, Z,     -1, -1, -1);
+				b.iuadd  (ea, A,  A, Z,     -1, -1, -1);
+				b.ieq    (ea, ZF, A, c(0),  -1, -1, -1);
+				b.assign (ea, HF, c(0),     -1, -1);
 			}
 
 			// ------------------------------------------------------------------------------------
