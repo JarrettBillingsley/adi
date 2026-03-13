@@ -495,6 +495,39 @@ impl IrBuilder {
 		self.n1    (ea);
 		self.z_    (ea, REG_A,                       -1);
 	}
+
+	/// Do `REG_A = REG_A & src` and update flags.
+	fn and_a(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) {
+		let src = src.into();
+
+		self.iand(ea, REG_A, REG_A, src,  -1, -1, srcn);
+		self.n0  (ea)
+		.h1      (ea)
+		.c0      (ea)
+		.z_      (ea, REG_A, -1);
+	}
+
+	/// Do `REG_A = REG_A | src` and update flags.
+	fn or_a(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) {
+		let src = src.into();
+
+		self.ior(ea, REG_A, REG_A, src,  -1, -1, srcn);
+		self.n0 (ea)
+		.h0     (ea)
+		.c0     (ea)
+		.z_     (ea, REG_A, -1);
+	}
+
+	/// Do `REG_A = REG_A ^ src` and update flags.
+	fn xor_a(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) {
+		let src = src.into();
+
+		self.ixor(ea, REG_A, REG_A, src,  -1, -1, srcn);
+		self.n0  (ea)
+		.h0      (ea)
+		.c0      (ea)
+		.z_      (ea, REG_A, -1);
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -605,42 +638,48 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		}
 
 		// and r
-		(AND, &[Srg(A), Srg(_reg)]) => { // {Z*, N0, H1, C0}
-			b.nop(ea); // TODO
+		(AND, &[Srg(A), Srg(reg)]) => { // {Z*, N0, H1, C0}
+			b.and_a(ea, IrReg::from(reg), -1);
 		}
 		// and [hl]
 		(AND, [Srg(A), IndReg(HL)]) => { // {Z*, N0, H1, C0}
-			b.nop(ea); // TODO
+			b.load_ind(ea, REG_Z, HL,   0);
+			b.and_a   (ea, REG_Z,      -1);
 		}
 		// and n
 		(AND, [Srg(A), Op]) => { // {Z*, N0, H1, C0}
-			b.nop(ea); // TODO
+			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			b.and_a(ea, IrConst::_8(val as u8), -1);
 		}
 
 		// or r
-		(OR, &[Srg(A), Srg(_reg)]) => { // {Z*, N0, H0, C0}
-			b.nop(ea); // TODO
+		(OR, &[Srg(A), Srg(reg)]) => { // {Z*, N0, H0, C0}
+			b.or_a(ea, IrReg::from(reg), -1);
 		}
 		// or [hl]
 		(OR, [Srg(A), IndReg(HL)]) => { // {Z*, N0, H0, C0}
-			b.nop(ea); // TODO
+			b.load_ind(ea, REG_Z, HL,   0);
+			b.or_a   (ea, REG_Z,      -1);
 		}
 		// or n
 		(OR, [Srg(A), Op]) => { // {Z*, N0, H0, C0}
-			b.nop(ea); // TODO
+			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			b.or_a(ea, IrConst::_8(val as u8), -1);
 		}
 
 		// xor r
-		(XOR, &[Srg(A), Srg(_reg)]) => { // {Z*, N0, H0, C0}
-			b.nop(ea); // TODO
+		(XOR, &[Srg(A), Srg(reg)]) => { // {Z*, N0, H0, C0}
+			b.xor_a(ea, IrReg::from(reg), -1);
 		}
 		// xor [hl]
 		(XOR, [Srg(A), IndReg(HL)]) => { // {Z*, N0, H0, C0}
-			b.nop(ea); // TODO
+			b.load_ind(ea, REG_Z, HL,   0);
+			b.xor_a   (ea, REG_Z,      -1);
 		}
 		// xor n
 		(XOR, [Srg(A), Op]) => { // {Z*, N0, H0, C0}
-			b.nop(ea); // TODO
+			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			b.xor_a(ea, IrConst::_8(val as u8), -1);
 		}
 
 		// inc bc, inc de, inc hl
