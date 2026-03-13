@@ -35,25 +35,22 @@ impl IIrCompiler for GBIrCompiler {
 	}
 }
 
-const REG_A:  IrReg = IrReg::reg8(0);
-const REG_B:  IrReg = IrReg::reg8(1);
-const REG_C:  IrReg = IrReg::reg8(2);
-const REG_D:  IrReg = IrReg::reg8(3);
-const REG_E:  IrReg = IrReg::reg8(4);
-const REG_H:  IrReg = IrReg::reg8(5);
-const REG_L:  IrReg = IrReg::reg8(6);
-
-const REG_CF: IrReg = IrReg::reg8(7);   // 4 Carry
-const REG_HF: IrReg = IrReg::reg8(8);   // 5 Half-carry (BCD)
-const REG_NF: IrReg = IrReg::reg8(9);   // 6 Subtraction (BCD)
-const REG_ZF: IrReg = IrReg::reg8(10);  // 7 Zero
-
-const REG_SP: IrReg = IrReg::reg16(11);
-
-const REG_W:  IrReg = IrReg::reg8(13); // 8-bit temporary
-const REG_Z:  IrReg = IrReg::reg8(14); // 8-bit temporary
-
-const REG_AF_TMP: IrReg = IrReg::reg16(15); // 16-bit temporary
+const REG_A:      IrReg = IrReg::reg8 (0);
+const REG_B:      IrReg = IrReg::reg8 (1);
+const REG_C:      IrReg = IrReg::reg8 (2);
+const REG_D:      IrReg = IrReg::reg8 (3);
+const REG_E:      IrReg = IrReg::reg8 (4);
+const REG_H:      IrReg = IrReg::reg8 (5);
+const REG_L:      IrReg = IrReg::reg8 (6);
+const REG_CF:     IrReg = IrReg::reg8 (7);   // 4 Carry
+const REG_HF:     IrReg = IrReg::reg8 (8);   // 5 Half-carry (BCD)
+const REG_NF:     IrReg = IrReg::reg8 (9);   // 6 Subtraction (BCD)
+const REG_ZF:     IrReg = IrReg::reg8 (10);  // 7 Zero
+const REG_SP:     IrReg = IrReg::reg16(11);
+const REG_W:      IrReg = IrReg::reg8 (13); // 8-bit temporary
+const REG_X:      IrReg = IrReg::reg8 (14); // 8-bit temporary
+const REG_Y:      IrReg = IrReg::reg8 (15); // 8-bit temporary
+const REG_Z:      IrReg = IrReg::reg8 (16); // 8-bit temporary
 const REG_BC_TMP: IrReg = IrReg::reg16(17); // 16-bit temporary
 const REG_DE_TMP: IrReg = IrReg::reg16(19); // 16-bit temporary
 const REG_HL_TMP: IrReg = IrReg::reg16(21); // 16-bit temporary
@@ -113,15 +110,14 @@ impl IrBuilder {
 	}
 
 	/// Pair the constituent registers of a paired register into its corresponding `REG_XX_TMP`.
-	/// Named `rr` to match the ISA docs.
-	fn rr(&mut self, ea: EA, reg: Reg) {
+	/// Named `rr` to match the ISA docs. Returns the temporary register.
+	fn rr(&mut self, ea: EA, reg: Reg) -> IrReg {
 		match reg {
-			// Reg::AF => self.ipair(ea, REG_AF_TMP, REG_A, REG_F,  -1, -1, -1),
-			Reg::BC => self.ipair(ea, REG_BC_TMP, REG_B, REG_C,  -1, -1, -1),
-			Reg::DE => self.ipair(ea, REG_DE_TMP, REG_D, REG_E,  -1, -1, -1),
-			Reg::HL => self.ipair(ea, REG_HL_TMP, REG_H, REG_L,  -1, -1, -1),
+			Reg::BC => { self.ipair(ea, REG_BC_TMP, REG_B, REG_C,  -1, -1, -1); REG_BC_TMP }
+			Reg::DE => { self.ipair(ea, REG_DE_TMP, REG_D, REG_E,  -1, -1, -1); REG_DE_TMP }
+			Reg::HL => { self.ipair(ea, REG_HL_TMP, REG_H, REG_L,  -1, -1, -1); REG_HL_TMP }
 			_ => panic!("given something other than a paired register"),
-		};
+		}
 	}
 
 	/// Pair `REG_W` with `REG_Z` into `REG_WZ_TMP`.
@@ -210,6 +206,12 @@ impl IrBuilder {
 	fn n0h0(&mut self, ea: EA) {
 		self.assign(ea, REG_NF, IrConst::_8(0),  -1, -1);
 		self.assign(ea, REG_HF, IrConst::_8(0),  -1, -1);
+	}
+
+	/// Set the N and H flags to 1.
+	fn n1h1(&mut self, ea: EA) {
+		self.assign(ea, REG_NF, IrConst::_8(1),  -1, -1);
+		self.assign(ea, REG_HF, IrConst::_8(1),  -1, -1);
 	}
 
 	/// Set the Z, N, and H flags to 0.
@@ -330,6 +332,26 @@ impl IrBuilder {
 		self.z_n0h0c0(ea, reg,                       regn);
 	}
 
+	/// Perform an increment or decrement on `reg`. `delta == 1` increments, `delta == -1`
+	/// decrements. If `change_flags`, the zero flag is set according to if `reg == 0` after the
+	/// crement; N is set to 0 if `delta == 1` and 1 otherwise; and H is set according to the
+	/// half-carry rules.
+	fn inc_dec(&mut self, ea: EA, reg: impl Into<IrReg>, delta: isize, change_flags: bool) {
+		let reg = reg.into();
+		match delta {
+			1  => self.iuadd(ea, reg, reg, IrConst::with_size(reg.size(), 1),  -1, -1, -1),
+			-1 => self.iusub(ea, reg, reg, IrConst::with_size(reg.size(), 1),  -1, -1, -1),
+			_  => panic!("bad delta"),
+		}
+
+		if change_flags {
+			self.z_    (ea, reg, -1);
+			self.assign(ea, REG_NF, IrConst::_8(if delta == 1 { 0 } else { 1 }),  -1, -1);
+			// TODO: half carry
+			self.assign(ea, REG_HF, IrConst::_8(0),  -1, -1);
+		}
+	}
+
 	/// Do a conditional branch using the condition code `cc`.
 	fn cc_branch(&mut self, ea: EA, cc: Cc, target: EA, targetn: i8) {
 		let cond = self.cc(ea, cc);
@@ -338,24 +360,14 @@ impl IrBuilder {
 
 	/// Load indirect, using one of the paired registers as the source address.
 	fn load_ind(&mut self, ea: EA, dst: impl Into<IrReg>, src: Reg, srcn: i8) {
-		self.rr(ea, src);
-		match src {
-			Reg::BC => self.load(ea, dst.into(), REG_BC_TMP,  -1, srcn),
-			Reg::DE => self.load(ea, dst.into(), REG_DE_TMP,  -1, srcn),
-			Reg::HL => self.load(ea, dst.into(), REG_HL_TMP,  -1, srcn),
-			_       => panic!("invalid paired reg used as source"),
-		}
+		let src = self.rr(ea, src);
+		self.load(ea, dst.into(), src,  -1, srcn);
 	}
 
 	/// Store indirect, using one of the paired registers as the destination address.
 	fn store_ind(&mut self, ea: EA, dst: Reg, src: impl Into<IrSrc>, dstn: i8, srcn: i8) {
-		self.rr(ea, dst);
-		match dst {
-			Reg::BC => self.store(ea, REG_BC_TMP, src.into(),  dstn, srcn),
-			Reg::DE => self.store(ea, REG_DE_TMP, src.into(),  dstn, srcn),
-			Reg::HL => self.store(ea, REG_HL_TMP, src.into(),  dstn, srcn),
-			_       => panic!("invalid paired reg used as dest"),
-		}
+		let dst = self.rr(ea, dst);
+		self.store(ea, dst, src.into(),  dstn, srcn);
 	}
 
 	/// Increment or decrement HL. Assumes HL has already been paired. Increments `REG_HL_TMP`,
@@ -533,46 +545,121 @@ impl InstDesc {
 					// {Z*, N1, H*, C*} 0xFE (cp a, imm8)
 					// InstDesc(   0xFE, CP,   &[Srg(A), Op],             Other,  UImm8),
 			}
-			(INC, _) => {
-				b.nop(ea); // TODO
-				// r8++
-					// {Z*, N0, H*, C-} 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C (inc r)
-					// InstDesc(   0x04, INC,  &[Srg(B)],                 Other,  Imp),
-					// ...
 
-				// [hl]++
-					// {Z*, N0, H*, C-} 0x34 (inc [hl])
-					// InstDesc(   0x34, INC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
-
-				// r16++
-					// no flag changes
-					// InstDesc(   0x03, INC,  &[Srg(BC)],                Other,  Imp),
-					// ...
+			// inc bc, inc de, inc hl
+			(INC, Some(Srg(reg @ (Reg::BC | Reg::DE | Reg::HL)))) => { // no flag changes
+				let tmp_reg = b.rr(ea, reg);
+				b.inc_dec(ea, tmp_reg, 1, false);
+				b.ihi    (ea, reg.hi().into(), tmp_reg,          -1, -1);
+				b.ilo    (ea, reg.lo().into(), tmp_reg,          -1, -1);
 			}
-			(DEC, _) => {
-				b.nop(ea); // TODO
 
-				// r8--
-					// {Z*, N1, H*, C-} 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D (dec r)
-					// InstDesc(   0x05, DEC,  &[Srg(B)],                 Other,  Imp),
-					// ...
-
-				// [hl]--
-					// {Z*, N1, H*, C-} 0x3f (dec [hl])
-					// InstDesc(   0x35, DEC,  &[IndReg(HL)],             Other,  Ind(HL, RW)),
-
-				// r16--
-					// no flag changes
-					// InstDesc(   0x0B, DEC,  &[Srg(BC)],                Other,  Imp),
-					// ...
+			// inc sp
+			(INC, Some(Srg(Reg::SP))) => { // no flag changes
+				b.inc_dec(ea, REG_SP, 1, false);
 			}
-			(CPL, _) => {
-				b.nop(ea); // TODO
-				// {Z-, N1, H1, C-} 0x2F (cpl)
+
+			// inc r
+			(INC, Some(Srg(reg))) => { // {Z*, N0, H*, C-}
+				let reg = IrReg::from(reg);
+				b.inc_dec(ea, reg, 1, true);
 			}
-			(DAA, None) => {
-				b.nop(ea); // TODO
-				// {Z*, N-, H0, C*} 0x27 (da a)
+
+			// inc [hl]
+			(INC, Some(IndReg(Reg::HL))) => {  // {Z*, N0, H*, C-}
+				hl_rmw(b, ea, |b, reg| b.inc_dec(ea, reg, 1, true), 0);
+			}
+
+			// dec bc, inc de, inc hl
+			(DEC, Some(Srg(reg @ (Reg::BC | Reg::DE | Reg::HL)))) => { // no flag changes
+				let tmp_reg = b.rr(ea, reg);
+				b.inc_dec(ea, tmp_reg, -1, false);
+				b.ihi    (ea, reg.hi().into(), tmp_reg,          -1, -1);
+				b.ilo    (ea, reg.lo().into(), tmp_reg,          -1, -1);
+			}
+
+			// dec sp
+			(DEC, Some(Srg(Reg::SP))) => { // no flag changes
+				b.inc_dec(ea, REG_SP, -1, false);
+			}
+
+			// dec r
+			(DEC, Some(Srg(reg))) => { // {Z*, N0, H*, C-}
+				let reg = IrReg::from(reg);
+				b.inc_dec(ea, reg, -1, true);
+			}
+
+			// dec [hl]
+			(DEC, Some(IndReg(Reg::HL))) => {  // {Z*, N0, H*, C-}
+				hl_rmw(b, ea, |b, reg| b.inc_dec(ea, reg, -1, true), 0);
+			}
+
+			// cpl a
+			(CPL, Some(Srg(Reg::A))) => { // {Z-, N1, H1, C-}
+				b.inot(ea, REG_A, REG_A,  -1, -1);
+				b.n1h1(ea);
+			}
+
+			// daa
+			(DAA, None) => { // {Z*, N-, H0, C*}
+				// The logic is something like this. oof.
+				// REG_WZ = zxt(REG_A)
+				// if(REG_NF) {
+				//     // .0 = NF & HF
+				//     // .4 = NF & CF
+				//     if(REG_HF) REG_WZ -= 0x06;
+				//     if(REG_CF) REG_WZ -= 0x60;
+				// } else {
+				//     // .0 = !NF & (HF | (A & 0xF > 9))
+				//     // .4 = !NF & (CF | (A > 0x99))
+				//     if(REG_HF || (REG_WZ & 0x0F > 0x09)) REG_WZ += 0x06;
+				//     if(REG_CF || REG_WZ > 0x99)          REG_WZ += 0x60;
+				// }
+				// REG_A  = lo(REG_WZ)
+				// REG_ZF = REG_A == 0
+				// REG_CF = REG_WZ.8
+				// REG_HF = 0
+
+				// All this is to make the actual code below more readable...
+				const C0:   IrConst = IrConst::_8(0);
+				const C4:   IrConst = IrConst::_8(4);
+				const C6:   IrConst = IrConst::_8(6);
+				const C9:   IrConst = IrConst::_8(9);
+				const CN6:  IrConst = IrConst::_8(-6i8 as u8);
+				const CXF:  IrConst = IrConst::_8(0x0F);
+				const CX99: IrConst = IrConst::_8(0x99);
+				use { REG_A as A, REG_W as W, REG_X as X, REG_Y as Y, REG_Z as Z,
+					REG_NF as NF, REG_HF as HF, REG_CF as CF, REG_ZF as ZF };
+
+				// Z = subtraction adjustment { 0x00, -0x06, -0x60, -0x66 }
+				b.band   (ea, Z, NF, HF,   -1, -1, -1);     // Z.0 = NF & HF
+				b.band   (ea, X, NF, CF,   -1, -1, -1);     // X   = NF & CF
+				b.ibitset(ea, Z, Z, C4, X, -1, -1, -1, -1); // Z.4 = NF & CF
+				b.imul   (ea, Z, Z, CN6,   -1, -1, -1);     // Z   = Z * -6
+
+				// W = addition adjustment { 0x00, 0x06, 0x60, 0x66 }
+				b.inot   (ea, X, NF,       -1, -1);         // X   = !NF
+				b.iand   (ea, Y, A, CXF,   -1, -1, -1);     // Y   = A & 0xF
+				b.iugt   (ea, Y, Y, C9,    -1, -1, -1);     // Y   = A & 0xF > 9
+				b.bor    (ea, Y, Y, HF,    -1, -1, -1);     // Y   = HF | (A & 0xF > 9)
+				b.band   (ea, W, X, Y,     -1, -1, -1);     // W.0 = !NF & (HF | (A & 0xF > 9))
+				b.iugt   (ea, Y, A, CX99,  -1, -1, -1);     // Y   = A > 0x99
+				b.bor    (ea, Y, Y, CF,    -1, -1, -1);     // Y   = CF | (A > 0x99)
+				b.band   (ea, Y, Y, X,     -1, -1, -1);     // Y   = !NF & (CF | (A > 0x99))
+				b.ibitset(ea, W, W, C4, Y, -1, -1, -1, -1); // W.4 = !NF & (CF | (A > 0x99))
+				b.imul   (ea, W, W, C6,    -1, -1, -1);     // W   = W * 6
+
+				// Z = adjustment
+				// because the above two values were calculated based on NF and !NF, either
+				// they are both 0 or exactly one is 0. so adding them together has the effect
+				// of picking between them.
+				b.iuadd  (ea, Z, Z, W,     -1, -1, -1);     // Z = NF ? Z : W (effectively)
+
+				// now we can do the actual addition and set the flags
+				b.icarry (ea, CF, A, Z,    -1, -1, -1);
+				b.iuadd  (ea, A,  A, Z,    -1, -1, -1);
+				b.ieq    (ea, ZF, A, C0,   -1, -1, -1);
+				b.assign (ea, HF, C0,      -1, -1);
 			}
 
 			// ------------------------------------------------------------------------------------
@@ -737,11 +824,11 @@ impl InstDesc {
 				(Srg(dst @ (Reg::BC | Reg::DE | Reg::HL)), Op) => {
 					let Operand::UImm(val) = i.ops()[0] else { panic!() };
 					b.assign(ea, REG_WZ_TMP, IrConst::_16(val as u16),  -1,  0);
-					b.ilo   (ea, dst.lo().into(), REG_WZ_TMP,           -1, -1);
 					b.ihi   (ea, dst.hi().into(), REG_WZ_TMP,           -1, -1);
+					b.ilo   (ea, dst.lo().into(), REG_WZ_TMP,           -1, -1);
 				}
 
-				// ld sp, nn (0x31) (same as above but I represent SP differently)
+				// ld sp, nn (0x31) (same as above but SP is represented differently)
 				(Srg(Reg::SP), Op) => {
 					let Operand::UImm(val) = i.ops()[0] else { panic!() };
 					b.assign(ea, REG_SP, IrConst::_16(val as u16),  -1,  0);

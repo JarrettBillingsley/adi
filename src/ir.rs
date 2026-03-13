@@ -201,6 +201,11 @@ impl IrConst {
 		Self { size: ValSize::_64, val }
 	}
 
+	/// Constructs a constant with a given size.
+	pub(crate) const fn with_size(size: ValSize, val: u64) -> Self {
+		Self { size, val }
+	}
+
 	/// Get the value.
 	pub(crate) fn val(&self) -> u64 {
 		self.val

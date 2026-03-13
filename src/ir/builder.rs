@@ -137,6 +137,18 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
+	pub(crate) fn isgt(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) {
+		self.inst(IrInst::islt(ea, dst, src2.into(), src1.into(), dstn, src2n, src1n));
+	}
+
+	/// TODO: docme
+	pub(crate) fn isge(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) {
+		self.inst(IrInst::isle(ea, dst, src2.into(), src1.into(), dstn, src2n, src1n));
+	}
+
+	/// TODO: docme
 	pub(crate) fn iult(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
 		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) {
 		self.inst(IrInst::iult(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n));
@@ -146,6 +158,18 @@ impl IrBuilder {
 	pub(crate) fn iule(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
 		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) {
 		self.inst(IrInst::iule(ea, dst, src1.into(), src2.into(), dstn, src1n, src2n));
+	}
+
+	/// TODO: docme
+	pub(crate) fn iugt(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) {
+		self.inst(IrInst::iult(ea, dst, src2.into(), src1.into(), dstn, src2n, src1n));
+	}
+
+	/// TODO: docme
+	pub(crate) fn iuge(&mut self, ea: EA, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) {
+		self.inst(IrInst::iule(ea, dst, src2.into(), src1.into(), dstn, src2n, src1n));
 	}
 
 	/// TODO: docme
