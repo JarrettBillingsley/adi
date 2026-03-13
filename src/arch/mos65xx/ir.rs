@@ -349,9 +349,9 @@ impl InstDesc {
 		let ea = i.ea();
 		let src = src.into();
 
-		b.iuaddc  (ea, REG_A,  REG_A, src, REG_CF, -1, -1, srcn, -1);
 		b.iscarryc(ea, REG_VF, REG_A, src, REG_CF, -1, -1,   -1, -1);
 		b.icarryc (ea, REG_CF, REG_A, src, REG_CF, -1, -1,   -1, -1);
+		b.iuaddc  (ea, REG_A,  REG_A, src, REG_CF, -1, -1, srcn, -1);
 		self.set_nz(REG_A, i, b);
 	}
 
