@@ -5,6 +5,7 @@
 # Imminent tasks!
 
 - why aren't `icarry[c]/IntCarry[C]` called `iucarry[c]/IntUCarry[C]`?? 
+	- also `.assign` bugs me. just call it `.mov`
 - GB inst descs - `Imp`, `Ind`, and maybe `Add16` have annoying special cases. split em
 - Mos65xx IR:
 	- reimplement rotates and uses of `iand` which could be bit instructions

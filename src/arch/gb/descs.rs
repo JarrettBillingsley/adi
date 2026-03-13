@@ -153,6 +153,17 @@ pub(super) enum Cc {
 	C, NC, Z, NZ
 }
 
+impl Cc {
+	pub(super) fn not(&self) -> Self {
+		match self {
+			Cc::C  => Cc::NC,
+			Cc::Z  => Cc::NZ,
+			Cc::NC => Cc::C,
+			Cc::NZ => Cc::Z,
+		}
+	}
+}
+
 const CC_C:  SynOp = SynOp::Cc(Cc::C);
 const CC_NC: SynOp = SynOp::Cc(Cc::NC);
 const CC_Z:  SynOp = SynOp::Cc(Cc::Z);

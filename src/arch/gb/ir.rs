@@ -110,41 +110,34 @@ impl IrBuilder {
 	}
 
 	/// Set the Z flag to whether or not `reg == 0`.
-	fn z_(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
+	fn z_(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) -> &mut Self {
 		let reg = reg.into();
 		self.ieq(ea, REG_ZF, reg, IrConst::_8(0),  -1, regn, -1);
+		self
 	}
 
-	/// Set the N and H flags to 0.
-	fn n0h0(&mut self, ea: EA) {
-		self.assign(ea, REG_NF, IrConst::_8(0),  -1, -1);
-		self.assign(ea, REG_HF, IrConst::_8(0),  -1, -1);
+	/// Sets the N flag to a given value.
+	fn nx(&mut self, ea: EA, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
+		let src = src.into();
+		self.assign(ea, REG_NF, src,  -1, srcn);
+		self
 	}
 
-	/// Set the N and H flags to 1.
-	fn n1h1(&mut self, ea: EA) {
-		self.assign(ea, REG_NF, IrConst::_8(1),  -1, -1);
-		self.assign(ea, REG_HF, IrConst::_8(1),  -1, -1);
-	}
+	/// Sets the Z flag to 0.
+	fn z0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_ZF, IrConst::_8(0), -1, -1); self }
+	/// Sets the N flag to 0.
+	fn n0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_NF, IrConst::_8(0), -1, -1); self }
+	/// Sets the H flag to 0.
+	fn h0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_HF, IrConst::_8(0), -1, -1); self }
+	/// Sets the C flag to 0.
+	fn c0(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_CF, IrConst::_8(0), -1, -1); self }
 
-	/// Set the Z, N, and H flags to 0.
-	fn z0n0h0(&mut self, ea: EA) {
-		self.assign(ea, REG_ZF, IrConst::_8(0),  -1, -1);
-		self.n0h0  (ea);
-	}
-
-	/// Set the N and H flags to 0, and the Z flag to whether or not `reg == 0`.
-	fn z_n0h0(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
-		self.z_  (ea, reg, regn);
-		self.n0h0(ea);
-	}
-
-	/// Set the N, H, and C flags to 0, and the Z flag to whether or not `reg == 0`.
-	fn z_n0h0c0(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
-		self.z_    (ea, reg, regn);
-		self.n0h0  (ea);
-		self.assign(ea, REG_CF, IrConst::_8(0),       -1, -1);
-	}
+	/// Sets the N flag to 1.
+	fn n1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_NF, IrConst::_8(1), -1, -1); self }
+	/// Sets the H flag to 1.
+	fn h1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_HF, IrConst::_8(1), -1, -1); self }
+	/// Sets the C flag to 1.
+	fn c1(&mut self, ea: EA) -> &mut Self { self.assign(ea, REG_CF, IrConst::_8(1), -1, -1); self }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -224,26 +217,15 @@ impl IrBuilder {
 		match cc {
 			Cc::C  => REG_CF,
 			Cc::Z  => REG_ZF,
-			Cc::NC => {
-				self.bnot(ea, REG_Z, REG_CF, -1, -1);
-				REG_Z
-			}
-			Cc::NZ => {
-				self.bnot(ea, REG_Z, REG_ZF, -1, -1);
-				REG_Z
-			}
+			Cc::NC => { self.bnot(ea, REG_Z, REG_CF, -1, -1); REG_Z }
+			Cc::NZ => { self.bnot(ea, REG_Z, REG_ZF, -1, -1); REG_Z }
 		}
 	}
 
 	/// Evaluate the logical inversion of the condition code `cc` and return a register which
 	/// contains the inverted truth value.
 	fn not_cc(&mut self, ea: EA, cc: Cc) -> IrReg {
-		match cc {
-			Cc::C  => self.cc(ea, Cc::NC),
-			Cc::Z  => self.cc(ea, Cc::NZ),
-			Cc::NC => self.cc(ea, Cc::C),
-			Cc::NZ => self.cc(ea, Cc::Z),
-		}
+		self.cc(ea, cc.not())
 	}
 
 	/// Do a conditional branch using the condition code `cc`.
@@ -257,12 +239,12 @@ impl IrBuilder {
 // Computation
 // ------------------------------------------------------------------------------------------------
 
-/// Perform some read-modify-write operation using `[hl]` as the source/dest. `f` is passed
-/// a temporary register containing the 8-bit value loaded from `[hl]`; it must place the
-/// result back into this same register, and it must not modify `REG_HL`.
-fn hl_rmw(b: &mut IrBuilder, ea: EA, f: impl Fn(&mut IrBuilder, IrReg), hln: i8) {
+/// Perform some read-modify-write operation using `[hl]` as the source/dest. `callback` is passed a
+/// temporary register containing the 8-bit value loaded from `[hl]`; it must place the result back
+/// into this same register, and it must not modify `REG_HL`.
+fn hl_rmw(b: &mut IrBuilder, ea: EA, callback: impl Fn(&mut IrBuilder, IrReg), hln: i8) {
 	b.load_ind(ea, REG_Z, Reg::HL,  hln);
-	f         (b,  REG_Z);
+	callback  (b,  REG_Z);
 	b.store   (ea, REG_HL, REG_Z,   hln, -1);
 }
 
@@ -271,27 +253,33 @@ impl IrBuilder {
 	/// set if the result is 0. N and H flags are set to 0.
 	fn sla(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
 		let reg = reg.into();
-		self.ibit  (ea, REG_CF, reg, IrConst::_8(7),    -1, regn, -1);
-		self.ishl  (ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
-		self.z_n0h0(ea, reg,                          regn);
+		self.ibit(ea, REG_CF, reg, IrConst::_8(7),    -1, regn, -1);
+		self.ishl(ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
+		self.z_  (ea, reg,                          regn)
+		.n0      (ea)
+		.h0      (ea);
 	}
 
 	/// Shift the given `reg` right arithmetic. The carry flag is set to the MSB of `reg`, and the
 	/// zero flag is set if the result is 0. N and H flags are set to 0.
 	fn sra(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
 		let reg = reg.into();
-		self.ibit  (ea, REG_CF, reg, IrConst::_8(0),    -1, regn, -1);
-		self.isshr (ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
-		self.z_n0h0(ea, reg,                          regn);
+		self.ibit (ea, REG_CF, reg, IrConst::_8(0),    -1, regn, -1);
+		self.isshr(ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
+		self.z_   (ea, reg,                          regn)
+		.n0       (ea)
+		.h0       (ea);
 	}
 
 	/// Shift the given `reg` right logical. The carry flag is set to the MSB of `reg`, and the
 	/// zero flag is set if the result is 0. N and H flags are set to 0.
 	fn srl(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
 		let reg = reg.into();
-		self.ibit  (ea, REG_CF, reg, IrConst::_8(0),    -1, regn, -1);
-		self.iushr (ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
-		self.z_n0h0(ea, reg,                          regn);
+		self.ibit (ea, REG_CF, reg, IrConst::_8(0),    -1, regn, -1);
+		self.iushr(ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
+		self.z_   (ea, reg,                          regn)
+		.n0       (ea)
+		.h0       (ea);
 	}
 
 	/// Rotate the given `reg` left. The carry flag is set to the MSB of `reg`, but otherwise does
@@ -301,11 +289,13 @@ impl IrBuilder {
 		let reg = reg.into();
 		self.ibit(ea, REG_CF, reg, IrConst::_8(7),    -1, regn, -1);
 		self.irol(ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
+		self.n0  (ea)
+		.h0      (ea);
 
 		if set_zero_flag {
-			self.z_n0h0(ea, reg, regn)
+			self.z_(ea, reg, regn);
 		} else {
-			self.z0n0h0(ea);
+			self.z0(ea);
 		}
 	}
 
@@ -316,11 +306,13 @@ impl IrBuilder {
 		let reg = reg.into();
 		self.ibit(ea, REG_CF, reg, IrConst::_8(7),    -1, regn, -1);
 		self.iror(ea, reg,    reg, IrConst::_8(1),  regn, regn, -1);
+		self.n0  (ea)
+		.h0      (ea);
 
 		if set_zero_flag {
-			self.z_n0h0(ea, reg, regn)
+			self.z_(ea, reg, regn);
 		} else {
-			self.z0n0h0(ea);
+			self.z0(ea);
 		}
 	}
 
@@ -333,11 +325,13 @@ impl IrBuilder {
 		self.ibit   (ea, REG_CF, reg, IrConst::_8(7),           -1, regn, -1);
 		self.irol   (ea, reg,    reg, IrConst::_8(1),         regn, regn, -1);
 		self.ibitset(ea, reg,    reg, IrConst::_8(0), REG_Z,  regn, regn, -1, -1);
+		self.n0     (ea)
+		.h0         (ea);
 
 		if set_zero_flag {
-			self.z_n0h0(ea, reg, regn)
+			self.z_(ea, reg, regn);
 		} else {
-			self.z0n0h0(ea);
+			self.z0(ea);
 		}
 	}
 
@@ -350,11 +344,13 @@ impl IrBuilder {
 		self.ibit   (ea, REG_CF, reg,   IrConst::_8(0),           -1, regn, -1);
 		self.iror   (ea, reg,    reg,   IrConst::_8(1),         regn, regn, -1);
 		self.ibitset(ea, reg,    reg,   IrConst::_8(7), REG_Z,  regn, regn, -1, -1);
+		self.n0     (ea)
+		.h0         (ea);
 
 		if set_zero_flag {
-			self.z_n0h0(ea, reg, regn)
+			self.z_(ea, reg, regn);
 		} else {
-			self.z0n0h0(ea);
+			self.z0(ea);
 		}
 	}
 
@@ -362,8 +358,11 @@ impl IrBuilder {
 	/// is zero, and the N, H, and C flags are all set to 0.
 	fn swap(&mut self, ea: EA, reg: impl Into<IrReg>, regn: i8) {
 		let reg = reg.into();
-		self.irol    (ea, reg, reg, IrConst::_8(4),  regn, regn, -1);
-		self.z_n0h0c0(ea, reg,                       regn);
+		self.irol(ea, reg, reg, IrConst::_8(4),  regn, regn, -1);
+		self.z_  (ea, reg,                       regn)
+		.n0      (ea)
+		.h0      (ea)
+		.c0      (ea);
 	}
 
 	/// Perform an increment or decrement on `reg`. `delta == 1` increments, `delta == -1`
@@ -379,16 +378,16 @@ impl IrBuilder {
 		};
 
 		if change_flags {
-			self.z_    (ea, reg, -1);
-			self.assign(ea, REG_NF, IrConst::_8(nf),  -1, -1);
+			self.z_(ea, reg, -1);
+			self.nx(ea, IrConst::_8(nf), -1);
 			// TODO: half carry
-			self.assign(ea, REG_HF, IrConst::_8(0),   -1, -1);
+			self.h0(ea);
 		}
 	}
 
 	/// Increment or decrement HL. Assumes HL has already been paired. Increments `REG_HL`, then
 	/// extracts the components into `REG_H` and `REG_L`.
-	fn inc_hl(&mut self, ea: EA, plus: bool) {
+	fn inc_dec_hl(&mut self, ea: EA, plus: bool) {
 		if plus {
 			self.iuadd(ea, REG_HL, REG_HL, IrConst::ONE_16,  -1, -1, -1);
 		} else {
@@ -426,9 +425,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(ADD, &[Srg(HL), Srg(reg)]) => { // {Z-, N0, H*, C*}
 			b.rr(ea, HL);
 			let src = b.rr(ea, reg);
-			b.iuadd  (ea, REG_HL, REG_HL, src, -1, -1, -1);
-			b.ihi    (ea, REG_H,  REG_HL,      -1, -1);
-			b.ilo    (ea, REG_L,  REG_HL,      -1, -1);
+			b.icarry(ea, REG_CF, REG_HL, src, -1, -1, -1);
+			b.iuadd (ea, REG_HL, REG_HL, src, -1, -1, -1);
+			b.ihi   (ea, REG_H,  REG_HL,      -1, -1);
+			b.ilo   (ea, REG_L,  REG_HL,      -1, -1);
+			b.n0    (ea);
+			// TODO: half-carry
+			b.h0    (ea);
 		}
 		// add sp, e
 		(ADD, [Srg(SP), Op]) => { // {Z0, N0, H*, C*}
@@ -587,7 +590,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		// cpl a
 		(CPL, [Srg(A)]) => { // {Z-, N1, H1, C-}
 			b.inot(ea, REG_A, REG_A,  -1, -1);
-			b.n1h1(ea);
+			b.n1  (ea)
+			.h1   (ea);
 		}
 
 		// daa
@@ -726,12 +730,14 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		// Flag manipulation
 
 		(CCF, []) => { // {Z-, N0, H0, C*}
-			b.n0h0(ea);
-			b.bnot(ea, REG_CF, REG_CF,  -1, -1);
+			b.n0 (ea)
+			.h0  (ea)
+			.bnot(ea, REG_CF, REG_CF,  -1, -1);
 		}
 		(SCF, []) => { // {Z-, N0, H0, C1}
-			b.n0h0(ea);
-			b.assign(ea, REG_CF, IrConst::ONE_8,  -1, -1);
+			b.n0(ea)
+			.h0 (ea)
+			.c1 (ea);
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -788,13 +794,11 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			b.iuadd (ea, REG_HL, REG_SP, val,       -1, -1, 0);
 			b.ilo   (ea, REG_L,  REG_HL,            -1, -1);
 			b.ihi   (ea, REG_H,  REG_HL,            -1, -1);
-			b.assign(ea, REG_ZF, IrConst::ZERO_8,   -1, -1);
-			b.assign(ea, REG_NF, IrConst::ZERO_8,   -1, -1);
-			// TODO: this is wrong, but the behavior of these on this instruction is very
-			// strange (set to the half-carry and carry of only the *lower* 8 bits of the
-			// addition...) so I doubt much/any code actually relies on it working right?
-			b.assign(ea, REG_HF, IrConst::ZERO_8,   -1, -1);
-			b.assign(ea, REG_CF, IrConst::ZERO_8,   -1, -1);
+			b.z0    (ea)
+			.n0     (ea)
+			// TODO: half-carry (and carry; HF = carrybits.3, CF = carrybits.7)
+			.h0     (ea)
+			.c0     (ea);
 		}
 
 		// ld rr, nn (0x01, 0x11, 0x21)
@@ -842,15 +846,15 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		// ld [hl+], a (0x22)
 		// ld [hl-], a (0x32)
 		(LD, &[pm @ (IndHlPlus | IndHlMinus), Srg(A)]) => { // no flag changes
-			b.store_ind(ea, HL, REG_A,  0, -1);
-			b.inc_hl   (ea, pm == IndHlPlus);
+			b.store_ind (ea, HL, REG_A,  0, -1);
+			b.inc_dec_hl(ea, pm == IndHlPlus);
 		}
 
 		// ld a, [hl+] (0x2A)
 		// ld a, [hl-] (0x3A)
 		(LD, &[Srg(A), pm @ (IndHlPlus | IndHlMinus)]) => { // no flag changes
-			b.load_ind(ea, A, HL,  0);
-			b.inc_hl  (ea, pm == IndHlPlus);
+			b.load_ind  (ea, A, HL,  0);
+			b.inc_dec_hl(ea, pm == IndHlPlus);
 		}
 
 		// ld [hl], n (0x36)
