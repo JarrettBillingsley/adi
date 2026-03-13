@@ -1431,7 +1431,7 @@ mod tests {
 	fn test_ibit_badpos_64() { test_binop_64(1, IrBinOp::IntBit, 0, 64); }
 
 	#[test]
-	fn test_ibitset() {
+	fn test_ibset() {
 		use IrTernOp::*;
 		test_ternop_8(0xF0, IntBitSet, 0xF0, 0, 0);
 		test_ternop_8(0xF0, IntBitSet, 0xF0, 1, 0);
@@ -1455,15 +1455,15 @@ mod tests {
 	}
 
 	#[test] #[should_panic]
-	fn test_ibitset_badpos_8 () { test_ternop_8 (0, IrTernOp::IntBitSet, 0, 8, 0); }
+	fn test_ibset_badpos_8 () { test_ternop_8 (0, IrTernOp::IntBitSet, 0, 8, 0); }
 	#[test] #[should_panic]
-	fn test_ibitset_badpos_16() { test_ternop_16(0, IrTernOp::IntBitSet, 0, 16, 0); }
+	fn test_ibset_badpos_16() { test_ternop_16(0, IrTernOp::IntBitSet, 0, 16, 0); }
 	#[test] #[should_panic]
-	fn test_ibitset_badpos_32() { test_ternop_32(0, IrTernOp::IntBitSet, 0, 32, 0); }
+	fn test_ibset_badpos_32() { test_ternop_32(0, IrTernOp::IntBitSet, 0, 32, 0); }
 	#[test] #[should_panic]
-	fn test_ibitset_badpos_64() { test_ternop_64(0, IrTernOp::IntBitSet, 0, 64, 0); }
+	fn test_ibset_badpos_64() { test_ternop_64(0, IrTernOp::IntBitSet, 0, 64, 0); }
 	#[test] #[should_panic]
-	fn test_ibitset_badsrc   () { test_ternop_8 (0, IrTernOp::IntBitSet, 0, 0, 2); }
+	fn test_ibset_badsrc   () { test_ternop_8 (0, IrTernOp::IntBitSet, 0, 0, 2); }
 
 	#[test]
 	fn test_bxor_band_bor() {

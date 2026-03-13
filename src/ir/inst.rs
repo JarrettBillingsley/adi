@@ -237,7 +237,7 @@ impl Debug for IrInstKind {
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 				IntSBorrowC => write!(f, "isborrowc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntBitSet   => write!(f, "ibitset   {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
+				IntBitSet   => write!(f, "ibset     {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 			},
 		}
@@ -577,7 +577,7 @@ impl IrInst {
 	}
 
 	/// TODO: docme
-	pub(crate) fn ibitset(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn ibset(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		Self { ea, kind: IrInstKind::Ternary {
 			dst, src1, op: IrTernOp::IntBitSet, src2, src3, dstn, src1n, src2n, src3n } }

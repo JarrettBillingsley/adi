@@ -310,13 +310,13 @@ impl InstDesc {
 		let ea = i.ea();
 
 		// the values of bits 4 and 5 (Break and Reserved) are always 1 when pushed.
-		b.mov    (ea, REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
-		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(0), REG_CF,  -1, -1, -1, -1);
-		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(1), REG_ZF,  -1, -1, -1, -1);
-		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(2), REG_IF,  -1, -1, -1, -1);
-		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(3), REG_DF,  -1, -1, -1, -1);
-		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(6), REG_VF,  -1, -1, -1, -1);
-		b.ibitset(ea, REG_TMP1, REG_TMP1, IrConst::_8(7), REG_NF,  -1, -1, -1, -1);
+		b.mov  (ea, REG_TMP1, IrConst::_8(0b0011_0000),          -1, -1);
+		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(0), REG_CF,  -1, -1, -1, -1);
+		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(1), REG_ZF,  -1, -1, -1, -1);
+		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(2), REG_IF,  -1, -1, -1, -1);
+		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(3), REG_DF,  -1, -1, -1, -1);
+		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(6), REG_VF,  -1, -1, -1, -1);
+		b.ibset(ea, REG_TMP1, REG_TMP1, IrConst::_8(7), REG_NF,  -1, -1, -1, -1);
 		self.push8(REG_TMP1, i, b);
 	}
 

@@ -173,7 +173,7 @@ fn printing() {
 		(disas(0, &[0x10, 0x00]),       "stop "),             // Dummy
 		(disas(0, &[0x02]),             "ld   [bc], a"),      // Ind
 		(disas(0, &[0x32]),             "ld   [hl-], a"),
-		(disas(0, &[0xE2]),             "ldh  [c], a"),       // IndHi
+		(disas(0, &[0xE2]),             "ldh  [0xFF00 + c], a"),       // IndHi
 		(disas(0, &[0x36, 7]),          "ld   [hl], 7"),      // LdHlImm
 		(disas(0, &[0x06, 0xEF]),       "ld   b, 0xEF"),      // UImm8
 		(disas(0, &[0x01, 0x0D, 0xF0]), "ld   bc, 0xF00D"),   // Imm16
@@ -208,7 +208,7 @@ fn disasm_range() {
 		0x10, 0x00,       // stop
 		0x02,             // ld [bc], a
 		0x32,             // ld [hl-], a
-		0xE2,             // ldh [c], a
+		0xE2,             // ldh [0xFF00 + c], a
 		0x36, 7,          // ld [hl], 7
 		0x06, 0xEF,       // ld b, 0xEF
 		0x01, 0x0D, 0xF0, // ld bc, 0xF00D
@@ -232,7 +232,7 @@ fn disasm_range() {
 		"stop ",
 		"ld   [bc], a",
 		"ld   [hl-], a",
-		"ldh  [c], a",
+		"ldh  [0xFF00 + c], a",
 		"ld   [hl], 7",
 		"ld   b, 0xEF",
 		"ld   bc, 0xF00D",

@@ -94,11 +94,11 @@ impl IrBuilder {
 
 	/// Combine all the flag registers into an 8-bit value in `dst`.
 	fn combine_flags(&mut self, ea: EA, dst: IrReg) {
-		self.mov    (ea, dst, IrConst::ZERO_8,                -1, -1);
-		self.ibitset(ea, dst, dst, IrConst::_8(4), REG_CF,  -1, -1, -1, -1);
-		self.ibitset(ea, dst, dst, IrConst::_8(5), REG_HF,  -1, -1, -1, -1);
-		self.ibitset(ea, dst, dst, IrConst::_8(6), REG_NF,  -1, -1, -1, -1);
-		self.ibitset(ea, dst, dst, IrConst::_8(7), REG_ZF,  -1, -1, -1, -1);
+		self.mov  (ea, dst, IrConst::ZERO_8,                -1, -1);
+		self.ibset(ea, dst, dst, IrConst::_8(4), REG_CF,  -1, -1, -1, -1);
+		self.ibset(ea, dst, dst, IrConst::_8(5), REG_HF,  -1, -1, -1, -1);
+		self.ibset(ea, dst, dst, IrConst::_8(6), REG_NF,  -1, -1, -1, -1);
+		self.ibset(ea, dst, dst, IrConst::_8(7), REG_ZF,  -1, -1, -1, -1);
 	}
 
 	/// Extracts all the flag values from `src` into the flag registers.
@@ -349,12 +349,12 @@ impl IrBuilder {
 	/// are set to 0.
 	fn rolc(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool, regn: i8) {
 		let reg = reg.into();
-		self.mov    (ea, REG_Z,  REG_CF,                        -1,   -1);
-		self.ibit   (ea, REG_CF, reg, IrConst::_8(7),           -1, regn, -1);
-		self.irol   (ea, reg,    reg, IrConst::_8(1),         regn, regn, -1);
-		self.ibitset(ea, reg,    reg, IrConst::_8(0), REG_Z,  regn, regn, -1, -1);
-		self.n0     (ea)
-		.h0         (ea);
+		self.mov  (ea, REG_Z,  REG_CF,                        -1,   -1);
+		self.ibit (ea, REG_CF, reg, IrConst::_8(7),           -1, regn, -1);
+		self.irol (ea, reg,    reg, IrConst::_8(1),         regn, regn, -1);
+		self.ibset(ea, reg,    reg, IrConst::_8(0), REG_Z,  regn, regn, -1, -1);
+		self.n0   (ea)
+		.h0       (ea);
 
 		if set_zero_flag {
 			self.z_(ea, reg, regn);
@@ -368,12 +368,12 @@ impl IrBuilder {
 	/// are set to 0.
 	fn rorc(&mut self, ea: EA, reg: impl Into<IrReg>, set_zero_flag: bool, regn: i8) {
 		let reg = reg.into();
-		self.mov    (ea, REG_Z,  REG_CF,                          -1,   -1);
-		self.ibit   (ea, REG_CF, reg,   IrConst::_8(0),           -1, regn, -1);
-		self.iror   (ea, reg,    reg,   IrConst::_8(1),         regn, regn, -1);
-		self.ibitset(ea, reg,    reg,   IrConst::_8(7), REG_Z,  regn, regn, -1, -1);
-		self.n0     (ea)
-		.h0         (ea);
+		self.mov  (ea, REG_Z,  REG_CF,                          -1,   -1);
+		self.ibit (ea, REG_CF, reg,   IrConst::_8(0),           -1, regn, -1);
+		self.iror (ea, reg,    reg,   IrConst::_8(1),         regn, regn, -1);
+		self.ibset(ea, reg,    reg,   IrConst::_8(7), REG_Z,  regn, regn, -1, -1);
+		self.n0   (ea)
+		.h0       (ea);
 
 		if set_zero_flag {
 			self.z_(ea, reg, regn);
@@ -763,29 +763,29 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			const fn c(val: u8) -> IrConst { IrConst::_8(val) }
 
 			// Z = subtraction adjustment { 0x00, -0x06, -0x60, -0x66 }
-			b.band   (ea, Z, NF, HF,            -1, -1, -1);     // Z.0 = NF & HF
-			b.band   (ea, X, NF, CF,            -1, -1, -1);     // X   = NF & CF
-			b.ibitset(ea, Z, Z, c(4), X,        -1, -1, -1, -1); // Z.4 = NF & CF
-			b.imul   (ea, Z, Z, c(-6i8 as u8),  -1, -1, -1);     // Z   = Z * -6
+			b.band (ea, Z, NF, HF,            -1, -1, -1);     // Z.0 = NF & HF
+			b.band (ea, X, NF, CF,            -1, -1, -1);     // X   = NF & CF
+			b.ibset(ea, Z, Z, c(4), X,        -1, -1, -1, -1); // Z.4 = NF & CF
+			b.imul (ea, Z, Z, c(-6i8 as u8),  -1, -1, -1);     // Z   = Z * -6
 
 			// W = addition adjustment { 0x00, 0x06, 0x60, 0x66 }
-			b.inot   (ea, X, NF,          -1, -1);         // X   = !NF
-			b.iand   (ea, Y, A, c(0xF),   -1, -1, -1);     // Y   = A & 0xF
-			b.iugt   (ea, Y, Y, c(9),     -1, -1, -1);     // Y   = A & 0xF > 9
-			b.bor    (ea, Y, Y, HF,       -1, -1, -1);     // Y   = HF | (A & 0xF > 9)
-			b.band   (ea, W, X, Y,        -1, -1, -1);     // W.0 = !NF & (HF | (A & 0xF > 9))
-			b.iugt   (ea, Y, A, c(0x99),  -1, -1, -1);     // Y   = A > 0x99
-			b.bor    (ea, Y, Y, CF,       -1, -1, -1);     // Y   = CF | (A > 0x99)
-			b.band   (ea, Y, Y, X,        -1, -1, -1);     // Y   = !NF & (CF | (A > 0x99))
-			b.ibitset(ea, W, W, c(4), Y,  -1, -1, -1, -1); // W.4 = !NF & (CF | (A > 0x99))
-			b.imul   (ea, W, W, c(6),     -1, -1, -1);     // W   = W * 6
+			b.inot (ea, X, NF,          -1, -1);         // X   = !NF
+			b.iand (ea, Y, A, c(0xF),   -1, -1, -1);     // Y   = A & 0xF
+			b.iugt (ea, Y, Y, c(9),     -1, -1, -1);     // Y   = A & 0xF > 9
+			b.bor  (ea, Y, Y, HF,       -1, -1, -1);     // Y   = HF | (A & 0xF > 9)
+			b.band (ea, W, X, Y,        -1, -1, -1);     // W.0 = !NF & (HF | (A & 0xF > 9))
+			b.iugt (ea, Y, A, c(0x99),  -1, -1, -1);     // Y   = A > 0x99
+			b.bor  (ea, Y, Y, CF,       -1, -1, -1);     // Y   = CF | (A > 0x99)
+			b.band (ea, Y, Y, X,        -1, -1, -1);     // Y   = !NF & (CF | (A > 0x99))
+			b.ibset(ea, W, W, c(4), Y,  -1, -1, -1, -1); // W.4 = !NF & (CF | (A > 0x99))
+			b.imul (ea, W, W, c(6),     -1, -1, -1);     // W   = W * 6
 
 			// because the above two values were calculated based on NF and !NF, either they are
 			// both 0 or exactly one is 0. so adding them together has the effect of choosing
 			// between them.
 
 			// Z = adjustment
-			b.iuadd  (ea, Z, Z, W,     -1, -1, -1);     // Z = NF ? Z : W (effectively)
+			b.iuadd(ea, Z, Z, W,     -1, -1, -1);     // Z = NF ? Z : W (effectively)
 
 			// now we can do the actual addition and set the flags
 			b.c_   (ea,     A, Z,         -1, -1);
@@ -844,13 +844,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let bit = IrConst::_8(bit as u8);
 			let reg = IrReg::from(reg);
-			b.ibitset(ea, reg, reg, bit, IrConst::ZERO_8,  -1, -1, -1, -1);
+			b.ibset(ea, reg, reg, bit, IrConst::ZERO_8,  -1, -1, -1, -1);
 		}
 		(RES, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let bit = IrConst::_8(bit as u8);
 			hl_rmw(b, ea, |b, reg| {
-				b.ibitset(ea, reg, reg, bit, IrConst::ZERO_8, -1, -1, -1, -1);
+				b.ibset(ea, reg, reg, bit, IrConst::ZERO_8, -1, -1, -1, -1);
 			}, 1); // operand 0 is the bit number, operand 1 is [hl]
 		}
 
@@ -859,13 +859,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let bit = IrConst::_8(bit as u8);
 			let reg = IrReg::from(reg);
-			b.ibitset(ea, reg, reg, bit, IrConst::ONE_8,  -1, -1, -1, -1);
+			b.ibset(ea, reg, reg, bit, IrConst::ONE_8,  -1, -1, -1, -1);
 		}
 		(SET, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let bit = IrConst::_8(bit as u8);
 			hl_rmw(b, ea, |b, reg| {
-				b.ibitset(ea, reg, reg, bit, IrConst::ONE_8, -1, -1, -1, -1);
+				b.ibset(ea, reg, reg, bit, IrConst::ONE_8, -1, -1, -1, -1);
 			}, 1); // operand 0 is the bit number, operand 1 is [hl]
 		}
 
