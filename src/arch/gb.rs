@@ -181,24 +181,14 @@ impl IPrinter for GBPrinter {
 	}
 
 	fn print_indir_reg(&self, ctx: &mut PrinterCtx, reg: u8) -> FmtResult {
-		ctx.write_char('[')?;
-		self.print_register(ctx, reg)?;
-		ctx.write_char(']')
+		self.print_register(ctx, reg)
 	}
 
+	// only called for `[0xFF00 + C]` style instructions
 	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, reg: u8, disp: i64) -> FmtResult {
-		ctx.write_char('[')?;
-		self.print_register(ctx, reg)?;
-
-		if disp < 0 {
-			ctx.write_str(" - ")?;
-			self.print_int_no_radix(ctx, -disp)?;
-		} else {
-			ctx.write_str(" + ")?;
-			self.print_int_no_radix(ctx, disp)?;
-		}
-
-		ctx.write_char(']')
+		self.print_int_no_radix(ctx, disp)?;
+		ctx.write_str(" + ")?;
+		self.print_register(ctx, reg)
 	}
 
 	fn print_raw_va(&self, ctx: &mut PrinterCtx, va: VA) -> FmtResult {
@@ -229,6 +219,9 @@ impl IPrinter for GBPrinter {
 				}
 				SynOp::IndOp => {
 					ctx.write_char('[')?;
+					// all IndOps are on instructions that have either Add16 or AddHi,
+					// which guarantees that operand 0 is an Operand::Mem. print_operand
+					// will print out its opinfo, too, so we don't have to do it here.
 					self.print_operand(ctx, 0)?;
 					ctx.write_char(']')?;
 				}
@@ -239,19 +232,54 @@ impl IPrinter for GBPrinter {
 				SynOp::Srg(r) => {
 					self.print_register(ctx, *r as u8)?;
 				}
-				SynOp::IndReg(r) => {
-					self.print_indir_reg(ctx, *r as u8)?;
+				SynOp::IndReg(_) => {
+					// IndReg is on instructions that use AddHi, IndHi, Ind, LdHlImm. there are
+					// FOUR possible cases. I hate this, why did I do this to myself
+					//   - operand 0 is Mem            (from AddHi)
+					//   - operand 0 is Indir(Reg)     (from LdHlImm and Ind)
+					//   - operand 0 is Indir(RegDisp) (from IndHi)
+					//   - operand 1 is Indir(Reg)     (from Ind)
+
+					match ctx.get_inst().ops() {
+						[Operand::Mem(va, _), ..] => {
+							self.print_mem_addr(ctx, *va)?;
+							self.print_mem_opinfo(ctx, 0)?;
+						}
+						[Operand::Indir(MemIndir::Reg { reg }, _), ..] => {
+							ctx.write_char('[')?;
+							self.print_indir_reg(ctx, *reg)?;
+							self.print_mem_opinfo(ctx, 0)?;
+							ctx.write_char(']')?;
+						}
+						[Operand::Indir(MemIndir::RegDisp { reg, disp }, _), ..] => {
+							ctx.write_char('[')?;
+							self.print_indir_reg_disp(ctx, *reg, *disp)?;
+							self.print_mem_opinfo(ctx, 0)?;
+							ctx.write_char(']')?;
+						}
+						[_, Operand::Indir(MemIndir::Reg { reg }, _)] => {
+							ctx.write_char('[')?;
+							self.print_register(ctx, *reg)?;
+							self.print_mem_opinfo(ctx, 1)?;
+							ctx.write_char(']')?;
+						}
+						_ => panic!("{:?}", ctx.get_inst()),
+					}
 				}
 				SynOp::IndHlPlus => {
+					// these instructions have an Indir(Reg) as operand 0
 					ctx.write_char('[')?;
 					self.print_register(ctx, Reg::HL as u8)?;
 					ctx.write_char('+')?;
+					self.print_mem_opinfo(ctx, 0)?;
 					ctx.write_char(']')?;
 				}
 				SynOp::IndHlMinus => {
+					// these instructions have an Indir(Reg) as operand 0
 					ctx.write_char('[')?;
 					self.print_register(ctx, Reg::HL as u8)?;
 					ctx.write_char('-')?;
+					self.print_mem_opinfo(ctx, 0)?;
 					ctx.write_char(']')?;
 				}
 				SynOp::Cc(c) => {

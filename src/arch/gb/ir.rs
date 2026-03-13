@@ -940,6 +940,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		// ld rr, nn (0x01, 0x11, 0x21)
 		(LD, &[Srg(dst @ (BC | DE | HL)), Op]) => { // no flag changes
 			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			// seems silly to do this, but it's to preserve the original source operand in the IR,
+			// for later tracing back and marking this operand as a reference
 			b.assign(ea, REG_WZ, IrConst::_16(val as u16),  -1,  0);
 			b.ihi   (ea, dst.hi().into(), REG_WZ,           -1, -1);
 			b.ilo   (ea, dst.lo().into(), REG_WZ,           -1, -1);
