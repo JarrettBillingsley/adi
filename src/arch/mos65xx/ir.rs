@@ -15,7 +15,7 @@ use super::*;
 pub(crate) struct Mos65xxIrCompiler;
 
 impl IIrCompiler for Mos65xxIrCompiler {
-	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, _next: Option<EA>, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
 		lookup_desc(i.bytes()[0]).build_ir(i, target, b);
 	}

@@ -253,8 +253,6 @@ impl Instruction {
 	pub fn ea(&self) -> EA { self.ea }
 	/// Get virtual address.
 	pub fn va(&self) -> VA { self.va }
-	/// Get the EA of the instruction after this one.
-	pub fn next_ea(&self) -> EA { self.ea() + self.size() }
 	/// Get the virtual address of the instruction after this one.
 	pub fn next_va(&self) -> VA { self.va() + self.size() }
 	/// Get size, in bytes.

@@ -165,9 +165,11 @@ pub(crate) enum IrCompiler {
 /// Trait for IR Compilers.
 #[enum_dispatch(IrCompiler)]
 pub(crate) trait IIrCompiler: Sized + Sync + Send {
-	/// Given an instruction, an optional control flow target, and an [`IrBuilder`], convert the
-	/// instruction into a sequence of IR instructions.
-	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder);
+	/// Convert the instruction into a sequence of IR instructions. `target` and `next` are only
+	/// `Some` when called on the terminating instruction of a BB, and then only if the instruction
+	/// has a target and/or next EA. `target` is used for encoding control flow; `next` is used for
+	/// conditional calls and returns.
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>, b: &mut IrBuilder);
 
 	/// Give a set of registers which can be used to pass arguments.
 	fn arg_regs(&self) -> &'static [IrReg];

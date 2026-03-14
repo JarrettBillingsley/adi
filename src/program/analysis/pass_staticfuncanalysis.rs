@@ -157,7 +157,8 @@ impl Program {
 
 			// if the state-changing instruction is *not* the terminating instruction, split the BB.
 			if inst.ea() != self.bbidx.get(bbid).term_ea() {
-				match self.split_bb(bbid, inst.next_ea(), Some(fid)) {
+				// SAFETY: this is okay because of the above check.
+				match self.split_bb(bbid, inst.ea() + inst.size(), Some(fid)) {
 					Ok(Some(new_bbid)) => {
 						self.get_func_mut(fid).bbs.push(new_bbid);
 					}

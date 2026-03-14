@@ -1,4 +1,5 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::collections::{ HashMap };
 
 use parse_display::{ Display };
 use enum_dispatch::enum_dispatch;
@@ -382,6 +383,19 @@ impl ILoader for GBLoader {
 	}
 }
 
+// NOTE: would not work for MBC6, M161, or Wisdom Tree, as they use other bank sizes
+fn rom_banks_to_segments(segs: &mut SegCollection, rom_banks: Vec<Image>) -> Vec<SegId> {
+	rom_banks
+		.into_iter()
+		.enumerate()
+		.map(|(i, bank)| segs.add_segment_with_va(
+			&format!("ROM{}", i),
+			0x4000,
+			Some(bank),
+			VA(if i == 0 { 0x0000 } else { 0x4000 })))
+		.collect::<Vec<_>>()
+}
+
 fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 	// TODO: CGB memory map
 	let vram = segs.add_segment_with_va("VRAM",  0x2000, None, VA(0x8000));
@@ -391,26 +405,38 @@ fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 	let hram = segs.add_segment_with_va("HRAM",    0x7F, None, VA(0xFF80));
 	let ie   = segs.add_segment_with_va("IE",         1, None, VA(0xFFFF));
 
+	// right now impossible but sanity check
+	if cart.header.rom_bank_size != 0x4000 {
+		return PlatformError::invalid_image("invalid ROM bank size".into());
+	}
+
+	// TODO: cart RAM
+	if cart.header.ram_size() > 0 {
+		return PlatformError::invalid_image(
+			format!("cart RAM is unimplemented (has {} bytes)", cart.header.ram_size()));
+	}
+
 	let mbc = match cart.header.mbc_type {
 		MbcType::None => {
 			if cart.header.rom_num_banks != 2 {
 				return PlatformError::invalid_image("invalid number of ROM banks".into());
-			} else if cart.header.rom_bank_size != 0x4000 {
-				return PlatformError::invalid_image("invalid ROM bank size".into());
 			}
 
-			// done this way because of MOVING
-			// (into_iter lets us take ownership of the values; indexing[] does not)
-			let segids = cart.rom_banks
-				.into_iter()
-				.enumerate()
-				.map(|(i, bank)| segs.add_segment_with_va(
-					&format!("ROM{}", i), 0x4000, Some(bank), VA(0x4000 * i)))
-				.collect::<Vec<_>>();
-
-			// TODO: cart RAM
-
+			let segids = rom_banks_to_segments(segs, cart.rom_banks);
 			NoMbc::init(segids[0], segids[1])
+		}
+		MbcType::Mbc1 => {
+			if cart.header.rom_num_banks > 0x7F {
+				return PlatformError::invalid_image("invalid number of ROM banks".into());
+			} else if cart.header.rom_num_banks > 0x1F {
+				// TODO: it's possible to have up to 128 banks, but that requires More Complex
+				// Bullshit than I'm willing to implement rn
+				return PlatformError::invalid_image("unsupported number of ROM banks".into());
+			}
+			// TODO: apparently some carts wire it up differently to support more ROM... how is
+			// that detected?
+			let segids = rom_banks_to_segments(segs, cart.rom_banks);
+			Mbc1::init(segids)
 		}
 		_ => return PlatformError::invalid_image(
 			format!("unsupported MBC: {}", cart.header.mbc_type)),
@@ -526,9 +552,9 @@ impl IMmu for GBMmu {
 
 	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
 		match va.0 {
-			0x0000 ..= 0x7FFF |
-			0xA000 ..= 0xBFFF => self.mbc.ea_for_va(state, va),
+			0x0000 ..= 0x7FFF => self.mbc.ea_for_va(state, va),
 			0x8000 ..= 0x9FFF => Some(EA::new(self.vram, va.0 & 0x1FFF)),
+			0xA000 ..= 0xBFFF => self.mbc.ea_for_va(state, va),
 			0xC000 ..= 0xFDFF => Some(EA::new(self.ram,  va.0 & 0x1FFF)),
 			0xFE00 ..= 0xFE9F => Some(EA::new(self.oam,  va.0 % 0xA0)),
 			0xFEA0 ..= 0xFEFF => None,
@@ -581,12 +607,14 @@ impl IMmu for GBMmu {
 #[derive(Debug)]
 enum Mbc {
 	NoMbc,
+	Mbc1,
 }
 
 impl Display for Mbc {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		match self {
 			Mbc::NoMbc(m) => m.fmt(f),
+			Mbc::Mbc1(m)  => m.fmt(f),
 		}
 	}
 }
@@ -648,5 +676,152 @@ impl IMbc for NoMbc {
 	fn state_change(&self, _state: MmuState, _va: VA, _val: Option<u64>, _load: bool)
 	-> StateChange {
 		StateChange::None
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// MBC1
+// Kinda like NES UXROM, really.
+
+#[derive(Debug, Display)]
+#[display("MBC1")]
+struct Mbc1 {
+	all:   Vec<SegId>,
+	first: SegId,
+	map:   HashMap<SegId, usize>,
+}
+
+impl Mbc1 {
+	fn init(all: Vec<SegId>) -> Mbc {
+		let first = *all.first().unwrap();
+		let map = all.iter().enumerate().map(|(idx, seg)| (*seg, idx)).collect();
+		Self { all, first, map }.into()
+	}
+
+	fn seg_idx_for_seg_id(&self, seg: SegId) -> Option<usize> {
+		self.map.get(&seg).copied()
+	}
+
+	fn contains_seg(&self, seg: SegId) -> bool {
+		self.seg_idx_for_seg_id(seg).is_some()
+	}
+}
+
+impl IMbc for Mbc1 {
+	fn initial_state(&self) -> MmuState {
+		Default::default()
+	}
+
+	fn ea_for_va(&self, state: MmuState, va: VA) -> Option<EA> {
+		let offs = va.0 & 0x3FFF;
+		let bank = Mbc1State::rom_bank(state);
+
+		match va.0 {
+			0x0000 ..= 0x3FFF => Some(EA::new(self.first,     offs)),
+			0x4000 ..= 0x7FFF => Some(EA::new(self.all[bank], offs)),
+			_                 => None,
+		}
+	}
+
+	fn va_for_ea(&self, _state: MmuState, ea: EA) -> Option<VA> {
+		let offs = ea.offs() & 0x3FFF;
+
+		// every segment except the first has a virtual base of 0x4000.
+		if ea.seg() == self.first {
+			Some(VA(offs))
+		} else if self.contains_seg(ea.seg()) {
+			Some(VA(0x4000 + offs))
+		} else {
+			None
+		}
+	}
+
+	fn name_prefix_for_va(&self, state: MmuState, va: VA) -> String {
+		match va.0 {
+			0x0000 ..= 0x3FFF => "PRG0".into(),
+			0x4000 ..= 0x7FFF => format!("PRG{}", Mbc1State::rom_bank(state)),
+			_                 => "UNK".into(),
+		}
+	}
+
+	fn state_change(&self, state: MmuState, va: VA, val: Option<u64>, load: bool)
+	-> StateChange {
+		match (load, va.0, val) {
+			// loads don't change state.
+			(true,  _, _) => StateChange::None,
+
+			// If val is None, either ~something~ happens or nothing does.
+			(_, 0x0000 ..= 0x7FFF, None) => StateChange::Dynamic,
+			(_, 0x8000 ..        , None) => StateChange::None,
+
+			// RAM enable, when value least-sig nybble is 0xA
+			(_, 0x0000 ..= 0x1FFF, Some(val)) =>
+				StateChange::Static(Mbc1State::set_ram_en(state, (val & 0xF) == 0xA)),
+
+			// ROM bank select
+			// "If this register is set to $00, it behaves as if it is set to $01."
+			(_, 0x2000 ..= 0x3FFF, Some(0)) =>
+				StateChange::Static(Mbc1State::set_rom_bank(state, 1)),
+			(_, 0x2000 ..= 0x3FFF, Some(val)) =>
+				StateChange::Static(Mbc1State::set_rom_bank(state, val % (self.all.len() as u64))),
+
+			// Upper bits or RAM bank
+			(_, 0x4000 ..= 0x5FFF, Some(val)) =>
+				StateChange::Static(Mbc1State::set_upper(state, val)),
+
+			// Upper bits or RAM bank
+			(_, 0x6000 ..= 0x7FFF, Some(val)) =>
+				StateChange::Static(Mbc1State::set_mode(state, val)),
+
+			(_, 0x8000 .., Some(_)) => StateChange::None,
+		}
+	}
+}
+
+struct Mbc1State;
+
+impl Mbc1State {
+	const RAM_EN_SHIFT:     u64 = 0;
+	const RAM_EN_SIZE:      u64 = 1;
+	const RAM_EN_MASK:      u64 = (1 << Self::RAM_EN_SIZE) - 1;
+	const RAM_EN_REPL:      u64 = !(Self::RAM_EN_MASK << Self::RAM_EN_SHIFT);
+
+	const ROM_BANK_SHIFT:   u64 = Self::RAM_EN_SHIFT + Self::RAM_EN_SIZE;
+	const ROM_BANK_SIZE:    u64 = 5;
+	const ROM_BANK_MASK:    u64 = (1 << Self::ROM_BANK_SIZE) - 1;
+	const ROM_BANK_REPL:    u64 = !(Self::ROM_BANK_MASK << Self::ROM_BANK_SHIFT);
+
+	const UPPER_BITS_SHIFT: u64 = Self::ROM_BANK_SHIFT + Self::ROM_BANK_SIZE;
+	const UPPER_BITS_SIZE:  u64 = 2;
+	const UPPER_BITS_MASK:  u64 = (1 << Self::UPPER_BITS_SIZE) - 1;
+	const UPPER_BITS_REPL:  u64 = !(Self::UPPER_BITS_MASK << Self::UPPER_BITS_SHIFT);
+
+	const BANK_MODE_SHIFT:  u64 = Self::UPPER_BITS_SHIFT + Self::UPPER_BITS_SIZE;
+	const BANK_MODE_SIZE:   u64 = 1;
+	const BANK_MODE_MASK:   u64 = (1 << Self::BANK_MODE_SIZE) - 1;
+	const BANK_MODE_REPL:   u64 = !(Self::BANK_MODE_MASK << Self::BANK_MODE_SHIFT);
+
+	fn rom_bank(state: MmuState) -> usize {
+		((state.to_u64() >> Self::ROM_BANK_SHIFT) & Self::ROM_BANK_MASK) as usize
+	}
+
+	fn set_rom_bank(state: MmuState, new_bank: u64) -> MmuState {
+		MmuState::from_u64((state.to_u64() & Self::ROM_BANK_REPL) |
+			((new_bank & Self::ROM_BANK_MASK) << Self::ROM_BANK_SHIFT))
+	}
+
+	fn set_ram_en(state: MmuState, en: bool) -> MmuState {
+		MmuState::from_u64((state.to_u64() & Self::RAM_EN_REPL) |
+			((en as u64) << Self::RAM_EN_SHIFT))
+	}
+
+	fn set_upper(state: MmuState, val: u64) -> MmuState {
+		MmuState::from_u64((state.to_u64() & Self::UPPER_BITS_REPL) |
+			(val << Self::UPPER_BITS_SHIFT))
+	}
+
+	fn set_mode(state: MmuState, mode: u64) -> MmuState {
+		MmuState::from_u64((state.to_u64() & Self::BANK_MODE_REPL) |
+			(mode << Self::BANK_MODE_SHIFT))
 	}
 }

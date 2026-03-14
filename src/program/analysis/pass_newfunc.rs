@@ -6,11 +6,22 @@ use log::*;
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm, FuncId };
-use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId };
+use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId, Segment };
 
 // ------------------------------------------------------------------------------------------------
 // First-pass function analysis
 // ------------------------------------------------------------------------------------------------
+
+/// Given an instruction and segment, get the EA after it, or an unresolved EA if the next EA
+/// would be past the end of the segment.
+fn ea_after_inst(i: &Instruction, seg: &Segment) -> EA {
+	let next_ea = i.ea() + i.size();
+	if next_ea.offs() < seg.len() {
+		next_ea
+	} else {
+		EA::unresolved(i.next_va().0)
+	}
+}
 
 impl Program {
 	pub(super) fn new_func_pass(&mut self, ea: EA, state: MmuState) {
@@ -52,7 +63,8 @@ impl Program {
 
 			'instloop: for inst in &mut iter {
 				// debug!("  {:04X} {:?}", inst.va(), inst.bytes());
-				end_ea = inst.next_ea();
+				// SAFETY: this is OK because we do checks on its offset after this loop.
+				end_ea = inst.ea() + inst.size();
 
 				// the Old Way checked for bank changes here using self.mem.inst_state_change
 				// on each instruction, and ending the BB if so. but now we're checking for
@@ -67,8 +79,10 @@ impl Program {
 					}
 					Ret(cond) => {
 						if cond {
-							let next = inst.next_ea();
-							potential_bbs.push_back(next);
+							let next = ea_after_inst(&inst, seg);
+							if seg.contains_ea(next) {
+								potential_bbs.push_back(next);
+							}
 							term = Some(BBTerm::Return { cont: Some(next) });
 						} else {
 							term = Some(BBTerm::Return { cont: None });
@@ -82,8 +96,10 @@ impl Program {
 						term = Some(BBTerm::JumpTbl(vec![]));
 					}
 					IndirCall => {
-						let next = inst.next_ea();
-						potential_bbs.push_back(next);
+						let next = ea_after_inst(&inst, seg);
+						if seg.contains_ea(next) {
+							potential_bbs.push_back(next);
+						}
 
 						// the destination EAs are filled in later
 						term = Some(BBTerm::IndirCall { dst: vec![], ret: next });
@@ -92,8 +108,10 @@ impl Program {
 						let target_va = inst.control_target().expect("should have control target");
 						let target_ea = self.va_to_ea_in_same_seg(seg.id(), state, target_va);
 
-						let next = inst.next_ea();
-						potential_bbs.push_back(next);
+						let next = ea_after_inst(&inst, seg);
+						if seg.contains_ea(next) {
+							potential_bbs.push_back(next);
+						}
 
 						// debug!("  {:04X} t: {} next: {}", inst.va(), target_ea, next);
 
@@ -112,8 +130,10 @@ impl Program {
 						if inst.kind() == Uncond {
 							term = Some(BBTerm::Jump(target_ea));
 						} else {
-							let next = inst.next_ea();
-							potential_bbs.push_back(next);
+							let next = ea_after_inst(&inst, seg);
+							if seg.contains_ea(next) {
+								potential_bbs.push_back(next);
+							}
 
 							// debug!("  {:04X} t: {} next: {}", inst.va(), target_ea, next);
 
@@ -151,6 +171,7 @@ impl Program {
 						}
 					} else {
 						term = Some(BBTerm::FallThru(end_ea));
+						debug!("  falling thru");
 					}
 				}
 

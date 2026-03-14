@@ -50,8 +50,6 @@ impl BasicBlock {
 	pub fn id(&self) -> BBId     { self.id }
 	/// Its globally-unique EA.
 	pub fn ea(&self) -> EA { self.ea }
-	/// The first EA after it.
-	pub fn ea_after(&self) -> EA { self.term_inst().next_ea() }
 	/// Where its terminator (last instruction) is located.
 	pub fn term_ea(&self) -> EA { self.term_inst().ea() }
 	/// How it ends, and what its successors are.
@@ -127,15 +125,14 @@ impl BasicBlock {
 	///
 	/// Panics if the given EA is out of the range of EAs that this BB covers.
 	pub(crate) fn last_instr_before(&self, ea: EA) -> Option<usize> {
-		assert!(ea >= self.ea() && ea < self.ea_after(), "wuh oh, out-of-range EA for this BB");
+		assert!(ea >= self.ea() && ea < self.term_inst().ea() + self.term_inst().size(),
+			"wuh oh, out-of-range EA for this BB");
 
 		for (i, inst) in self.insts.iter().enumerate() {
 			if inst.ea() < ea {
-				let next = inst.next_ea();
-
 				use std::cmp::Ordering::*;
 
-				match next.cmp(&ea) {
+				match (inst.ea() + inst.size()).cmp(&ea) {
 					// uh oh. ea is in the middle of this instruction.
 					Greater => return None,
 					Equal   => return Some(i),
@@ -245,6 +242,22 @@ pub type Successors<'a> = Chain<option::IntoIter<&'a EA>, slice::Iter<'a, EA>>;
 pub type SuccessorsMut<'a> = Chain<option::IntoIter<&'a mut EA>, slice::IterMut<'a, EA>>;
 
 impl BBTerm {
+	/// If this terminator has a "continuation" successor (i.e. a successor which is run immediately
+	/// after the terminating instruction runs, like after a call or return), returns Some.
+	pub fn continuation_successor(&self) -> Option<EA> {
+		use BBTerm::*;
+
+		match self {
+			Return     { cont: Some(ea) } |
+			FallThru   (ea) |
+			Call       { ret: ea, .. } |
+			IndirCall  { ret: ea, .. } |
+			Cond       { f: ea, .. } |
+			StateChange(ea, _) => Some(*ea),
+			_ => None,
+		}
+	}
+
 	/// An iterator over the owning block's successors.
 	pub fn successors(&'_ self) -> Successors<'_> {
 		use BBTerm::*;

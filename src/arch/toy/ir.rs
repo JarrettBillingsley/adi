@@ -10,9 +10,9 @@ use super::*;
 pub(crate) struct ToyIrCompiler;
 
 impl IIrCompiler for ToyIrCompiler {
-	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, target, b);
+		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, target, next, b);
 	}
 
 	fn arg_regs(&self) -> &'static [IrReg] {
@@ -84,7 +84,8 @@ impl InstDesc {
 		}
 	}
 
-	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>,
+	b: &mut IrBuilder) {
 		use MetaOp::*;
 
 		let r0 = | | -> IrReg {
@@ -193,7 +194,7 @@ impl InstDesc {
 			}
 			CALZ => {
 				b.bnot             (REG_TMP, REG_ZF,                              -1, -1);
-				b.cbranch_and_split(REG_TMP, i.next_ea(),                         -1, -1);
+				b.cbranch_and_split(REG_TMP, next.expect("!!!"),                  -1, -1);
 				b.iusub            (REG_SP,  REG_SP, IrConst::_16(2),             -1, -1, -1);
 				b.store            (REG_SP,  IrConst::_16(i.next_va().0 as u16),  -1, -1);
 				b.call             (target.unwrap(),                              0);
@@ -205,7 +206,7 @@ impl InstDesc {
 			}
 			RETZ => {
 				b.bnot             (REG_TMP, REG_ZF,                 -1, -1);
-				b.cbranch_and_split(REG_TMP, i.next_ea(),            -1, -1);
+				b.cbranch_and_split(REG_TMP, next.expect("!!!"),     -1, -1);
 				b.load             (REG_TMP16, REG_SP,               -1, -1);
 				b.iuadd            (REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
 				b.ret              (REG_TMP16,                       -1);

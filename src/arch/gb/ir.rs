@@ -13,11 +13,11 @@ use super::*;
 pub(crate) struct GBIrCompiler;
 
 impl IIrCompiler for GBIrCompiler {
-	fn build_ir(&self, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
 		match i.bytes() {
-			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, target, b),
-			&[byte1, ..]       => build_ir(&lookup_desc(byte1).expect("ono"), i, target, b),
+			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, target, next, b),
+			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, target, next, b),
 			_                  => unreachable!(),
 		}
 	}
@@ -559,7 +559,8 @@ impl IrBuilder {
 // Computation
 // ------------------------------------------------------------------------------------------------
 
-fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuilder) {
+fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, next: Option<EA>,
+b: &mut IrBuilder) {
 	use { MetaOp::*, SynOp::*, Reg::* };
 
 	match (desc.meta_op(), desc.syn_ops()) {
@@ -939,7 +940,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(CALL, &[Cc(cond), Op]) => {
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, i.next_ea(), -1, -1)
+			.cbranch_and_split(cond, next.expect("!!!"),       -1, -1)
 			.push_return_addr (i.next_va())
 			.call             (target.unwrap(),   0);
 		}
@@ -949,7 +950,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, b: &mut IrBuil
 		(RET,  &[Cc(cond)]) => {
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, i.next_ea(), -1, -1)
+			.cbranch_and_split(cond, next.expect("!!!"), -1, -1)
 			.return_();
 		}
 
