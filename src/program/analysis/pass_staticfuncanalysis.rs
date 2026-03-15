@@ -61,7 +61,7 @@ impl Program {
 		// for (reg, (val, from)) in consts {
 		// 	debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
 		// }
-		debug!("{:?}", irfunc);
+		// debug!("{:?}", irfunc);
 
 		let addr_bits = self.plat.arch().addr_bits();
 

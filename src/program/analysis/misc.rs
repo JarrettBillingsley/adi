@@ -135,9 +135,6 @@ impl Program {
 			let (last, rest) = bb.insts().split_last().unwrap();
 			rest.iter().for_each(|inst|
 				compiler.build_ir(inst, None, None, &mut b));
-
-			log::warn!("target = {:?}, succ = {:?}",
-				bb.control_target(), bb.term().continuation_successor());
 			compiler.build_ir(last, bb.control_target(), bb.term().continuation_successor(), &mut b);
 
 			// TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually

@@ -443,8 +443,8 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	let img = Image::new_from_file(
-		// "tests/data/tetris.gb" // no MBC
-		"tests/data/sml.gb"    // MBC1  (ROM only)
+		"tests/data/tetris.gb" // no MBC
+		// "tests/data/sml.gb"    // MBC1  (ROM only)
 		// "tests/data/sml2.gb"   // MBC1B (ROM + RAM)
 		// "tests/data/pkblue.gb" // MBC3
 	)?;
