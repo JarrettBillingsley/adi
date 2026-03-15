@@ -123,7 +123,7 @@ impl InstDesc {
 				let op0 = r0();
 				let op1 = r1();
 				b.mov(      REG_TMPCF, REG_CF,                -1, -1);
-				b.isborrowc(REG_CF,    op0, op1, REG_CF,      -1,  0, 1, -1);
+				b.isborrowb(REG_CF,    op0, op1, REG_CF,      -1,  0, 1, -1);
 				b.iusubb(   op0,       op0, op1, REG_TMPCF,    0,  0, 1, -1);
 			}
 			AND => {
@@ -157,7 +157,7 @@ impl InstDesc {
 				let op0 = r0();
 				let op1 = r1();
 				b.mov(      REG_TMPCF, REG_CF,                -1, -1);
-				b.isborrowc(REG_CF,    op0, op1, REG_CF,      -1,  0,  1, -1);
+				b.isborrowb(REG_CF,    op0, op1, REG_CF,      -1,  0,  1, -1);
 				b.iusubb(   REG_TMP,   op0, op1, REG_TMPCF,   -1,  0,  1, -1);
 				b.ieq(      REG_ZF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);
 				b.islt(     REG_NF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);

@@ -145,7 +145,7 @@ impl IrBuilder {
 	/// Set the C flag to the carry out of unsigned `src1 - src2 - C`.
 	fn c_bc(&mut self, src1: impl Into<IrSrc>, src2: impl Into<IrSrc>, src1n: i8, src2n: i8)
 	-> &mut Self {
-		self.isborrowc(REG_CF, src1.into(), src2.into(), REG_CF,  -1, src1n, src2n, -1)
+		self.isborrowb(REG_CF, src1.into(), src2.into(), REG_CF,  -1, src1n, src2n, -1)
 	}
 
 	/// Set the Z flag to 0.

@@ -299,6 +299,11 @@ fn do_unop(op: IrUnOp, val: u64, src_size: ValSize, dst_size: ValSize) -> u64 {
 	}
 }
 
+/// Wraps the given value to `NBITS` bits. (Just masks off any higher bits)
+fn mask_to<const NBITS: usize>(v: u64) -> u64 {
+	v & ((1 << NBITS) - 1)
+}
+
 /// Computes the carry-outs of all places in the unsigned addition `a + b + ci_0`. `ci_0` is meant
 /// to be the carry in to bit 0, and should be 0 or 1. (This is untested for values of `ci_0` other
 /// than 0 or 1.)
@@ -321,7 +326,31 @@ fn carries<const NBITS: usize>(a: u64, b: u64, ci_0: u64) -> u64 {
 
 	// expression below was for testing, should be equal to a+b+ci_0 (and it was, for all
 	// combinations of ci_0 in {0, 1}, a in {0, 65535}, and b in {0, 65535}
-	co //, (a ^ b ^ ci) & ((1 << NBITS) - 1))
+	co //, mask_to::<NBITS>(a ^ b ^ ci))
+}
+
+/// Computes the borrow-outs of all places in the unsigned subtraction `a - b - bi_0`. `bi_0` is
+/// meant to be the borrow in to bit 0, and should be 0 or 1. (This is untested for values of
+/// `bi_0` other than 0 or 1.)
+///
+/// This is worst-case linear time in the number of bits, but has early-out if the borrows stabilize
+/// sooner so can complete in as little as 1 iteration.
+fn borrows<const NBITS: usize>(a: u64, b: u64, bi_0: u64) -> u64 {
+	let mut bi = bi_0;
+	let mut bo = 0;
+	let mut old_bo = bo;
+	for _ in 0 .. NBITS {
+		bo = (mask_to::<NBITS>(!(a ^ b)) & bi) | (mask_to::<NBITS>(!a) & b);
+		// early out if it stabilized
+		if bo == old_bo {
+			break;
+		}
+		old_bo = bo;
+		bi = (bo << 1) | bi_0;
+	}
+	// expression below was for testing, should be equal to a-b-bi_0 (and it was, for all
+	// combinations of bi_0 in {0, 1}, a in {0, 65535}, and b in {0, 65535}
+	bo //, mask_to::<NBITS>(a ^ b ^ bi))
 }
 
 fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
@@ -382,6 +411,12 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			ValSize::_16 => carries::<16>(val1, val2, 0),
 			ValSize::_32 => carries::<32>(val1, val2, 0),
 			ValSize::_64 => carries::<64>(val1, val2, 0),
+		}
+		IntBorrows => match size {
+			ValSize::_8  => borrows::< 8>(val1, val2, 0),
+			ValSize::_16 => borrows::<16>(val1, val2, 0),
+			ValSize::_32 => borrows::<32>(val1, val2, 0),
+			ValSize::_64 => borrows::<64>(val1, val2, 0),
 		}
 		// TODO: this is also poorly-defined. would it make more sense to have an n*n=>2n
 		// multiplication operation? and then you'd need some kind of unpair operation...
@@ -588,7 +623,7 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 				}
 			}
 		}
-		IntSBorrowC => {
+		IntSBorrowB => {
 			let (sum, borrow) = match size {
 				ValSize::_8 => {
 					let (sum, borrow) = (val1 as i8).overflowing_sub(val2 as i8);
@@ -624,6 +659,12 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 			ValSize::_16 => carries::<16>(val1, val2, val3),
 			ValSize::_32 => carries::<32>(val1, val2, val3),
 			ValSize::_64 => carries::<64>(val1, val2, val3),
+		}
+		IntBorrowsB => match size {
+			ValSize::_8  => borrows::< 8>(val1, val2, val3),
+			ValSize::_16 => borrows::<16>(val1, val2, val3),
+			ValSize::_32 => borrows::<32>(val1, val2, val3),
+			ValSize::_64 => borrows::<64>(val1, val2, val3),
 		}
 		IntBitSet => {
 			let num_bits = size.bytes() as u64 * 8;
@@ -1093,6 +1134,28 @@ mod tests {
 	}
 
 	#[test]
+	fn test_iborrows() {
+		use IrBinOp::IntBorrows;
+
+		// as explained on the docs of [`borrows`] I already validated the output for all possible
+		// 16-bit ints so I'm not gonna be too thorough here.
+
+		//             vvvvvvvvvv borrows of...
+		test_binop_8  (0b00000000, IntBorrows,
+						0b00000000,  //   this
+						0b00000000); // - this
+		test_binop_8  (0b00000000, IntBorrows,
+						0b00000001,
+						0b00000000);
+		test_binop_8  (0b11111111, IntBorrows,
+						0b00000000,
+						0b00000001);
+		test_binop_8  (0b00000000, IntBorrows,
+						0b00000001,
+						0b00000001);
+	}
+
+	#[test]
 	fn test_imul() {
 		use IrBinOp::*;
 
@@ -1459,7 +1522,7 @@ mod tests {
 	fn test_ipair() {
 		use IrBinOp::*;
 
-		test_binop_8 (0x1234,               IntPair, 0x12,       0x34,     );
+		test_binop_8 (0x1234,              IntPair, 0x12,       0x34,     );
 		test_binop_16(0x12345678,          IntPair, 0x1234,     0x5678,   );
 		test_binop_32(0x12345678_ABCDEF97, IntPair, 0x12345678, 0xABCDEF97);
 	}
@@ -1762,50 +1825,52 @@ mod tests {
 	// I'll be honest I'm running out of steam here
 
 	#[test]
-	fn test_isborrowc() {
+	fn test_isborrowb() {
 		use IrTernOp::*;
-		test_ternop_8 (0, IntSBorrowC, 0x08, 0x05, 0);
-		test_ternop_8 (0, IntSBorrowC, 0x08, 0x05, 1);
-		test_ternop_16(0, IntSBorrowC, 0x0008, 0x0005, 0);
-		test_ternop_16(0, IntSBorrowC, 0x0008, 0x0005, 1);
-		test_ternop_32(0, IntSBorrowC, 0x00000008, 0x00000005, 0);
-		test_ternop_32(0, IntSBorrowC, 0x00000008, 0x00000005, 1);
-		test_ternop_64(0, IntSBorrowC, 0x00000000_00000008, 0x00000000_00000005, 0);
-		test_ternop_64(0, IntSBorrowC, 0x00000000_00000008, 0x00000000_00000005, 1);
+		test_ternop_8 (0, IntSBorrowB, 0x08, 0x05, 0);
+		test_ternop_8 (0, IntSBorrowB, 0x08, 0x05, 1);
+		test_ternop_16(0, IntSBorrowB, 0x0008, 0x0005, 0);
+		test_ternop_16(0, IntSBorrowB, 0x0008, 0x0005, 1);
+		test_ternop_32(0, IntSBorrowB, 0x00000008, 0x00000005, 0);
+		test_ternop_32(0, IntSBorrowB, 0x00000008, 0x00000005, 1);
+		test_ternop_64(0, IntSBorrowB, 0x00000000_00000008, 0x00000000_00000005, 0);
+		test_ternop_64(0, IntSBorrowB, 0x00000000_00000008, 0x00000000_00000005, 1);
 
-		test_ternop_8 (0, IntSBorrowC, 0xFE, 0x05, 0);
-		test_ternop_8 (0, IntSBorrowC, 0xFE, 0x05, 1);
-		test_ternop_16(0, IntSBorrowC, 0xFFFE, 0x0005, 0);
-		test_ternop_16(0, IntSBorrowC, 0xFFFE, 0x0005, 1);
-		test_ternop_32(0, IntSBorrowC, 0xFFFFFFFE, 0x00000005, 0);
-		test_ternop_32(0, IntSBorrowC, 0xFFFFFFFE, 0x00000005, 1);
-		test_ternop_64(0, IntSBorrowC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 0);
-		test_ternop_64(0, IntSBorrowC, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 1);
+		test_ternop_8 (0, IntSBorrowB, 0xFE, 0x05, 0);
+		test_ternop_8 (0, IntSBorrowB, 0xFE, 0x05, 1);
+		test_ternop_16(0, IntSBorrowB, 0xFFFE, 0x0005, 0);
+		test_ternop_16(0, IntSBorrowB, 0xFFFE, 0x0005, 1);
+		test_ternop_32(0, IntSBorrowB, 0xFFFFFFFE, 0x00000005, 0);
+		test_ternop_32(0, IntSBorrowB, 0xFFFFFFFE, 0x00000005, 1);
+		test_ternop_64(0, IntSBorrowB, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 0);
+		test_ternop_64(0, IntSBorrowB, 0xFFFFFFFF_FFFFFFFE, 0x00000000_00000005, 1);
 
-		test_ternop_8 (1, IntSBorrowC, 0x7F, 0xFF, 0);
-		test_ternop_8 (1, IntSBorrowC, 0x80, 0x01, 0);
-		test_ternop_8 (1, IntSBorrowC, 0x80, 0x00, 1);
-		test_ternop_8 (0, IntSBorrowC, 0xFF, 0xFF, 0);
-		test_ternop_16(0, IntSBorrowC, 0x00FF, 0x00FF, 0);
-		test_ternop_32(0, IntSBorrowC, 0x000000FF, 0x000000FF, 0);
-		test_ternop_64(0, IntSBorrowC, 0x00000000_000000FF, 0x00000000_000000FF, 0);
+		test_ternop_8 (1, IntSBorrowB, 0x7F, 0xFF, 0);
+		test_ternop_8 (1, IntSBorrowB, 0x80, 0x01, 0);
+		test_ternop_8 (1, IntSBorrowB, 0x80, 0x00, 1);
+		test_ternop_8 (0, IntSBorrowB, 0xFF, 0xFF, 0);
+		test_ternop_16(0, IntSBorrowB, 0x00FF, 0x00FF, 0);
+		test_ternop_32(0, IntSBorrowB, 0x000000FF, 0x000000FF, 0);
+		test_ternop_64(0, IntSBorrowB, 0x00000000_000000FF, 0x00000000_000000FF, 0);
 
-		test_ternop_16(1, IntSBorrowC, 0x7FFF, 0xFFFF, 0);
-		test_ternop_16(1, IntSBorrowC, 0x8000, 0x0001, 0);
-		test_ternop_16(1, IntSBorrowC, 0x8000, 0x0000, 1);
-		test_ternop_16(0, IntSBorrowC, 0xFFFF, 0xFFFF, 0);
-		test_ternop_32(0, IntSBorrowC, 0x0000FFFF, 0x0000FFFF, 0);
-		test_ternop_64(0, IntSBorrowC, 0x00000000_0000FFFF, 0x00000000_0000FFFF, 0);
+		test_ternop_16(1, IntSBorrowB, 0x7FFF, 0xFFFF, 0);
+		test_ternop_16(1, IntSBorrowB, 0x8000, 0x0001, 0);
+		test_ternop_16(1, IntSBorrowB, 0x8000, 0x0000, 1);
+		test_ternop_16(0, IntSBorrowB, 0xFFFF, 0xFFFF, 0);
+		test_ternop_32(0, IntSBorrowB, 0x0000FFFF, 0x0000FFFF, 0);
+		test_ternop_64(0, IntSBorrowB, 0x00000000_0000FFFF, 0x00000000_0000FFFF, 0);
 
-		test_ternop_32(1, IntSBorrowC, 0x7FFFFFFF, 0xFFFFFFFF, 0);
-		test_ternop_32(1, IntSBorrowC, 0x80000000, 0x00000001, 0);
-		test_ternop_32(1, IntSBorrowC, 0x80000000, 0x00000000, 1);
-		test_ternop_32(0, IntSBorrowC, 0xFFFFFFFF, 0xFFFFFFFF, 0);
-		test_ternop_64(0, IntSBorrowC, 0x00000000_FFFFFFFF, 0x00000000_FFFFFFFF, 0);
+		test_ternop_32(1, IntSBorrowB, 0x7FFFFFFF, 0xFFFFFFFF, 0);
+		test_ternop_32(1, IntSBorrowB, 0x80000000, 0x00000001, 0);
+		test_ternop_32(1, IntSBorrowB, 0x80000000, 0x00000000, 1);
+		test_ternop_32(0, IntSBorrowB, 0xFFFFFFFF, 0xFFFFFFFF, 0);
+		test_ternop_64(0, IntSBorrowB, 0x00000000_FFFFFFFF, 0x00000000_FFFFFFFF, 0);
 
-		test_ternop_64(1, IntSBorrowC, 0x7FFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0);
-		test_ternop_64(1, IntSBorrowC, 0x80000000_00000000, 0x00000000_00000001, 0);
-		test_ternop_64(1, IntSBorrowC, 0x80000000_00000000, 0x00000000_00000000, 1);
-		test_ternop_64(0, IntSBorrowC, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0);
+		test_ternop_64(1, IntSBorrowB, 0x7FFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0);
+		test_ternop_64(1, IntSBorrowB, 0x80000000_00000000, 0x00000000_00000001, 0);
+		test_ternop_64(1, IntSBorrowB, 0x80000000_00000000, 0x00000000_00000000, 1);
+		test_ternop_64(0, IntSBorrowB, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0);
 	}
+
+	// TODO: tests for icarriesc/iborrowsb, I don't feel like it
 }
