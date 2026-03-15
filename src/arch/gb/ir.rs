@@ -427,18 +427,34 @@ impl IrBuilder {
 	fn inc_dec(&mut self, reg: impl Into<IrReg>, delta: isize, change_flags: bool)
 	-> &mut Self {
 		let reg = reg.into();
+		let one = IrConst::with_size(reg.size(), 1);
+
 		let nf = match delta {
-			1  => { self.iuadd(reg, reg, IrConst::with_size(reg.size(), 1),  -1, -1, -1); 0 }
-			-1 => { self.iusub(reg, reg, IrConst::with_size(reg.size(), 1),  -1, -1, -1); 1 }
+			1  => {
+				if change_flags {
+					self
+					.icarries(REG_W,  reg,   one,             -1, -1, -1)
+					.ibit    (REG_HF, REG_W, IrConst::_8(3),  -1, -1, -1);
+				}
+				self.iuadd(reg, reg, one,  -1, -1, -1);
+				0 // nf
+			}
+			-1 => {
+				if change_flags {
+					self
+					.iborrows(REG_W,  REG_A, one,             -1, -1, -1)
+					.ibit    (REG_HF, REG_W, IrConst::_8(3),  -1, -1, -1);
+				}
+				self.iusub(reg, reg, one,  -1, -1, -1);
+				1 // nf
+			}
 			_  => panic!("bad delta"),
 		};
 
 		if change_flags {
 			self
 			.z_(reg, -1)
-			.nx(IrConst::_8(nf), -1)
-			// TODO: half-carry
-			.h0();
+			.nx(IrConst::_8(nf), -1);
 		}
 
 		self
@@ -450,74 +466,74 @@ impl IrBuilder {
 		let src = self.rr(reg);
 		self.rr(Reg::HL);
 		self
-		// TODO: half-carry
-		.h0    ()
-		.c_    (        REG_HL, src,     -1, -1)
-		.iuadd (REG_HL, REG_HL, src,  -1, -1, -1)
-		.n0    ()
-		.ihi   (REG_H,  REG_HL,       -1, -1)
-		.ilo   (REG_L,  REG_HL,       -1, -1)
+		.icarries(REG_WZ, REG_HL, src,              -1, -1, -1)
+		.ibit    (REG_CF, REG_WZ, IrConst::_16(15), -1, -1, -1)
+		.ibit    (REG_HF, REG_WZ, IrConst::_16(11), -1, -1, -1)
+		.iuadd   (REG_HL, REG_HL, src,              -1, -1, -1)
+		.n0      ()
+		.ihi     (REG_H,  REG_HL,                   -1, -1)
+		.ilo     (REG_L,  REG_HL,                   -1, -1)
 	}
 
 	/// Do `dst = REG_SP + val` (written `sp + e` in ISA docs), and update flags.
 	fn add_sp_e(&mut self, dst: IrReg, val: i64, valn: i8) -> &mut Self {
 		// it adds the sign-extended operand to SP, as if it were unsigned.
 		let val = IrConst::_16((val as u64) as u16);
-		// TODO: half-carry (and carry; HF = carrybits.3, CF = carrybits.7)
 		self
-		.h0   ()
-		.c0   ()
-		.iuadd(dst, REG_SP, val,  -1, -1, valn)
-		.z0   ()
-		.n0   ()
+		.icarries(REG_WZ, REG_SP, val,              -1, -1, -1)
+		.ibit    (REG_CF, REG_WZ, IrConst::_16(7),  -1, -1, -1)
+		.ibit    (REG_HF, REG_WZ, IrConst::_16(3),  -1, -1, -1)
+		.iuadd   (dst,    REG_SP, val,              -1, -1, valn)
+		.z0      ()
+		.n0      ()
 	}
 
 	/// Do `REG_A = REG_A + src` and update flags.
 	fn add_a(&mut self, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
 		let src = src.into();
-		// TODO: half-carry
 		self
-		.h0   ()
-		.c_   (       REG_A, src,      -1, srcn)
-		.iuadd(REG_A, REG_A, src,  -1, -1, srcn)
-		.n0   ()
-		.z_   (REG_A,              -1)
+		.c_      (        REG_A, src,                 -1, srcn)
+		.icarries(REG_W,  REG_A, src,             -1, -1, srcn)
+		.ibit    (REG_HF, REG_W, IrConst::_8(3),  -1, -1, -1)
+		.iuadd   (REG_A,  REG_A, src,             -1, -1, srcn)
+		.n0      ()
+		.z_      (REG_A,                              -1)
 	}
 
 	/// Do `REG_A = REG_A + src + REG_CF` and update flags.
 	fn adc_a(&mut self, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
 		let src = src.into();
-		// TODO: half-carry
 		self
-		.h0    ()
-		.c_c   (       REG_A, src,              -1, srcn)
-		.iuaddc(REG_A, REG_A, src, REG_CF,  -1, -1, srcn, -1)
-		.n0    ()
-		.z_    (REG_A,                      -1)
+		.c_c      (        REG_A, src,                 -1, srcn)
+		.icarriesc(REG_W,  REG_A, src, REG_CF,     -1, -1, srcn, -1)
+		.ibit     (REG_HF, REG_W, IrConst::_8(3),  -1, -1, -1)
+		.iuaddc   (REG_A,  REG_A, src, REG_CF,     -1, -1, srcn, -1)
+		.n0       ()
+		.z_       (REG_A,                              -1)
 	}
 
 	/// Do `dst = REG_A - src` and update flags.
 	fn sub_(&mut self, dst: IrReg, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
 		let src = src.into();
-		// TODO: half-carry
 		self
-		.h0   ()
-		.c_b  (     REG_A, src,      -1, srcn)
-		.iusub(dst, REG_A, src,  -1, -1, srcn)
-		.n1   ()
-		.z_   (dst,              -1)
+		.c_b     (        REG_A, src,                 -1, srcn)
+		.iborrows(REG_W,  REG_A, src,             -1, -1, srcn)
+		.ibit    (REG_HF, REG_W, IrConst::_8(3),  -1, -1, -1)
+		.iusub   (dst,    REG_A, src,             -1, -1, srcn)
+		.n1      ()
+		.z_      (dst,                                -1)
 	}
 
 	/// Do `REG_A = REG_A - src - REG_CF` and update flags.
 	fn sbc_a(&mut self, src: impl Into<IrSrc>, srcn: i8) -> &mut Self {
 		let src = src.into();
-		// TODO: half-carry
 		self
-		.h0    ()
-		.c_bc  (        REG_A, src,              -1, srcn)
-		.iusubb(REG_A,  REG_A, src, REG_CF,  -1, -1, srcn, -1)
-		.n1    ()
-		.z_    (REG_A,                       -1)
+		.c_bc     (        REG_A, src,                 -1, srcn)
+		.iborrowsb(REG_W,  REG_A, src, REG_CF,     -1, -1, srcn, -1)
+		.ibit     (REG_HF, REG_W, IrConst::_8(3),  -1, -1, -1)
+		.iusubb   (REG_A,  REG_A, src, REG_CF,     -1, -1, srcn, -1)
+		.n1       ()
+		.z_       (REG_A,                              -1)
 	}
 
 	/// Do `REG_A = REG_A & src` and update flags.
@@ -1002,12 +1018,12 @@ b: &mut IrBuilder) {
 
 		// ld r, [rr] (various)
 		(LD, &[Srg(dst), IndReg(src @ (BC | DE | HL))]) => { // no flag changes
-			b.load_ind(dst, src,  0);
+			b.load_ind(dst, src,  -1);
 		}
 
 		// ld [rr], r (various)
 		(LD, &[IndReg(dst @ (BC | DE | HL)), Srg(src)]) => { // no flag changes
-			b.store_ind(dst, IrReg::from(src),  0, -1);
+			b.store_ind(dst, IrReg::from(src),  -1, -1);
 		}
 
 		// ld a, [nn] (0xFA)
@@ -1019,14 +1035,14 @@ b: &mut IrBuilder) {
 		// ld [nn], a (0xEA)
 		(LD, &[IndOp, Srg(A)]) => { // no flag changes
 			let Operand::Mem(dst, _) = i.ops()[0] else { panic!() };
-			b.store(IrConst::_16(dst.0 as u16), REG_A,  -1, 0);
+			b.store(IrConst::_16(dst.0 as u16), REG_A,  0, -1);
 		}
 
 		// ld [hl+], a (0x22)
 		// ld [hl-], a (0x32)
 		(LD, &[pm @ (IndHlPlus | IndHlMinus), Srg(A)]) => { // no flag changes
 			b
-			.store_ind (HL, REG_A,  0, -1)
+			.store_ind (HL, REG_A,  -1, -1)
 			.inc_dec_hl(pm == IndHlPlus);
 		}
 
@@ -1034,7 +1050,7 @@ b: &mut IrBuilder) {
 		// ld a, [hl-] (0x3A)
 		(LD, &[Srg(A), pm @ (IndHlPlus | IndHlMinus)]) => { // no flag changes
 			b
-			.load_ind  (A, HL,  0)
+			.load_ind  (A, HL,  -1)
 			.inc_dec_hl(pm == IndHlPlus);
 		}
 
@@ -1068,19 +1084,19 @@ b: &mut IrBuilder) {
 			b
 			.izxt (REG_WZ, REG_C,                         -1, -1)
 			.iuadd(REG_WZ, REG_WZ, IrConst::_16(0xFF00),  -1, -1, -1)
-			.load (REG_A,      REG_WZ,                    -1, 0);
+			.load (REG_A,  REG_WZ,                        0, -1);
 		}
 		// ld [0xFF00 + n], a (0xE0)
 		(LDH, [IndOp, Srg(A)]) => { // no flag changes
 			let Operand::Mem(dst, _) = i.ops()[0] else { panic!() };
-			b.store(IrConst::_16(dst.0 as u16), REG_A,  -1, 0);
+			b.store(IrConst::_16(dst.0 as u16), REG_A,  0, -1);
 		}
 		// ld [0xFF00 + c], a (0xE2)
 		(LDH, [IndReg(C), Srg(A)]) => { // no flag changes
 			b
 			.izxt (REG_WZ, REG_C,                         -1, -1)
 			.iuadd(REG_WZ, REG_WZ, IrConst::_16(0xFF00),  -1, -1, -1)
-			.store(REG_WZ, REG_A,                          0, -1);
+			.store(REG_WZ, REG_A,                         0, -1);
 		}
 
 		// push bc (0xC5)

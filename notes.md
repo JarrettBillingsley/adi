@@ -7,7 +7,6 @@
 - IR
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 - GB
-	- half-carry IR
 	- inst descs - `Imp`, `Ind`, and maybe `Add16` have annoying special cases. split em
 		- tho be careful - the `bit x,[hl]` instruction currently puts the memindir on operand 1, and if that changes the IR has to change too
 	- god the mapping between SynOp/GBOpKind/Operand is a fucking MESS. kill it
@@ -18,8 +17,6 @@
 - put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction*
 	- ...and that all operands in the source instruction are referenced by the IR
 - GB IR stress test - test *all* possible opcodes
-- **Write GB IR compiler**
-	- once GB IR is done, uncomment pass_refs.rs:47
 - **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
 	- is it possible to rearchitect it so it doesn't?
 - **Function-local labels**

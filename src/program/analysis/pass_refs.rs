@@ -45,8 +45,8 @@ impl Program {
 								// case some non-control instruction slipped in here, let's put an
 								// assert here.
 
-								// TODO: TEMPORARILY WHILE STATIC ANALYSIS IS DISABLED
-								// assert!(inst.is_control());
+								assert!(inst.is_control(), "expected instruction to be control, \
+									but it's this instead: {:?}", inst);
 							}
 						}
 						OpInfo::Ref { target, .. } => {
