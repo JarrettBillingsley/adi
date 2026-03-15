@@ -299,6 +299,31 @@ fn do_unop(op: IrUnOp, val: u64, src_size: ValSize, dst_size: ValSize) -> u64 {
 	}
 }
 
+/// Computes the carry-outs of all places in the unsigned addition `a + b + ci_0`. `ci_0` is meant
+/// to be the carry in to bit 0, and should be 0 or 1. (This is untested for values of `ci_0` other
+/// than 0 or 1.)
+///
+/// This is worst-case linear time in the number of bits, but has early-out if the carries stabilize
+/// sooner so can complete in as little as 1 iteration.
+fn carries<const NBITS: usize>(a: u64, b: u64, ci_0: u64) -> u64 {
+	let mut ci = ci_0;
+	let mut co = 0;
+	let mut old_co = co;
+	for _ in 0 .. NBITS {
+		co = ((a ^ b) & ci) | (a & b);
+		// early out if it stabilized
+		if co == old_co {
+			break;
+		}
+		old_co = co;
+		ci = (co << 1) | ci_0;
+	}
+
+	// expression below was for testing, should be equal to a+b+ci_0 (and it was, for all
+	// combinations of ci_0 in {0, 1}, a in {0, 65535}, and b in {0, 65535}
+	co //, (a ^ b ^ ci) & ((1 << NBITS) - 1))
+}
+
 fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 	use IrBinOp::*;
 
@@ -351,6 +376,12 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			ValSize::_16 => (val1 as i16).overflowing_sub(val2 as i16).1 as u64,
 			ValSize::_32 => (val1 as i32).overflowing_sub(val2 as i32).1 as u64,
 			ValSize::_64 => (val1 as i64).overflowing_sub(val2 as i64).1 as u64,
+		}
+		IntCarries => match size {
+			ValSize::_8  => carries::< 8>(val1, val2, 0),
+			ValSize::_16 => carries::<16>(val1, val2, 0),
+			ValSize::_32 => carries::<32>(val1, val2, 0),
+			ValSize::_64 => carries::<64>(val1, val2, 0),
 		}
 		// TODO: this is also poorly-defined. would it make more sense to have an n*n=>2n
 		// multiplication operation? and then you'd need some kind of unpair operation...
@@ -587,6 +618,12 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 					ValSize::_64 => (sum as i64).overflowing_sub(val3 as i64).1 as u64,
 				}
 			}
+		}
+		IntCarriesC => match size {
+			ValSize::_8  => carries::< 8>(val1, val2, val3),
+			ValSize::_16 => carries::<16>(val1, val2, val3),
+			ValSize::_32 => carries::<32>(val1, val2, val3),
+			ValSize::_64 => carries::<64>(val1, val2, val3),
 		}
 		IntBitSet => {
 			let num_bits = size.bytes() as u64 * 8;
@@ -1010,6 +1047,49 @@ mod tests {
 		test_binop_64(1, IntSBorrow, 0x7FFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF);
 		test_binop_64(1, IntSBorrow, 0x80000000_00000000, 0x00000000_00000001);
 		test_binop_64(0, IntSBorrow, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF);
+	}
+
+	#[test]
+	fn test_icarries() {
+		use IrBinOp::IntCarries;
+
+		// as explained on the docs of [`carries`] I already validated the output for all possible
+		// 16-bit ints so I'm not gonna be too thorough here.
+
+		//             vvvvvvvvvv carries of...
+		test_binop_8  (0b00000000, IntCarries,
+						0b00000000,  //   this
+						0b00000000); // + this
+		test_binop_8  (0b00000000, IntCarries,
+						0b00000001,
+						0b00000000);
+		test_binop_8  (0b00000000, IntCarries,
+						0b00000000,
+						0b00000001);
+		test_binop_8  (0b00000001, IntCarries,
+						0b00000001,
+						0b00000001);
+		test_binop_8  (0b11111111, IntCarries,
+						0b11111111,
+						0b00000001);
+		test_binop_8  (0b11111111, IntCarries,
+						0b11111111,
+						0b11111111);
+		test_binop_8  (0b10000000, IntCarries,
+						0b10000000,
+						0b10000000);
+		test_binop_16 (0b00000000_11111111, IntCarries,
+						0b00000000_11111111,
+						0b00000000_11111111);
+		test_binop_16 (0b10000000_11111111, IntCarries,
+						0b10000000_11111111,
+						0b10000000_11111111);
+		test_binop_32 (0b00000000_00000000_10000000_11111111, IntCarries,
+						0b00000000_00000000_10000000_11111111,
+						0b00000000_00000000_10000000_11111111);
+		test_binop_32 (0b10000000_00000000_10000000_11111111, IntCarries,
+						0b10000000_00000000_10000000_11111111,
+						0b10000000_00000000_10000000_11111111);
 	}
 
 	#[test]

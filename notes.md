@@ -5,7 +5,6 @@
 # Imminent tasks!
 
 - IR
-	- also maybe we need a `carries` instruction which gives you a value where each bit is the carry-out of that column?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 - GB
 	- half-carry IR
@@ -15,7 +14,7 @@
 	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
 - Mos65xx IR:
 	- reimplement rotates and uses of `iand` which could be bit instructions
-	- cleanup/reorganize to match GB IR compiler (methods on `IrBuilder`, free function instead of method on `InstDesc`, method chaining)
+- cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)
 - put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction*
 	- ...and that all operands in the source instruction are referenced by the IR
 - GB IR stress test - test *all* possible opcodes

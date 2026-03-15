@@ -35,6 +35,7 @@ pub(crate) enum IrBinOp {
 	IntUCarry,  // dst = true if (s1 unsigned+ s2) has carry-out
 	IntSCarry,  // dst = true if (s1 signed+ s2) has carry-out
 	IntSBorrow, // dst = true if (s1 signed- s2) has borrow-out
+	IntCarries, // dst = carry-outs for each column of bits in (s1 unsigned+ s2)
 	IntMul,     // dst = s1 * s2
 	IntUDiv,    // dst = s1 / s2  (unsigned)
 	IntSDiv,    // dst = s1 / s2  (signed)
@@ -67,6 +68,7 @@ pub(crate) enum IrTernOp {
 	IntUCarryC,  // dst = true if unsigned sum(s1, s2, s3) has carry-out
 	IntSCarryC,  // dst = true if signed sum(s1, s2, s3) has carry-out
 	IntSBorrowC, // dst = true if signed (s1 - s2 - s3) has borrow-out
+	IntCarriesC, // dst = carry-outs for each column of bits in unsigned sum(s1, s2, s3)
 
 	IntBitSet,   // dst = (s1 & ~(1 << s2)) | (s3 << s2) (s3 must be 0 or 1)
 }
@@ -188,6 +190,8 @@ impl Debug for IrInstKind {
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntSBorrow => write!(f, "isborrow  {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+				IntCarries => write!(f, "icarries  {:?}{:?}, {:?}{:?}, {:?}{:?}",
+					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntMul     => write!(f, "imul      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 				IntUDiv    => write!(f, "iudiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
@@ -236,6 +240,8 @@ impl Debug for IrInstKind {
 				IntSCarryC  => write!(f, "iscarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 				IntSBorrowC => write!(f, "isborrowc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+				IntCarriesC => write!(f, "icarriesc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 				IntBitSet   => write!(f, "ibset     {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
@@ -454,6 +460,22 @@ impl IrInst {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary {
 			dst, src1, op: IrTernOp::IntSBorrowC, src2, src3, dstn, src1n, src2n, src3n } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn icarries(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Binary {
+			dst, src1, op: IrBinOp::IntCarries, src2, dstn, src1n, src2n } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn icarriesc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary {
+			dst, src1, op: IrTernOp::IntCarriesC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
 	/// TODO: docme

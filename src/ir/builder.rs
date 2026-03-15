@@ -251,6 +251,20 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
+	pub(crate) fn icarries(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
+		self.inst(IrInst::icarries(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	}
+
+	/// TODO: docme
+	pub(crate) fn icarriesc(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
+		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
+		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
+		self.inst(IrInst::icarriesc(self.ea, dst, src1.into(), src2.into(), src3.into(),
+			dstn, src1n, src2n, src3n))
+	}
+
+	/// TODO: docme
 	pub(crate) fn imul(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
 		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
 		self.inst(IrInst::imul(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
