@@ -77,71 +77,82 @@ impl IDisassembler for GBDisassembler {
 	}
 }
 
-fn rdisp(reg: Reg, disp: i64) -> MemIndir {
-	MemIndir::RegDisp { reg: reg as u8, disp }
-}
-
 /// decode operands into `ops`. returns (number of operands, control flow target)
 fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 -> (usize, Option<VA>) {
-	use GBOpKind::*;
 	use Operand::{ UImm, SImm, Indir, Mem };
 	use MemAccess::{ W, Target };
 
+	// comments show grouping by number and kind of operands
 	match desc.op_kind() {
-		Dummy    => (0, None),
-		UImm8    => { ops[0] = UImm(img[1] as u64);                           (1, None) }
-		Imm16    => { ops[0] = UImm((img[2] as u64) << 8 | (img[1] as u64));  (1, None) }
-		SImm8    => { ops[0] = SImm(img[1] as i8 as i64);                     (1, None) }
-		AddHi(a) => { ops[0] = Mem(VA(0xFF00 + (img[1] as usize)), a);        (1, None) }
-		IndHi(a) => { ops[0] = Indir(rdisp(Reg::C, 0xFF00), a);               (1, None) }
+		// []
+		GBOpKind::Dummy | GBOpKind::Imp => (0, None),
 
-		Imp => {
-			if let Some(addr) = desc.rst_target() {
-				let addr = VA(addr as usize);
-				ops[0] = Mem(addr, Target);
-				(1, Some(addr))
-			} else if let Some(bit) = desc.bit_operand() {
-				ops[0] = UImm(bit);
-				(1, None)
-			} else {
-				(0, None)
-			}
+		// [UImm]
+		GBOpKind::UImm8 => {
+			ops[0] = UImm(img[1] as u64);
+			(1, None)
 		}
-		Ind(r, a) => {
-			if let Some(bit) = desc.bit_operand() {
-				ops[0] = UImm(bit);
-				ops[1] = Indir(MemIndir::Reg { reg: r as u8 }, a);
-				(2, None)
-			} else {
-				ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);
-				(1, None)
-			}
+		GBOpKind::Imm16 => {
+			ops[0] = UImm((img[2] as u64) << 8 | (img[1] as u64));
+			(1, None)
+		}
+		GBOpKind::Bit(bitn) => {
+			ops[0] = UImm(bitn as u64);
+			(1, None)
 		}
 
-		LdHlImm => {
-			ops[0] = Indir(MemIndir::Reg { reg: Reg::HL as u8 }, W);
-			ops[1] = UImm(img[1] as u64);
-			(2, None)
+		// [SImm]
+		GBOpKind::SImm8 => {
+			ops[0] = SImm(img[1] as i8 as i64);
+			(1, None)
 		}
 
-		Rel => {
+		// [Mem]
+		GBOpKind::Rel => {
 			let addr = 2 + (va.0 as isize) + (img[1] as i8 as isize);
 			let addr = VA(addr as usize);
 			ops[0] = Mem(addr, Target);
 			(1, Some(addr))
 		}
-
-		Add16(a) => {
+		GBOpKind::Add16(a) => {
 			let addr = (img[2] as usize) << 8 | (img[1] as usize);
 			let addr = VA(addr);
 			ops[0] = Mem(addr, a);
+			(1, if a == Target { Some(addr) } else { None })
+		}
+		GBOpKind::AddHi(a) => {
+			ops[0] = Mem(VA(0xFF00 + (img[1] as usize)), a);
+			(1, None)
+		}
+		GBOpKind::Rst(addr) => {
+			let addr = VA(addr as usize);
+			ops[0] = Mem(addr, Target);
+			(1, Some(addr))
+		}
 
-			if a == Target {
-				(1, Some(addr))
-			} else {
-				(1, None)
-			}
+		// [Indir(Reg | RegDisp)]
+		GBOpKind::Ind(r, a) => {
+			ops[0] = Indir(MemIndir::Reg { reg: r as u8 }, a);
+			(1, None)
+		}
+		GBOpKind::IndHi(a) => {
+			ops[0] = Indir(MemIndir::RegDisp { reg: Reg::C as u8, disp: 0xFF00 }, a);
+			(1, None)
+		}
+
+		// [Indir(Reg), UImm]
+		GBOpKind::LdHlImm => {
+			ops[0] = Indir(MemIndir::Reg { reg: Reg::HL as u8 }, W);
+			ops[1] = UImm(img[1] as u64);
+			(2, None)
+		}
+
+		// [UImm, Indir(Reg)]
+		GBOpKind::BitInd(bitn, a) => {
+			ops[0] = UImm(bitn as u64);
+			ops[1] = Indir(MemIndir::Reg { reg: Reg::HL as u8 }, a);
+			(2, None)
 		}
 	}
 }
@@ -210,22 +221,30 @@ impl IPrinter for GBPrinter {
 				ctx.write_str(", ")?;
 			}
 
+			// comments show which kinds of instructions they appear on, and what the operands
+			// for those instructions are.
 			match syn_op {
 				SynOp::Op => {
+					// Uimm8, Imm16, Bit => [UImm]
+					// SImm8             => [SImm]
+					// Add16, Rel, Rst   => [Mem]
+					// BitInd            => [UImm, Indir(Reg)]
 					self.print_operand(ctx, 0)?;
+					// operand 1 of BitInd is handled by the SynOp::IndReg case below
 				}
 				SynOp::Op2 => {
+					// LdHlImm => [Indir(Reg), UImm]
 					self.print_operand(ctx, 1)?;
 				}
 				SynOp::IndOp => {
+					// Add16, AddHi => [Mem]
 					ctx.write_char('[')?;
-					// all IndOps are on instructions that have either Add16 or AddHi,
-					// which guarantees that operand 0 is an Operand::Mem. print_operand
-					// will print out its opinfo, too, so we don't have to do it here.
+					// print_operand will print out its opinfo so we don't have to do it here.
 					self.print_operand(ctx, 0)?;
 					ctx.write_char(']')?;
 				}
 				SynOp::SpPlusOp => {
+					// SImm8 => [SImm]
 					ctx.write_str("sp + ")?;
 					self.print_operand(ctx, 0)?;
 				}
@@ -233,18 +252,12 @@ impl IPrinter for GBPrinter {
 					self.print_register(ctx, *r as u8)?;
 				}
 				SynOp::IndReg(_) => {
-					// IndReg is on instructions that use AddHi, IndHi, Ind, LdHlImm. there are
-					// FOUR possible cases. I hate this, why did I do this to myself
-					//   - operand 0 is Mem            (from AddHi)
-					//   - operand 0 is Indir(Reg)     (from LdHlImm and Ind)
-					//   - operand 0 is Indir(RegDisp) (from IndHi)
-					//   - operand 1 is Indir(Reg)     (from Ind)
+					// Ind     => [Indir(Reg)]
+					// LdHlImm => [Indir(Reg), UImm]
+					// IndHi   => [Indir(RegDisp)]
+					// BitInd  => [UImm, Indir(Reg)]
 
 					match ctx.get_inst().ops() {
-						[Operand::Mem(va, _), ..] => {
-							self.print_mem_addr(ctx, *va)?;
-							self.print_mem_opinfo(ctx, 0)?;
-						}
 						[Operand::Indir(MemIndir::Reg { reg }, _), ..] => {
 							ctx.write_char('[')?;
 							self.print_indir_reg(ctx, *reg)?;
@@ -267,7 +280,7 @@ impl IPrinter for GBPrinter {
 					}
 				}
 				SynOp::IndHlPlus => {
-					// these instructions have an Indir(Reg) as operand 0
+					// Ind => [Indir(Reg)]
 					ctx.write_char('[')?;
 					self.print_register(ctx, Reg::HL as u8)?;
 					ctx.write_char('+')?;
@@ -275,7 +288,7 @@ impl IPrinter for GBPrinter {
 					ctx.write_char(']')?;
 				}
 				SynOp::IndHlMinus => {
-					// these instructions have an Indir(Reg) as operand 0
+					// Ind => [Indir(Reg)]
 					ctx.write_char('[')?;
 					self.print_register(ctx, Reg::HL as u8)?;
 					ctx.write_char('-')?;

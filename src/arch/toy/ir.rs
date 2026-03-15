@@ -194,7 +194,7 @@ impl InstDesc {
 			}
 			CALZ => {
 				b.bnot             (REG_TMP, REG_ZF,                              -1, -1);
-				b.cbranch_and_split(REG_TMP, next.expect("!!!"),                  -1, -1);
+				b.cbranch_and_split(REG_TMP, next.unwrap(),                       -1, -1);
 				b.iusub            (REG_SP,  REG_SP, IrConst::_16(2),             -1, -1, -1);
 				b.store            (REG_SP,  IrConst::_16(i.next_va().0 as u16),  -1, -1);
 				b.call             (target.unwrap(),                              0);
@@ -206,7 +206,7 @@ impl InstDesc {
 			}
 			RETZ => {
 				b.bnot             (REG_TMP, REG_ZF,                 -1, -1);
-				b.cbranch_and_split(REG_TMP, next.expect("!!!"),     -1, -1);
+				b.cbranch_and_split(REG_TMP, next.unwrap(),          -1, -1);
 				b.load             (REG_TMP16, REG_SP,               -1, -1);
 				b.iuadd            (REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
 				b.ret              (REG_TMP16,                       -1);

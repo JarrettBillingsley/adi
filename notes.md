@@ -7,9 +7,7 @@
 - IR
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 - GB
-	- inst descs - `Imp`, `Ind`, and maybe `Add16` have annoying special cases. split em
-		- tho be careful - the `bit x,[hl]` instruction currently puts the memindir on operand 1, and if that changes the IR has to change too
-	- god the mapping between SynOp/GBOpKind/Operand is a fucking MESS. kill it
+	- god the mapping between `SynOp/GBOpKind/Operand` is a fucking MESS. kill it
 	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
 - Mos65xx IR:
 	- reimplement rotates and uses of `iand` which could be bit instructions

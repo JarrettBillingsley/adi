@@ -956,9 +956,9 @@ b: &mut IrBuilder) {
 		(CALL, &[Cc(cond), Op]) => {
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, next.expect("!!!"),       -1, -1)
+			.cbranch_and_split(cond, next.unwrap(),  -1, -1)
 			.push_return_addr (i.next_va())
-			.call             (target.unwrap(),   0);
+			.call             (target.unwrap(),       0);
 		}
 
 		(RETI, []) => { b.return_(); }
@@ -966,7 +966,7 @@ b: &mut IrBuilder) {
 		(RET,  &[Cc(cond)]) => {
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, next.expect("!!!"), -1, -1)
+			.cbranch_and_split(cond, next.unwrap(),  -1, -1)
 			.return_();
 		}
 
