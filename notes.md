@@ -11,10 +11,14 @@
 	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
 - Mos65xx IR:
 	- reimplement rotates and uses of `iand` which could be bit instructions
-- cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)
-- put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction*
+- **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
+- **Put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction***
 	- ...and that all operands in the source instruction are referenced by the IR
-- GB IR stress test - test *all* possible opcodes
+- **GB IR stress test - test *all* possible opcodes**
+	- I'm just not sure I'm hitting them all with the test ROMs
+- **IR/const prop correctness tests**
+	- validate against emulator output
+	- use a dummy testing mapper/MBC which can be used to output the contents of stores to specific location to output results of const prop
 - **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
 	- is it possible to rearchitect it so it doesn't?
 - **Function-local labels**
