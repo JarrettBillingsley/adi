@@ -757,9 +757,9 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		let bb = &self.bbs[irbbid];
 
 		// first update the cfg.
-		// println!("{}: {:?}", bb.id, cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
+		// println!("{}: {:?}", bb.id, self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
 
-		let old_dest = self.get_old_dest(bb, "IrWrite::Returns");
+		let old_dest = self.get_old_dest(bb);
 
 		log::debug!("  changing bb{}'s dest from bb{} to bb{}", bb.id, old_dest, self.new_bbid);
 
@@ -781,10 +781,15 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		self.new_bbs.push(new_bb);
 	}
 
-	fn get_old_dest(&self, bb: &IrBasicBlock, kind: &'static str) -> usize {
+	fn get_old_dest(&self, bb: &IrBasicBlock) -> usize {
 		let targets = self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>();
 		match targets[..] {
-			[]                 => panic!("{} put on a BB with no in-function successor", kind),
+			[] => {
+				log::error!("offending function:");
+				debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
+				panic!("IrRewrite::Returns put on bb{} with no in-function successor. \
+					See function above", bb.id);
+			}
 			[target]           => target, // ok cool beans
 			[target1, target2] => {
 				// this case can happen if a function is recursive, which is okay. but any
@@ -794,9 +799,14 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 				} else if target2 == 0 {
 					target1
 				} else {
-					panic!("{} put on BB @ {} where one of the call targets ({}, {}) is self-call \
-						but NOT a recursive call. Why hasn't this function been split?",
-						kind,
+					log::error!("offending function:");
+					debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
+
+					panic!(
+						"IrRewrite::Returns put on bb{} @ {} where one of the call targets \
+						({}, {}) is self-call but NOT a recursive call.\n\
+						See function above. Why hasn't this function been split?",
+						bb.id,
 						bb.insts[0].ea(),
 						target1, target2);
 				}

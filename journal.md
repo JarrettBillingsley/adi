@@ -307,3 +307,373 @@ Well, I was originally thinking:
 	- Not everything can be statically determined! An unresolved EA is *something for the user to look into, a point of interest, not a mistake.*
 
 So.
+
+---
+
+## Function splitting 2: electric boogaloo
+
+Currently I handle this case and this case only:
+
+	...   ...
+	 ↓     ↓
+	+-------+
+	|   A   | ←-- EZ: dominates all nodes reachable from it.
+	+-------+
+		↓
+	   ...
+
+But I ran into this case, which seems solvable, but currently marks the function as multi-entry, which causes a crash later on since return-insertion gets real mad about non-recursive self-calls:
+
+	+-------+
+	|   A   |
+	+-------+
+	  |   ↓
+	  | +---+
+	  | | B | ←-- want to split at B, but doesn't dominate all reachable
+	  | +---+
+	  ↓   ↓ ←-- (there could be some more nodes in here)
+	+-------+
+	|   C   | ←-- BUT, splitting at C first would enable splitting at B
+	+-------+
+		  ↓
+		 ...
+
+
+Here's another possible case:
+
+	  (Start)
+	   ↓    ↓
+	 ( A ) (B) ← want to split at B
+	 ↓   ↓ ↙
+	(D)←(C)
+	 ↓   ↓
+	 .....
+
+Here, we can't split at `C`, but we can split at `D`, which makes it possible to split at `C`, which makes it possible to split at `B`. Yay recursion!
+
+### Axioms
+
+- A0: Graph dominators form trees.
+- A1: `B ∈ dominated_by(A) -> B ∈ reachable_from(A)`
+	- this is from the definition of what a dominator is . `A` is a node through which control *must* flow to get from the start of the function to `B`.
+
+### Definitions
+
+- D0: the set `R(N) = reachable_from(N) - dominated_by(N)` is the set of nodes we are considering to split out into their own function(s).
+	- we remove `dominated_by(N)` because those nodes will *not* become part of the potentially new function headed by some other node, but rather part of `N`'s function.
+- D1: `splittable(N) = R(N) == {}`
+	- *in the code, when `Reachables.not_dominated` is empty*
+
+### Premises
+
+- P0: *from A0* `∀N, idom(N) ∉ dominated_by(N)`,
+	- **the idom of a node is never in the set of nodes it dominates.**
+	- proof: `idom(N) ∈ dominated_by(N)` would form a cycle, not a tree. **contradiction.**
+- P1: *from A0* `R ≠ {} -> ∃T ∈ R, dom_root(T)`
+	- **the nodes of `R` will necessarily be in one or more dominator trees,** and each tree will be rooted at some **dominator root** `T ∈ R`.
+- P2: *from P0, P1* `∀T ∈ R, dom_root(T) <-> idom(T) ∉ R`,
+	- P2_1: `idom(T) ∈ R` would contradict **P0**. therefore, `dom_root(T) -> idom(T) ∉ R`.
+		- **the roots of dominator trees of `R` will have idoms outside `R`.**
+	- P2_2: `idom(T) ∉ R -> dom_root(T)`. Proof:
+		- if `idom(T) ∈ R`, then `T` cannot be the dominator root, because there is at least one node (`idom(T)`...) which dominates `T`, which is... the definition of a dominator root.
+	- *from P2_1, P2_2* **therefore, `dom_root(T) <-> idom(T) ∉ R`**
+- P3: *from D0* `∀Q ∈ R(B), Q ∈ reachable_from(B)`
+	- **all nodes in `R(B)` are reachable from `B`.**
+- P4: *from D1* `!splittable(N) -> R(N) != {}`
+	- **an unsplittable node `N` has a non-empty `R(N)`.**
+- P5: *from P4, D0* `R(N) != {} -> ∃W ∈ reachable_from(N), W ∉ dominated_by(N)`
+	- **an unsplittable node `N` has at least one node `W` that is reachable from it, but not dominated by it.**
+
+### Proofs
+
+For below, we want to split at `B`, so `R = R(B)`.
+
+- P6: *from D1* `R = {} -> splittable(B)`.
+	- in that case, `reachable_from(B) = dominated_by(B)`, in which case we can split at `B`. *(this is the case that is already handled!) ✅*
+
+For the rest of the proofs, we assume that `R ≠ {}`.
+
+**Question:** is it possible to have *no dom roots* in `R`? **No.** Proof:
+
+- H0: `∀Q ∈ R, idom(Q) ∈ R`
+	- C0: *from P1, P2* `∀ T ∈ R, dom_root(T) -> idom(T) ∉ R`, but that **contradicts H0.**
+- P7: *from C0, P2* `∃Q ∈ R, dom_root(Q)`
+	- **there is at least one node in `R` which is a dominator root.**
+
+We will assume P7 for the remaining proofs.
+
+**Question:** is it possible to have no *splittable* dom roots in `R`? **No.** Proof:
+
+- H1: `∀T ∈ R, dom_root(T) -> !splittable(T)` (assume there are no splittable roots)
+	- H1_1: **Question:** `∃N ∈ R, !dom_root(N) ^ (∀T ∈ R dom_root(T) -> N ∉ dominated_by(T))`?
+		- **are there any non dom roots in D which are reachable from some dom root T, but not dominated by any of them?**
+		- C1_1: *from P1, P2, H1_1* all nodes in `R` have to be in one of the trees rooted at some `T`. if there were a node not dominated by any `T`, its idom would have to be outside `R`, which would make it a dom root itself, **contradicting H1_1.**
+	- HP1_0: *from C1_1* `∀N ∈ R, !dom_root(N) -> (∃T ∈ R dom_root(T) ^ N ∈ dominated_by(T))`.
+		- **all non dom roots in `R` are dominated by some dom root `T`.**
+	- HP1_1: *from H1, P4, P5* `∀T ∈ R, dom_root(T) -> ∃W ∈ reachable_from(T), W ∉ dominated_by(T)`
+		- **for all dom roots `T` to be unsplittable, they would all have to have at least one node `W` which is reachable from, but not dominated by, `T`.**
+	- C1 *from HP1_0, HP1_1,* but each of those counterexample nodes `W` would have to be dominated by some *other* dom root `U`, which would make `U` splittable, **contradicting H1.**
+- P8: *from C1*	`∃T ∈ R, dom_root(T) ^ splittable(T)`
+	- **therefore there will always be at least one splittable dom root!**
+
+**Iterative splitting terminates**
+
+- once you split out a splittable dom root, it will take itself and all its reachable nodes with it, which gives you `R' = R - {T ∪ reachable_from(T)}`, and necessarily `|R'| < |R|`.
+- *from P8* this `R'` will also have a splittable dom root.
+- iterate until `R'` becomes `{}`, and now `B` is splittable. yay!
+
+## Uhhh what about the head?
+
+We handle "splitting at the head" as its own case, and do nothing in that case. **⚠️ But it is still possible for the head to be in the `R` set of a node.** The only way this is possible is if **`B` is in its own `R` set (there is a cycle).** (fucking cycles)
+
+`idom(H) = ∅` which is.... technically "not in `R`" and makes `H` a dom root (which it should be, it's *the* root of the dom tree) but... oof:
+
+	( H )
+	 ↓ ↑
+	( B ) ← want to split at B
+
+According to the above definitions:
+
+- `R(B) = {H B} - {} = {H B}`, so `!splittable(B)`
+- `dom_root(H)` since `∅ ∉ R(B)` ⚠️⚠️⚠️
+- `!dom_root(B)` since `idom(B) = H ∈ R(B)`
+- `R(H) = {H B} - {B} = {H}`, so `!splittable(H)`
+
+NOTHING IS SPLITTABLE AAAAAAAAAAAAA THIS CONTRADICTS P8
+
+But `H` is already the head, so we don't split there, because splitting there would be a no-op (it would take B with it, leaving nothing, and recreating the same CFG)
+
+But `!splittable(B)`... but maybe it should be?? oh god
+
+I guess `H` and `B` are *mutually recursive functions???*
+
+So maybe we *should* be able to split at `B`?
+
+- maybe `splittable(B) = B != H ^ (R(B) = {} v H ∈ R(B))`? herb...
+	- `B` is not the head, and
+	- either `R(B)` is empty, or the head is in `R(B)`.
+
+that would change the above to
+
+- `R(B) = {H}`, so `splittable(B)` ✅
+- `dom_root(H)` since `∅ ∉ R(B)`
+- `!splittable(H)` ✅
+
+now B is splittable, but H is not. *but which nodes does B take with it?*
+
+Bigger example:
+
+		( H )
+		 ↓   ↖ E -> H OKAY??? GOD IT'S UGLY
+		(A)   \
+		 ↓ ➘   \
+		(B) (C) |
+		 ↓ ↙   /
+		(D)   /
+	   ↙ ↓   /
+	(F) ( E ) ← want to split at E
+	  ➘ ↙
+	  (G)
+	  ↓ ↓
+	  ...
+
+Oh jesus.
+
+Just having `H ∈ R(E)` (here!) isn't enough to say `splittable(E)`. However, `G` is splittable... which would leave `H` as the only `dom_root` in `R(E)`. Then you'd split into two functions, `H A B C D F` and `E`, both of which tailcall `G`, and `E` calls `H`.
+
+So `E` takes `dominated_by(E)` (which in this case is empty, but could be nonempty in a case like below), and `H` takes the rest. Example of `B` taking stuff:
+
+	( H )←-+
+	  ↓    |
+	( A )  |
+	  ↓    |
+	( B ) -+ ← want to split at B
+	  ↓
+	( C )
+
+- `reachable_from(B) = { H A C } + is_cyclic`
+- `dominated_by(B) = { C }`
+- whole CFG = `{ H A B C }`
+- `B` takes `{ B C }` (`self ⋃ dominated_by(self)`)
+- `H` is left with the rest `{ H A }`
+
+## Cycles *not* involving the head
+
+What about this?
+
+	( H )
+	  ↓
+	( A )←-+
+	  ↓    |
+	( B ) -+ ← want to split at B
+	  ↓
+	( C )
+
+
+- `reachable_from(B) = {A B C}`
+- `dominated_by(B) = {C}`
+- `R(B) = {A B}`
+- `dom_root(A)`, `!dom_root(B)`
+- `R(A) = {A B C} - {B C} = {A}`
+- oh NO, this contradicts P8...
+	- OR I need to change my definition of splittable
+- really `A` should be splittable
+
+## If `B` is in a cycle, will there ever be more than one dom root?
+
+- `B` being in a cycle means there is a **back edge** (an edge from a dominee to a dominator).
+-
+
+split out B and all its dominees
+if dom root != H, split it
+
+## Okay. Okay. Okay.
+
+Define `cyc(B) = B ∈ reachable_from(B)`.
+	`cyc(B) -> reachable_from(B) ≠ {}` (defn of set membership)
+	`B ∉ dominated_by(B)`              (defn of dominator trees)
+	∴ `cyc(B) -> R(B) ≠ {}`            (above, defn of `R(B)`)
+Define `cycH(B) = H ∈ reachable_from(B)`.
+	`cycH(B) -> cyc(B)`     (H reachable from B only if B is in a cycle)
+	∴ `!cyc(B) -> !cycH(B)` (contrapositive)
+
+`cycH(B) -> R(B) = F`              *if `H` is reachable from `B`, then every node in `F` is*
+`cycH(B) -> dom_roots(R(B)) = {H}` *if `H` is reachable from `B` then `H` is the only dom root*
+
+*I don't believe it's possible for a CFG to have > 1 node with 0 in-edges, even with splitting.*
+
+If we want to split at `B`...
+
+*TODO: what about if the function is already multi-entry?*
+
+- splitting multi-entry functions *should* be possible
+	- currently I have a comment "can split as long as split point dominates all other entry points"
+	- tho I can see cases where it *doesn't* but is still splittable - *is dominated by* all other entry points, for example
+
+- If `B = H`, do nothing. (✅handled)
+- Else if the CFG is reducible:
+	
+	*`cyc(B) -> R(B) ≠ {}`, so the `0 1 x` rows are omitted.*
+	*`cyc(B) -> R(B) ≠ {}`, so the `1 x 0` rows are omitted.*
+
+	|`cyc(B)`|`cycH(B)`|`R(B)≠{}`| Action
+	|--------|---------|---------|--------
+	|   0    |    0    |    0    | Split at `B`. (✅handled)
+	|   0    |    0    |    1    | Iteratively split `R(B)` until `R(B)={}`. (⚠️in progress)
+	|   1    |    0    |    1    | `B` in cycle w/o H (⚠️TODO, currently marked multi-entry)
+	|   1    |    1    |    1    | `B` in cycle w/H (⚠️TODO, currently marked multi-entry)
+
+- Else the CFG is irreducable with some set of nodes `IR` which are part of an irreducible cycle:
+	- Let `OVL(B) = IR ∩ R(B)`
+	- Let `allornone(B) = OVL(B) == IR || OVL(B) == {}`
+	- If `R(B)` contains **all nodes** or **no nodes** of `IR` (`allornone(B)`)
+		- then essentially we can treat `IR` like a Big Weird Node.
+		- there are three cases:
+			- `IR ∉ R(B)` because `IR ∉ reachable_from(B)` (on some unrelated control flow path)
+				- => it remains part of `F`, *proceed as normal*
+			- `IR ∉ R(B)` because `IR ∈ reachable_from(B) ^ IR ∈ dominated_by(B)`
+				- => it will become part of `B`'s function (after splitting off dom trees in `R(B)` if needed), *proceed as normal*
+			- `IR ∈ R(B)` (`IR` is reachable from but not dominated by `B`)
+				- If no dom trees can be split (because `IR` overlaps with one or more dom tree's `R(T)`)
+					- 🛑 it is impossible to split. **mark the function as multi-entry.**
+				- Else,
+					- *iteratively split as normal.*
+	
+		- ⚠️TODO: similar table to above?
+			*`cyc(B) -> R(B) ≠ {}`, so the `0 1 x` rows are omitted.*
+			*`cyc(B) -> R(B) ≠ {}`, so the `1 x 0` rows are omitted.*
+		
+			|`cyc(B)`|`cycH(B)`|`R(B)≠{}`| Action
+			|--------|---------|---------|--------
+			|   0    |    0    |    0    | Split at `B`. (✅handled)
+			|   0    |    0    |    1    | Iteratively split `R(B)` until `R(B)={}`.
+				- *uh oh, could this change the contents of `OVL(B)`?*
+					- in order for `R(B)` to overlap `IR`, `B` would have to point into the `IR` cycle itself
+					- if it didn't originally, I'm not sure how it would become like that through splitting... because no other splits could split that cycle
+			|   1    |    0    |    1    | `B` in cycle w/o H
+			|   1    |    1    |    1    | `B` in cycle w/H
+
+	- Else `R(B)` overlaps but does not contain `IR`
+		- 🛑 it is impossible to split. **mark the function as multi-entry.**
+
+- `if B = H`,
+	- **done.**
+- else *B is not the head* if `!cyclic(B)`
+	- *since B is not cyclic, it is impossible for H to be in R(B).*
+	- while `!splittable(B)`, split a splittable dom root in `R(B)`
+	- split at B
+	- **done.**
+- else *cyclic* if `H ∈ reachable_from(B)`
+	- *in this case, R(B) is the whole function, so the only dom root will be H, which is not
+	splittable. instead, we will be breaking F into two **mutually-recursive** functions.*
+	- `B` takes `B ⋃ dominated_by(B)`
+	- `H` retains the rest
+	- *I think*
+- else *cyclic but not including H*
+	- UHMM
+
+---
+
+1. if split point is `H`, do nothing.
+2. split BB, and if that fails, do nothing.
+3. if function is multi-entry, add another entry point, but do nothing else.
+4. compute `reachable_from(B)`.
+	- `cyclic = B ∈ reachable_from(B)`; ensure `B` is removed from `reachable_from(B)`.
+5. compute `dominated_by(B)`.
+6. if `cyclic`...
+
+1. set = {reachable from B} - {dominated by B}
+2. find all nodes in set whose idom is not in set.
+3. **if there is exactly 1, and it is the dominator of everything reachable from it,**
+	- we can split there
+	- and then recheck to see if we can now split at B.
+4. **if there are 2 or more,** uhhhhhh fuck can't split that (yet)
+	- ...well actually, wouldn't that mean *each one of those* could potentially be split off as its own function? maybe do it in order from "last" to "first"? lowest on the dominator tree to highest?
+
+## Identifying irreducible nodes within CFGs through collapsing
+
+Hecht describes these transformations T1 and T2 (so descriptive) on a CFG where, if you repeatedly apply them until you can't anymore, you either get:
+
+- a **single node,** which means the CFG is reducible; or
+- **multiple nodes,** which identifies the irreducible node cycle(s) in the CFG.
+
+The transformations are defined as:
+
+- `T1`: if ∃ edge `(w,w)` (cyclical edge from one node to itself), remove it.
+- `T2`: 
+	- if there is exactly 1 edge into `v` where `v ≠ HEAD`:
+		- ∃ edge `(u,v)` AND 
+		- `v ≠ HEAD` AND 
+		- ∄ edge `(w,v)` where `w ≠ u`
+	- then:
+		- remove node `v`
+		- remove edges `(u,v)` and `{(v,n) | n ∈ succ(v)}`
+		- add edges `{(u,n) | n ∈ succ(v)}`
+
+---
+
+## How to analyze irreducible CFGs
+
+Irreducible CFGs make splitting impossible in the general case, so there will always be multi-entry functions which need to be analyzed.
+
+Irreducible CFGs will be a minority, but I don't want to have to skip analyzing those functions.
+
+So, the func->IR will just have to Deal With It. There *will* still be multi-entry functions whose CFGs are irreducible.
+
+Idea for converting a multi-entry function to IR:
+
+- generate a virtual IR bb0 with edges to all entry points.
+- each non-head entry point needs phis.
+- certain `Rewrite`s should not be inserted? more thought is needed there
+
+SMB func 838B gives this panic:
+
+  `IrRewrite::Returns` put on BB @ 0003:00006F09 where one of the call targets (16, 26) is self-call but NOT a recursive call. Why hasn't this function been split?
+
+it hasn't been split because it's multi-entry because it's a `R ≠ {}` case. but maybe it can still be instructional to look at it cause an irreducible CFG case would look pretty similar
+
+we've got one node calling another in the same function. we put a `Returns` rewrite on the calling node, because we have to insert dummy `mov r, <return>`s after the call, which is right.
+
+...
+
+right, the only issue is, because of the loose IR instruction/CFG coupling, I can't tell which edge is the one that needs to have the `<return>`s added...

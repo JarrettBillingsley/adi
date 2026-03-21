@@ -256,8 +256,10 @@ impl Program {
 	}
 
 	fn new_bb(&mut self, ea: EA, term: BBTerm, insts: Vec<Instruction>, state: MmuState) -> BBId {
-		trace!("  new bb ea: {}, term: {:?}", ea, term);
-		self.bbidx.new_bb(ea, term, insts, state)
+		trace!("  new bb ea: {}, term: {:?},", ea, term);
+		let id = self.bbidx.new_bb(ea, term, insts, state);
+		trace!("    => {:?}", id);
+		id
 	}
 
 	fn va_to_ea_in_same_seg(&self, seg: SegId, state: MmuState, va: VA) -> EA {

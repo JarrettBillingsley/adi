@@ -13,7 +13,7 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Debug)?;
+	setup_logging(LevelFilter::Trace)?;
 
 	setup_panic();
 	test_gb()
@@ -459,99 +459,40 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	// TETRIS
 	if img_name.contains("tetris") {
 		// from rst 0x28 at ROM0:02FA
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1BCE)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1CE2)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1244)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x127B)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1D06)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1D26)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x03AE)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0479)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1444)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x148C)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1A07)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1DC0)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1F16)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1F1F)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1525)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x14B0)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x157B)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x15BF)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1629)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x167A)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x16EB)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1913)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0677)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x072C)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0825)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x08E4)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0B31)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0CEB)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0AD2)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0D32)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0E23)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1112)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0D99)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0E8A)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1DCE)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1E41)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0369)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x0393)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1167)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x11E6)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x11FC)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x121C)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x05C7)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x05F7)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x12B3)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1305)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1324)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1351)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x1367)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x137E)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x13B5)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x13E5)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x131B)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x03A0)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x27EA)));
+		for va in [
+			0x1BCE, 0x1CE2, 0x1244, 0x127B, 0x1D06, 0x1D26, 0x03AE, 0x0479, 0x1444, 0x148C,
+			0x1A07, 0x1DC0, 0x1F16, 0x1F1F, 0x1525, 0x14B0, 0x157B, 0x15BF, 0x1629, 0x167A,
+			0x16EB, 0x1913, 0x0677, 0x072C, 0x0825, 0x08E4, 0x0B31, 0x0CEB, 0x0AD2, 0x0D32,
+			0x0E23, 0x1112, 0x0D99, 0x0E8A, 0x1DCE, 0x1E41, 0x0369, 0x0393, 0x1167, 0x11E6,
+			0x11FC, 0x121C, 0x05C7, 0x05F7, 0x12B3, 0x1305, 0x1324, 0x1351, 0x1367, 0x137E,
+			0x13B5, 0x13E5, 0x131B, 0x03A0, 0x27EA
+		] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
 
 		let ty = Type::array(Type::U16, 41);
 		prog.new_data(None, prog.ea_from_va(state, VA(0x6480)), ty.clone(), ty.size().fixed());
 
-		// // from jump table at ROM1:6480
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65AA)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65C6)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x66FC)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6628)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6734)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x66AF)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65F1)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6654)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65B2)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65CE)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6714)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65CE)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65CE)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x66C3)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x65F7)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x6660)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67D4)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67DC)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x679D)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67A5)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67E4)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67E4)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67E4)));
-		prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x67AD)));
+		// from jump table at ROM1:6480
+		for va in [
+			0x65AA, 0x65C6, 0x66FC, 0x6628, 0x6734, 0x66AF, 0x65F1, 0x6654,
+			0x65B2, 0x65CE, 0x6714, 0x65CE, 0x65CE, 0x66C3, 0x65F7, 0x6660,
+			0x67D4, 0x67DC, 0x679D, 0x67A5, 0x67E4, 0x67E4, 0x67E4, 0x67AD,
+		] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+
 	}
 
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
+	testing_look_for_unsplittable_funcs(&prog);
+	// testing_look_for_irreducible_funcs(&prog);
 
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
+	// for segid in prog.all_image_segs() {
+	// 	show_segment(&prog, segid);
+	// }
 
 	Ok(())
 }
@@ -559,22 +500,22 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 // ------------------------------------------------------------------------------------------------
 
 fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	let img = Image::new_from_file(
+	let img_name =
 		// listed in order of decreasing mapper popularity
-		// "tests/data/dragonwarrior.nes" // 1   (mmc1/sxrom)              *UNIMPLEMENTED*
-		// "tests/data/gauntlet.nes"      // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
-		// "tests/data/smb3.nes"          // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
-		// "tests/data/megaman.nes"       // 2   (uxrom)
-		// "tests/data/10yf.nes"          // 0   (nrom)
-		// "tests/data/duckhunt.nes"      // 0   (nrom)
-		"tests/data/smb.nes"           // 0   (nrom)
-		// "tests/data/arkanoid.nes"      // 3   (cnrom)
-		// "tests/data/battletoads.nes"   // 7   (axrom)
-		// I HAVE NO ROM FOR THIS         // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
-		// "tests/data/exodus.nes"        // 11  (color dreams)
-		// "tests/data/castlevania3.nes"  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
-		// I HAVE NO ROM FOR THIS         // 19 (namco N129/N163)          *UNIMPLEMENTED*
-	)?;
+		// "tests/data/dragonwarrior.nes"; // 1   (mmc1/sxrom)              *UNIMPLEMENTED*
+		// "tests/data/gauntlet.nes";      // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
+		// "tests/data/smb3.nes";          // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
+		// "tests/data/megaman.nes";       // 2   (uxrom)
+		// "tests/data/10yf.nes";          // 0   (nrom)
+		// "tests/data/duckhunt.nes";      // 0   (nrom)
+		"tests/data/smb.nes";           // 0   (nrom)
+		// "tests/data/arkanoid.nes";      // 3   (cnrom)
+		// "tests/data/battletoads.nes";   // 7   (axrom)
+		// I HAVE NO ROM FOR THIS          // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
+		// "tests/data/exodus.nes";        // 11  (color dreams)
+		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
+		// I HAVE NO ROM FOR THIS          // 19 (namco N129/N163)          *UNIMPLEMENTED*
+	let img = Image::new_from_file(img_name)?;
 
 	let (mut prog, start_ea) = program_from_image(img)?;
 
@@ -591,63 +532,30 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		prog.enqueue_new_func(state, ea);
 	}
 
-	// BATTLETOAAADS
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8003)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8006)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8009)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x800C)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x800F)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8012)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8015)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8018)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x801B)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x801E)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8021)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8024)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8027)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x802A)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x802D)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8030)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8085)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x80F7)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x831F)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x84E8)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x857A)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x86DE)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x87A3)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x87C2)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x884B)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x88EF)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8DC1)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9150)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9200)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x923E)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9252)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x930A)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x93C8)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x944E)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x95E8)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x95EB)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9643)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9E4E)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9ED2)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0xA51E)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0xA521)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0xA560)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0xB06B)));
-	// let ea   = prog.ea_from_va(state, VA(0xFFB3));
-	// let ty   = Type::array(Type::U8, 24);
-	// let size = ty.size().fixed();
-	// prog.new_data(Some("BANK_CHANGE"), ea, ty, size);
-
-	// MAYROOOOOO
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x8231)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x838B)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0x9218)));
-	// prog.enqueue_new_func(state, prog.ea_from_va(state, VA(0xAEDC)));
-	// let ea   = prog.ea_from_va(state, VA(0x821A));
-	// let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
-	// prog.new_data(Some("array"), ea, ty, ty.size().fixed());
+	if img_name.contains("battletoads") {
+		for va in [
+			0x8003, 0x8006, 0x8009, 0x800C, 0x800F, 0x8012, 0x8015, 0x8018,
+			0x801B, 0x801E, 0x8021, 0x8024, 0x8027, 0x802A, 0x802D, 0x8030,
+			0x8085, 0x80F7, 0x831F, 0x84E8, 0x857A, 0x86DE, 0x87A3, 0x87C2,
+			0x884B, 0x88EF, 0x8DC1, 0x9150, 0x9200, 0x923E, 0x9252, 0x930A,
+			0x93C8, 0x944E, 0x95E8, 0x95EB, 0x9643, 0x9E4E, 0x9ED2, 0xA51E,
+			0xA521, 0xA560, 0xB06B
+		] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+		let ea   = prog.ea_from_va(state, VA(0xFFB3));
+		let ty   = Type::array(Type::U8, 24);
+		let size = ty.size().fixed();
+		prog.new_data(Some("BANK_CHANGE"), ea, ty, size);
+	} else if img_name.contains("smb.nes") {
+		for va in [0x8231, /*0x838B,*/ 0x9218, 0xAEDC] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+		let ea   = prog.ea_from_va(state, VA(0x821A));
+		let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
+		let size = ty.size().fixed();
+		prog.new_data(Some("array"), ea, ty, size);
+	}
 
 	let ty = Type::ptr(Type::Code, Type::U16);
 	prog.new_data(Some("VEC_NMI_PTR"),   prog.ea_from_va(state, VA(0xFFFA)), ty.clone(), 2);
@@ -656,14 +564,13 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	prog.analyze_queue();
 	println!("found {} functions.", prog.all_funcs().count());
+	// testing_look_for_unsplittable_funcs(&prog);
+	testing_look_for_irreducible_funcs(&prog);
 
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
+	// for segid in prog.all_image_segs() {
+	// 	show_segment(&prog, segid);
+	// }
 
-	// show_all_func_cfgs(&prog);
-
-	// show_all_funcs(&prog);
 	// show_prg0(&prog);
 
 	// for (ea, name) in prog.all_names_by_ea() {
@@ -671,6 +578,46 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// }
 
 	Ok(())
+}
+
+fn testing_look_for_unsplittable_funcs(prog: &Program) {
+	'outer: for func in prog.all_funcs() {
+		if func.num_bbs() == 1 { continue; }
+		log::info!("checking {:?}", func.ea());
+
+		let ana = prog.func_begin_analysis(func);
+
+		if func.is_multi_entry() {
+			log::warn!("multi-entry function with entrypoints {:?}:", func.entrypoints());
+		} else {
+			for bbid in func.all_bbs() {
+				if bbid == func.head_id() { continue; }
+				if ana.dominates_all_reachable(bbid).is_some() {
+					continue 'outer;
+				}
+			}
+
+			log::warn!("found a function that's completely unsplittable:");
+		}
+		prog.func_dump_cfg(&ana);
+	}
+}
+
+fn testing_look_for_irreducible_funcs(prog: &Program) {
+	for func in prog.all_funcs() {
+		if func.num_bbs() == 1 { continue; }
+		log::info!("checking {:?}", func.ea());
+
+		let ana = prog.func_begin_analysis(func);
+
+		match ana.find_irreducible_nodes() {
+			None => {},
+			Some(set) => {
+				log::warn!("irreducible CFG caused by: {:?}:", set);
+				prog.func_dump_cfg(&ana);
+			}
+		}
+	}
 }
 
 fn find_identical_image_pieces(prog: &Program) {
@@ -890,61 +837,6 @@ fn interpret_uint(val: u64, bits: usize, radix: Radix) -> String {
 		Radix::Bin => format!("0b{:0width$b}", val, width = bits),
 		Radix::Dec => format!("{}", val),
 		Radix::Hex => format!("0x{:0width$X}", val, width = bits / 4),
-	}
-}
-
-fn show_all_funcs(prog: &Program) {
-	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by_key(|a| a.ea());
-
-	for func in funcs {
-		show_func(prog, func);
-	}
-}
-
-fn show_all_func_cfgs(prog: &Program) {
-	let mut funcs = prog.all_funcs().collect::<Vec<_>>();
-	funcs.sort_by_key(|a| a.ea());
-
-	for func in funcs {
-		show_func_cfg(prog, func);
-	}
-}
-
-fn show_func(prog: &Program, func: &Function) {
-	show_func_header(prog, func);
-
-	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
-	bbs.sort_by_key(|a| a.ea());
-
-	for bb in bbs {
-		show_bb(prog, bb);
-	}
-}
-
-fn show_func_cfg(prog: &Program, func: &Function) {
-	show_func_header(prog, func);
-
-	let mut bbs = func.all_bbs().map(|bbid| prog.get_bb(bbid)).collect::<Vec<_>>();
-	bbs.sort_by_key(|a| a.ea());
-
-	for bb in bbs {
-		let bb_ea = bb.ea();
-
-		print!("{}", prog.name_of_ea(bb_ea).name.truecolor(127, 63, 0));
-
-		// S U C C
-		let succ = bb.successors().collect::<Vec<_>>();
-
-		if !succ.is_empty() {
-			print!(" ->");
-
-			for s in succ {
-				print!(" {}", prog.name_of_ea(*s));
-			}
-		}
-
-		println!();
 	}
 }
 

@@ -58,33 +58,10 @@ impl Program {
 			return;
 		}
 
-		// idea: if this bb is the dominator of all its successors including descendants,
-		// then we can split the function at `ea`.
-		let ana           = self.func_begin_analysis(self.get_func(fid));
-		let doms          = self.func_bb_dominators(&ana);
-		let mut reachable = self.func_reachable_bbs(&ana, bbid);
-
-		// this makes some subsequent operations simpler.
-		reachable.remove(&bbid);
-
+		let ana = self.func_begin_analysis(self.get_func(fid));
 		// self.func_dump_cfg(&ana);
-		// debug!("trying to add entry point in {:?}", bbid);
-		// debug!("{:#?}", doms);
-		// debug!("reachable: {:#?}", reachable);
 
-		// if this BB doesn't dominate all BBs in reachable (except itself), then we can't split.
-		let mut can_split = true;
-
-		for &n in reachable.iter() {
-			let mut doms_of_n = doms.strict_dominators(n).expect("unreachable from start");
-
-			if !doms_of_n.any(|d| d == bbid) {
-				can_split = false;
-				break;
-			}
-		}
-
-		if can_split {
+		if let Some(reachable) = ana.dominates_all_reachable(bbid) {
 			// alright, we can split! conveniently, the reachable set is the set of BBs that the
 			// new function will inherit, and bbid will become its head.
 

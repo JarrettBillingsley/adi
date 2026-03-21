@@ -1,11 +1,107 @@
 
 # Yak stack
 
+- Detect irreducible CFGs 
+	- https://www.cs.tufts.edu/comp/150FP/archive/johan-jansson/node-splitting.pdf
+- Function Splitting
+	- WORKIN ON IT...
+	- `misc.rs` "determine if return-insertion is needed" TODO
+- After splitting a multi-entry function (and giving the entry points to the respective functions...), re-analyze the non-head entry points on any resulting multi-entry functions to see if any can be split
 
 # Imminent tasks!
 
+- BBTerm
+	- unify `FallThru` and `StateChange` into `FallThru { cont: EA, new_state: Option<MmuState> }`
+	- rename `Cond { f }`, `Call { ret }`, `IndirCall { ret }` to some common name like `cont` to match `Return { cont }`
+	- rename `JumpTbl` to `IndirJump`
+	- make all non-unit variants `{ }`-style
 - IR
+	- I'm thinking the current loose coupling of IR CFG and IR instructions is making some things harder than they need to be.
+		- the current panic about `IrRewrite::Returns` put on a non-recursive self-call is really only a problem because *it doesn't know which edge is the call target and which is the continue target*, but if it knew which was the continue, it would probably work just fine.
+		- really the IR CFG should be *derived from* the IR BB terminator instruction.
+		- the `target`s of `IrInstKind::Branch, CBranch, Call` should be some enum that is either in-function `Internal(BBId)` or out-of-function `External(EA)`.
+		- `IrInstKind::CBranch, Call, ICall` need to have explicit "continue" targets as well.
+		- `IrInstKind::IBranch/ICall` are trickier... they could have some `Vec` of targets, but that `Vec` may not be exhaustive
+			- which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive.
+		- would need a new terminating instruction like `IrInstKind::MultiEntry` to put at the end of the "dummy" entry BB used for translating multi-entry functions - has a `Vec<IrBBId>` for its targets
+		- `IIrCompiler::build_ir` could then just take an `Option<BBTerm>` from which the target(s) could be extracted.
+		- this slightly complicates IR codegen - for in-function targets/continuations, don't necessarily know IrBBId at time of codegen, so will have to go back and link them up at the end. but it's not a huge deal.
+			- really they could *all* be `External(EA)` at first, and then have a pass that goes through and changes any `External` targets that point to an in-function target to `Internal` once we know all the IrBBIds.
+	- `ValSize::_1` for bools?
+	- instruction methods which would remove all the -1 -1 -1 -1 madness
+		
+		```rust
+		#[derive(Copy, Clone)]
+		struct IrDst(isize);
+
+		impl From<isize> for IrDst {
+			fn from(other: isize) -> Self {
+				Self(other)
+			}
+		}
+
+		#[derive(Copy, Clone)]
+		struct RealDst { d: IrDst, n: i8 }
+
+		impl<T: Into<IrDst>> From<(T, i8)> for RealDst {
+			fn from(other: (T, i8)) -> Self {
+				Self { d: other.0.into(), n: other.1 }
+			}
+		}
+
+		impl<T: Into<IrDst>> From<T> for RealDst {
+			fn from(other: T) -> Self {
+				Self { d: other.into(), n: -1 }
+			}
+		}
+
+		#[derive(Copy, Clone)]
+		struct IrSrc(isize);
+
+		impl From<isize> for IrSrc {
+			fn from(other: isize) -> Self {
+				Self(other)
+			}
+		}
+
+		#[derive(Copy, Clone)]
+		struct RealSrc { s: IrSrc, n: i8 }
+
+		impl<T: Into<IrSrc>> From<(T, i8)> for RealSrc {
+			fn from(other: (T, i8)) -> Self {
+				Self { s: other.0.into(), n: other.1 }
+			}
+		}
+
+		impl<T: Into<IrSrc>> From<T> for RealSrc {
+			fn from(other: T) -> Self {
+				Self { s: other.into(), n: -1 }
+			}
+		}
+
+		struct B;
+		impl B {
+			fn test(&self, dst: impl Into<RealDst>, src1: impl Into<RealSrc>, src2: impl Into<RealSrc>) {
+				let dst = dst.into();
+				let src1 = src1.into();
+				let src2 = src2.into();
+				println!("{}{{{}}} {}{{{}}} {}{{{}}}",
+					dst.d.0, dst.n, src1.s.0, src1.n, src2.s.0, src2.n);
+			}
+		}
+
+		fn main() {
+			let b = B;
+			const REG_A: isize = 0;
+			const REG_B: isize = 1;
+			const REG_C: isize = 2;
+			b.test(REG_A, (REG_B, 1), REG_C);
+		}
+		```
+		
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
+		- maybe `IIrCompiler` could have a `name_map` method that returns a `Vec<&'static str>` of register names
+		- maybe there could be a macro to declare all the `IrReg`s for an arch that generates this vec for you cause it's already getting annoying (and error-prone, since you have to come up with the indexes yourself based on the sizes of the regs)
 - GB
 	- god the mapping between `SynOp/GBOpKind/Operand` is a fucking MESS. kill it
 	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
@@ -21,11 +117,6 @@
 	- use a dummy testing mapper/MBC which can be used to output the contents of stores to specific location to output results of const prop
 - **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
 	- is it possible to rearchitect it so it doesn't?
-- **Function-local labels**
-	- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
-	- how to keep it globally-unique for the `NameMap` tho?
-		- well, could leave that to the frontend to deal with it
-		- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
 	
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
@@ -64,6 +155,11 @@
 # TODO:
 
 - **Features**
+	- **Function-local labels**
+		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
+		- how to keep it globally-unique for the `NameMap` tho?
+			- well, could leave that to the frontend to deal with it
+			- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
 	- **"Points of interest" to let user know things to investigate**
 		- state changes that can't be automatically determined
 		- jumptables

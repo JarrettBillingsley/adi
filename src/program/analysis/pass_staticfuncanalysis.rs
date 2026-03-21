@@ -196,7 +196,7 @@ impl Program {
 		let func       = self.get_func(fid);
 		let ana        = self.func_begin_analysis(func);
 		let all_bbs    = ana.all_bbs().collect::<Vec<_>>();
-		let preds      = self.func_bb_predecessors(&ana);
+		let preds      = ana.bb_predecessors();
 		let head_state = self.bbidx.get(func.head_id()).mmu_state();
 		// vector of BBs which end in a `BBTerm::StateChange`, and the new MMU state that its
 		// terminating instruction produced, to be propagated to its successors (note: NOT the new

@@ -106,6 +106,12 @@ impl Program {
 		let compiler = self.plat.arch().new_ir_compiler();
 		let func = self.funcs.get(fid);
 
+		if func.is_multi_entry() {
+			log::warn!("func_to_ir on multi-entry function");
+			let ana = self.func_begin_analysis(func);
+			self.func_dump_cfg(&ana);
+		}
+
 		// the IR BBs, one for each of the original BBs
 		let mut bbs = vec![];
 
@@ -215,6 +221,13 @@ impl Program {
 
 			// determine if return-insertion is needed
 			if let Call { ret, .. } | IndirCall { ret, .. } = bb.term {
+				if let Call { dst, .. } = bb.term {
+					// if dst is an in-function successor...
+					if self.ea_is_bb_in_function(dst, bb.func()).is_some() {
+						// TODO: what was I thinking here???
+					}
+				}
+
 				// if ret is an in-function successor, it needs return-insertion
 				if self.ea_is_bb_in_function(ret, bb.func()).is_some() {
 					rewrites.push((rewrite_irbbid, IrRewrite::Returns));
