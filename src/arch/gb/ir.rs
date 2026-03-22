@@ -13,11 +13,20 @@ use super::*;
 pub(crate) struct GBIrCompiler;
 
 impl IIrCompiler for GBIrCompiler {
-	fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
 		match i.bytes() {
-			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, term, b),
-			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, term, b),
+			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, None, b),
+			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, None, b),
+			_                  => unreachable!(),
+		}
+	}
+
+	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder) {
+		b.set_ea(i.ea());
+		match i.bytes() {
+			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, Some(term), b),
+			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, Some(term), b),
 			_                  => unreachable!(),
 		}
 	}
@@ -254,11 +263,11 @@ impl IrBuilder {
 		.push8(IrConst::_8((ret_addr & 0xFF) as u8))
 	}
 
-	/// Push `ret_addr` to the stack, and then call `target`.
-	fn call_(&mut self, ret_addr: VA, target: EA, targetn: i8) -> &mut Self {
+	/// Push `ret_addr` to the stack, and then call `dst`.
+	fn call_(&mut self, ret_addr: VA, dst: EA, cont: EA, dstn: i8) -> &mut Self {
 		self
-		.push_return_addr(ret_addr       )
-		.call            (target, targetn)
+		.push_return_addr(ret_addr             )
+		.call            (dst, cont, dstn)
 	}
 
 	/// Pop the return address and `ret` to it.
@@ -286,9 +295,9 @@ impl IrBuilder {
 	}
 
 	/// Do a conditional branch using the condition code `cc`.
-	fn cc_branch(&mut self, cc: Cc, target: EA, targetn: i8) -> &mut Self {
+	fn cc_branch(&mut self, cc: Cc, dst: EA, cont: EA, dstn: i8) -> &mut Self {
 		let cond = self.cc(cc);
-		self.cbranch(cond, target, -1, targetn)
+		self.cbranch(cond, dst, cont, -1, dstn)
 	}
 }
 
@@ -609,8 +618,9 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		(NOP,  &[]) => { b.nop(); } // no flag changes
 		(DI,   &[]) => { b.nop(); } // no flag changes
 		(EI,   &[]) => { b.nop(); } // no flag changes
-		(HALT, &[]) => { b.nop(); } // no flag changes
 		(STOP, &[]) => { b.nop(); } // no flag changes
+
+		(HALT, &[]) => { b.halt(); } // no flag changes
 
 		// ------------------------------------------------------------------------------------
 		// Computation
@@ -966,26 +976,19 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		// Control flow
 
 		// no flag changes
-		(JP, [Op]) => {
-			let target = term.expect("no terminator?")
-				.one_explicit_successor().expect("JP as BB term with no explicit successor");
-			b.branch(target, 0);
-		}
+		(JP, [Op]) |
 		(JR, [Op]) => {
-			let target = term.expect("no terminator?")
-				.one_explicit_successor().expect("JR as BB term with no explicit successor");
-			b.branch(target, 0);
+			let term = term.unwrap();
+			let dst = term.one_explicit_successor().unwrap();
+			b.branch(dst, 0);
 		}
 
-		(JP, &[Cc(cond), Op]) => {
-			let target = term.expect("no terminator?")
-				.one_explicit_successor().expect("JP as BB term with no explicit successor");
-			b.cc_branch(cond, target, 0);
-		}
+		(JP, &[Cc(cond), Op]) |
 		(JR, &[Cc(cond), Op]) => {
-			let target = term.expect("no terminator?")
-				.one_explicit_successor().expect("JR as BB term with no explicit successor");
-			b.cc_branch(cond, target, 0);
+			let term = term.unwrap();
+			let dst = term.one_explicit_successor().unwrap();
+			let cont = term.continuation_successor().unwrap();
+			b.cc_branch(cond, dst, cont, 0);
 		}
 
 		(JP, [Srg(HL)]) => {
@@ -993,39 +996,32 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			b.ibranch(REG_HL, 0);
 		}
 
-		(CALL, [Op]) => {
-			let target = term.expect("no terminator?")
-				.one_explicit_successor().expect("CALL as BB term with no explicit successor");
-			b.call_(i.next_va(), target, 0);
-		}
+		(CALL, [Op]) |
 		(RST,  [Op]) => {
-			let target = term.expect("no terminator?")
-				.one_explicit_successor().expect("RST as BB term with no explicit successor");
-			b.call_(i.next_va(), target, 0);
+			let term = term.unwrap();
+			let dst = term.one_explicit_successor().unwrap();
+			let cont = term.continuation_successor().unwrap();
+			b.call_(i.next_va(), dst, cont, 0);
 		}
 		(CALL, &[Cc(cond), Op]) => {
-			let term = term.expect("no terminator?");
-			let target = term
-				.one_explicit_successor().expect("CALL as BB term with no explicit successor");
-			let next = term
-				.continuation_successor().expect("CALL as BB term with no continuation successor");
-
+			let term = term.unwrap();
+			let dst = term.one_explicit_successor().unwrap();
+			let cont = term.continuation_successor().unwrap();
+			let next = i.next_va();
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(       cond, next,  -1, -1)
-			.push_return_addr (i.next_va()               )
-			.call             (           target,       0);
+			.cbranch_and_split(     cond, cont,  -1, -1)
+			.push_return_addr (next                    )
+			.call             (      dst, cont,  0     );
 		}
 
-		(RETI, []) => { b.return_(); }
+		(RETI, []) |
 		(RET,  []) => { b.return_(); }
 		(RET,  &[Cc(cond)]) => {
-			let next = term.expect("no terminator?")
-				.continuation_successor().expect("RET as BB term with no continuation successor");
-
+			let cont = term.unwrap().continuation_successor().unwrap();
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, next,  -1, -1)
+			.cbranch_and_split(cond, cont,  -1, -1)
 			.return_();
 		}
 

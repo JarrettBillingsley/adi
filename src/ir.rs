@@ -347,6 +347,40 @@ impl Debug for IrPhi {
 }
 
 // ------------------------------------------------------------------------------------------------
+// IrTarget
+// ------------------------------------------------------------------------------------------------
+
+/// Possible targets for an IR control flow instruction
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub(crate) enum IrTarget {
+	/// Inside the function
+	Internal(IrBBId),
+	/// Outside the function
+	External(EA),
+}
+
+impl From<IrBBId> for IrTarget {
+	fn from(other: IrBBId) -> Self {
+		Self::Internal(other)
+	}
+}
+
+impl From<EA> for IrTarget {
+	fn from(other: EA) -> Self {
+		Self::External(other)
+	}
+}
+
+impl Debug for IrTarget {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		match self {
+			IrTarget::Internal(bbid) => write!(f, "bb{}", bbid),
+			IrTarget::External(ea)   => write!(f, "{}", ea),
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // IrBasicBlock
 // ------------------------------------------------------------------------------------------------
 
@@ -355,18 +389,21 @@ pub(crate) type IrBBId = usize;
 pub(crate) struct IrBasicBlock {
 	pub(crate) id:        IrBBId,
 	pub(crate) real_bbid: BBId,
+	pub(crate) ea:        EA,
 	pub(crate) insts:     Vec<IrInst>,
 
 	phis:                 Vec<IrPhi>,
 }
 
 impl IrBasicBlock {
-	pub(crate) fn new(id: IrBBId, real_bbid: BBId, insts: Vec<IrInst>) -> Self {
+	pub(crate) fn new(id: IrBBId, real_bbid: BBId, ea: EA, insts: Vec<IrInst>) -> Self {
+		assert!(!insts.is_empty());
 		Self {
 			id,
 			real_bbid,
-			phis: vec![],
+			ea,
 			insts,
+			phis: vec![],
 		}
 	}
 
@@ -405,6 +442,14 @@ impl IrBasicBlock {
 
 	fn insts_mut(&mut self) -> impl Iterator<Item = &mut IrInst> {
 		self.insts.iter_mut()
+	}
+
+	pub(crate) fn term_inst(&self) -> &IrInst {
+		self.insts.last().unwrap()
+	}
+
+	pub(crate) fn term_inst_mut(&mut self) -> &mut IrInst {
+		self.insts.last_mut().unwrap()
 	}
 }
 
@@ -508,8 +553,8 @@ impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
 		for bb in bbs {
 			Debug::fmt(&bb, f)?;
 
-			for target in cfg.edges(bb.id).map(|(_, n, _)|n) {
-				writeln!(f, "    -> bb{}", target)?;
+			for dst in cfg.edges(bb.id).map(|(_, n, _)|n) {
+				writeln!(f, "    -> bb{}", dst)?;
 			}
 		}
 
@@ -526,7 +571,7 @@ pub(crate) fn debug_dump_ir_cfg_and_bbs(cfg: &IrCfg, bbs: &[IrBasicBlock]) {
 // ------------------------------------------------------------------------------------------------
 
 impl IrFunction {
-	/// Returns an iterator over all
+	/// Returns an iterator over all constant addresses used in a function.
 	pub(crate) fn const_addrs(&self) -> ConstAddrsIter<'_> {
 		ConstAddrsIter {
 			bbidx:   0,
@@ -550,7 +595,7 @@ pub(crate) enum ConstAddrKind {
 	Load,
 	/// Store (write). The optional value is the constant value being stored, if known.
 	Store(Option<u64>),
-	/// Control flow target
+	/// Control flow dst
 	Target,
 	/// Some other reference
 	Offset,
@@ -590,7 +635,7 @@ impl ConstAddr {
 				Store(Some(val)) => format!("store of const value 0x{:08X} to {}", val, addr),
 				Store(None)      => format!("store to {}", addr),
 				Offset           => format!("reference to {}", addr),
-				Target           => format!("control flow target to {}", addr),
+				Target           => format!("control flow dst to {}", addr),
 			},
 			srcs);
 	}
@@ -614,14 +659,17 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 			};
 
 			match inst.kind() {
-				IrInstKind::Branch  { target, targetn: opn } |
-				IrInstKind::CBranch { target, targetn: opn, .. } |
-				IrInstKind::Call    { target, targetn: opn } if opn >= 0 => {
+				IrInstKind::Branch  { dst, dstn: opn } |
+				IrInstKind::CBranch { dst, dstn: opn, .. } |
+				IrInstKind::Call    { dst, dstn: opn, .. } if opn >= 0 => {
 					return Some(ConstAddr {
 						bbid: self.func.bbs[self.bbidx].real_bbid,
 						ea: inst.ea(),
 						opn: opn as usize,
-						addr: target,
+						addr: match dst {
+							IrTarget::Internal(irbbid) => self.func.bbs[irbbid].ea,
+							IrTarget::External(ea) => ea,
+						},
 						kind: ConstAddrKind::Target,
 						srcs: [None, None, None],
 					});
@@ -629,8 +677,8 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 
 				IrInstKind::Load    { addr, addrn: opn, .. } |
 				IrInstKind::Store   { addr, addrn: opn, .. } |
-				IrInstKind::IBranch { target: addr, targetn: opn, .. } |
-				IrInstKind::ICall   { target: addr, targetn: opn, .. }  if opn >= 0 => {
+				IrInstKind::IBranch { dst: addr, dstn: opn, .. } |
+				IrInstKind::ICall   { dst: addr, dstn: opn, .. }  if opn >= 0 => {
 					let addr = match addr {
 						IrSrc::Const(IrConst { val, .. }) => Some((val, [None, None, None])),
 						IrSrc::Reg(r)                     => self.consts.get(&r).copied(),
@@ -648,8 +696,8 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 
 						return Some(ConstAddr {
 							bbid: self.func.bbs[self.bbidx].real_bbid,
-							ea: inst.ea(),
-							opn: opn as usize,
+							ea:   inst.ea(),
+							opn:  opn as usize,
 							addr,
 							kind,
 							srcs,

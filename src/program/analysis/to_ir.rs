@@ -1,12 +1,12 @@
 
-use std::collections::{ HashMap };
+use std::collections::{ HashMap, HashSet };
 
 use crate::program::{ Program, BBTerm, FuncId };
 use crate::memory::{ EA } ;
 use crate::arch::{ IArchitecture, IIrCompiler };
 use crate::platform::{ IPlatform };
 use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrBBId, IrCfg, IrInst, IrReg, IrSrc,
-	IrInstKind, debug_dump_ir_cfg_and_bbs };
+	IrInstKind, IrTarget };
 
 // ------------------------------------------------------------------------------------------------
 // Conversion of a function to IR
@@ -26,9 +26,15 @@ impl Program {
 
 		if func.is_multi_entry() {
 			log::warn!("func_to_ir on multi-entry function");
-			let cfg = self.func_analyze_cfg(func);
-			self.func_dump_cfg(&cfg);
+			self.func_dump_cfg(&self.func_analyze_cfg(func));
 		}
+
+		// log::debug!("func has {} bbs", func.num_bbs());
+		// self.func_dump_cfg(&self.func_analyze_cfg(func));
+		// for bb in func.all_bbs() {
+		// 	let bb = self.bbidx.get(bb);
+		// 	log::debug!("terminator for {:?} @ {:?} is {:?}", bb.id(), bb.ea(), bb.term());
+		// }
 
 		// the IR BBs, one for each of the original BBs
 		let mut bbs = vec![];
@@ -39,30 +45,35 @@ impl Program {
 
 		// extra edges which need to be added to the CFG as a result of extra BBs above, but whose
 		// EAs cannot be turned into IrBBIds until the first loop is done
-		let mut extra_edges: HashMap<IrBBId, EA> = HashMap::new();
+		let mut extra_edges: HashSet<(IrBBId, IrBBId)> = HashSet::new();
 
-		// maps from the original BBId to its IrBBId
-		let mut bbid_to_irbbid = HashMap::new();
+		// map from BB start EAs to IR basic block IDs. not all IrBBIds will end up in here, because
+		// some real BBs get turned into 2 IR BBs, and so only the "first half" of those will be
+		// in here; the second half is handled by the "extra_edges" above
+		let mut eas_to_bbids: HashMap<EA, IrBBId> = HashMap::new();
 
-		// rewrites that need to be done by IrFunction::new()
+		// rewrites that need to be done on the IR after it's been built
 		let mut rewrites: Vec<(IrBBId, IrRewrite)> = vec![];
-
-		// the IR CFG
-		let mut cfg = IrCfg::new();
-		cfg.add_node(0); // IrBBId of the function's head BB - 0 by definition
 
 		for (irbbid, bbid) in func.all_bbs().enumerate() {
 			let bb = self.get_bb(bbid);
-			let mut b = IrBuilder::new();
+			let bbea = bb.ea();
+			eas_to_bbids.insert(bbea, irbbid);
+
+			let mut b = IrBuilder::new(extra_irbbid);
 
 			// SAFETY: BasicBlock::new asserts that insts is non-empty
 			let (last, rest) = bb.insts().split_last().unwrap();
 			rest.iter().for_each(|inst|
-				compiler.build_ir(inst, None, &mut b));
-			compiler.build_ir(last, Some(bb.term()), &mut b);
+				compiler.build_ir(inst, &mut b));
+			compiler.build_ir_term(last, &bb.term, &mut b);
 
-			// TODO: uhhhhh if the terminator is NOT a control flow inst, the IR BB doesn't actually
-			// end with a terminator. is that an issue? the IR CFG encodes this info already...
+			match bb.term {
+				BBTerm::FallThru { cont } |
+				BBTerm::StateChange { cont, .. } => { b.branch(cont, -1); }
+				BBTerm::DeadEnd                  => { b.halt(); }
+				_                                => {}
+			}
 
 			let rewrite_irbbid = match b.finish() {
 				(insts, None) => {
@@ -70,12 +81,10 @@ impl Program {
 						"no IR instructions emitted for BB {:?} at {:?}", bb.id(), bb.ea());
 
 					irbb_terminator_sanity_check(bb.term(), &insts);
-					bbs.push(IrBasicBlock::new(irbbid, bbid, insts));
-					bbid_to_irbbid.insert(bbid, irbbid);
+					bbs.push(IrBasicBlock::new(irbbid, bbid, bbea, insts));
 					irbbid
 				}
 				(insts_before, Some(insts_after)) => {
-					// cbranch_and_split guarantees insts_before is not empty
 					assert!(!insts_after.is_empty(),
 						"no IR instructions emitted after split for BB {:?} at {:?}",
 						bb.id(), bb.ea());
@@ -84,30 +93,18 @@ impl Program {
 					// the Call at the end of insts_after
 					irbb_terminator_sanity_check(bb.term(), &insts_after);
 
-					let (next_ea, is_call) = match bb.term {
-						BBTerm::Call { cont, .. }           => (cont, true),
-						BBTerm::Return { cont: Some(cont) } => (cont, false),
-						_                                   => panic!("impastabowl"),
-					};
+					bbs.push(IrBasicBlock::new(irbbid, bbid, bbea, insts_before));
 
-					// push the first half as the "true" BB so other BBs will properly refer to it
-					// when using bbid_to_irbbid in the loop after this one.
-					//
-					// in the loop below, this will also add an edge from the first half to the
-					// next BB (the one at `next_ea`), which we do actually want.
-					bbs.push(IrBasicBlock::new(irbbid, bbid, insts_before));
-					bbid_to_irbbid.insert(bbid, irbbid);
-
-					// add a new edge from the first half to the second
-					cfg.add_edge(irbbid, extra_irbbid, ());
-
-					if is_call {
-						// and push an extra edge from the second to the next_ea EA
-						extra_edges.insert(extra_irbbid, next_ea);
+					if matches!(bb.term, BBTerm::Call { .. }) {
+						// log::debug!("  pushing extra edge from {} to {}", irbbid, extra_irbbid);
+						extra_edges.insert((irbbid, extra_irbbid));
+					} else {
+						// log::debug!("  cond ret, not pushing an extra edge");
 					}
 
 					// finally push the second part of the code as an extra bb
-					extra_bbs.push(IrBasicBlock::new(extra_irbbid, bbid, insts_after));
+					let after_ea = insts_after[0].ea();
+					extra_bbs.push(IrBasicBlock::new(extra_irbbid, bbid, after_ea, insts_after));
 					extra_irbbid += 1;
 					extra_irbbid - 1
 				}
@@ -121,13 +118,12 @@ impl Program {
 				// always insert, before final
 				Return { .. } => {
 					// before, ret regs
-					rewrites.push((rewrite_irbbid, IrRewrite::Uses { before_last: true }));
+					rewrites.push((rewrite_irbbid, IrRewrite::Uses));
 				}
 				_ => {
 					// only insert uses if there is *at least one* out-of-function successor.
 					if !self.bb_all_successors_in_function(bbid) {
-						let before_last = bb.term.has_explicit_successors();
-						rewrites.push((rewrite_irbbid, IrRewrite::Uses { before_last }));
+						rewrites.push((rewrite_irbbid, IrRewrite::Uses));
 					}
 				}
 			}
@@ -140,29 +136,84 @@ impl Program {
 		}
 
 		assert_eq!(extra_irbbid, bbs.len() + extra_bbs.len());
-
-		// 2. finish making the CFG
-		for bbid in func.all_bbs() {
-			let irbbid = bbid_to_irbbid[&bbid];
-
-			self.bb_successors_in_function(bbid, |succ| {
-				cfg.add_edge(irbbid, bbid_to_irbbid[&succ], ());
-			});
-		}
-
-		for (irbbid, ea) in extra_edges.into_iter() {
-			if let Some(succ) = self.ea_is_bb_in_function(ea, fid) {
-				cfg.add_edge(irbbid, bbid_to_irbbid[&succ], ());
-			}
-		}
-
 		bbs.append(&mut extra_bbs);
-		// 3. perform rewrites
-		IrRewriter::new(&compiler, &mut bbs, &mut cfg).perform_rewrites(rewrites);
 
-		// 4. create the IrFunction
+		// 2. fix up control flow targets
+		fixup_ir_targets(&mut bbs, &eas_to_bbids);
+
+		// 3. perform rewrites
+		IrRewriter::new(&compiler, &mut bbs).perform_rewrites(rewrites);
+
+		// 4. build the CFG from the IrBB terminators
+		let cfg = build_ir_cfg(&bbs, extra_edges);
+
+		// use petgraph::dot::{ Dot, Config as DotConfig };
+		// println!("{:?}", Dot::with_config(&cfg, &[DotConfig::EdgeNoLabel]));
+
+		// 5. create the IrFunction (which converts it to SSA)
 		IrFunction::new(fid, bbs, cfg)
 	}
+}
+
+fn fixup_ir_targets(bbs: &mut [IrBasicBlock], eas_to_bbids: &HashMap<EA, IrBBId>) {
+	// log::debug!("eas_to_bbids: {:#?}", eas_to_bbids);
+
+	let fixup = |target: &mut IrTarget| {
+		if let IrTarget::External(ea) = target {
+			if let Some(bbid) = eas_to_bbids.get(ea) {
+				// log::debug!("  rewriting external {:?} to internal bb{}", ea, *bbid);
+				*target = IrTarget::Internal(*bbid);
+			} else {
+				// log::debug!("  failed to rewrite external {:?}", ea);
+
+			}
+		}
+	};
+
+	for bb in bbs.iter_mut() {
+		match bb.term_inst_mut().kind_mut() {
+			IrInstKind::Branch  { dst, .. }       => { fixup(dst);              }
+			IrInstKind::CBranch { dst, cont, .. } => { fixup(dst); fixup(cont); }
+			IrInstKind::Call    { dst, cont, .. } => { fixup(dst); fixup(cont); }
+			IrInstKind::ICall   { cont, .. }      => { fixup(cont);             }
+			_ => {}
+		}
+	}
+}
+
+fn build_ir_cfg(bbs: &[IrBasicBlock], extra_edges: HashSet<(IrBBId, IrBBId)>) -> IrCfg {
+	let mut cfg = IrCfg::new();
+	cfg.add_node(0); // IrBBId of the function's head BB - 0 by definition
+
+	for (src, dst) in extra_edges.into_iter() {
+		cfg.add_edge(src, dst, ());
+	}
+
+	let mut edge = |src: IrBBId, dst: IrTarget| {
+		if let IrTarget::Internal(dst) = dst {
+			cfg.add_edge(src, dst, ());
+		}
+	};
+
+	for bb in bbs.iter() {
+		match bb.term_inst().kind() {
+			IrInstKind::Branch  { dst, .. }       => { edge(bb.id, dst);                    }
+			IrInstKind::CBranch { dst, cont, .. } => { edge(bb.id, dst); edge(bb.id, cont); }
+			IrInstKind::Call    { dst, cont, .. } => { edge(bb.id, dst); edge(bb.id, cont); }
+			IrInstKind::ICall   { cont, .. }      => { edge(bb.id, cont);                   }
+			IrInstKind::IBranch { .. } |
+			IrInstKind::Ret     { .. } |
+			IrInstKind::Halt                      => {}
+			_ => {
+				log::error!("irbb{} does not end in a control flow instruction", bb.id);
+				for inst in bb.insts.iter() {
+					log::error!("  {:?}", inst);
+				}
+				panic!();
+			}
+		}
+	}
+	cfg
 }
 
 /// Does sanity checking on the terminating instruction of an IR BB to ensure the arch IR
@@ -184,19 +235,11 @@ impl Program {
 /// | `Call(..)`        | `Call`             | `call`                           |
 /// | `Uncond`          | `Jump`             | `branch`                         |
 /// | `Cond`            | `Cond`             | `cbranch`                        |
-/// | `Halt`            | `Halt`             | non-control-flow is allowed\*    |
-/// | _                 | `DeadEnd`          | non-control-flow is allowed\*    |
-/// | _                 | `FallThru`         | non-control-flow is allowed      |
-/// | _                 | `StateChange`      | `Load` or `Store`                |
+/// | `Halt`            | `Halt`             | `halt`                           |
+/// | _                 | `DeadEnd`          | `halt` (done by `func_to_ir`)    |
+/// | _                 | `FallThru`         | `branch` (done by `func_to_ir`)  |
+/// | _                 | `StateChange`      | `branch` (done by `func_to_ir`)  |
 ///
-/// Other notes:
-///
-/// - Currently only loads or stores are checked for MMU state changes. This will probably change
-///   in the future, once "state change functions" are implemented, in which case call instructions
-///   will be checked as well; but beyond that, I doubt any more will be.
-/// - For `BBTerm::Halt` and `BBTerm::DeadEnd`, currently any non-control flow instruction is
-///   allowed, but that may change in the future (if `IrInstKind` gains some halt or dead-end
-///   instructions).
 ///
 /// Panics if the above check for the appropriate terminating
 /// instruction fails.
@@ -206,20 +249,10 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 
 	use BBTerm::*;
 	match term {
-		FallThru { .. } | Halt | DeadEnd => {
-			match inst.kind() {
-				IrInstKind::Ret { .. }
-				| IrInstKind::IBranch { .. }
-				| IrInstKind::ICall { .. }
-				| IrInstKind::Call { .. }
-				| IrInstKind::Branch { .. }
-				| IrInstKind::CBranch { .. } => {
-					panic!("for `{:?}`, the terminating instruction should not have been a \
-						control flow instruction, but found this: {:?}", term, inst.kind());
-				}
-
-				_ => {} // yay
-			}
+		Halt | DeadEnd => {
+			assert!(matches!(inst.kind(), IrInstKind::Halt),
+				"for `{:?}`, the terminating instruction should have \
+				been `IrInstKind::Halt`, but found this instead: {:?}", term, inst.kind());
 		}
 		Return { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::Ret { .. }),
@@ -241,21 +274,17 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 				"for `BBTerm::Call {{ cond: false }}`, the terminating instruction should have \
 				been `IrInstKind::Call`, but found this instead: {:?}", inst.kind());
 		}
+		FallThru { .. } |
+		StateChange { .. } |
 		Jump { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::Branch { .. }),
-				"for `BBTerm::Jump`, the terminating instruction should have \
-				been `IrInstKind::Branch`, but found this instead: {:?}", inst.kind());
+				"for `{:?}`, the terminating instruction should have \
+				been `IrInstKind::Branch`, but found this instead: {:?}", term, inst.kind());
 		}
 		Cond { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::CBranch { .. }),
 				"for `BBTerm::Cond`, the terminating instruction should have \
 				been `IrInstKind::CBranch`, but found this instead: {:?}", inst.kind());
-		}
-		StateChange { .. } => {
-			assert!(matches!(inst.kind(), IrInstKind::Load { .. } | IrInstKind::Store { .. }),
-				"for `BBTerm::StateChange`, the terminating instruction should have \
-				been `IrInstKind::Load` or `IrInstKind::Store`, but found this instead: {:?}",
-				inst.kind());
 		}
 	}
 }
@@ -266,7 +295,7 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum IrRewrite {
-	Uses { before_last: bool },
+	Uses,
 	Returns,
 }
 
@@ -275,21 +304,19 @@ pub(crate) enum IrRewrite {
 // ------------------------------------------------------------------------------------------------
 
 struct IrRewriter<'a, C: IIrCompiler> {
-	compiler: &'a C,
-	bbs:      &'a mut Vec<IrBasicBlock>,
-	cfg:      &'a mut IrCfg,
-	new_bbs:  Vec<IrBasicBlock>,
-	new_bbid: IrBBId,
+	compiler:     &'a C,
+	bbs:          &'a mut Vec<IrBasicBlock>,
+	new_bbs:      Vec<IrBasicBlock>,
+	new_bbid:     IrBBId,
 }
 
 impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
-	fn new(compiler: &'a C, bbs: &'a mut Vec<IrBasicBlock>, cfg: &'a mut IrCfg) -> Self {
+	fn new(compiler: &'a C, bbs: &'a mut Vec<IrBasicBlock>) -> Self {
 		Self {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
 			compiler,
 			bbs,
-			cfg,
 		}
 	}
 
@@ -297,18 +324,12 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		let arg_regs = self.compiler.arg_regs();
 		let ret_regs = self.compiler.return_regs();
 
-		// log::debug!("-------------BEFORE REWRITE----------------");
-		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-
 		// first pass: insert uses
 		for (irbbid, rewrite) in rewrites.iter() {
-			if let IrRewrite::Uses { before_last } = rewrite {
-				insert_dummy_uses(&mut self.bbs[*irbbid], arg_regs, ret_regs, *before_last);
+			if let IrRewrite::Uses = rewrite {
+				insert_dummy_uses(&mut self.bbs[*irbbid], arg_regs, ret_regs);
 			}
 		}
-
-		// log::debug!("-------------AFTER USE-INSERTION----------------");
-		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
 
 		// second pass: insert dummy BBs for return-uses after calls
 		for (irbbid, rewrite) in rewrites.into_iter() {
@@ -321,100 +342,70 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		}
 
 		self.bbs.append(&mut self.new_bbs);
-
-		// log::debug!("-------------AFTER REWRITE----------------");
-		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
 	}
 
 	fn rewrite_returns(&mut self, irbbid: IrBBId, ret_regs: &[IrReg]) {
-		let bb = &self.bbs[irbbid];
-
+		// log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
-		// println!("{}: {:?}", bb.id, self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
+		let old_cont = self.change_cont(irbbid, self.new_bbid);
 
-		let old_dest = self.get_old_dest(bb);
-
-		log::debug!("  changing bb{}'s dest from bb{} to bb{}", bb.id, old_dest, self.new_bbid);
-
-		assert!(self.cfg.remove_edge(bb.id, old_dest).is_some());
-		self.cfg.add_edge(bb.id, self.new_bbid, ());
-		self.cfg.add_edge(self.new_bbid, old_dest, ());
-
-		let mut b = IrBuilder::new();
-		// SAFETY: rewrite_call_or_ret ensures it has at least 1 inst.
-		b.set_ea(bb.insts.last().unwrap().ea());
+		// then build the new interstitial BB.
+		let mut b = IrBuilder::new(0); // never using cbranch_and_split, so whatev
+		let bb = &self.bbs[irbbid];
+		let last_ea = bb.term_inst().ea();
+		b.set_ea(last_ea);
 
 		for &reg in ret_regs.iter() {
 			b.mov(reg, IrSrc::Return(reg.size()), -1, -1);
 		}
 
-		let real_bbid = bb.real_bbid;
-		let new_bb = IrBasicBlock::new(self.new_bbid, real_bbid, b.finish_one());
+		b.branch(EA::unresolved(0), -1);
+		let mut insts = b.finish_one();
+		// SAFETY: above b.branch ensures at least 1 inst in insts
+		*insts.last_mut().unwrap().kind_mut() = IrInstKind::Branch { dst: old_cont, dstn: -1 };
+
+		let new_bb = IrBasicBlock::new(self.new_bbid, bb.real_bbid, last_ea, insts);
 		self.new_bbid += 1;
 		self.new_bbs.push(new_bb);
 	}
 
-	fn get_old_dest(&self, bb: &IrBasicBlock) -> usize {
-		let targets = self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>();
-		match targets[..] {
-			[] => {
-				log::error!("offending function:");
-				debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-				panic!("IrRewrite::Returns put on bb{} with no in-function successor. \
-					See function above", bb.id);
-			}
-			[target]           => target, // ok cool beans
-			[target1, target2] => {
-				// this case can happen if a function is recursive, which is okay. but any
-				// NON-recursive call would be an error.
-				if target1 == 0 {
-					target2
-				} else if target2 == 0 {
-					target1
-				} else {
-					log::error!("offending function:");
-					debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
+	fn change_cont(&mut self, irbbid: IrBBId, new_cont: IrBBId) -> IrTarget {
+		let bb = &mut self.bbs[irbbid];
 
-					panic!(
-						"IrRewrite::Returns put on bb{} @ {} where one of the call targets \
-						({}, {}) is self-call but NOT a recursive call.\n\
-						See function above. Why hasn't this function been split?",
-						bb.id,
-						bb.insts[0].ea(),
-						target1, target2);
-				}
+		match bb.term_inst_mut().kind_mut() {
+			IrInstKind::Call { cont, .. } |
+			IrInstKind::ICall { cont, .. } => {
+				let old_cont = *cont;
+				*cont = IrTarget::Internal(new_cont);
+				old_cont
 			}
-			_ => panic!("UHHHHHHHHHHHHHHHH TOO MANY EDGES"),
+			_ => panic!("IrRewrite::Returns put on bb{} which ended with something other than \
+					`Call` or `ICall`.", irbbid),
 		}
 	}
 }
 
-fn insert_dummy_uses(irbb: &mut IrBasicBlock, arg_regs: &[IrReg], ret_regs: &[IrReg],
-before_last: bool) {
+fn insert_dummy_uses(irbb: &mut IrBasicBlock, arg_regs: &[IrReg], ret_regs: &[IrReg]) {
+	// log::debug!("dummy uses on irbb{}", irbb.id);
 	// SAFETY: `func_to_ir` checks that every IR BB has at least 1 instruction.
-	let (terminating_inst, _) = irbb.insts.split_last().unwrap();
-	let terminating_inst = *terminating_inst;
+	let term_inst = *irbb.term_inst();
 
 	// the match is also valid because irbb_terminator_sanity_check ensured that any BB that
 	// ends in IrInstKind::Ret really did come from a BB with BBTerm::Ret.
-	let regs = match terminating_inst.kind() {
+	let regs = match term_inst.kind() {
 		IrInstKind::Ret { .. } => ret_regs,
 		_                      => arg_regs,
 	};
 
 	if !regs.is_empty() {
-		let ea = terminating_inst.ea();
+		let ea = term_inst.ea();
 
-		if before_last {
-			irbb.insts.pop();
-		}
+		irbb.insts.pop();
 
 		for &reg in regs.iter() {
 			irbb.insts.push(IrInst::use_(ea, reg));
 		}
 
-		if before_last {
-			irbb.insts.push(terminating_inst);
-		}
+		irbb.insts.push(term_inst);
 	}
 }

@@ -15,9 +15,14 @@ use super::*;
 pub(crate) struct Mos65xxIrCompiler;
 
 impl IIrCompiler for Mos65xxIrCompiler {
-	fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).build_ir(i, term, b);
+		lookup_desc(i.bytes()[0]).build_ir(i, None, b);
+	}
+
+	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder) {
+		b.set_ea(i.ea());
+		lookup_desc(i.bytes()[0]).build_ir(i, Some(term), b);
 	}
 
 	fn arg_regs(&self) -> &'static [IrReg] {
@@ -371,8 +376,7 @@ impl InstDesc {
 			UNK => { panic!("what the hell is an unknown instruction doing in a BB?"); }
 
 			HLT => {
-				// the CFG will handle this.
-				b.nop();
+				b.halt();
 			}
 
 			// NOPs
@@ -590,22 +594,22 @@ impl InstDesc {
 			JMP => { // no flags changed
 				match self.addr_mode {
 					AddrMode::LAB => {
-						let target = term.expect("no terminator?").one_explicit_successor()
-							.expect("JMP as BB term with no explicit successor");
-						b.branch(target, 0);
+						let dst = term.unwrap().one_explicit_successor().unwrap();
+						b.branch(dst, 0);
 					}
 					AddrMode::IND => {
-						let target_ind = self.get_operand(i, b);
-						b.ibranch(target_ind, -1);
+						let dst_ind = self.get_operand(i, b);
+						b.ibranch(dst_ind, -1);
 					}
 					_ => panic!(),
 				}
 			}
 			JSR => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("JSR as BB term with no explicit successor");
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
 				self.push_return_addr(i, b);
-				b.call(target, 0);
+				b.call(dst, cont, 0);
 			}
 			RTS => { // no flags changed
 				self.return_(b, true);
@@ -625,48 +629,56 @@ impl InstDesc {
 
 			// Branches
 			BCC => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BCC as BB term with no explicit successor");
-				b.bnot   (REG_TMP1, REG_CF,          -1, -1);
-				b.cbranch(REG_TMP1, target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.bnot   (REG_TMP1, REG_CF,       -1, -1);
+				b.cbranch(REG_TMP1, dst, cont, -1,  0);
 			}
 			BCS => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BCS as BB term with no explicit successor");
-				b.cbranch(REG_CF,   target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.cbranch(REG_CF,   dst, cont, -1, 0);
 			}
 			BNE => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BNE as BB term with no explicit successor");
-				b.bnot   (REG_TMP1, REG_ZF,          -1, -1);
-				b.cbranch(REG_TMP1, target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.bnot   (REG_TMP1, REG_ZF,       -1, -1);
+				b.cbranch(REG_TMP1, dst, cont, -1,  0);
 			}
 			BEQ => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BEQ as BB term with no explicit successor");
-				b.cbranch(REG_ZF,   target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.cbranch(REG_ZF,   dst, cont, -1, 0);
 			}
 			BPL => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BPL as BB term with no explicit successor");
-				b.bnot   (REG_TMP1, REG_NF,          -1, -1);
-				b.cbranch(REG_TMP1, target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.bnot   (REG_TMP1, REG_NF,       -1, -1);
+				b.cbranch(REG_TMP1, dst, cont, -1,  0);
 			}
 			BMI => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BMI as BB term with no explicit successor");
-				b.cbranch(REG_NF,   target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.cbranch(REG_NF,   dst, cont, -1, 0);
 			}
 			BVC => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BVC as BB term with no explicit successor");
-				b.bnot   (REG_TMP1, REG_VF,          -1, -1);
-				b.cbranch(REG_TMP1, target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.bnot   (REG_TMP1, REG_VF,       -1, -1);
+				b.cbranch(REG_TMP1, dst, cont, -1,  0);
 			}
 			BVS => { // no flags changed
-				let target = term.expect("no terminator?").one_explicit_successor()
-					.expect("BVS as BB term with no explicit successor");
-				b.cbranch(REG_VF,   target, -1, 0);
+				let term = term.unwrap();
+				let dst = term.one_explicit_successor().unwrap();
+				let cont = term.continuation_successor().unwrap();
+				b.cbranch(REG_VF,   dst, cont, -1, 0);
 			}
 
 			// ------------------------------------------------------------------------------------

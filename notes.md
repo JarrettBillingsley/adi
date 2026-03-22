@@ -4,16 +4,10 @@
 # Imminent tasks!
 
 - IR
-	- I'm thinking the current loose coupling of IR CFG and IR instructions is making some things harder than they need to be.
-		- the current panic about `IrRewrite::Returns` put on a non-recursive self-call is really only a problem because *it doesn't know which edge is the call target and which is the continue target*, but if it knew which was the continue, it would probably work just fine.
-		- really the IR CFG should be *derived from* the IR BB terminator instruction.
-		- the `target`s of `IrInstKind::Branch, CBranch, Call` should be some enum that is either in-function `Internal(BBId)` or out-of-function `External(EA)`.
-		- `IrInstKind::CBranch, Call, ICall` need to have explicit "continue" targets as well.
-		- `IrInstKind::IBranch/ICall` are trickier... they could have some `Vec` of targets, but that `Vec` may not be exhaustive
-			- which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive.
-		- would need a new terminating instruction like `IrInstKind::MultiEntry` to put at the end of the "dummy" entry BB used for translating multi-entry functions - has a `Vec<IrBBId>` for its targets
-		- this slightly complicates IR codegen - for in-function targets/continuations, don't necessarily know IrBBId at time of codegen, so will have to go back and link them up at the end. but it's not a huge deal.
-			- really they could *all* be `External(EA)` at first, and then have a pass that goes through and changes any `External` targets that point to an in-function target to `Internal` once we know all the IrBBIds.
+	- properly analyzing multi-entry functions
+		- would need a **new terminating instruction like `IrInstKind::MultiEntry` with a a `Vec<IrBBId>` for its targets** to put at the end of the "dummy" entry BB used for translating multi-entry functions
+		- then we can add that auxiliary IR BB when building the IR
+	- `IrInstKind::IBranch/ICall` could have some `Vec` of targets (which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive), but that `Vec` may not be exhaustive... hmmmm not sure, jump tables/indirect calls are a big TODO for now
 	- `ValSize::_1` for bools?
 	- instruction methods which would remove all the -1 -1 -1 -1 madness. proof of concept:
 		

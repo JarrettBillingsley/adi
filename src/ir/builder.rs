@@ -1,5 +1,5 @@
 
-use crate::ir::{ IrInst, IrSrc, IrReg };
+use crate::ir::{ IrInst, IrSrc, IrReg, IrBBId };
 use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
@@ -8,25 +8,28 @@ use crate::memory::{ EA };
 
 /// Helper for building blocks of IR instructions.
 pub(crate) struct IrBuilder {
-	insts: [Vec<IrInst>; 2],
-	cur:   bool,
-	ea:    EA,
+	insts:       [Vec<IrInst>; 2],
+	cur:         bool,
+	ea:          EA,
+	next_irbbid: IrBBId,
 }
 
 impl IrBuilder {
-	/// Constructor.
-	pub(crate) fn new() -> Self {
+	/// Constructor. `next_irbbid` is the ID of the IR BB which will be used as the continuation
+	/// target if `cbranch_and_split` is called.
+	pub(crate) fn new(next_irbbid: IrBBId) -> Self {
 		Self {
-			insts: [Vec::with_capacity(8), vec![]],
-			cur:   false,
-			ea:    EA::unresolved(0),
+			insts:       [Vec::with_capacity(8), vec![]],
+			cur:         false,
+			ea:          EA::unresolved(0),
+			next_irbbid,
 		}
 	}
 
 	/// Finish building and get the finished vecs of instructions. (There can be more than one, if
-	/// the `split_bb` method was called.)
+	/// `cbranch_and_split` was called.)
 	pub(crate) fn finish(self) -> (Vec<IrInst>, Option<Vec<IrInst>>) {
-		let Self { insts: [mut ret1, mut ret2], cur, ea: _ } = self;
+		let Self { insts: [mut ret1, mut ret2], cur, ea: _, next_irbbid: _ } = self;
 
 		ret1.shrink_to_fit();
 		if cur {
@@ -39,7 +42,7 @@ impl IrBuilder {
 
 	/// Finish building, assert there is only one vec of instructions, and get it.
 	pub(crate) fn finish_one(self) -> Vec<IrInst> {
-		let Self { insts: [mut ret, _], cur, ea: _ } = self;
+		let Self { insts: [mut ret, _], cur, ea: _, next_irbbid: _ } = self;
 		assert_eq!(cur, false);
 		ret.shrink_to_fit();
 		ret
@@ -407,42 +410,48 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
-	pub(crate) fn branch(&mut self, target: EA, targetn: i8) -> &mut Self {
-		self.inst(IrInst::branch(self.ea, target, targetn))
+	pub(crate) fn branch(&mut self, dst: EA, dstn: i8) -> &mut Self {
+		self.inst(IrInst::branch(self.ea, dst, dstn))
 	}
 
 	/// TODO: docme
-	pub(crate) fn cbranch(&mut self, cond: impl Into<IrSrc>, target: EA,
-		condn: i8, targetn: i8) -> &mut Self {
-		self.inst(IrInst::cbranch(self.ea, cond.into(), target, condn, targetn))
+	pub(crate) fn cbranch(&mut self, cond: impl Into<IrSrc>, dst: EA, cont: EA,
+		condn: i8, dstn: i8) -> &mut Self {
+		self.inst(IrInst::cbranch(self.ea, cond.into(), dst, cont, condn, dstn))
 	}
 
 	/// TODO: docme
-	pub(crate) fn cbranch_and_split(&mut self, cond: impl Into<IrSrc>, target: EA,
-		condn: i8, targetn: i8) -> &mut Self {
+	pub(crate) fn cbranch_and_split(&mut self, cond: impl Into<IrSrc>, dst: EA,
+		condn: i8, dstn: i8) -> &mut Self {
 		assert_eq!(self.cur, false);
-		self.inst(IrInst::cbranch(self.ea, cond.into(), target, condn, targetn));
+		self.inst(IrInst::cbranch(self.ea, cond.into(), dst, self.next_irbbid, condn, dstn));
 		self.cur = true;
 		self
 	}
 
 	/// TODO: docme
-	pub(crate) fn ibranch(&mut self, target: impl Into<IrSrc>, targetn: i8) -> &mut Self {
-		self.inst(IrInst::ibranch(self.ea, target.into(), targetn))
+	pub(crate) fn ibranch(&mut self, dst: impl Into<IrSrc>, dstn: i8) -> &mut Self {
+		self.inst(IrInst::ibranch(self.ea, dst.into(), dstn))
 	}
 
 	/// TODO: docme
-	pub(crate) fn call(&mut self, target: EA, targetn: i8) -> &mut Self {
-		self.inst(IrInst::call(self.ea, target, targetn))
+	pub(crate) fn call(&mut self, dst: EA, cont: EA, dstn: i8) -> &mut Self {
+		self.inst(IrInst::call(self.ea, dst, cont, dstn))
 	}
 
 	/// TODO: docme
-	pub(crate) fn icall(&mut self, target: impl Into<IrSrc>, targetn: i8) -> &mut Self {
-		self.inst(IrInst::icall(self.ea, target.into(), targetn))
+	pub(crate) fn icall(&mut self, dst: impl Into<IrSrc>, cont: EA,
+		dstn: i8) -> &mut Self {
+		self.inst(IrInst::icall(self.ea, dst.into(), cont, dstn))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ret(&mut self, target: impl Into<IrSrc>, targetn: i8) -> &mut Self {
-		self.inst(IrInst::ret(self.ea, target.into(), targetn))
+	pub(crate) fn ret(&mut self, dst: impl Into<IrSrc>, dstn: i8) -> &mut Self {
+		self.inst(IrInst::ret(self.ea, dst.into(), dstn))
+	}
+
+	/// TODO: docme
+	pub(crate) fn halt(&mut self) -> &mut Self {
+		self.inst(IrInst::halt(self.ea))
 	}
 }

@@ -4,7 +4,7 @@ use crate::memory::{ MemAccess };
 use super::*;
 
 // ------------------------------------------------------------------------------------------------
-// IrUnOp, IrBinOp
+// IrUnOp, IrBinOp, IrTernOp
 // ------------------------------------------------------------------------------------------------
 
 /// Unary operations.
@@ -82,36 +82,39 @@ pub(crate) enum IrTernOp {
 /// Represents IR instructions.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum IrInstKind {
+	// no operation
 	Nop,
 
-	Use     { reg: IrReg },            // dummy use of reg
-	Mov     { dst: IrReg, src: IrSrc,  // dst = src
-		dstn: i8, srcn: i8, },
-	Load    { dst: IrReg, addr: IrSrc, // dst = *addr
-		dstn: i8, addrn: i8, },
-	Store   { addr: IrSrc, src: IrSrc, // *addr = src
-		addrn: i8, srcn: i8, },
+	// dummy use of reg
+	Use     { reg: IrReg },
+	// dst = src
+	Mov     { dst: IrReg, src: IrSrc,                             dstn: i8, srcn: i8, },
+	// dst = *addr
+	Load    { dst: IrReg, addr: IrSrc,                            dstn: i8, addrn: i8, },
+	// *addr = src
+	Store   { addr: IrSrc, src: IrSrc,                            addrn: i8, srcn: i8, },
 
-	Branch  { target: EA,              // pc = target (also subsumes jumps)
-		targetn: i8, },
-	CBranch { cond: IrSrc, target: EA, // if(cond) pc = target
-		condn: i8, targetn: i8, },
-	IBranch { target: IrSrc,           // pc = target (but it's indirect)
-		targetn: i8, },
+	// pc = dst (also subsumes jumps and fallthroughs)
+	Branch  { dst: IrTarget,                                      dstn: i8, },
+	// if(cond) pc = dst else pc = cont
+	CBranch { cond: IrSrc, dst: IrTarget, cont: IrTarget,         condn: i8, dstn: i8 },
+	// pc = dst (but it's indirect)
+	IBranch { dst: IrSrc,                                         dstn: i8, },
+	// pc = dst (but it's a call)
+	Call    { dst: IrTarget, cont: IrTarget,                      dstn: i8, },
+	// pc = dst (but it's an indirect call)
+	ICall   { dst: IrSrc, cont: IrTarget,                         dstn: i8, },
+	// pc = dst (but it's a return)
+	Ret     { dst: IrSrc,                                         dstn: i8, },
+	// either a halt or a dead end terminator
+	Halt,
 
-	Call    { target: EA,              // pc = target (but it's a call)
-		targetn: i8, },
-
-	ICall   { target: IrSrc,           // pc = target (but it's an indirect call)
-		targetn: i8, },
-	Ret     { target: IrSrc,           // pc = target (but it's a return)
-		targetn: i8, },
-
-	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc, // dst = op src
-		dstn: i8, srcn: i8, },
-	Binary  { dst: IrReg, src1: IrSrc, op: IrBinOp, src2: IrSrc, // dst = src1 op src2
-		dstn: i8, src1n: i8, src2n: i8, },
-	Ternary { dst: IrReg, src1: IrSrc, op: IrTernOp, src2: IrSrc, src3: IrSrc, // dst = ...yeah
+	// dst = op src
+	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc,                 dstn: i8, srcn: i8, },
+	// dst = src1 op src2
+	Binary  { dst: IrReg, src1: IrSrc, op: IrBinOp, src2: IrSrc,  dstn: i8, src1n: i8, src2n: i8, },
+	// dst = src1 op src2 op src3
+	Ternary { dst: IrReg, src1: IrSrc, op: IrTernOp, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8, },
 }
 
@@ -121,10 +124,10 @@ struct Opn<'a>(&'a i8);
 
 impl<'a> Debug for Opn<'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		match *self.0 {
-			n if n >= 0 => write!(f, "{{{}}}", n),
-			_           => Ok(())
+		if *self.0 >= 0 {
+			write!(f, "{{{}}}", *self.0)?
 		}
+		Ok(())
 	}
 }
 
@@ -146,18 +149,21 @@ impl Debug for IrInstKind {
 				write!(f, "load      {:?}{:?}, [{:?}{:?}]", dst, Opn(dstn), addr, Opn(addrn)),
 			Store { addr, src, addrn, srcn } =>
 				write!(f, "store     [{:?}{:?}], {:?}{:?}", addr, Opn(addrn), src, Opn(srcn)),
-			Branch { target, targetn } =>
-				write!(f, "branch    {}{:?}", target, Opn(targetn)),
-			CBranch { cond, target, condn, targetn } =>
-				write!(f, "cbranch   {:?}{:?}, {}{:?}", cond, Opn(condn), target, Opn(targetn)),
-			IBranch { target, targetn } =>
-				write!(f, "ibranch   [{:?}{:?}]", target, Opn(targetn)),
-			Call { target, targetn } =>
-				write!(f, "call      {}{:?}", target, Opn(targetn)),
-			ICall { target, targetn } =>
-				write!(f, "icall     [{:?}{:?}]", target, Opn(targetn)),
-			Ret { target, targetn } =>
-				write!(f, "ret       [{:?}{:?}]", target, Opn(targetn)),
+			Branch { dst, dstn } =>
+				write!(f, "branch    {:?}{:?}", dst, Opn(dstn)),
+			CBranch { cond, dst, cont, condn, dstn } =>
+				write!(f, "cbranch   {:?}{:?} ? {:?}{:?} : {:?}",
+					cond, Opn(condn), dst, Opn(dstn), cont),
+			IBranch { dst, dstn } =>
+				write!(f, "ibranch   [{:?}{:?}]", dst, Opn(dstn)),
+			Call { dst, dstn, cont } =>
+				write!(f, "call      {:?}{:?} (return to {:?})", dst, Opn(dstn), cont),
+			ICall { dst, dstn, cont } =>
+				write!(f, "icall     [{:?}{:?}] (return to {:?})", dst, Opn(dstn), cont),
+			Ret { dst, dstn } =>
+				write!(f, "ret       [{:?}{:?}]", dst, Opn(dstn)),
+			Halt =>
+				write!(f, "halt"),
 
 			Unary { dst, op, src, dstn, srcn } => match op {
 				IntZxt  => write!(f, "izxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
@@ -664,39 +670,45 @@ impl IrInst {
 	}
 
 	/// TODO: docme
-	pub(crate) fn branch(ea: EA, target: EA,
-		targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::Branch { target, targetn } }
+	pub(crate) fn branch(ea: EA, dst: impl Into<IrTarget>,
+		dstn: i8) -> Self {
+		Self { ea, kind: IrInstKind::Branch { dst: dst.into(), dstn } }
 	}
 
 	/// TODO: docme
-	pub(crate) fn cbranch(ea: EA, cond: IrSrc, target: EA,
-		condn: i8, targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::CBranch { cond, target, condn, targetn } }
+	pub(crate) fn cbranch(ea: EA, cond: IrSrc, dst: impl Into<IrTarget>, cont: impl Into<IrTarget>,
+		condn: i8, dstn: i8) -> Self {
+		Self { ea, kind: IrInstKind::CBranch { cond, dst: dst.into(), cont: cont.into(),
+			condn, dstn } }
 	}
 
 	/// TODO: docme
-	pub(crate) fn ibranch(ea: EA, target: IrSrc,
-		targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::IBranch { target, targetn } }
+	pub(crate) fn ibranch(ea: EA, dst: IrSrc,
+		dstn: i8) -> Self {
+		Self { ea, kind: IrInstKind::IBranch { dst, dstn } }
 	}
 
 	/// TODO: docme
-	pub(crate) fn call(ea: EA, target: EA,
-		targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::Call { target, targetn } }
+	pub(crate) fn call(ea: EA, dst: impl Into<IrTarget>, cont: impl Into<IrTarget>,
+		dstn: i8) -> Self {
+		Self { ea, kind: IrInstKind::Call { dst: dst.into(), cont: cont.into(), dstn } }
 	}
 
 	/// TODO: docme
-	pub(crate) fn icall(ea: EA, target: IrSrc,
-		targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::ICall { target, targetn } }
+	pub(crate) fn icall(ea: EA, dst: IrSrc, cont: impl Into<IrTarget>,
+		dstn: i8) -> Self {
+		Self { ea, kind: IrInstKind::ICall { dst, dstn, cont: cont.into() } }
 	}
 
 	/// TODO: docme
-	pub(crate) fn ret(ea: EA, target: IrSrc,
-		targetn: i8) -> Self {
-		Self { ea, kind: IrInstKind::Ret { target, targetn } }
+	pub(crate) fn ret(ea: EA, dst: IrSrc,
+		dstn: i8) -> Self {
+		Self { ea, kind: IrInstKind::Ret { dst, dstn } }
+	}
+
+	/// TODO: docme
+	pub(crate) fn halt(ea: EA) -> Self {
+		Self { ea, kind: IrInstKind::Halt }
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -711,6 +723,11 @@ impl IrInst {
 		self.kind
 	}
 
+	/// What kind of instruction this is, mutable.
+	pub(crate) fn kind_mut(&mut self) -> &mut IrInstKind {
+		&mut self.kind
+	}
+
 	/// Gets ths size of the source value(s).
 	/// Panics if called on an instruction that has no source.
 	pub(crate) fn src_size(&self) -> ValSize {
@@ -722,7 +739,8 @@ impl IrInst {
 			| IBranch { .. }
 			| Call { .. }
 			| ICall { .. }
-			| Ret { .. } => panic!("no source"),
+			| Ret { .. }
+			| Halt => panic!("no source"),
 
 			Use       { reg }      => reg.size(),
 			Mov       { src, .. }  => src.size(),
@@ -748,7 +766,8 @@ impl IrInst {
 			| ICall { .. }
 			| Ret { .. }
 			| CBranch { .. }
-			| Use { .. } => panic!("no destination"),
+			| Use { .. }
+			| Halt => panic!("no destination"),
 
 			Mov     { dst, .. } => dst.size(),
 			Load    { dst, .. } => dst.size(),
@@ -767,15 +786,16 @@ impl IrInst {
 			Nop
 			| Branch { .. }
 			| IBranch { .. }
-			| Call { .. } => {}
+			| Call { .. }
+			| Halt => {}
 
 			Use { reg }              => { f(reg); }
 			Mov { dst, src, .. }  => { f(dst); src.regs(&mut f); }
 			Load { dst, addr, .. }   => { f(dst); addr.regs(&mut f); }
 			Store { addr,  src, .. } => { addr.regs(&mut f); src.regs(&mut f); }
 			CBranch { cond, .. }     => { cond.regs(&mut f); }
-			ICall { target, .. }     => { target.regs(&mut f); }
-			Ret { target, .. }       => { target.regs(&mut f); }
+			ICall { dst, .. }     => { dst.regs(&mut f); }
+			Ret { dst, .. }       => { dst.regs(&mut f); }
 			Unary { dst, src, .. }   => { f(dst); src.regs(&mut f); }
 
 			Binary { dst, src1, src2, .. } => {
@@ -798,7 +818,7 @@ impl IrInst {
 
 		match &self.kind {
 			Nop | Use { .. } | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. }
-			| IBranch { .. } | Store { .. } | Call { .. } => false,
+			| IBranch { .. } | Store { .. } | Call { .. } | Halt => false,
 
 			Mov { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
 			| Ternary { dst, .. } => *dst == reg,
@@ -812,16 +832,17 @@ impl IrInst {
 		match &self.kind {
 			Nop
 			| Branch { .. }
-			| Call { .. } => {}
+			| Call { .. }
+			| Halt => {}
 
 			Use { reg }             => { f(*reg); }
 			Mov { src, .. }         => { src.visit_use(&mut f); }
 			Load { addr, .. }       => { addr.visit_use(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use(&mut f); src.visit_use(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use(&mut f); }
-			IBranch { target, .. }  => { target.visit_use(&mut f); }
-			ICall { target, .. }    => { target.visit_use(&mut f); }
-			Ret { target, .. }      => { target.visit_use(&mut f); }
+			IBranch { dst, .. }  => { dst.visit_use(&mut f); }
+			ICall { dst, .. }    => { dst.visit_use(&mut f); }
+			Ret { dst, .. }      => { dst.visit_use(&mut f); }
 			Unary { src, .. }       => { src.visit_use(&mut f); }
 			Binary { src1, src2, .. } => {
 				src1.visit_use(&mut f);
@@ -842,16 +863,17 @@ impl IrInst {
 		match &mut self.kind {
 			Nop
 			| Branch { .. }
-			| Call { .. } => {}
+			| Call { .. }
+			| Halt => {}
 
 			Use { reg }             => { f(reg); }
 			Mov { src, .. }         => { src.visit_use_mut(&mut f); }
 			Load { addr, .. }       => { addr.visit_use_mut(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use_mut(&mut f); }
-			IBranch { target, .. }  => { target.visit_use_mut(&mut f); }
-			ICall { target, .. }    => { target.visit_use_mut(&mut f); }
-			Ret { target, .. }      => { target.visit_use_mut(&mut f); }
+			IBranch { dst, .. }  => { dst.visit_use_mut(&mut f); }
+			ICall { dst, .. }    => { dst.visit_use_mut(&mut f); }
+			Ret { dst, .. }      => { dst.visit_use_mut(&mut f); }
 			Unary { src, .. }       => { src.visit_use_mut(&mut f); }
 			Binary { src1, src2, .. } => {
 				src1.visit_use_mut(&mut f);
@@ -878,7 +900,8 @@ impl IrInst {
 			| ICall { .. }
 			| Ret { .. }
 			| Store { .. }
-			| CBranch { .. } => None,
+			| CBranch { .. }
+			| Halt => None,
 
 			Mov  { dst, .. }
 			| Load    { dst, .. }
@@ -901,7 +924,8 @@ impl IrInst {
 			| ICall { .. }
 			| Ret { .. }
 			| Store { .. }
-			| CBranch { .. } => None,
+			| CBranch { .. }
+			| Halt => None,
 
 			Mov  { dst, .. }
 			| Load    { dst, .. }
