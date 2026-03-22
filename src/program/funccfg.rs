@@ -506,8 +506,8 @@ impl<'f> FunctionCfg<'f> {
 			let overlap = r.r_overlap_of(&irred);
 
 			if r_overlaps(&overlap, &irred) {
-				println!("overlap = {:?}", overlap);
-				r.dump();
+				// println!("overlap = {:?}", overlap);
+				// r.dump();
 				// R(B) partially overlaps with the irred clump
 				return Err(UnsplittableError::OverlapsIrreducible(irred));
 			} else if irred.is_subset(&r.not_dominated) {

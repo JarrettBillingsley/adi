@@ -443,8 +443,8 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	let img_name =
-		"tests/data/tetris.gb"; // no MBC
-		// "tests/data/sml.gb";    // MBC1  (ROM only)
+		// "tests/data/tetris.gb"; // no MBC
+		"tests/data/sml.gb";    // MBC1  (ROM only)
 		// "tests/data/sml2.gb";   // MBC1B (ROM + RAM)
 		// "tests/data/pkblue.gb"; // MBC3
 
@@ -487,12 +487,12 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
-	testing_look_for_unsplittable_funcs(&prog);
+	// testing_look_for_unsplittable_funcs(&prog);
 	// testing_look_for_irreducible_funcs(&prog);
 
-	// for segid in prog.all_image_segs() {
-	// 	show_segment(&prog, segid);
-	// }
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
 
 	Ok(())
 }
@@ -548,7 +548,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		let size = ty.size().fixed();
 		prog.new_data(Some("BANK_CHANGE"), ea, ty, size);
 	} else if img_name.contains("smb.nes") {
-		for va in [0x8231, /*0x838B,*/ 0x9218, 0xAEDC] {
+		for va in [0x8231, 0x838B, 0x9218, 0xAEDC] {
 			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
 		}
 		let ea   = prog.ea_from_va(state, VA(0x821A));
@@ -565,11 +565,11 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	prog.analyze_queue();
 	println!("found {} functions.", prog.all_funcs().count());
 	// testing_look_for_unsplittable_funcs(&prog);
-	testing_look_for_irreducible_funcs(&prog);
+	// testing_look_for_irreducible_funcs(&prog);
 
-	// for segid in prog.all_image_segs() {
-	// 	show_segment(&prog, segid);
-	// }
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
 
 	// show_prg0(&prog);
 
