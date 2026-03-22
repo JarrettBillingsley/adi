@@ -13,11 +13,11 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Trace)?;
-
+	setup_logging(LevelFilter::Debug)?;
 	setup_panic();
-	test_gb()
-	// test_nes()
+
+	// test_gb()
+	test_nes()
 	// test_toy()
 }
 
@@ -443,8 +443,8 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 
 fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	let img_name =
-		// "tests/data/tetris.gb"; // no MBC
-		"tests/data/sml.gb";    // MBC1  (ROM only)
+		"tests/data/tetris.gb"; // no MBC
+		// "tests/data/sml.gb";    // MBC1  (ROM only)
 		// "tests/data/sml2.gb";   // MBC1B (ROM + RAM)
 		// "tests/data/pkblue.gb"; // MBC3
 
@@ -487,8 +487,6 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	prog.analyze_queue();
 
 	println!("found {} functions.", prog.all_funcs().count());
-	// testing_look_for_unsplittable_funcs(&prog);
-	// testing_look_for_irreducible_funcs(&prog);
 
 	for segid in prog.all_image_segs() {
 		show_segment(&prog, segid);
@@ -564,8 +562,6 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 
 	prog.analyze_queue();
 	println!("found {} functions.", prog.all_funcs().count());
-	// testing_look_for_unsplittable_funcs(&prog);
-	// testing_look_for_irreducible_funcs(&prog);
 
 	for segid in prog.all_image_segs() {
 		show_segment(&prog, segid);
@@ -578,46 +574,6 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 	// }
 
 	Ok(())
-}
-
-fn testing_look_for_unsplittable_funcs(prog: &Program) {
-	'outer: for func in prog.all_funcs() {
-		if func.num_bbs() == 1 { continue; }
-		log::info!("checking {:?}", func.ea());
-
-		let cfg = prog.func_analyze_cfg(func);
-
-		if func.is_multi_entry() {
-			log::warn!("multi-entry function with entrypoints {:?}:", func.entrypoints());
-		} else {
-			for bbid in func.all_bbs() {
-				if bbid == func.head_id() { continue; }
-				if cfg.reachable(bbid).splittable() {
-					continue 'outer;
-				}
-			}
-
-			log::warn!("found a function that's completely unsplittable:");
-		}
-		prog.func_dump_cfg(&cfg);
-	}
-}
-
-fn testing_look_for_irreducible_funcs(prog: &Program) {
-	for func in prog.all_funcs() {
-		if func.num_bbs() == 1 { continue; }
-		log::info!("checking {:?}", func.ea());
-
-		let cfg = prog.func_analyze_cfg(func);
-
-		match cfg.find_irreducible_nodes() {
-			None => {},
-			Some(set) => {
-				log::warn!("irreducible CFG caused by: {:?}:", set);
-				prog.func_dump_cfg(&cfg);
-			}
-		}
-	}
 }
 
 fn find_identical_image_pieces(prog: &Program) {

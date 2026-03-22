@@ -1,12 +1,7 @@
 
 # Yak stack
 
-- Detect irreducible CFGs 
-	- https://www.cs.tufts.edu/comp/150FP/archive/johan-jansson/node-splitting.pdf
-- Function Splitting
-	- WORKIN ON IT...
-	- `misc.rs` "determine if return-insertion is needed" TODO
-- After splitting a multi-entry function (and giving the entry points to the respective functions...), re-analyze the non-head entry points on any resulting multi-entry functions to see if any can be split
+- `misc.rs` "determine if return-insertion is needed" TODO
 
 # Imminent tasks!
 

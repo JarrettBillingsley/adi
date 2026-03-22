@@ -35,6 +35,10 @@ impl Program {
 		// TODO: technically, it *is* possible to split multi-entry functions, as long as the split
 		// point dominates/is dominated by all the other entry points. but I don't care to deal
 		// with that right now.
+		//
+		// After splitting a multi-entry function (and giving the entry points to the respective
+		// functions...), we would have to re-analyze the non-head entry points on any resulting
+		// multi-entry functions to see if any can be split.
 		if self.get_func(fid).is_multi_entry() {
 			debug!("  function at {} is multi-entry already", func_ea);
 
