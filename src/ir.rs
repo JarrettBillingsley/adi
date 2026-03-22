@@ -3,7 +3,6 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use lazycell::LazyCell;
 
-use crate::arch::{ IIrCompiler };
 use crate::memory::{ EA, MemAccess };
 use crate::program::{ BBId, FuncId };
 
@@ -354,10 +353,11 @@ impl Debug for IrPhi {
 pub(crate) type IrBBId = usize;
 
 pub(crate) struct IrBasicBlock {
-	id:        IrBBId,
-	real_bbid: BBId,
-	phis:      Vec<IrPhi>,
-	insts:     Vec<IrInst>,
+	pub(crate) id:        IrBBId,
+	pub(crate) real_bbid: BBId,
+	pub(crate) insts:     Vec<IrInst>,
+
+	phis:                 Vec<IrPhi>,
 }
 
 impl IrBasicBlock {
@@ -429,16 +429,6 @@ impl Debug for IrBasicBlock {
 }
 
 // ------------------------------------------------------------------------------------------------
-// IrRewrite
-// ------------------------------------------------------------------------------------------------
-
-#[derive(Debug, Copy, Clone)]
-pub(crate) enum IrRewrite {
-	Uses { before_last: bool },
-	Returns,
-}
-
-// ------------------------------------------------------------------------------------------------
 // IrFunction
 // ------------------------------------------------------------------------------------------------
 
@@ -462,13 +452,10 @@ pub(crate) struct IrFunction {
 
 impl IrFunction {
 	pub(crate) fn new(
-		compiler: &impl IIrCompiler,
-		rewrites: Vec<(IrBBId, IrRewrite)>,
 		real_fid: FuncId,
 		mut bbs: Vec<IrBasicBlock>,
-		mut cfg: IrCfg
+		cfg: IrCfg
 	) -> Self {
-		IrRewriter::new(compiler, &mut bbs, &mut cfg).perform_rewrites(rewrites);
 		ssa::to_ssa(&mut bbs, &cfg);
 		Self {
 			real_fid,
@@ -530,7 +517,7 @@ impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
 	}
 }
 
-fn debug_dump_ir_cfg_and_bbs(cfg: &IrCfg, bbs: &[IrBasicBlock]) {
+pub(crate) fn debug_dump_ir_cfg_and_bbs(cfg: &IrCfg, bbs: &[IrBasicBlock]) {
 	log::debug!("{:?}", DebugWorkaroundThing(cfg, bbs));
 }
 
@@ -694,155 +681,5 @@ impl<'func> ConstAddrsIter<'func> {
 		}
 
 		None
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// Rewrites
-// ------------------------------------------------------------------------------------------------
-
-struct IrRewriter<'a, C: IIrCompiler> {
-	compiler: &'a C,
-	bbs:      &'a mut Vec<IrBasicBlock>,
-	cfg:      &'a mut IrCfg,
-	new_bbs:  Vec<IrBasicBlock>,
-	new_bbid: IrBBId,
-}
-
-impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
-	fn new(compiler: &'a C, bbs: &'a mut Vec<IrBasicBlock>, cfg: &'a mut IrCfg) -> Self {
-		Self {
-			new_bbs:  vec![],
-			new_bbid: bbs.len(),
-			compiler,
-			bbs,
-			cfg,
-		}
-	}
-
-	fn perform_rewrites(&mut self, rewrites: Vec<(IrBBId, IrRewrite)>) {
-		let arg_regs = self.compiler.arg_regs();
-		let ret_regs = self.compiler.return_regs();
-
-		// log::debug!("-------------BEFORE REWRITE----------------");
-		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-
-		// first pass: insert uses
-		for (irbbid, rewrite) in rewrites.iter() {
-			if let IrRewrite::Uses { before_last } = rewrite {
-				self.bbs[*irbbid].insert_dummy_uses(arg_regs, ret_regs, *before_last);
-			}
-		}
-
-		// log::debug!("-------------AFTER USE-INSERTION----------------");
-		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-
-		// second pass: insert dummy BBs for return-uses after calls
-		for (irbbid, rewrite) in rewrites.into_iter() {
-			match rewrite {
-				IrRewrite::Uses { .. } => {} // already handled
-				IrRewrite::Returns => {
-					self.rewrite_returns(irbbid, ret_regs);
-				}
-			}
-		}
-
-		self.bbs.append(&mut self.new_bbs);
-
-		// log::debug!("-------------AFTER REWRITE----------------");
-		// debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-	}
-
-	fn rewrite_returns(&mut self, irbbid: IrBBId, ret_regs: &[IrReg]) {
-		let bb = &self.bbs[irbbid];
-
-		// first update the cfg.
-		// println!("{}: {:?}", bb.id, self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>());
-
-		let old_dest = self.get_old_dest(bb);
-
-		log::debug!("  changing bb{}'s dest from bb{} to bb{}", bb.id, old_dest, self.new_bbid);
-
-		assert!(self.cfg.remove_edge(bb.id, old_dest).is_some());
-		self.cfg.add_edge(bb.id, self.new_bbid, ());
-		self.cfg.add_edge(self.new_bbid, old_dest, ());
-
-		let mut b = IrBuilder::new();
-		// SAFETY: rewrite_call_or_ret ensures it has at least 1 inst.
-		b.set_ea(bb.insts.last().unwrap().ea());
-
-		for &reg in ret_regs.iter() {
-			b.mov(reg, IrSrc::Return(reg.size()), -1, -1);
-		}
-
-		let real_bbid = bb.real_bbid;
-		let new_bb = IrBasicBlock::new(self.new_bbid, real_bbid, b.finish_one());
-		self.new_bbid += 1;
-		self.new_bbs.push(new_bb);
-	}
-
-	fn get_old_dest(&self, bb: &IrBasicBlock) -> usize {
-		let targets = self.cfg.edges(bb.id).map(|(_, n, _)|n).collect::<Vec<_>>();
-		match targets[..] {
-			[] => {
-				log::error!("offending function:");
-				debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-				panic!("IrRewrite::Returns put on bb{} with no in-function successor. \
-					See function above", bb.id);
-			}
-			[target]           => target, // ok cool beans
-			[target1, target2] => {
-				// this case can happen if a function is recursive, which is okay. but any
-				// NON-recursive call would be an error.
-				if target1 == 0 {
-					target2
-				} else if target2 == 0 {
-					target1
-				} else {
-					log::error!("offending function:");
-					debug_dump_ir_cfg_and_bbs(self.cfg, self.bbs);
-
-					panic!(
-						"IrRewrite::Returns put on bb{} @ {} where one of the call targets \
-						({}, {}) is self-call but NOT a recursive call.\n\
-						See function above. Why hasn't this function been split?",
-						bb.id,
-						bb.insts[0].ea(),
-						target1, target2);
-				}
-			}
-			_ => panic!("UHHHHHHHHHHHHHHHH TOO MANY EDGES"),
-		}
-	}
-}
-
-impl IrBasicBlock {
-	fn insert_dummy_uses(&mut self, arg_regs: &[IrReg], ret_regs: &[IrReg], before_last: bool) {
-		// SAFETY: `func_to_ir` checks that every IR BB has at least 1 instruction.
-		let (terminating_inst, _) = self.insts.split_last().unwrap();
-		let terminating_inst = *terminating_inst;
-
-		// the match is also valid because irbb_terminator_sanity_check ensured that any BB that
-		// ends in IrInstKind::Ret really did come from a BB with BBTerm::Ret.
-		let regs = match terminating_inst.kind() {
-			IrInstKind::Ret { .. } => ret_regs,
-			_                      => arg_regs,
-		};
-
-		if !regs.is_empty() {
-			let ea = terminating_inst.ea();
-
-			if before_last {
-				self.insts.pop();
-			}
-
-			for &reg in regs.iter() {
-				self.insts.push(IrInst::use_(ea, reg));
-			}
-
-			if before_last {
-				self.insts.push(terminating_inst);
-			}
-		}
 	}
 }

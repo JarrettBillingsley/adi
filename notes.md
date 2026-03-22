@@ -4,10 +4,6 @@
 # Imminent tasks!
 
 - IR
-	- function IR compilation is currently split across `program/analysis/misc.rs` and `ir.rs`
-		- which in some ways makes sense, because the stuff in `misc` requires access to the `Program` and the stuff in `ir` doesn't
-		- but it's also confusing having to hop between those two files
-		- and I always forget that `func_to_ir` is in `misc`
 	- I'm thinking the current loose coupling of IR CFG and IR instructions is making some things harder than they need to be.
 		- the current panic about `IrRewrite::Returns` put on a non-recursive self-call is really only a problem because *it doesn't know which edge is the call target and which is the continue target*, but if it knew which was the continue, it would probably work just fine.
 		- really the IR CFG should be *derived from* the IR BB terminator instruction.

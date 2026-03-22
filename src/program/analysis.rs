@@ -8,6 +8,7 @@ use crate::dataflow::{ WorkQueue };
 // ------------------------------------------------------------------------------------------------
 
 pub mod misc;
+pub mod to_ir;
 pub mod pass_newfunc;
 pub mod pass_splitfunc;
 pub mod pass_staticfuncanalysis;
