@@ -592,7 +592,7 @@ fn testing_look_for_unsplittable_funcs(prog: &Program) {
 		} else {
 			for bbid in func.all_bbs() {
 				if bbid == func.head_id() { continue; }
-				if cfg.dominates_all_reachable(bbid).is_some() {
+				if cfg.reachable(bbid).splittable() {
 					continue 'outer;
 				}
 			}

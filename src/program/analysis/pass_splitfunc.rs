@@ -61,9 +61,13 @@ impl Program {
 		let cfg = self.func_analyze_cfg(self.get_func(fid));
 		// self.func_dump_cfg(&cfg);
 
-		if let Some(reachable) = cfg.dominates_all_reachable(bbid) {
+		let r = cfg.reachable(bbid);
+
+		if r.splittable() {
 			// alright, we can split! conveniently, the reachable set is the set of BBs that the
 			// new function will inherit, and bbid will become its head.
+
+			let reachable = r.all_reachable();
 
 			// first, remove all the 'reachable' bbs from func
 			self.get_func_mut(fid).bbs
