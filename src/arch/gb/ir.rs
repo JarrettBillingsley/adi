@@ -1,7 +1,7 @@
 //! IR compiler for Game Boy/LR35902/SM83.
 
 use crate::arch::{ IIrCompiler };
-// use crate::program::{ MemIndir };
+use crate::program::{ BBTerm };
 use crate::ir::{ IrReg, IrConst, IrSrc, IrBuilder };
 
 use super::*;
@@ -13,11 +13,11 @@ use super::*;
 pub(crate) struct GBIrCompiler;
 
 impl IIrCompiler for GBIrCompiler {
-	fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
 		match i.bytes() {
-			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, target, next, b),
-			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, target, next, b),
+			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, term, b),
+			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, term, b),
 			_                  => unreachable!(),
 		}
 	}
@@ -599,8 +599,7 @@ impl IrBuilder {
 // Computation
 // ------------------------------------------------------------------------------------------------
 
-fn build_ir(desc: &InstDesc, i: &Instruction, target: Option<EA>, next: Option<EA>,
-b: &mut IrBuilder) {
+fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
 	use { MetaOp::*, SynOp::*, Reg::* };
 
 	match (desc.meta_op(), desc.syn_ops()) {
@@ -967,33 +966,66 @@ b: &mut IrBuilder) {
 		// Control flow
 
 		// no flag changes
-		(JP, [Op]) => { b.branch(target.unwrap(), 0); }
-		(JR, [Op]) => { b.branch(target.unwrap(), 0); }
+		(JP, [Op]) => {
+			let target = term.expect("no terminator?")
+				.one_explicit_successor().expect("JP as BB term with no explicit successor");
+			b.branch(target, 0);
+		}
+		(JR, [Op]) => {
+			let target = term.expect("no terminator?")
+				.one_explicit_successor().expect("JR as BB term with no explicit successor");
+			b.branch(target, 0);
+		}
 
-		(JP, &[Cc(cond), Op]) => { b.cc_branch(cond, target.unwrap(), 0); }
-		(JR, &[Cc(cond), Op]) => { b.cc_branch(cond, target.unwrap(), 0); }
+		(JP, &[Cc(cond), Op]) => {
+			let target = term.expect("no terminator?")
+				.one_explicit_successor().expect("JP as BB term with no explicit successor");
+			b.cc_branch(cond, target, 0);
+		}
+		(JR, &[Cc(cond), Op]) => {
+			let target = term.expect("no terminator?")
+				.one_explicit_successor().expect("JR as BB term with no explicit successor");
+			b.cc_branch(cond, target, 0);
+		}
 
 		(JP, [Srg(HL)]) => {
 			b.rr     (HL);
 			b.ibranch(REG_HL, 0);
 		}
 
-		(CALL, [Op]) => { b.call_(i.next_va(), target.unwrap(), 0); }
-		(RST,  [Op]) => { b.call_(i.next_va(), target.unwrap(), 0); }
+		(CALL, [Op]) => {
+			let target = term.expect("no terminator?")
+				.one_explicit_successor().expect("CALL as BB term with no explicit successor");
+			b.call_(i.next_va(), target, 0);
+		}
+		(RST,  [Op]) => {
+			let target = term.expect("no terminator?")
+				.one_explicit_successor().expect("RST as BB term with no explicit successor");
+			b.call_(i.next_va(), target, 0);
+		}
 		(CALL, &[Cc(cond), Op]) => {
+			let term = term.expect("no terminator?");
+			let target = term
+				.one_explicit_successor().expect("CALL as BB term with no explicit successor");
+			let next = term
+				.continuation_successor().expect("CALL as BB term with no continuation successor");
+
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(       cond, next.unwrap(),  -1, -1)
-			.push_return_addr ( i.next_va()                       )
-			.call             (           target.unwrap(),       0);
+			.cbranch_and_split(       cond, next,  -1, -1)
+			.push_return_addr (i.next_va()               )
+			.call             (           target,       0);
 		}
 
 		(RETI, []) => { b.return_(); }
 		(RET,  []) => { b.return_(); }
 		(RET,  &[Cc(cond)]) => {
+			let next = term.expect("no terminator?")
+				.continuation_successor().expect("RET as BB term with no continuation successor");
+
 			let cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, next.unwrap(),  -1, -1)
+			.cbranch_and_split(cond, next,  -1, -1)
 			.return_();
 		}
 

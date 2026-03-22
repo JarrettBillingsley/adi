@@ -1,5 +1,6 @@
 
 use crate::ir::{ IrReg, IrConst, IrSrc, IrBuilder };
+use crate::program::{ BBTerm };
 
 use super::*;
 
@@ -10,9 +11,9 @@ use super::*;
 pub(crate) struct ToyIrCompiler;
 
 impl IIrCompiler for ToyIrCompiler {
-	fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>, b: &mut IrBuilder) {
+	fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, target, next, b);
+		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, term, b);
 	}
 
 	fn arg_regs(&self) -> &'static [IrReg] {
@@ -84,8 +85,7 @@ impl InstDesc {
 		}
 	}
 
-	pub(super) fn build_ir(&self, i: &Instruction, target: Option<EA>, next: Option<EA>,
-	b: &mut IrBuilder) {
+	pub(super) fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
 		let r0 = | | -> IrReg {
@@ -163,41 +163,59 @@ impl InstDesc {
 				b.islt(     REG_NF, REG_TMP, IrConst::ZERO_8, -1, -1, -1);
 			}
 			BLT => {
-				b.cbranch(REG_NF, target.unwrap(), -1, 0);
+				let target = term.expect("no terminator?").one_explicit_successor()
+					.expect("BLT as BB term with no explicit successor");
+				b.cbranch(REG_NF, target, -1, 0);
 			}
 			BLE => {
+				let target = term.expect("no terminator?").one_explicit_successor()
+					.expect("BLE as BB term with no explicit successor");
 				b.bor(    REG_TMP, REG_CF, REG_ZF,   -1, -1, -1);
-				b.cbranch(REG_TMP, target.unwrap(),  -1,  0);
+				b.cbranch(REG_TMP, target,  -1,  0);
 			}
 			BEQ => {
-				b.cbranch(REG_ZF, target.unwrap(), -1, 0);
+				let target = term.expect("no terminator?").one_explicit_successor()
+					.expect("BEQ as BB term with no explicit successor");
+				b.cbranch(REG_ZF, target, -1, 0);
 			}
 			BNE => {
+				let target = term.expect("no terminator?").one_explicit_successor()
+					.expect("BNE as BB term with no explicit successor");
 				b.bnot(   REG_TMP, REG_ZF,           -1, -1);
-				b.cbranch(REG_TMP, target.unwrap(),  -1,  0);
+				b.cbranch(REG_TMP, target,  -1,  0);
 			}
 			JMP => {
-				b.branch(target.unwrap(), 0);
+				let target = term.expect("no terminator?").one_explicit_successor()
+					.expect("JMP as BB term with no explicit successor");
+				b.branch(target, 0);
 			}
 			JMPI => {
 				b.ipair(  REG_TMP16, REG_D, REG_C, -1, -1, -1);
 				b.ibranch(REG_TMP16, 0);
 			}
 			CALL => {
+				let target = term.expect("no terminator?").one_explicit_successor()
+					.expect("CALL as BB term with no explicit successor");
 				b.iusub(REG_SP, REG_SP, IrConst::_16(2),             -1, -1, -1);
 				b.store(REG_SP, IrConst::_16(i.next_va().0 as u16),  -1, -1);
-				b.call(target.unwrap(),                               0);
+				b.call (target,                                      0);
 			}
 			CALI => {
 				b.ipair(REG_TMP16, REG_D, REG_C, -1, -1, -1);
 				b.icall(REG_TMP16, 0);
 			}
 			CALZ => {
+				let term = term.expect("no terminator?");
+				let target = term
+					.one_explicit_successor().expect("CALZ as BB term with no explicit successor");
+				let next = term
+					.continuation_successor().expect("CALZ as BB term with no continuation successor");
+
 				b.bnot             (REG_TMP, REG_ZF,                              -1, -1);
-				b.cbranch_and_split(REG_TMP, next.unwrap(),                       -1, -1);
+				b.cbranch_and_split(REG_TMP, next,                                -1, -1);
 				b.iusub            (REG_SP,  REG_SP, IrConst::_16(2),             -1, -1, -1);
 				b.store            (REG_SP,  IrConst::_16(i.next_va().0 as u16),  -1, -1);
-				b.call             (target.unwrap(),                              0);
+				b.call             (target,                                       0);
 			}
 			RET => {
 				b.load( REG_TMP16, REG_SP,               -1, -1);
@@ -205,8 +223,11 @@ impl InstDesc {
 				b.ret(  REG_TMP16,                       -1);
 			}
 			RETZ => {
+				let next = term.expect("no terminator?").continuation_successor()
+					.expect("RETZ as BB term with no continuation successor");
+
 				b.bnot             (REG_TMP, REG_ZF,                 -1, -1);
-				b.cbranch_and_split(REG_TMP, next.unwrap(),          -1, -1);
+				b.cbranch_and_split(REG_TMP, next,                   -1, -1);
 				b.load             (REG_TMP16, REG_SP,               -1, -1);
 				b.iuadd            (REG_SP, REG_SP, IrConst::_16(2), -1, -1, -1);
 				b.ret              (REG_TMP16,                       -1);

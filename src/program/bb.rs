@@ -318,6 +318,19 @@ impl BBTerm {
 		}
 	}
 
+	/// Get the *one* explicit successor from this terminator, or `None` if it has 0 or > 1 explicit
+	/// successors.
+	pub fn one_explicit_successor(&self) -> Option<EA> {
+		use BBTerm::*;
+
+		match self {
+			Jump { dst } |
+			Call { dst, .. } |
+			Cond { dst, .. } => Some(*dst),
+			_ => None,
+		}
+	}
+
 	/// Returns true if this terminator has one or more explicit successors.
 	pub fn has_explicit_successors(&self) -> bool {
 		use BBTerm::*;

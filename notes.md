@@ -4,6 +4,10 @@
 # Imminent tasks!
 
 - IR
+	- function IR compilation is currently split across `program/analysis/misc.rs` and `ir.rs`
+		- which in some ways makes sense, because the stuff in `misc` requires access to the `Program` and the stuff in `ir` doesn't
+		- but it's also confusing having to hop between those two files
+		- and I always forget that `func_to_ir` is in `misc`
 	- I'm thinking the current loose coupling of IR CFG and IR instructions is making some things harder than they need to be.
 		- the current panic about `IrRewrite::Returns` put on a non-recursive self-call is really only a problem because *it doesn't know which edge is the call target and which is the continue target*, but if it knew which was the continue, it would probably work just fine.
 		- really the IR CFG should be *derived from* the IR BB terminator instruction.
@@ -12,11 +16,10 @@
 		- `IrInstKind::IBranch/ICall` are trickier... they could have some `Vec` of targets, but that `Vec` may not be exhaustive
 			- which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive.
 		- would need a new terminating instruction like `IrInstKind::MultiEntry` to put at the end of the "dummy" entry BB used for translating multi-entry functions - has a `Vec<IrBBId>` for its targets
-		- `IIrCompiler::build_ir` could then just take an `Option<BBTerm>` from which the target(s) could be extracted.
 		- this slightly complicates IR codegen - for in-function targets/continuations, don't necessarily know IrBBId at time of codegen, so will have to go back and link them up at the end. but it's not a huge deal.
 			- really they could *all* be `External(EA)` at first, and then have a pass that goes through and changes any `External` targets that point to an in-function target to `Internal` once we know all the IrBBIds.
 	- `ValSize::_1` for bools?
-	- instruction methods which would remove all the -1 -1 -1 -1 madness
+	- instruction methods which would remove all the -1 -1 -1 -1 madness. proof of concept:
 		
 		```rust
 		#[derive(Copy, Clone)]
@@ -90,6 +93,8 @@
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 		- maybe `IIrCompiler` could have a `name_map` method that returns a `Vec<&'static str>` of register names
 		- maybe there could be a macro to declare all the `IrReg`s for an arch that generates this vec for you cause it's already getting annoying (and error-prone, since you have to come up with the indexes yourself based on the sizes of the regs)
+			- and it could also generate the lists of arg/return regs
+		- or maybe not a macro just a builder that's lazily initialized
 - GB
 	- god the mapping between `SynOp/GBOpKind/Operand` is a fucking MESS. kill it
 	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
