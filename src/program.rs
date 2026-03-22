@@ -853,7 +853,7 @@ impl<'f> FuncAnalysis<'f> {
 		}
 
 		if g.0.node_count() > 1 {
-			log::warn!("AAAAAAAAA");
+			log::warn!("AAAAAAAAA IRREDUCIBLE CFG COLLAPSED TO:");
 			g.dump();
 			Some(g.0.nodes().collect())
 		} else {
