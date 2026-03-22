@@ -506,11 +506,11 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		// "tests/data/megaman.nes";       // 2   (uxrom)
 		// "tests/data/10yf.nes";          // 0   (nrom)
 		// "tests/data/duckhunt.nes";      // 0   (nrom)
-		"tests/data/smb.nes";           // 0   (nrom)
+		// "tests/data/smb.nes";           // 0   (nrom)
 		// "tests/data/arkanoid.nes";      // 3   (cnrom)
 		// "tests/data/battletoads.nes";   // 7   (axrom)
 		// I HAVE NO ROM FOR THIS          // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
-		// "tests/data/exodus.nes";        // 11  (color dreams)
+		"tests/data/exodus.nes";        // 11  (color dreams)
 		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
 		// I HAVE NO ROM FOR THIS          // 19 (namco N129/N163)          *UNIMPLEMENTED*
 	let img = Image::new_from_file(img_name)?;
@@ -903,35 +903,35 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 	use BBTerm::*;
 	match bb.term() {
 		DeadEnd => println!("{}", "---------- DEAD END ----------".red().bold()),
-		StateChange(_, new_state) => {
+		StateChange { state_after, .. } => {
 			println!("{}",
-				format!("---------- STATE CHANGE {:?} ----------", new_state)
+				format!("---------- STATE CHANGE {:?} ----------", state_after)
 				.cyan().bold());
 		}
 		Halt | Return { .. } => {
 		}
-		FallThru(ea) => {
-			print_divider_if_diff_funcs(prog, bb_ea, *ea, "Fall through", Color::Yellow);
+		FallThru { cont } => {
+			print_divider_if_diff_funcs(prog, bb_ea, *cont, "Fall through", Color::Yellow);
 		}
-		Jump(ea) => {
-			print_divider_if_diff_funcs(prog, bb_ea, *ea, "Tailcall", Color::Yellow);
+		Jump { dst } => {
+			print_divider_if_diff_funcs(prog, bb_ea, *dst, "Tailcall", Color::Yellow);
 		}
-		Call { ret, cond, .. } => {
+		Call { cont, cond, .. } => {
 			if *cond {
-				print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through with cond call",
+				print_divider_if_diff_funcs(prog, bb_ea, *cont, "Fall through with cond call",
 					Color::Yellow);
 			} else {
-				print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through", Color::Yellow);
+				print_divider_if_diff_funcs(prog, bb_ea, *cont, "Fall through", Color::Yellow);
 			}
 		}
-		IndirCall { ret, .. } => {
-			print_divider_if_diff_funcs(prog, bb_ea, *ret, "Fall through", Color::Yellow);
+		IndirCall { cont, .. } => {
+			print_divider_if_diff_funcs(prog, bb_ea, *cont, "Fall through", Color::Yellow);
 		}
-		Cond { t, f } => {
-			print_divider_if_diff_funcs(prog, bb_ea, *t, "Tailbranch", Color::Yellow);
-			print_divider_if_diff_funcs(prog, bb_ea, *f, "Fall through", Color::Yellow);
+		Cond { dst, cont } => {
+			print_divider_if_diff_funcs(prog, bb_ea, *dst, "Tailbranch", Color::Yellow);
+			print_divider_if_diff_funcs(prog, bb_ea, *cont, "Fall through", Color::Yellow);
 		}
-		JumpTbl(..) => println!("{}", "---------- JUMP TABLE ----------".yellow())
+		IndirJump { .. } => println!("{}", "---------- JUMP TABLE ----------".yellow())
 	}
 
 	println!();

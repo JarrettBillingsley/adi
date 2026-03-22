@@ -74,7 +74,7 @@ impl Program {
 
 		let new_bbid = self.bbidx.new_bb(
 			new_start,
-			BBTerm::FallThru(new_start), // NOT WRONG, they get swapped below.
+			BBTerm::FallThru { cont: new_start }, // NOT WRONG, they get swapped below.
 			insts,
 			state
 		);
@@ -167,7 +167,7 @@ impl Program {
 					irbb_terminator_sanity_check(bb.term(), &insts_after);
 
 					let (next_ea, is_call) = match bb.term {
-						BBTerm::Call { ret, .. }            => (ret, true),
+						BBTerm::Call { cont, .. }           => (cont, true),
 						BBTerm::Return { cont: Some(cont) } => (cont, false),
 						_                                   => panic!("impastabowl"),
 					};
@@ -208,30 +208,16 @@ impl Program {
 				_ => {
 					// only insert uses if there is *at least one* out-of-function successor.
 					if !self.bb_all_successors_in_function(bbid) {
-						let before_last = match bb.term {
-							Jump(..) | JumpTbl(..) | Cond{..} | Call{..} | IndirCall{..} => true,
-							FallThru(..) | StateChange(..)                               => false,
-							_ => unreachable!()
-						};
-
+						let before_last = bb.term.has_explicit_successors();
 						rewrites.push((rewrite_irbbid, IrRewrite::Uses { before_last }));
 					}
 				}
 			}
 
-			// determine if return-insertion is needed
-			if let Call { ret, .. } | IndirCall { ret, .. } = bb.term {
-				if let Call { dst, .. } = bb.term {
-					// if dst is an in-function successor...
-					if self.ea_is_bb_in_function(dst, bb.func()).is_some() {
-						// TODO: what was I thinking here???
-					}
-				}
-
-				// if ret is an in-function successor, it needs return-insertion
-				if self.ea_is_bb_in_function(ret, bb.func()).is_some() {
-					rewrites.push((rewrite_irbbid, IrRewrite::Returns));
-				}
+			// if cont is an in-function successor, it needs return-insertion
+			if let Call { cont, .. } | IndirCall { cont, .. } = bb.term &&
+			self.ea_is_bb_in_function(cont, bb.func()).is_some() {
+				rewrites.push((rewrite_irbbid, IrRewrite::Returns));
 			}
 		}
 
@@ -271,13 +257,13 @@ impl Program {
 /// |-------------------|--------------------|----------------------------------|
 /// | `InstructionKind` | `BBTerm`           | `IrInstKind`                     |
 /// |-------------------|--------------------|----------------------------------|
-/// | `Ret`             | `Return`           | `Ret`                            |
+/// | `Ret`             | `Return`           | `ret`                            |
+/// | `Indir`           | `IndirJump`        | `ibranch`                        |
+/// | `IndirCall`       | `IndirCall`        | `icall`                          |
+/// | `Call(..)`        | `Call`             | `call`                           |
+/// | `Uncond`          | `Jump`             | `branch`                         |
+/// | `Cond`            | `Cond`             | `cbranch`                        |
 /// | `Halt`            | `Halt`             | non-control-flow is allowed\*    |
-/// | `Indir`           | `JumpTbl`          | `IBranch`                        |
-/// | `IndirCall`       | `IndirCall`        | `ICall`                          |
-/// | `Call(..)`        | `Call`             | `Call`                           |
-/// | `Uncond`          | `Jump`             | `Branch`                         |
-/// | `Cond`            | `Cond`             | `CBranch`                        |
 /// | _                 | `DeadEnd`          | non-control-flow is allowed\*    |
 /// | _                 | `FallThru`         | non-control-flow is allowed      |
 /// | _                 | `StateChange`      | `Load` or `Store`                |
@@ -299,7 +285,7 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 
 	use BBTerm::*;
 	match term {
-		FallThru(..) | Halt | DeadEnd => {
+		FallThru { .. } | Halt | DeadEnd => {
 			match inst.kind() {
 				IrInstKind::Ret { .. }
 				| IrInstKind::IBranch { .. }
@@ -319,12 +305,12 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 				"for `BBTerm::Return`, the terminating instruction should have \
 				been `IrInstKind::Ret`, but found this instead: {:?}", inst.kind());
 		}
-		JumpTbl(..) => {
+		IndirJump { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::IBranch { .. }),
 				"for `BBTerm::Jump`, the terminating instruction should have \
 				been `IrInstKind::IBranch`, but found this instead: {:?}", inst.kind());
 		}
-		IndirCall {..} => {
+		IndirCall { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::ICall { .. }),
 				"for `BBTerm::Indir`, the terminating instruction should have \
 				been `IrInstKind::ICall`, but found this instead: {:?}", inst.kind());
@@ -334,17 +320,17 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 				"for `BBTerm::Call {{ cond: false }}`, the terminating instruction should have \
 				been `IrInstKind::Call`, but found this instead: {:?}", inst.kind());
 		}
-		Jump(..) => {
+		Jump { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::Branch { .. }),
 				"for `BBTerm::Jump`, the terminating instruction should have \
 				been `IrInstKind::Branch`, but found this instead: {:?}", inst.kind());
 		}
-		Cond {..} => {
+		Cond { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::CBranch { .. }),
 				"for `BBTerm::Cond`, the terminating instruction should have \
 				been `IrInstKind::CBranch`, but found this instead: {:?}", inst.kind());
 		}
-		StateChange(..) => {
+		StateChange { .. } => {
 			assert!(matches!(inst.kind(), IrInstKind::Load { .. } | IrInstKind::Store { .. }),
 				"for `BBTerm::StateChange`, the terminating instruction should have \
 				been `IrInstKind::Load` or `IrInstKind::Store`, but found this instead: {:?}",

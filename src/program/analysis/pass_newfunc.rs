@@ -93,7 +93,7 @@ impl Program {
 					}
 					Indir => {
 						// the target EAs are filled in later
-						term = Some(BBTerm::JumpTbl(vec![]));
+						term = Some(BBTerm::IndirJump { dst: vec![] });
 					}
 					IndirCall => {
 						let next = ea_after_inst(&inst, seg);
@@ -102,7 +102,7 @@ impl Program {
 						}
 
 						// the destination EAs are filled in later
-						term = Some(BBTerm::IndirCall { dst: vec![], ret: next });
+						term = Some(BBTerm::IndirCall { dst: vec![], cont: next });
 					}
 					Call(cond) => {
 						let target_va = inst.control_target().expect("should have control target");
@@ -115,7 +115,7 @@ impl Program {
 
 						// debug!("  {:04X} t: {} next: {}", inst.va(), target_ea, next);
 
-						term = Some(BBTerm::Call { dst: target_ea, ret: next, cond });
+						term = Some(BBTerm::Call { dst: target_ea, cont: next, cond });
 					}
 					Uncond | Cond => {
 						let target_va = inst.control_target().expect("should have control target");
@@ -128,7 +128,7 @@ impl Program {
 						}
 
 						if inst.kind() == Uncond {
-							term = Some(BBTerm::Jump(target_ea));
+							term = Some(BBTerm::Jump { dst: target_ea });
 						} else {
 							let next = ea_after_inst(&inst, seg);
 							if seg.contains_ea(next) {
@@ -137,7 +137,7 @@ impl Program {
 
 							// debug!("  {:04X} t: {} next: {}", inst.va(), target_ea, next);
 
-							term = Some(BBTerm::Cond { t: target_ea, f: next });
+							term = Some(BBTerm::Cond { dst: target_ea, cont: next });
 						}
 					}
 				}
@@ -170,7 +170,7 @@ impl Program {
 							debug!("    {} {}", inst.ea(), self.inst_to_string(inst, state));
 						}
 					} else {
-						term = Some(BBTerm::FallThru(end_ea));
+						term = Some(BBTerm::FallThru { cont: end_ea });
 						debug!("  falling thru");
 					}
 				}

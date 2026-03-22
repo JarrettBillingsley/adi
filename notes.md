@@ -1,15 +1,8 @@
 
 # Yak stack
 
-- `misc.rs` "determine if return-insertion is needed" TODO
-
 # Imminent tasks!
 
-- BBTerm
-	- unify `FallThru` and `StateChange` into `FallThru { cont: EA, new_state: Option<MmuState> }`
-	- rename `Cond { f }`, `Call { ret }`, `IndirCall { ret }` to some common name like `cont` to match `Return { cont }`
-	- rename `JumpTbl` to `IndirJump`
-	- make all non-unit variants `{ }`-style
 - IR
 	- I'm thinking the current loose coupling of IR CFG and IR instructions is making some things harder than they need to be.
 		- the current panic about `IrRewrite::Returns` put on a non-recursive self-call is really only a problem because *it doesn't know which edge is the call target and which is the continue target*, but if it knew which was the continue, it would probably work just fine.

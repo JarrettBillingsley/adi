@@ -67,8 +67,8 @@ impl BasicBlock {
 	/// The MMU state after running this BB. If this BB ends in a `BBTerm::StateChange`, it
 	/// may be different!
 	pub fn mmu_state_after(&self) -> MmuState {
-		if let BBTerm::StateChange(_, state) = self.term {
-			state
+		if let BBTerm::StateChange { state_after, .. } = self.term {
+			state_after
 		} else {
 			self.state
 		}
@@ -108,15 +108,15 @@ impl BasicBlock {
 			BBTerm::DeadEnd
 			| BBTerm::Halt
 			| BBTerm::Return { .. }
-			| BBTerm::FallThru(..)
-			| BBTerm::StateChange(..) => None,
+			| BBTerm::FallThru { .. }
+			| BBTerm::StateChange { .. } => None,
 
-			BBTerm::Jump(dst)
+			BBTerm::Jump { dst }
 			| BBTerm::Call { dst, .. }
-			| BBTerm::Cond { t: dst, .. } => Some(*dst),
+			| BBTerm::Cond { dst, .. } => Some(*dst),
 
 			// TODO: how would these even be implemented?
-			BBTerm::JumpTbl(_targets)        => None, // unimplemented!(),
+			BBTerm::IndirJump { dst: _ }     => None, // unimplemented!(),
 			BBTerm::IndirCall { dst: _, .. } => None, // unimplemented!(),
 		}
 	}
@@ -217,22 +217,24 @@ pub enum BBTerm {
 	Halt,
 	/// A return instruction. If `cont.is_some()`, this is a conditional return, and `cont` is where
 	/// the code will continue from if the return does not happen.
-	Return { cont: Option<EA> },
+	Return      { cont: Option<EA> },
 	/// Execution falls through to the next BB.
-	FallThru(EA),
+	FallThru    { cont: EA },
 	/// Unconditional jump.
-	Jump(EA),
-	/// Function call (dst = function called, ret = return location, cond: if it's conditional).
-	Call { dst: EA, ret: EA, cond: bool },
+	Jump        { dst: EA },
+	/// Function call (dst = function called, cont = where to continue after function returns, cond:
+	/// if it's conditional).
+	Call        { dst: EA, cont: EA, cond: bool },
 	/// Indirect function call (dst = any number of destinations, empty for unknown;
-	/// ret = return location).
-	IndirCall { dst: Vec<EA>, ret: EA },
-	/// Conditional branch within a function.
-	Cond { t: EA, f: EA },
-	/// Jump table with any number of destinations.
-	JumpTbl(Vec<EA>),
+	/// cont = return location).
+	IndirCall   { dst: Vec<EA>, cont: EA },
+	/// Conditional branch within a function. t = where to branch to if the condition is true;
+	/// cont = where code continues if the condition is false.
+	Cond        { dst: EA, cont: EA },
+	/// Indirect jump with any number of destinations.
+	IndirJump   { dst: Vec<EA> },
 	/// Like FallThru, but perform an MMU state change as well.
-	StateChange(EA, MmuState),
+	StateChange { cont: EA, state_after: MmuState },
 }
 
 /// Iterator type of `BBTerm`'s successors. (Thanks for the type, librustc_middle)
@@ -248,12 +250,12 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			Return     { cont: Some(ea) } |
-			FallThru   (ea) |
-			Call       { ret: ea, .. } |
-			IndirCall  { ret: ea, .. } |
-			Cond       { f: ea, .. } |
-			StateChange(ea, _) => Some(*ea),
+			Return     { cont: Some(cont) } |
+			FallThru   { cont } |
+			Call       { cont, .. } |
+			IndirCall  { cont, .. } |
+			Cond       { cont, .. } |
+			StateChange{ cont, .. } => Some(*cont),
 			_ => None,
 		}
 	}
@@ -263,14 +265,17 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Halt |
-			Return { cont: None }   => None     .into_iter().chain(&[]),
-			Return { cont: Some(ea) } | FallThru(ea) | Jump(ea) |
-			StateChange(ea, _)      => Some(ea) .into_iter().chain(&[]),
-			Call { dst, ret, .. }   => Some(dst).into_iter().chain(slice::from_ref(ret)),
-			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_ref(f)),
-			JumpTbl(eas)            => None     .into_iter().chain(eas),
-			IndirCall { dst, ret }  => Some(ret).into_iter().chain(dst),
+			DeadEnd |
+			Halt |
+			Return      { cont: None }    => None      .into_iter().chain(&[]),
+			Return      { cont: Some(ea) } |
+			FallThru    { cont: ea } |
+			Jump        { dst: ea } |
+			StateChange { cont: ea, .. }  => Some(ea)  .into_iter().chain(&[]),
+			Call        { dst, cont, .. } => Some(dst) .into_iter().chain(slice::from_ref(cont)),
+			Cond        { dst, cont }     => Some(dst) .into_iter().chain(slice::from_ref(cont)),
+			IndirJump   { dst }           => None      .into_iter().chain(dst),
+			IndirCall   { dst, cont }     => Some(cont).into_iter().chain(dst),
 		}
 	}
 
@@ -279,29 +284,43 @@ impl BBTerm {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return { cont: None } |
-			Halt                    => None     .into_iter().chain([].iter_mut()),
-			Return { cont: Some(ea) } | FallThru(ea) | Jump(ea) |
-			StateChange(ea, _)      => Some(ea) .into_iter().chain([].iter_mut()),
-			Call { dst, ret, .. }   => Some(dst).into_iter().chain(slice::from_mut(ret).iter_mut()),
-			Cond { t, f }           => Some(t)  .into_iter().chain(slice::from_mut(f).iter_mut()),
-			JumpTbl(eas)            => None     .into_iter().chain(eas.iter_mut()),
-			IndirCall { dst, ret }  => Some(ret).into_iter().chain(dst),
+			DeadEnd |
+			Halt |
+			Return      { cont: None }    => None      .into_iter().chain(&mut []),
+			Return      { cont: Some(ea) } |
+			FallThru    { cont: ea } |
+			Jump        { dst: ea } |
+			StateChange { cont: ea, .. }  => Some(ea)  .into_iter().chain(&mut []),
+			Call        { dst, cont, .. } => Some(dst) .into_iter().chain(slice::from_mut(cont)),
+			Cond        { dst, cont }     => Some(dst) .into_iter().chain(slice::from_mut(cont)),
+			IndirJump   { dst }           => None      .into_iter().chain(dst),
+			IndirCall   { dst, cont }     => Some(cont).into_iter().chain(dst),
 		}
 	}
 
-	/// An iterator over the owning block's *explicit* successors (those which are written
-	/// in the terminating instruction).
+	/// An iterator over the owning block's *explicit* successors (those which the terminating
+	/// instruction will explicitly transfer control to, rather than implicitly transfer control
+	/// after executing like the `continuation_successor`).
 	pub fn explicit_successors(&'_ self) -> Successors<'_> {
 		use BBTerm::*;
 
 		match self {
-			DeadEnd | Return { cont: None } | Halt | FallThru(..) |
-			StateChange(..) | IndirCall { .. }       => None     .into_iter().chain(&[]),
-			Return { cont: Some(ea) } | Jump(ea)     => Some(ea) .into_iter().chain(&[]),
-			Call { dst, .. }                         => Some(dst).into_iter().chain(&[]),
-			Cond { t, .. }                           => Some(t)  .into_iter().chain(&[]),
-			JumpTbl(eas)                             => None     .into_iter().chain(eas),
+			DeadEnd |
+			Halt |
+			FallThru    { .. } |
+			StateChange { .. } |
+			Return      { .. }      => None     .into_iter().chain(&[]),
+			Jump        { dst }     => Some(dst).into_iter().chain(&[]),
+			Call        { dst, .. } => Some(dst).into_iter().chain(&[]),
+			Cond        { dst, .. } => Some(dst).into_iter().chain(&[]),
+			IndirCall   { dst, .. } |
+			IndirJump   { dst }     => None     .into_iter().chain(dst),
 		}
+	}
+
+	/// Returns true if this terminator has one or more explicit successors.
+	pub fn has_explicit_successors(&self) -> bool {
+		use BBTerm::*;
+		matches!(self, Jump{..} | IndirJump{..} | Cond{..} | Call{..} | IndirCall{..})
 	}
 }

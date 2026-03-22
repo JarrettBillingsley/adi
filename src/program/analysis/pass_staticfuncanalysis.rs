@@ -170,12 +170,12 @@ impl Program {
 			}
 
 			let target = match self.bbidx.get(bbid).term() {
-				BBTerm::FallThru(target) => *target,
-				BBTerm::StateChange(target, old_new_state) => {
+				BBTerm::FallThru { cont } => *cont,
+				BBTerm::StateChange { cont, state_after: old_new_state }  => {
 					assert_eq!(new_state, *old_new_state,
 						"BB already had a StateChange terminator, but its old \"new state\" and \
 						its new \"new state\" don't match");
-					*target
+					*cont
 				}
 				_ => {
 					unreachable!("either split_bb should have made this a FallThru, \
@@ -183,7 +183,8 @@ impl Program {
 				}
 			};
 
-			*self.bbidx.get_mut(bbid).term_mut() = BBTerm::StateChange(target, new_state);
+			*self.bbidx.get_mut(bbid).term_mut() =
+				BBTerm::StateChange { cont: target, state_after: new_state } ;
 			let bb = self.bbidx.get(bbid);
 			debug!("rewrote terminator of BB {:?} @ {:?} to {:?}", bbid, bb.ea(), bb.term());
 		}
@@ -207,8 +208,8 @@ impl Program {
 		for bbid in all_bbs.iter() {
 			trace!("    {:?} @ {:?}", bbid, self.bbidx.get(*bbid).ea());
 
-			if let BBTerm::StateChange(_, new_state) = self.bbidx.get(*bbid).term() {
-				to_propagate.push((*bbid, *new_state));
+			if let BBTerm::StateChange { state_after, .. } = self.bbidx.get(*bbid).term() {
+				to_propagate.push((*bbid, *state_after));
 			}
 		}
 

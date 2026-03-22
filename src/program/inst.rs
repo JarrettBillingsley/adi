@@ -150,16 +150,16 @@ pub enum InstructionKind {
 	Other,
 	/// Control flow - function call. The `bool` is whether or not it's conditional.
 	Call(bool),
+	/// Control flow - indirect call. (currently no support for conditional indirect calls)
+	IndirCall,
 	/// Control flow - function return. The `bool` is whether or not it's conditional.
 	Ret(bool),
 	/// Control flow - conditional jump/branch.
 	Cond,
 	/// Control flow - unconditional jump/branch.
 	Uncond,
-	/// Control flow - indirect jump/branch.
+	/// Control flow - indirect jump/branch. (currently no support for conditional indirect jumps)
 	Indir,
-	/// Control flow - indirect call.
-	IndirCall,
 	/// Control flow - halt/stop.
 	Halt,
 }
