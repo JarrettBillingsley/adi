@@ -655,14 +655,14 @@ impl crate::dataflow::DataflowCfg<BBId> for CfgGraph {
 /// Type to hold onto function CFG analysis data structures to avoid having to recompute them
 /// during longer analyses. Holds a reference to the function to prevent it from being modified
 /// during the analysis.
-pub struct FuncAnalysis<'f> {
+pub struct FunctionCfg<'f> {
 	func:  &'f Function,
 	cfg:   CfgGraph,
 	doms:  LazyCell<CfgDominators>,
 	preds: LazyCell<CfgPredecessors>,
 }
 
-impl<'f> FuncAnalysis<'f> {
+impl<'f> FunctionCfg<'f> {
 	fn new(func: &'f Function, cfg: CfgGraph) -> Self {
 		Self {
 			func,
@@ -863,10 +863,9 @@ impl<'f> FuncAnalysis<'f> {
 }
 
 impl Program {
-	/// Begin the analysis of a function. The returned object is meant to be passed to the other
-	/// analysis methods and is used to cache their results (as some methods use the results of
-	/// others to operate properly).
-	pub fn func_begin_analysis<'f>(&self, func: &'f Function) -> FuncAnalysis<'f> {
+	/// Begin the analysis of a function's CFG. The returned object has several analysis methods and
+	/// caches some of their results. It can also be passed to some other `Program` methods.
+	pub fn func_analyze_cfg<'f>(&self, func: &'f Function) -> FunctionCfg<'f> {
 		let num_bbs = func.num_bbs();
 		let mut cfg = CfgGraph::new(num_bbs, func.head_id());
 
@@ -885,13 +884,13 @@ impl Program {
 		// this is going to be the setup for a brick joke, isn't it?
 		assert!(cfg.0.node_count() == num_bbs);
 
-		FuncAnalysis::new(func, cfg)
+		FunctionCfg::new(func, cfg)
 	}
 
 	/// Dump the function's CFG as a DOT diagram description to the console. DEBUGGING!
-	pub fn func_dump_cfg(&self, ana: &FuncAnalysis) {
+	pub fn func_dump_cfg(&self, fcfg: &FunctionCfg) {
 		println!("--------------------------------------------------------------");
-		println!("function {}", self.name_of_ea(ana.func.ea()));
-		ana.cfg.dump();
+		println!("function {}", self.name_of_ea(fcfg.func.ea()));
+		fcfg.cfg.dump();
 	}
 }

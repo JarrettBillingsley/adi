@@ -58,10 +58,10 @@ impl Program {
 			return;
 		}
 
-		let ana = self.func_begin_analysis(self.get_func(fid));
-		// self.func_dump_cfg(&ana);
+		let cfg = self.func_analyze_cfg(self.get_func(fid));
+		// self.func_dump_cfg(&cfg);
 
-		if let Some(reachable) = ana.dominates_all_reachable(bbid) {
+		if let Some(reachable) = cfg.dominates_all_reachable(bbid) {
 			// alright, we can split! conveniently, the reachable set is the set of BBs that the
 			// new function will inherit, and bbid will become its head.
 

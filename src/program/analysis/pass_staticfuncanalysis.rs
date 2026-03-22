@@ -194,9 +194,9 @@ impl Program {
 	-> impl Iterator<Item = (BBId, StateInfo)> + use<> {
 		debug!("- running state change dataflow");
 		let func       = self.get_func(fid);
-		let ana        = self.func_begin_analysis(func);
-		let all_bbs    = ana.all_bbs().collect::<Vec<_>>();
-		let preds      = ana.bb_predecessors();
+		let cfg        = self.func_analyze_cfg(func);
+		let all_bbs    = cfg.all_bbs().collect::<Vec<_>>();
+		let preds      = cfg.bb_predecessors();
 		let head_state = self.bbidx.get(func.head_id()).mmu_state();
 		// vector of BBs which end in a `BBTerm::StateChange`, and the new MMU state that its
 		// terminating instruction produced, to be propagated to its successors (note: NOT the new
@@ -212,8 +212,8 @@ impl Program {
 			}
 		}
 
-		let mut flow = StateFlow::new(preds, &all_bbs, ana.head_id(), head_state, &to_propagate);
-		flow.run(ana.cfg());
+		let mut flow = StateFlow::new(preds, &all_bbs, cfg.head_id(), head_state, &to_propagate);
+		flow.run(cfg.cfg());
 		flow.dump_state("final", &all_bbs);
 		flow.into_iter()
 	}

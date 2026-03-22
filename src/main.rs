@@ -585,21 +585,21 @@ fn testing_look_for_unsplittable_funcs(prog: &Program) {
 		if func.num_bbs() == 1 { continue; }
 		log::info!("checking {:?}", func.ea());
 
-		let ana = prog.func_begin_analysis(func);
+		let cfg = prog.func_analyze_cfg(func);
 
 		if func.is_multi_entry() {
 			log::warn!("multi-entry function with entrypoints {:?}:", func.entrypoints());
 		} else {
 			for bbid in func.all_bbs() {
 				if bbid == func.head_id() { continue; }
-				if ana.dominates_all_reachable(bbid).is_some() {
+				if cfg.dominates_all_reachable(bbid).is_some() {
 					continue 'outer;
 				}
 			}
 
 			log::warn!("found a function that's completely unsplittable:");
 		}
-		prog.func_dump_cfg(&ana);
+		prog.func_dump_cfg(&cfg);
 	}
 }
 
@@ -608,13 +608,13 @@ fn testing_look_for_irreducible_funcs(prog: &Program) {
 		if func.num_bbs() == 1 { continue; }
 		log::info!("checking {:?}", func.ea());
 
-		let ana = prog.func_begin_analysis(func);
+		let cfg = prog.func_analyze_cfg(func);
 
-		match ana.find_irreducible_nodes() {
+		match cfg.find_irreducible_nodes() {
 			None => {},
 			Some(set) => {
 				log::warn!("irreducible CFG caused by: {:?}:", set);
-				prog.func_dump_cfg(&ana);
+				prog.func_dump_cfg(&cfg);
 			}
 		}
 	}

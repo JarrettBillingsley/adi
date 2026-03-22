@@ -108,8 +108,8 @@ impl Program {
 
 		if func.is_multi_entry() {
 			log::warn!("func_to_ir on multi-entry function");
-			let ana = self.func_begin_analysis(func);
-			self.func_dump_cfg(&ana);
+			let cfg = self.func_analyze_cfg(func);
+			self.func_dump_cfg(&cfg);
 		}
 
 		// the IR BBs, one for each of the original BBs
