@@ -3,6 +3,61 @@ use crate::ir::{ IrInst, IrSrc, IrReg, IrBBId };
 use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
+// BuildReg, BuildSrc, BuildEA
+// ------------------------------------------------------------------------------------------------
+
+#[derive(Copy, Clone)]
+pub(crate) struct BuildReg { r: IrReg, n: i8 }
+
+impl<T: Into<IrReg>> From<(T, i8)> for BuildReg {
+	fn from(other: (T, i8)) -> Self {
+		Self { r: other.0.into(), n: other.1 }
+	}
+}
+
+impl<T: Into<IrReg>> From<T> for BuildReg {
+	fn from(other: T) -> Self {
+		Self { r: other.into(), n: -1 }
+	}
+}
+
+#[derive(Copy, Clone)]
+pub(crate) struct BuildSrc { s: IrSrc, n: i8 }
+
+impl<T: Into<IrSrc>> From<(T, i8)> for BuildSrc {
+	fn from(other: (T, i8)) -> Self {
+		Self { s: other.0.into(), n: other.1 }
+	}
+}
+
+impl<T: Into<IrSrc>> From<T> for BuildSrc {
+	fn from(other: T) -> Self {
+		Self { s: other.into(), n: -1 }
+	}
+}
+
+impl From<BuildReg> for BuildSrc {
+	fn from(other: BuildReg) -> Self {
+		Self { s: other.r.into(), n: other.n }
+	}
+}
+
+#[derive(Copy, Clone)]
+pub(crate) struct BuildEA { ea: EA, n: i8 }
+
+impl From<(EA, i8)> for BuildEA {
+	fn from(other: (EA, i8)) -> Self {
+		Self { ea: other.0, n: other.1 }
+	}
+}
+
+impl From<EA> for BuildEA {
+	fn from(other: EA) -> Self {
+		Self { ea: other, n: -1 }
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // IrBuilder
 // ------------------------------------------------------------------------------------------------
 
@@ -76,378 +131,531 @@ impl IrBuilder {
 	}
 
 	/// TODO: docme
-	pub(crate) fn mov(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::mov(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn mov(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::mov(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn izxt(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::izxt(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn izxt(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::izxt(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isxt(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::isxt(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn isxt(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::isxt(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ilo(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::ilo(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn ilo(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::ilo(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ihi(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::ihi(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn ihi(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::ihi(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ineg(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::ineg(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn ineg(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::ineg(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn inot(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::inot(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn inot(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::inot(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn bnot(&mut self, dst: IrReg, src: impl Into<IrSrc>,
-		dstn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::bnot(self.ea, dst, src.into(), dstn, srcn))
+	pub(crate) fn bnot(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src = src.into();
+		self.inst(IrInst::bnot(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ieq(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ieq(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ieq(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ieq(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ine(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ine(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ine(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ine(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn islt(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::islt(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn islt(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::islt(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isle(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::isle(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn isle(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::isle(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isgt(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::islt(self.ea, dst, src2.into(), src1.into(), dstn, src2n, src1n))
+	pub(crate) fn isgt(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::islt(self.ea, dst.r, src2.s, src1.s, dst.n, src2.n, src1.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isge(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::isle(self.ea, dst, src2.into(), src1.into(), dstn, src2n, src1n))
+	pub(crate) fn isge(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::isle(self.ea, dst.r, src2.s, src1.s, dst.n, src2.n, src1.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iult(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iult(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iult(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iult(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iule(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iule(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iule(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iule(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iugt(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iult(self.ea, dst, src2.into(), src1.into(), dstn, src2n, src1n))
+	pub(crate) fn iugt(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iult(self.ea, dst.r, src2.s, src1.s, dst.n, src2.n, src1.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iuge(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iule(self.ea, dst, src2.into(), src1.into(), dstn, src2n, src1n))
+	pub(crate) fn iuge(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iule(self.ea, dst.r, src2.s, src1.s, dst.n, src2.n, src1.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iuadd(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iuadd(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iuadd(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iuadd(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iuaddc(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::iuaddc(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn iuaddc(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::iuaddc(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iusub(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iusub(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iusub(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iusub(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iusubb(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::iusubb(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn iusubb(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::iusubb(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iucarry(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iucarry(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iucarry(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iucarry(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iucarryc(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::iucarryc(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn iucarryc(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::iucarryc(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iscarry(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iscarry(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iscarry(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iscarry(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iscarryc(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::iscarryc(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn iscarryc(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::iscarryc(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isborrow(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::isborrow(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn isborrow(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::isborrow(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isborrowb(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::isborrowb(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn isborrowb(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::isborrowb(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn icarries(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::icarries(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn icarries(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::icarries(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn icarriesc(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::icarriesc(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn icarriesc(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::icarriesc(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iborrows(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iborrows(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iborrows(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iborrows(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iborrowsb(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::iborrowsb(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn iborrowsb(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::iborrowsb(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn imul(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::imul(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn imul(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::imul(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iudiv(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iudiv(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iudiv(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iudiv(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isdiv(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::isdiv(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn isdiv(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::isdiv(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iumod(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iumod(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iumod(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iumod(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ismod(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ismod(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ismod(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ismod(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ixor(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ixor(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ixor(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ixor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iand(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iand(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iand(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iand(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ior(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ior(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ior(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ior(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ishl(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ishl(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ishl(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ishl(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iushr(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iushr(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iushr(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iushr(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn isshr(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::isshr(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn isshr(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::isshr(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn irol(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::irol(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn irol(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::irol(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn iror(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::iror(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn iror(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::iror(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ipair(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ipair(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ipair(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ipair(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ibit(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::ibit(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn ibit(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::ibit(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ibset(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, src3: impl Into<IrSrc>,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> &mut Self {
-		self.inst(IrInst::ibset(self.ea, dst, src1.into(), src2.into(), src3.into(),
-			dstn, src1n, src2n, src3n))
+	pub(crate) fn ibset(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>, src3: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		let src3 = src3.into();
+		self.inst(IrInst::ibset(self.ea, dst.r, src1.s, src2.s, src3.s,
+			dst.n, src1.n, src2.n, src3.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn bxor(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::bxor(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn bxor(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::bxor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn band(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::band(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn band(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::band(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn bor(&mut self, dst: IrReg, src1: impl Into<IrSrc>,
-		src2: impl Into<IrSrc>, dstn: i8, src1n: i8, src2n: i8) -> &mut Self {
-		self.inst(IrInst::bor(self.ea, dst, src1.into(), src2.into(), dstn, src1n, src2n))
+	pub(crate) fn bor(&mut self, dst: impl Into<BuildReg>, src1: impl Into<BuildSrc>,
+		src2: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		let src1 = src1.into();
+		let src2 = src2.into();
+		self.inst(IrInst::bor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn load(&mut self, dst: IrReg, addr: impl Into<IrSrc>,
-		dstn: i8, addrn: i8) -> &mut Self {
-		self.inst(IrInst::load(self.ea, dst, addr.into(), dstn, addrn))
+	pub(crate) fn load(&mut self, dst: impl Into<BuildReg>, addr: impl Into<BuildSrc>)
+		-> &mut Self {
+		let dst = dst.into();
+		let addr = addr.into();
+		self.inst(IrInst::load(self.ea, dst.r, addr.s, dst.n, addr.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn store(&mut self, addr: impl Into<IrSrc>, src: impl Into<IrSrc>,
-		addrn: i8, srcn: i8) -> &mut Self {
-		self.inst(IrInst::store(self.ea, addr.into(), src.into(), addrn, srcn))
+	pub(crate) fn store(&mut self, addr: impl Into<BuildSrc>, src: impl Into<BuildSrc>)
+		-> &mut Self {
+		let src = src.into();
+		let addr = addr.into();
+		self.inst(IrInst::store(self.ea, addr.s, src.s, addr.n, src.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn branch(&mut self, dst: EA, dstn: i8) -> &mut Self {
-		self.inst(IrInst::branch(self.ea, dst, dstn))
+	pub(crate) fn branch(&mut self, dst: impl Into<BuildEA>) -> &mut Self {
+		let dst = dst.into();
+		self.inst(IrInst::branch(self.ea, dst.ea, dst.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn cbranch(&mut self, cond: impl Into<IrSrc>, dst: EA, cont: EA,
-		condn: i8, dstn: i8) -> &mut Self {
-		self.inst(IrInst::cbranch(self.ea, cond.into(), dst, cont, condn, dstn))
+	pub(crate) fn cbranch(&mut self, cond: impl Into<BuildSrc>, dst: impl Into<BuildEA>,
+		cont: impl Into<BuildEA>) -> &mut Self {
+		let cond = cond.into();
+		let dst = dst.into();
+		let cont = cont.into();
+		self.inst(IrInst::cbranch(self.ea, cond.s, dst.ea, cont.ea, cond.n, dst.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn cbranch_and_split(&mut self, cond: impl Into<IrSrc>, dst: EA,
-		condn: i8, dstn: i8) -> &mut Self {
+	pub(crate) fn cbranch_and_split(&mut self, cond: impl Into<BuildSrc>, dst: impl Into<BuildEA>)
+		-> &mut Self {
 		assert_eq!(self.cur, false);
-		self.inst(IrInst::cbranch(self.ea, cond.into(), dst, self.next_irbbid, condn, dstn));
+		let cond = cond.into();
+		let dst = dst.into();
+		self.inst(IrInst::cbranch(self.ea, cond.s, dst.ea, self.next_irbbid, cond.n, dst.n));
 		self.cur = true;
 		self
 	}
 
 	/// TODO: docme
-	pub(crate) fn ibranch(&mut self, dst: impl Into<IrSrc>, dstn: i8) -> &mut Self {
-		self.inst(IrInst::ibranch(self.ea, dst.into(), dstn))
+	pub(crate) fn ibranch(&mut self, dst: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		self.inst(IrInst::ibranch(self.ea, dst.s, dst.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn call(&mut self, dst: EA, cont: EA, dstn: i8) -> &mut Self {
-		self.inst(IrInst::call(self.ea, dst, cont, dstn))
+	pub(crate) fn call(&mut self, dst: impl Into<BuildEA>, cont: impl Into<BuildEA>) -> &mut Self {
+		let dst = dst.into();
+		let cont = cont.into();
+		self.inst(IrInst::call(self.ea, dst.ea, cont.ea, dst.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn icall(&mut self, dst: impl Into<IrSrc>, cont: EA,
-		dstn: i8) -> &mut Self {
-		self.inst(IrInst::icall(self.ea, dst.into(), cont, dstn))
+	pub(crate) fn icall(&mut self, dst: impl Into<BuildSrc>, cont: impl Into<BuildEA>)
+		-> &mut Self {
+		let dst = dst.into();
+		let cont = cont.into();
+		self.inst(IrInst::icall(self.ea, dst.s, cont.ea, dst.n))
 	}
 
 	/// TODO: docme
-	pub(crate) fn ret(&mut self, dst: impl Into<IrSrc>, dstn: i8) -> &mut Self {
-		self.inst(IrInst::ret(self.ea, dst.into(), dstn))
+	pub(crate) fn ret(&mut self, dst: impl Into<BuildSrc>) -> &mut Self {
+		let dst = dst.into();
+		self.inst(IrInst::ret(self.ea, dst.s, dst.n))
 	}
 
 	/// TODO: docme

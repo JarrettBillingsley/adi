@@ -70,7 +70,7 @@ impl Program {
 
 			match bb.term {
 				BBTerm::FallThru { cont } |
-				BBTerm::StateChange { cont, .. } => { b.branch(cont, -1); }
+				BBTerm::StateChange { cont, .. } => { b.branch(cont); }
 				BBTerm::DeadEnd                  => { b.halt(); }
 				_                                => {}
 			}
@@ -356,10 +356,10 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		b.set_ea(last_ea);
 
 		for &reg in ret_regs.iter() {
-			b.mov(reg, IrSrc::Return(reg.size()), -1, -1);
+			b.mov(reg, IrSrc::Return(reg.size()));
 		}
 
-		b.branch(EA::unresolved(0), -1);
+		b.branch(EA::unresolved(0));
 		let mut insts = b.finish_one();
 		// SAFETY: above b.branch ensures at least 1 inst in insts
 		*insts.last_mut().unwrap().kind_mut() = IrInstKind::Branch { dst: old_cont, dstn: -1 };
