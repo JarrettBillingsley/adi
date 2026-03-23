@@ -3,10 +3,9 @@
 
 # Imminent tasks!
 
+- `VA` should contain `u64`, not `usize`.
 - IR
-	- properly analyzing multi-entry functions
-		- would need a **new terminating instruction like `IrInstKind::MultiEntry` with a a `Vec<IrBBId>` for its targets** to put at the end of the "dummy" entry BB used for translating multi-entry functions
-		- then we can add that auxiliary IR BB when building the IR
+	- `IrFunction` should have lists of entry/exit points for dataflow analysis
 	- `IrInstKind::IBranch/ICall` could have some `Vec` of targets (which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive), but that `Vec` may not be exhaustive... hmmmm not sure, jump tables/indirect calls are a big TODO for now
 	- `ValSize::_1` for bools?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.

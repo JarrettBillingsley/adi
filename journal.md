@@ -549,12 +549,22 @@ part of the irreducible clump, which was checked earlier. so either the IR is on
 
 ---
 
-## How to analyze irreducible CFGs
+## Single entry/exit in IR (or, why it's not really possible)
 
-Irreducible CFGs make splitting impossible in the general case, so there will always be multi-entry functions which need to be analyzed. Irreducible CFGs will be a minority, but I don't want to have to skip analyzing those functions. So, the func->IR will just have to Deal With It.
+In a compiler for an HLL, the CFG always has a single entry point, and it's useful to have a single exit point in the IR in order to simplify dataflow algorithms (only need to start a reverse dataflow in one place instead of many). 
 
-Idea for converting a multi-entry function to IR:
+But this isn't a compiler for an HLL, and the code we're working with is not well-behaved. 
 
-- generate a virtual IR bb0 with edges to all entry points.
-- each non-head entry point needs phis.
-- certain `Rewrite`s should not be inserted? ⚠️more thought is needed there
+There are two main problems:
+
+- to have a single exit point, you'd need to have all `ret`-terminated BBs branch to a common virtual return BB. **but:**
+	- **each IrInst has an EA of the corresponding real inst,** so a common return BB would either have to:
+		- pick some arbitrary `ret` instruction's EA to use (associating any dataflow results with the wrong location)
+		- or use some "invalid" addresses (associating any dataflow results with *nowhere*)
+	- **the stack pointer could be at different positions at each `ret`**
+		- so unifying them wouldn't really help.
+- having a single entry point would **run into the same stack pointer issue**
+
+So I don't think it'd work out.
+
+Instead, I guess each IrFunction needs to keep a list of heads (entry points) and tails (return points).
