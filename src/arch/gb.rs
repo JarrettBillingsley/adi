@@ -6,6 +6,7 @@
 //! Also, it drops the IO ports/instructions entirely, and adds a "zero-page-like"
 //! addressing mode for accessing `0xFF00..0xFFFF` where memory-mapped IO resides.
 
+use crate::{ Offs };
 use crate::program::{
 	MemIndir,
 	Operand,
@@ -111,22 +112,22 @@ fn decode_operands(desc: &InstDesc, va: VA, img: &[u8], ops: &mut [Operand; 2])
 		// [Mem]
 		GBOpKind::Rel => {
 			let addr = 2 + (va.0 as isize) + (img[1] as i8 as isize);
-			let addr = VA(addr as usize);
+			let addr = VA(addr as usize as Offs);
 			ops[0] = Mem(addr, Target);
 			(1, Some(addr))
 		}
 		GBOpKind::Add16(a) => {
 			let addr = (img[2] as usize) << 8 | (img[1] as usize);
-			let addr = VA(addr);
+			let addr = VA(addr as Offs);
 			ops[0] = Mem(addr, a);
 			(1, if a == Target { Some(addr) } else { None })
 		}
 		GBOpKind::AddHi(a) => {
-			ops[0] = Mem(VA(0xFF00 + (img[1] as usize)), a);
+			ops[0] = Mem(VA(0xFF00 + (img[1] as Offs)), a);
 			(1, None)
 		}
 		GBOpKind::Rst(addr) => {
-			let addr = VA(addr as usize);
+			let addr = VA(addr as Offs);
 			ops[0] = Mem(addr, Target);
 			(1, Some(addr))
 		}

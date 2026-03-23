@@ -1,6 +1,7 @@
 use std::ops::{ Range, RangeBounds, Bound, Index };
 use std::convert::TryInto;
 
+use crate::{ Size, Offs, to_usize };
 use crate::memory::{ Endian };
 
 // ------------------------------------------------------------------------------------------------
@@ -71,60 +72,60 @@ impl<'img> ImageSlice<'img> {
 	// ---------------------------------------------------------------------------------------------
 	// private
 
-	fn check_range(&self, range: Range<usize>) -> (usize, usize) {
+	fn check_range(&self, range: Range<Offs>) -> (Offs, Offs) {
 		let (start, end) = (range.start, range.end);
 		assert!(end > start, "no zero-size slices");
-		assert!(end <= self.data.len(), "range exceeds data length");
+		assert!(end <= self.data.len() as Offs, "range exceeds data length");
 		(start, end)
 	}
 }
 
-impl Index<usize> for ImageSlice<'_> {
+impl Index<Offs> for ImageSlice<'_> {
 	type Output = u8;
-	fn index(&self, idx: usize) -> &Self::Output {
-		&self.data[idx]
+	fn index(&self, idx: Offs) -> &Self::Output {
+		&self.data[to_usize(idx)]
 	}
 }
 
-impl ImageRead<usize> for ImageSlice<'_> {
-	fn read_u8(&self, idx: usize) -> u8 {
-		self.data[idx]
+impl ImageRead<Offs> for ImageSlice<'_> {
+	fn read_u8(&self, idx: Offs) -> u8 {
+		self.data[to_usize(idx)]
 	}
 
-	fn read_le_u16(&self, idx: usize) -> u16 {
-		let data = &self.data[idx .. idx + 2];
+	fn read_le_u16(&self, idx: Offs) -> u16 {
+		let data = &self.data[to_usize(idx) .. to_usize(idx + 2)];
 		u16::from_le_bytes(data.try_into().unwrap())
 	}
 
-	fn read_be_u16(&self, idx: usize) -> u16 {
-		let data = &self.data[idx .. idx + 2];
+	fn read_be_u16(&self, idx: Offs) -> u16 {
+		let data = &self.data[to_usize(idx) .. to_usize(idx + 2)];
 		u16::from_be_bytes(data.try_into().unwrap())
 	}
 
-	fn read_le_u32(&self, idx: usize) -> u32 {
-		let data = &self.data[idx .. idx + 4];
+	fn read_le_u32(&self, idx: Offs) -> u32 {
+		let data = &self.data[to_usize(idx) .. to_usize(idx + 4)];
 		u32::from_le_bytes(data.try_into().unwrap())
 	}
 
-	fn read_be_u32(&self, idx: usize) -> u32 {
-		let data = &self.data[idx .. idx + 4];
+	fn read_be_u32(&self, idx: Offs) -> u32 {
+		let data = &self.data[to_usize(idx) .. to_usize(idx + 4)];
 		u32::from_be_bytes(data.try_into().unwrap())
 	}
 
-	fn read_le_u64(&self, idx: usize) -> u64 {
-		let data = &self.data[idx .. idx + 8];
+	fn read_le_u64(&self, idx: Offs) -> Offs {
+		let data = &self.data[to_usize(idx) .. to_usize(idx + 8)];
 		u64::from_le_bytes(data.try_into().unwrap())
 	}
 
-	fn read_be_u64(&self, idx: usize) -> u64 {
-		let data = &self.data[idx .. idx + 8];
+	fn read_be_u64(&self, idx: Offs) -> Offs {
+		let data = &self.data[to_usize(idx) .. to_usize(idx + 8)];
 		u64::from_be_bytes(data.try_into().unwrap())
 	}
 }
 
-impl ImageSliceable<usize> for ImageSlice<'_> {
+impl ImageSliceable<Offs> for ImageSlice<'_> {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&'_ self, range: impl RangeBounds<usize>) -> ImageSlice<'_> {
+	fn image_slice(&'_ self, range: impl RangeBounds<Offs>) -> ImageSlice<'_> {
 		let start = match range.start_bound() {
 			Bound::Included(&s) => s,
 			Bound::Excluded(&s) => s + 1,
@@ -134,14 +135,13 @@ impl ImageSliceable<usize> for ImageSlice<'_> {
 		let end = match range.end_bound() {
 			Bound::Included(&e) => e + 1,
 			Bound::Excluded(&e) => e,
-			Bound::Unbounded    => self.data.len(),
+			Bound::Unbounded    => self.data.len() as Offs,
 		};
 
 		let (start, end) = self.check_range(start .. end);
-		ImageSlice { data: &self.data[start .. end] }
+		ImageSlice { data: &self.data[to_usize(start) .. to_usize(end)] }
 	}
 }
-
 
 // ------------------------------------------------------------------------------------------------
 // Image
@@ -151,7 +151,7 @@ impl ImageSliceable<usize> for ImageSlice<'_> {
 pub struct Image {
 	name:      String,
 	data:      Vec<u8>,
-	orig_offs: usize,
+	orig_offs: Offs,
 }
 
 #[allow(clippy::len_without_is_empty)]
@@ -172,12 +172,12 @@ impl Image {
 	}
 
 	/// Create a *new* image whose data is a copy of a range of this one's.
-	pub fn new_from_range(&self, range: Range<usize>) -> Image {
+	pub fn new_from_range(&self, range: Range<Offs>) -> Image {
 		let (start, end) = self.check_range(range);
 
 		Image {
 			name:      self.name.clone(),
-			data:      self.data[start .. end].into(),
+			data:      self.data[to_usize(start) .. to_usize(end)].into(),
 			orig_offs: self.orig_offs + start,
 		}
 	}
@@ -188,8 +188,8 @@ impl Image {
 	}
 
 	/// Gets the image's length in bytes.
-	#[inline] pub fn len(&self) -> usize {
-		self.data.len()
+	#[inline] pub fn len(&self) -> Size {
+		self.data.len() as Size
 	}
 
 	/// Gets a view of the image's data.
@@ -198,24 +198,24 @@ impl Image {
 	}
 
 	/// Get the range of the original file from which this was created.
-	#[inline] pub fn orig_range(&self) -> Range<usize> {
-		self.orig_offs .. self.orig_offs + self.data.len()
+	#[inline] pub fn orig_range(&self) -> Range<Offs> {
+		self.orig_offs .. self.orig_offs + self.data.len() as Offs
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// private
 
-	fn check_range(&self, range: Range<usize>) -> (usize, usize) {
+	fn check_range(&self, range: Range<Offs>) -> (Offs, Offs) {
 		let (start, end) = (range.start, range.end);
 		assert!(end > start, "no zero-size slices");
-		assert!(end <= self.data.len(), "range exceeds data length");
+		assert!(end <= self.data.len() as Offs, "range exceeds data length");
 		(start, end)
 	}
 }
 
-impl ImageSliceable<usize> for Image {
+impl ImageSliceable<Offs> for Image {
 	/// Get a read-only slice of this image's data.
-	fn image_slice(&'_ self, range: impl RangeBounds<usize>) -> ImageSlice<'_> {
+	fn image_slice(&'_ self, range: impl RangeBounds<Offs>) -> ImageSlice<'_> {
 		let start = match range.start_bound() {
 			Bound::Included(&s) => s,
 			Bound::Excluded(&s) => s + 1,
@@ -225,10 +225,10 @@ impl ImageSliceable<usize> for Image {
 		let end = match range.end_bound() {
 			Bound::Included(&e) => e + 1,
 			Bound::Excluded(&e) => e,
-			Bound::Unbounded    => self.data.len(),
+			Bound::Unbounded    => self.data.len() as Offs,
 		};
 
 		let (start, end) = self.check_range(start .. end);
-		ImageSlice { data: &self.data[start .. end] }
+		ImageSlice { data: &self.data[to_usize(start) .. to_usize(end)] }
 	}
 }

@@ -207,7 +207,7 @@ fn toy_test_calls() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
-	const FUNC_FIRST_HALF: usize = 0x20;
+	const FUNC_FIRST_HALF: Offs = 0x20;
 
 	let mut b = ToyBuilder::new();
 	b.movi(A, 0x30);
@@ -267,9 +267,9 @@ fn toy_test_state_change() -> ToyTest {
 	use Reg::*;
 
 	let mut b = ToyBuilder::new();
-	const FUNC2: usize = 0x50;
-	const FUNC3: usize = 0x90;
-	const STATE_CHANGE_FUNC: usize = 0x150;
+	const FUNC2: Offs = 0x50;
+	const FUNC3: Offs = 0x90;
+	const STATE_CHANGE_FUNC: Offs = 0x150;
 
 	// ---------------------------------
 	// main
@@ -382,7 +382,7 @@ fn toy_test_ccall_cret() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
-	const FUNC1: usize = 0x20;
+	const FUNC1: Offs = 0x20;
 
 	let mut b = ToyBuilder::new();
 	b.ldi(A, 0x8000);
@@ -666,7 +666,7 @@ fn show_unk(prog: &Program, span: &Span) {
 	println!("{:>4}:{} {}", seg.name().yellow(), addr, msg.truecolor(255, 127, 0));
 
 	if seg.is_real() {
-		let len = span.len().min(UNK_SIZE_CUTOFF);
+		let len = span.len().min(UNK_SIZE_CUTOFF as Offs);
 		let slice = seg.image_slice(ea .. ea + len);
 		let data = slice.data();
 		let seg_name = seg.name().yellow();
@@ -680,11 +680,11 @@ fn show_unk(prog: &Program, span: &Span) {
 				bytes.push_str(&format!(" {:02X}", byte));
 			}
 
-			let addr = prog.fmt_addr(va.0 + i * UNK_STRIDE);
+			let addr = prog.fmt_addr(va.0 + (i * UNK_STRIDE) as Offs);
 			println!("{:>4}:{} {}", seg_name, addr, bytes.truecolor(255, 127, 0));
 		}
 
-		if span.len() > UNK_SIZE_CUTOFF {
+		if span.len() > UNK_SIZE_CUTOFF as Offs {
 			println!("          {}", "...".truecolor(255, 127, 0));
 		}
 	}
@@ -744,7 +744,7 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 		}
 
 		Array(arrty) => {
-			let mut ret = String::with_capacity(arrty.len() * 4);
+			let mut ret = String::with_capacity(to_usize(arrty.len() * 4));
 			let sub_ty = arrty.ty();
 			let stride = sub_ty.size().fixed();
 

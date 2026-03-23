@@ -108,7 +108,7 @@ impl<'dis, 'img> DisasAll<'dis, 'img> {
 	}
 
 	pub fn skip_it(&mut self) {
-		self.va += 1;
+		self.va += 1u64;
 		self.ea += 1;
 		self.offs += 1;
 		self.err = None;
@@ -126,8 +126,8 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 			match self.disas.disas_inst(&self.img[self.offs ..], self.state, self.va, self.ea) {
 				Ok(inst) => {
 					let size = inst.size();
-					self.va += size;
-					self.ea += size;
+					self.va += size as u64;
+					self.ea += size as u64;
 					self.offs += size;
 
 					// terminate iteration if the instruction is a halt

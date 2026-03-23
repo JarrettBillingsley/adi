@@ -4,6 +4,7 @@ use std::iter::{ IntoIterator} ;
 
 use log::*;
 
+use crate::{ Size };
 use crate::dataflow::{ JoinSemiLattice, DataflowAlgorithm };
 use crate::program::{ Program, BBId, BBTerm, FuncId, OpInfo, RefInfo, Operand };
 use crate::arch::{ IArchitecture };
@@ -158,7 +159,7 @@ impl Program {
 			// if the state-changing instruction is *not* the terminating instruction, split the BB.
 			if inst.ea() != self.bbidx.get(bbid).term_ea() {
 				// SAFETY: this is okay because of the above check.
-				match self.split_bb(bbid, inst.ea() + inst.size(), Some(fid)) {
+				match self.split_bb(bbid, inst.ea() + inst.size() as Size, Some(fid)) {
 					Ok(Some(new_bbid)) => {
 						self.get_func_mut(fid).bbs.push(new_bbid);
 					}

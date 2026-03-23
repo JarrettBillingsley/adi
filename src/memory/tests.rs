@@ -6,7 +6,7 @@ fn span_map() {
 	use SpanKind::*;
 
 	let id = SegId(0);
-	let mut m = SpanMap::new(id, 2usize.pow(16));
+	let mut m = SpanMap::new(id, 2u64.pow(16));
 
 	// 1. it must be all undefined at the beginning.
 	assert_eq!(m.iter().collect::<Vec<_>>(), &[
@@ -143,7 +143,7 @@ fn span_map_iter() {
 	use SpanKind::*;
 
 	let id = SegId(0);
-	let mut m = SpanMap::new(id, 2usize.pow(16));
+	let mut m = SpanMap::new(id, 2u64.pow(16));
 	m.define(0x0000, 0x1000, Ana);
 	m.define(0xF000, 0x1000, Ana);
 	m.define(0x1000, 0x1000, Ana);

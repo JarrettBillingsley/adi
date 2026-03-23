@@ -122,7 +122,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 					};
 
 					if let Some((addr, srcs)) = addr {
-						let addr = EA::unresolved(addr as usize);
+						let addr = EA::unresolved(addr);
 
 						let kind = match inst.kind() {
 							IrInstKind::Load{ .. }  => ConstAddrKind::Load,

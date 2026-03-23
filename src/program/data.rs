@@ -5,6 +5,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
 
+use crate::{ Size, Offs, to_usize };
 use crate::memory::{ EA };
 
 // ------------------------------------------------------------------------------------------------
@@ -41,12 +42,12 @@ pub struct DataItem {
 	id:    DataId,
 	ea:    EA,
 	ty:    Type,
-	size:  usize,
+	size:  Size,
 	radix: Radix,
 }
 
 impl DataItem {
-	fn new(id: DataId, ea: EA, ty: Type, size: usize) -> Self {
+	fn new(id: DataId, ea: EA, ty: Type, size: Size) -> Self {
 		Self { id, ea, ty, size, radix: Radix::Hex }
 	}
 
@@ -57,7 +58,7 @@ impl DataItem {
 	/// Its type.
 	pub fn ty(&self) -> &Type { &self.ty }
 	/// Its size in bytes.
-	pub fn size(&self) -> usize { self.size }
+	pub fn size(&self) -> Size { self.size }
 	/// Its display radix (if that means anything).
 	pub fn radix(&self) -> Radix { self.radix }
 
@@ -81,7 +82,7 @@ impl DataIndex {
 	}
 
 	/// Creates a new data item and returns its ID.
-	pub fn new_item(&mut self, ea: EA, ty: Type, size: usize)
+	pub fn new_item(&mut self, ea: EA, ty: Type, size: Size)
 	-> DataId {
 		assert!(size >= ty.min_size());
 
@@ -114,22 +115,22 @@ impl DataIndex {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum TypeSize {
 	/// A fixed-size type.
-	Fixed(usize),
+	Fixed(Size),
 
 	/// A variable-size type (i.e. a struct with a VLA). This is the minimum size of such a type.
-	Variable(usize),
+	Variable(Size),
 }
 
 impl TypeSize {
 	/// The minimum number of bytes taken up by a value of this type.
-	pub fn min_size(&self) -> usize {
+	pub fn min_size(&self) -> Size {
 		match self {
 			TypeSize::Fixed(s) | TypeSize::Variable(s) => *s
 		}
 	}
 
 	/// Like `.unwrap()`, but for fixed type sizes.
-	pub fn fixed(&self) -> usize {
+	pub fn fixed(&self) -> Size {
 		match self {
 			TypeSize::Fixed(s) => *s,
 			TypeSize::Variable(..) => panic!("expected a fixed size"),
@@ -149,13 +150,13 @@ impl TypeSize {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ArrayType {
 	ty:  Box<Type>,
-	len: usize,
+	len: Size,
 }
 
 #[allow(clippy::len_without_is_empty)]
 impl ArrayType {
 	pub fn ty(&self)  -> &Type { self.ty.as_ref() }
-	pub fn len(&self) -> usize { self.len }
+	pub fn len(&self) -> Size { self.len }
 }
 
 impl Display for ArrayType {
@@ -200,10 +201,10 @@ pub enum Type {
 	WChar,
 
 	/// A zero-terminated string of `Char` values of the given length.
-	StrZ(usize),
+	StrZ(Size),
 
 	/// A zero-terminated string of `WChar` values of the given length.
-	WStrZ(usize),
+	WStrZ(Size),
 
 	/// An enumerated constant.
 	Enum(RcCell<EnumDesc>),
@@ -226,7 +227,7 @@ pub enum Type {
 
 impl Type {
 	/// ctor for array types. Panics if `ty` is not a fixed-size type.
-	pub fn array(ty: Type, len: usize) -> Self {
+	pub fn array(ty: Type, len: Size) -> Self {
 		assert!(ty.size().is_fixed(), "arrays can only hold fixed-size values");
 		Self::Array(ArrayType { ty: Box::new(ty), len })
 	}
@@ -262,7 +263,7 @@ impl Type {
 	}
 
 	/// Same as `self.size().min_size()`.
-	pub fn min_size(&self) -> usize {
+	pub fn min_size(&self) -> Size {
 		self.size().min_size()
 	}
 
@@ -453,7 +454,7 @@ pub enum BitfieldSize {
 impl BitfieldSize {
 	/// The *byte* size of this *bit* size.
 	pub fn size(&self) -> TypeSize {
-		TypeSize::Fixed(*self as usize / 8)
+		TypeSize::Fixed(*self as Size / 8)
 	}
 }
 
@@ -463,22 +464,22 @@ pub struct BitfieldField {
 	name:      String,
 	ty:        Box<Type>, // to allow e.g. sub-enums!
 	radix:     Radix,
-	bit_pos:   usize,     // measured from LSB=0
-	bit_size:  usize,     // measured in bits
+	bit_pos:   Offs,     // measured from LSB=0
+	bit_size:  Offs,     // measured in bits
 }
 
 impl BitfieldField {
 	/// ctor. `bit_pos` is its position within the bitfield and is measured from LSB=0.
 	/// Panics if `ty` is not a "loose" integer type, or if `ty` is itself a bitfield type, or
 	/// if the name is empty.
-	pub fn new(name: &str, ty: Box<Type>, radix: Radix, bit_pos: usize, bit_size: usize) -> Self {
+	pub fn new(name: &str, ty: Box<Type>, radix: Radix, bit_pos: Offs, bit_size: Offs) -> Self {
 		assert!(!name.is_empty());
 		BitfieldField::_check_type(ty.as_ref());
 		Self { name: name.into(), ty, radix, bit_pos, bit_size, }
 	}
 
 	/// The bit position of the next (further-left) field after this one.
-	pub fn next_bit_pos(&self) -> usize {
+	pub fn next_bit_pos(&self) -> Offs {
 		self.bit_pos + self.bit_size
 	}
 
@@ -537,7 +538,7 @@ impl BitfieldDesc {
 	/// truncated/deleted by the new size.
 	pub fn set_size(&mut self, new_size: BitfieldSize) {
 		if new_size < self.bit_size && !self.fields.is_empty() {
-			assert!(self.fields.last().unwrap().next_bit_pos() <= new_size as usize);
+			assert!(self.fields.last().unwrap().next_bit_pos() <= new_size as Size);
 		}
 
 		self.bit_size = new_size;
@@ -589,17 +590,17 @@ pub struct StructField {
 	name:   String,
 	ty:     Box<Type>,
 	radix:  Radix,
-	offset: usize,
+	offset: Offs,
 }
 
 impl StructField {
 	/// ctor. Use this if you don't care about the `radix`. Panics if name is empty.
-	pub fn new(name: &str, ty: Box<Type>, offset: usize) -> Self {
+	pub fn new(name: &str, ty: Box<Type>, offset: Offs) -> Self {
 		Self::new_radix(name, ty, Radix::Dec, offset)
 	}
 
 	/// ctor. Panics if name is empty.
-	pub fn new_radix(name: &str, ty: Box<Type>, radix: Radix, offset: usize) -> Self {
+	pub fn new_radix(name: &str, ty: Box<Type>, radix: Radix, offset: Offs) -> Self {
 		assert!(!name.is_empty());
 		Self { name: name.into(), ty, radix, offset }
 	}
@@ -608,18 +609,18 @@ impl StructField {
 	pub fn size(&self) -> TypeSize { self.ty.size() }
 
 	/// Its offset within the structure.
-	pub fn offset(&self) -> usize { self.offset }
+	pub fn offset(&self) -> Offs { self.offset }
 
 	/// The offset of the first byte after this field. Panics if this is a VLA.
-	pub fn next_offset(&self) -> usize { self.offset + self.size().fixed() }
+	pub fn next_offset(&self) -> Offs { self.offset + self.size().fixed() }
 
 	/// The range of offsets this field covers. Panics if this is a VLA.
-	pub fn offset_range(&self) -> core::ops::Range<usize> {
+	pub fn offset_range(&self) -> core::ops::Range<Offs> {
 		self.offset .. self.next_offset()
 	}
 
 	/// Set its offset within the structure.
-	pub fn set_offset(&mut self, new_offs: usize) { self.offset = new_offs; }
+	pub fn set_offset(&mut self, new_offs: Offs) { self.offset = new_offs; }
 }
 
 // This weird-ass type exists to... I guess replace a pair of Options? idk
@@ -627,13 +628,14 @@ impl StructField {
 enum VlaField {
 	None,
 	Just(StructField),
+	/// .1 is the index of the field which specifies the length
 	WithLen(StructField, usize),
 }
 
 impl VlaField {
-	pub fn is_none(&self) -> bool { self.get().is_none() }
-	pub fn is_some(&self) -> bool { self.get().is_some() }
-	pub fn has_len(&self) -> bool { self.get_len().is_some() }
+	pub fn is_none(&self) -> bool { matches!(self, VlaField::None) }
+	pub fn is_some(&self) -> bool { matches!(self, VlaField::Just(..)) }
+	pub fn has_len(&self) -> bool { matches!(self, VlaField::WithLen(..)) }
 
 	pub fn get_len(&self) -> Option<&usize> {
 		use VlaField::*;
@@ -681,7 +683,7 @@ impl VlaField {
 pub struct StructDesc {
 	name:    String,
 	fields:  Vec<StructField>,
-	size:    usize,
+	size:    Size,
 	vla:     VlaField,
 }
 
@@ -692,7 +694,7 @@ impl StructDesc {
 	}
 
 	/// ctor. Panics if name is empty.
-	pub fn new_sized(name: String, size: usize) -> Self {
+	pub fn new_sized(name: String, size: Size) -> Self {
 		assert!(!name.is_empty());
 		Self { name, fields: Vec::new(), size, vla: VlaField::None }
 	}
@@ -741,18 +743,18 @@ impl StructDesc {
 	}
 
 	/// How many normal (non-vla) fields are there?
-	pub fn num_normal_fields(&self) -> usize {
-		self.fields.len()
+	pub fn num_normal_fields(&self) -> Size {
+		self.fields.len() as Size
 	}
 
 	/// Get the field at this index. Gets the VLA if `idx` is the number of normal fields + 1.
 	/// Panics if the index is invalid.
-	pub fn nth_field(&self, idx: usize) -> &StructField {
-		if idx == self.fields.len() {
+	pub fn nth_field(&self, idx: Offs) -> &StructField {
+		if idx == self.fields.len() as Size {
 			self.vla.unwrap()
 		} else {
-			assert!(idx < self.fields.len());
-			&self.fields[idx]
+			assert!(idx < self.fields.len() as Size);
+			&self.fields[to_usize(idx)]
 		}
 	}
 
@@ -766,7 +768,7 @@ impl StructDesc {
 	}
 
 	/// Change the size of this struct. Panics if it would delete any fields (incl. a VLA field).
-	pub fn set_size(&mut self, new_size: usize) {
+	pub fn set_size(&mut self, new_size: Size) {
 		if new_size < self.size {
 			assert!(self.vla.is_none());
 

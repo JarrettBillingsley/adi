@@ -9,6 +9,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 
+use crate::{ Size, Offs };
 use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintOutput, FmtWritePrintOutput,
 	IArchitecture };
 use crate::memory::{ Memory, MmuState, StateChange, EA, VA, SegId, Span, SpanKind, Segment,
@@ -131,7 +132,7 @@ impl Program {
 			pub fn va_from_ea(&self, state: MmuState, ea: EA) -> VA;
 			/// Formats a number as a hexadecimal number with the appropriate number of digits
 			/// for the size of the address space.
-			pub fn fmt_addr(&self, addr: usize) -> String;
+			pub fn fmt_addr(&self, addr: Offs) -> String;
 		}
 	}
 
@@ -361,7 +362,7 @@ impl Program {
 
 	/// Creates a new data item at the given EA. If a `name` is given, adds that name as a
 	/// `NameKind::User` name. Returns its ID.
-	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: Type, size: usize) -> DataId {
+	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: Type, size: Size) -> DataId {
 		let did = self.data.new_item(ea, ty, size);
 		let seg = self.segment_from_ea_mut(ea);
 		seg.span_make_data(ea, size, did);

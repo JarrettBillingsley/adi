@@ -20,10 +20,10 @@ use MemIndir::*;
 const OP_INVALID: InstDesc =
 	InstDesc { opcode: INVALID, meta_op: UNK, addr_mode: IMP, access: None };
 
-fn direct_r (a: u64) -> Operand { Operand::Mem(VA(a as usize), R) }
-fn direct_w (a: u64) -> Operand { Operand::Mem(VA(a as usize), W) }
-fn direct_rw(a: u64) -> Operand { Operand::Mem(VA(a as usize), RW) }
-fn target   (a: u64) -> Operand { Operand::Mem(VA(a as usize), Target) }
+fn direct_r (a: u64) -> Operand { Operand::Mem(VA(a), R) }
+fn direct_w (a: u64) -> Operand { Operand::Mem(VA(a), W) }
+fn direct_rw(a: u64) -> Operand { Operand::Mem(VA(a), RW) }
+fn target   (a: u64) -> Operand { Operand::Mem(VA(a), Target) }
 fn indirx_r (a: u64) -> Operand {
 	Operand::Indir(RegDisp { reg: Reg::X as u8, disp: a as i64 }, R)
 }

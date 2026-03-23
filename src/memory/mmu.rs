@@ -22,7 +22,7 @@ impl MmuState {
 	}
 
 	pub fn to_usize(&self) -> usize {
-		self.0 as usize
+		self.0.try_into().unwrap()
 	}
 
 	pub fn from_u64(v: u64) -> Self {
@@ -30,7 +30,7 @@ impl MmuState {
 	}
 
 	pub fn to_u64(&self) -> u64 {
-		self.0 as u64
+		self.0.try_into().unwrap()
 	}
 }
 

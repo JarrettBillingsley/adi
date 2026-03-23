@@ -4,6 +4,7 @@ use std::ops::{ Bound, RangeBounds };
 
 use parse_display::Display;
 
+use crate::{ Size, Offs };
 use crate::program::{ DataId, BBId };
 use crate::memory::{ EA, SegId };
 
@@ -17,19 +18,19 @@ use crate::memory::{ EA, SegId };
 #[display("{kind:?} [0x{start:08X} .. 0x{end:08X})")]
 pub struct Span {
 	seg:   SegId,
-	start: usize,
-	end:   usize,
+	start: Offs,
+	end:   Offs,
 	kind:  SpanKind,
 }
 
 #[allow(clippy::len_without_is_empty)]
 impl Span {
 	#[cfg(test)]
-	pub fn new(seg: SegId, start: usize, end: usize, kind: SpanKind) -> Self {
+	pub fn new(seg: SegId, start: Offs, end: Offs, kind: SpanKind) -> Self {
 		Self { seg, start, end, kind }
 	}
 
-	fn from_internal(seg: SegId, (&start, span): (&usize, &SpanInternal)) -> Self {
+	fn from_internal(seg: SegId, (&start, span): (&Offs, &SpanInternal)) -> Self {
 		Self {
 			seg,
 			start,
@@ -47,7 +48,7 @@ impl Span {
 	/// The ID of the segment which owns this span.
 	#[inline] pub fn seg  (&self) -> SegId    { self.seg }
 	/// The length of this span.
-	#[inline] pub fn len  (&self) -> usize    { self.end - self.start }
+	#[inline] pub fn len  (&self) -> u64      { self.end - self.start }
 
 	#[inline] /// If this is an unknown span.
 	pub fn is_unknown(&self) -> bool {
@@ -73,12 +74,12 @@ impl Span {
 	}
 }
 
-impl RangeBounds<usize> for Span {
-	fn start_bound(&self) -> Bound<&usize> {
+impl RangeBounds<Offs> for Span {
+	fn start_bound(&self) -> Bound<&Offs> {
 		Bound::Included(&self.start)
 	}
 
-	fn end_bound(&self) -> Bound<&usize> {
+	fn end_bound(&self) -> Bound<&Offs> {
 		Bound::Excluded(&self.end)
 	}
 }
@@ -101,38 +102,6 @@ pub enum SpanKind {
 }
 
 // ------------------------------------------------------------------------------------------------
-// SpanIdx
-// ------------------------------------------------------------------------------------------------
-
-/// Newtype for a zero-based index into a [`SpanMap`]'s spans. Although spans are primarily indexed
-/// by their offset into a segment, it is often useful (in GUIs for example) to refer to spans by
-/// their index.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord, Hash)]
-pub struct SpanIdx(pub usize);
-
-impl SpanIdx {
-	/// Returns whether this [`SpanIdx`] and `other` are within `delta` of each other, inclusive
-	/// both directions. e.g. if this is index 5, and `other` is 15, and `delta` is 10, returns
-	/// `true`, as well as if this and `other` are swapped.
-	pub fn is_within_delta_inclusive(&self, other: SpanIdx, delta: usize) -> bool {
-		(self.0).abs_diff(other.0) <= delta
-	}
-}
-
-// impl From<SpanIdx> for usize {
-// 	fn from(value: SpanIdx) -> Self {
-// 		value.0
-// 	}
-// }
-
-impl core::ops::Sub<SpanIdx> for SpanIdx {
-	type Output = Self;
-	#[inline] fn sub(self, other: SpanIdx) -> Self {
-		SpanIdx(self.0 - other.0)
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
 // SpanMapListener
 // ------------------------------------------------------------------------------------------------
 
@@ -140,13 +109,13 @@ impl core::ops::Sub<SpanIdx> for SpanIdx {
 /// such as spans being added, removed, or redefined. Intended to be used by e.g. GUIs.
 pub trait SpanMapListener {
 	/// A span was added at segment offset `offs`.
-	fn span_added(&self, offs: usize);
+	fn span_added(&self, offs: Offs);
 
 	/// A span was removed at segment offset `offs`, so there is no longer a span starting there.
-	fn span_removed(&self, offs: usize);
+	fn span_removed(&self, offs: Offs);
 
 	/// A span at segment offset `offs` changed in some way (e.g. different type, changed size).
-	fn span_changed(&self, offs: usize);
+	fn span_changed(&self, offs: Offs);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -172,8 +141,8 @@ pub trait SpanMapListener {
 ///     - but it's fine to bisect an unknown span for the same reason it's fine to coalesce them.
 pub(crate) struct SpanMap {
 	seg:      SegId,
-	spans:    BTreeMap<usize, SpanInternal>,
-	end:      usize,
+	spans:    BTreeMap<Offs, SpanInternal>,
+	end:      Offs,
 	listener: Option<Box<dyn SpanMapListener>>,
 }
 
@@ -181,19 +150,19 @@ pub(crate) struct SpanMap {
 // is the key.
 #[derive(Debug, Copy, Clone)]
 struct SpanInternal {
-	end:  usize,
+	end:  Offs,
 	kind: SpanKind,
 }
 
 impl SpanInternal {
-	fn new(end: usize, kind: SpanKind) -> Self {
+	fn new(end: Offs, kind: SpanKind) -> Self {
 		Self { end, kind }
 	}
 }
 
 impl SpanMap {
 	/// Creates a new `SpanMap` with a single unknown span that covers the entire segment.
-	pub fn new(seg: SegId, size: usize) -> Self {
+	pub fn new(seg: SegId, size: Size) -> Self {
 		let end = size;
 		let mut spans = BTreeMap::new();
 		spans.insert(0, SpanInternal::new(end, SpanKind::Unk));
@@ -211,7 +180,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `offs` is after the last address.
-	pub fn span_at(&self, offs: usize) -> Span {
+	pub fn span_at(&self, offs: Offs) -> Span {
 		assert!(offs < self.end);
 		Span::from_internal(self.seg, self.spans.range(..= offs).next_back().expect("how even"))
 	}
@@ -222,7 +191,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `offs` is after the last address.
-	pub fn span_after(&self, offs: usize) -> Option<Span> {
+	pub fn span_after(&self, offs: Offs) -> Option<Span> {
 		assert!(offs < self.end);
 
 		self.spans.range((Bound::Excluded(offs), Bound::Unbounded)).next()
@@ -235,7 +204,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `offs` is after the last address.
-	pub fn span_before(&self, offs: usize) -> Option<Span> {
+	pub fn span_before(&self, offs: Offs) -> Option<Span> {
 		assert!(offs < self.end);
 
 		let mut iter = self.spans.range(..= offs);
@@ -244,19 +213,9 @@ impl SpanMap {
 	}
 
 	/// The offset of the last span.
-	pub fn last_span_offset(&self) -> usize {
+	pub fn last_span_offset(&self) -> Offs {
 		// SAFETY: self.spans is never empty
 		*self.spans.last_key_value().unwrap().0
-	}
-
-	/// Given an offset into the segment, gets the zero-based index of the span which contains it.
-	///
-	/// # Panics
-	///
-	/// - if `offs` is after the last address.
-	pub fn offset_to_idx(&self, offs: usize) -> SpanIdx {
-		assert!(offs < self.end);
-		SpanIdx(self.spans.range(..= offs).count() - 1)
 	}
 
 	/// Iterator over all spans in the segment, in order.
@@ -265,39 +224,9 @@ impl SpanMap {
 		self.spans.iter().map(move |s| Span::from_internal(seg, s))
 	}
 
-	/// Takes start and end zero-based indices. Returns an iterator over the spans whose indices
-	/// fall in the range `[start_idx, end_idx)`.
-	///
-	/// WARNING: this is a linear time operation.
-	///
-	/// # Panics
-	///
-	/// - if `end_idx > the number of spans`
-	/// - if `start_idx > end_idx`
-	pub fn bracket_iter(&self, start_idx: SpanIdx, end_idx: SpanIdx)
-	-> impl Iterator<Item = Span> + '_ {
-		assert!(end_idx.0 <= self.spans.len());
-		assert!(start_idx.0 <= end_idx.0);
-
-		let mut ret = self.spans.iter();
-
-		for _ in 0 .. start_idx.0 {
-			// SAFETY: asserts above
-			ret.next().unwrap();
-		}
-
-		for _ in 0 .. (self.spans.len() - end_idx.0) {
-			// SAFETY: asserts above
-			ret.next_back().unwrap();
-		}
-
-		let seg = self.seg;
-		ret.map(move |s| Span::from_internal(seg, s))
-	}
-
 	/// How many spans there are.
-	pub fn len(&self) -> usize {
-		self.spans.len()
+	pub fn len(&self) -> Size {
+		self.spans.len() as Size
 	}
 
 	/// Redefine a span that begins at `start` with a new `kind`. Has no effect
@@ -311,7 +240,7 @@ impl SpanMap {
 	///
 	/// - if `start` is not the start of a span.
 	/// - if it is not one of the valid transitions above.
-	pub fn redefine(&mut self, start: usize, kind: SpanKind) {
+	pub fn redefine(&mut self, start: Offs, kind: SpanKind) {
 		let old = self.spans.get_mut(&start).expect("no span at this location");
 
 		if old.kind != kind {
@@ -339,7 +268,7 @@ impl SpanMap {
 	/// - if `old_start` is not the start of a span
 	/// - if `new_len` is 0
 	/// - if the existing span is `SpanKind::Unk`
-	pub fn truncate(&mut self, old_start: usize, new_len: usize) {
+	pub fn truncate(&mut self, old_start: Offs, new_len: Size) {
 		let old = *self.spans.get(&old_start).expect("no span at this location");
 		assert!(new_len != 0);
 		assert!(old.kind != SpanKind::Unk);
@@ -384,7 +313,7 @@ impl SpanMap {
 	/// - if `start` is past the end of the segment.
 	/// - if `start` is not at the beginning of, or within, an unknown span.
 	/// - if `start + len` is past the end of that same span.
-	pub fn define(&mut self, start: usize, len: usize, kind: SpanKind) {
+	pub fn define(&mut self, start: Offs, len: Size, kind: SpanKind) {
 		assert_ne!(len, 0, "length cannot be 0");
 		assert_ne!(kind, SpanKind::Unk, "must give a non-unknown span kind");
 		assert!(start < self.end, "start is past end of segment");
@@ -428,7 +357,7 @@ impl SpanMap {
 	/// # Panics
 	///
 	/// - if `start` is not the beginning of a span.
-	pub fn undefine(&mut self, start: usize) {
+	pub fn undefine(&mut self, start: Offs) {
 		let old = self.span_at(start);
 		assert_eq!(start, old.start, "no span at this location");
 

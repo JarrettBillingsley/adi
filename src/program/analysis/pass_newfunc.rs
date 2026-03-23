@@ -3,6 +3,7 @@ use std::collections::{ VecDeque };
 
 use log::*;
 
+use crate::{ Size };
 use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm, FuncId };
@@ -15,7 +16,7 @@ use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId, Segment 
 /// Given an instruction and segment, get the EA after it, or an unresolved EA if the next EA
 /// would be past the end of the segment.
 fn ea_after_inst(i: &Instruction, seg: &Segment) -> EA {
-	let next_ea = i.ea() + i.size();
+	let next_ea = i.ea() + i.size() as Size;
 	if next_ea.offs() < seg.len() {
 		next_ea
 	} else {
@@ -64,7 +65,7 @@ impl Program {
 			'instloop: for inst in &mut iter {
 				// debug!("  {:04X} {:?}", inst.va(), inst.bytes());
 				// SAFETY: this is OK because we do checks on its offset after this loop.
-				end_ea = inst.ea() + inst.size();
+				end_ea = inst.ea() + inst.size() as Size;
 
 				// the Old Way checked for bank changes here using self.mem.inst_state_change
 				// on each instruction, and ending the BB if so. but now we're checking for

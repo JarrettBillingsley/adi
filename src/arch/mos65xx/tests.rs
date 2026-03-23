@@ -8,6 +8,7 @@ use super::{
 	lookup_desc,
 };
 
+use crate::{ Offs };
 use crate::memory::{ MmuState, SegId, EA, VA, MemAccess };
 use crate::arch::{ DisasError, INameLookup, Disassembler, IDisassembler, IPrinter,
 	FmtWritePrintOutput, PrinterCtx };
@@ -44,7 +45,7 @@ fn mnemonics() {
 	Instruction::new(VA(va), desc, size, operands)
 } */
 
-fn disas(va: usize, img: &[u8]) -> Instruction {
+fn disas(va: Offs, img: &[u8]) -> Instruction {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
@@ -54,7 +55,7 @@ fn disas(va: usize, img: &[u8]) -> Instruction {
 	}
 }
 
-fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
+fn check_disas(va: Offs, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
@@ -71,7 +72,7 @@ fn check_disas(va: usize, img: &[u8], meta_op: MetaOp, op: Option<Operand>) {
 	}
 }
 
-fn check_fail(va: usize, img: &[u8], expected: DisasError) {
+fn check_fail(va: Offs, img: &[u8], expected: DisasError) {
 	let ea = EA::new(SegId(0), va);
 	let va = VA(va);
 	let state = MmuState::default();
@@ -87,7 +88,7 @@ fn check_fail(va: usize, img: &[u8], expected: DisasError) {
 }
 
 fn mem(addr: usize, acc: MemAccess) -> Operand {
-	Operand::Mem(VA(addr), acc)
+	Operand::Mem(VA(addr as Offs), acc)
 }
 
 fn uimm(val: usize) -> Operand {

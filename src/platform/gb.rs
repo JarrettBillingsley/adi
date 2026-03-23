@@ -4,6 +4,7 @@ use std::collections::{ HashMap };
 use parse_display::{ Display };
 use enum_dispatch::enum_dispatch;
 
+use crate::{ Size, Offs };
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::gb::{ GBArchitecture };
@@ -217,10 +218,10 @@ struct GBHeader {
 	sgb:           SgbFlags,
 	mbc_type:      MbcType,
 	options:       CartOptions,
-	rom_bank_size: usize,
-	rom_num_banks: usize,
-	ram_bank_size: usize,
-	ram_num_banks: usize,
+	rom_bank_size: Size,
+	rom_num_banks: Size,
+	ram_bank_size: Size,
+	ram_num_banks: Size,
 	is_japanese:   bool,
 	old_licensee:  u8,
 	rom_version:   u8,
@@ -229,11 +230,11 @@ struct GBHeader {
 }
 
 impl GBHeader {
-	fn rom_size(&self) -> usize {
+	fn rom_size(&self) -> Size {
 		self.rom_bank_size * self.rom_num_banks
 	}
 
-	fn ram_size(&self) -> usize {
+	fn ram_size(&self) -> Size {
 		self.ram_bank_size * self.ram_num_banks
 	}
 }
@@ -341,7 +342,7 @@ impl GBLoader {
 	fn parse_image(&self, img: &Image) -> PlatformResult<GBCart> {
 		let header = self.parse_header(img.data())?;
 
-		if img.len() != header.rom_size() {
+		if img.len() != header.rom_size() as Size {
 			return PlatformError::invalid_image(format!(
 				"image size ({}) does not match expected size ({})", img.len(), header.rom_size()));
 		}
@@ -455,7 +456,7 @@ fn setup_gb_labels(prog: &mut Program) {
 	// TODO: CGB names (if it's a CGB cart)
 }
 
-struct StdName(&'static str, usize);
+struct StdName(&'static str, Offs);
 
 const STD_NAMES: &[StdName] = &[
 	StdName("INT_RST_00",  0x0000),

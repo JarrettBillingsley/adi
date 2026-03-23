@@ -4,6 +4,8 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use parse_display::Display;
 use delegate::delegate;
 
+use crate::{ Offs };
+
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
 // ------------------------------------------------------------------------------------------------
@@ -178,7 +180,7 @@ impl SegCollection {
 	pub fn new() -> Self {
 		let mut ret = Self {
 			segs: vec![
-				Segment::new_with_va(SegId::unresolved(), "[UNRESOLVED]", usize::MAX, None,
+				Segment::new_with_va(SegId::unresolved(), "[UNRESOLVED]", Offs::MAX, None,
 					Some(VA(0)))
 			],
 			next_seg_id: SegId(0),
@@ -196,7 +198,7 @@ impl SegCollection {
 	/// # Panics
 	///
 	/// - if `name` is already the name of an existing segment.
-	pub fn add_segment(&mut self, name: &str, size: usize, image: Option<Image>) -> SegId {
+	pub fn add_segment(&mut self, name: &str, size: Offs, image: Option<Image>) -> SegId {
 		let idx = self.segs.len();
 
 		let existing = self.seg_name_map.insert(name.into(), idx);
@@ -216,7 +218,7 @@ impl SegCollection {
 	/// # Panics
 	///
 	/// - if `name` is already the name of an existing segment.
-	pub fn add_segment_with_va(&mut self, name: &str, size: usize, image: Option<Image>,
+	pub fn add_segment_with_va(&mut self, name: &str, size: Offs, image: Option<Image>,
 	base_va: VA) -> SegId {
 		let ret = self.add_segment(name, size, image);
 		self.segment_from_id_mut(ret).set_base_va(base_va);
@@ -303,7 +305,7 @@ impl Memory {
 	/// How many digits in a formatted address.
 	pub fn digits(&self) -> usize { self.digits }
 	/// The length of the address space.
-	pub fn len(&self) -> usize { 2_usize.pow(self.bits as u32) }
+	pub fn len(&self) -> Offs { 2_u64.pow(self.bits as u32) }
 
 	// ---------------------------------------------------------------------------------------------
 	// MMU
@@ -387,7 +389,7 @@ impl Memory {
 
 	/// Formats a number as a hexadecimal number with the appropriate number of digits
 	/// for the size of the address space.
-	pub fn fmt_addr(&self, addr: usize) -> String {
+	pub fn fmt_addr(&self, addr: Offs) -> String {
 		format!("{:0width$X}", addr, width = self.digits)
 	}
 

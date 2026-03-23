@@ -6,6 +6,7 @@ use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
 
+use crate::{ Size };
 use crate::memory::{ EA, MmuState };
 use crate::program::{ Instruction, FuncId };
 
@@ -125,14 +126,14 @@ impl BasicBlock {
 	///
 	/// Panics if the given EA is out of the range of EAs that this BB covers.
 	pub(crate) fn last_instr_before(&self, ea: EA) -> Option<usize> {
-		assert!(ea >= self.ea() && ea < self.term_inst().ea() + self.term_inst().size(),
+		assert!(ea >= self.ea() && ea < self.term_inst().ea() + self.term_inst().size() as Size,
 			"wuh oh, out-of-range EA for this BB");
 
 		for (i, inst) in self.insts.iter().enumerate() {
 			if inst.ea() < ea {
 				use std::cmp::Ordering::*;
 
-				match (inst.ea() + inst.size()).cmp(&ea) {
+				match (inst.ea() + inst.size() as Size).cmp(&ea) {
 					// uh oh. ea is in the middle of this instruction.
 					Greater => return None,
 					Equal   => return Some(i),

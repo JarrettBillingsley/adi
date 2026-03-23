@@ -3,7 +3,6 @@
 
 # Imminent tasks!
 
-- `VA` should contain `u64`, not `usize`.
 - IR
 	- `IrFunction` should have lists of entry/exit points for dataflow analysis
 	- `IrInstKind::IBranch/ICall` could have some `Vec` of targets (which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive), but that `Vec` may not be exhaustive... hmmmm not sure, jump tables/indirect calls are a big TODO for now
@@ -121,20 +120,6 @@
 		- it's kind of a lot
 		- it seems to work for now so not the highest priority but...
 		- if we add **custom operands,** it might be worth redoing this
-	- **Evaluate uses of `usize/isize`**
-		- I think I should be using `u64/i64` instead in some places
-		- well indexing slices `s[i]` requires `i` to be `usize`, so I think anything related to accessing the underlying data should be `usize`.
-		- also I think it might be good to have type aliases like IDA's `addr_t` for `u64` (and an equivalent for `i64`... `delta_t`? `offs_t`?)
-			- this way it's clear when something is referring to "a big unsigned int" vs. "an abstract address/offset from an address"
-		- offenders:
-			- `VA`
-			- `EA` (multiple methods/impls)
-			- `Segment::size`
-			- `SpanMap`
-			- `Memory::len`
-			- `Memory::fmt_addr`
-			- `ImageSlice<usize>`
-			- `ImageSliceable<usize>`
 	- **Custom IR instructions?**
 		- How are multi-step instruction (e.g. 68K `movem`, Z80 `ldir`) represented/handled in the IR? Since they can't cause "real" control flow, maybe they can be represented by just recording their "end-state" effects, like "now BC = 0" etc.
 		- because of that, might be useful to have a custom IR instruction type for things like this. I think Ghidra Pcode does.

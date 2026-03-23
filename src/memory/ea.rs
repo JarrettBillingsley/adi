@@ -3,6 +3,7 @@ use std::fmt::{ Debug, Display, Formatter, Result as FmtResult };
 use std::ops::{ Add, AddAssign, Sub, SubAssign };
 // use std::fmt::{ Debug, UpperHex, Formatter, Result as FmtResult };
 
+use crate::{ Offs };
 use crate::memory::{ SegId };
 
 // ------------------------------------------------------------------------------------------------
@@ -18,7 +19,7 @@ use crate::memory::{ SegId };
 /// could not be mapped to a known EA. This happens sometimes - not everything can be determined
 /// through static analysis.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-pub struct EA(u64);
+pub struct EA(Offs);
 
 impl Display for EA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
@@ -26,21 +27,21 @@ impl Display for EA {
 	}
 }
 
-const SEG_MASK: u64  = 0xFFFF0000_00000000;
-const OFFS_MASK: u64 = 0x0000FFFF_FFFFFFFF;
+const SEG_MASK: Offs  = 0xFFFF0000_00000000;
+const OFFS_MASK: Offs = 0x0000FFFF_FFFFFFFF;
 const SEG_SHIFT: usize = 48;
 
 impl EA {
 	/// Make a new EA from a segment ID and offset.
 	///
 	/// Panics if the offset is too big (more than 48 bits).
-	pub fn new(seg: SegId, offs: usize) -> Self {
-		assert!((offs as u64) & SEG_MASK == 0);
-		Self(((seg.0 as u64) << SEG_SHIFT) | (offs as u64))
+	pub fn new(seg: SegId, offs: Offs) -> Self {
+		assert!((offs as Offs) & SEG_MASK == 0);
+		Self(((seg.0 as Offs) << SEG_SHIFT) | (offs as Offs))
 	}
 
 	/// Make a new unresolved EA with the given VA embedded in it.
-	pub fn unresolved(offs: usize) -> Self {
+	pub fn unresolved(offs: Offs) -> Self {
 		Self::new(SegId::unresolved(), offs)
 	}
 
@@ -60,14 +61,14 @@ impl EA {
 
 	/// The offset of this EA.
 	#[inline]
-	pub fn offs(&self) -> usize { (self.0 & OFFS_MASK) as usize }
+	pub fn offs(&self) -> Offs { self.0 & OFFS_MASK }
 
 	/// Set the offset of this EA.
 	#[inline]
-	fn set_offs(&mut self, new_offs: usize) {
-		assert!((new_offs as u64) & SEG_MASK == 0);
+	fn set_offs(&mut self, new_offs: Offs) {
+		assert!(new_offs & SEG_MASK == 0);
 		self.0 &= !OFFS_MASK;
-		self.0 |= new_offs as u64;
+		self.0 |= new_offs;
 	}
 }
 
@@ -77,28 +78,28 @@ impl Debug for EA {
 	}
 }
 
-impl Add<usize> for EA {
+impl Add<Offs> for EA {
 	type Output = Self;
-	fn add(self, other: usize) -> Self {
+	fn add(self, other: Offs) -> Self {
 		EA::new(self.seg(), self.offs() + other)
 	}
 }
 
-impl AddAssign<usize> for EA {
-	fn add_assign(&mut self, other: usize) {
+impl AddAssign<Offs> for EA {
+	fn add_assign(&mut self, other: Offs) {
 		self.set_offs(self.offs() + other);
 	}
 }
 
-impl Sub<usize> for EA {
+impl Sub<Offs> for EA {
 	type Output = Self;
-	fn sub(self, other: usize) -> Self {
+	fn sub(self, other: Offs) -> Self {
 		EA::new(self.seg(), self.offs() - other)
 	}
 }
 
-impl SubAssign<usize> for EA {
-	fn sub_assign(&mut self, other: usize) {
+impl SubAssign<Offs> for EA {
+	fn sub_assign(&mut self, other: Offs) {
 		self.set_offs(self.offs() - other);
 	}
 }

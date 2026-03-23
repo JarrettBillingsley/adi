@@ -7,6 +7,7 @@ use nes_rom::ines::{ Ines };
 use parse_display::Display;
 use enum_dispatch::enum_dispatch;
 
+use crate::{ Size, Offs };
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture, VEC_NMI, VEC_IRQ, VEC_RESET };
@@ -178,7 +179,7 @@ fn setup_nes_labels(prog: &mut Program) {
 	for StdName(name, addr) in NES_INT_VECS {
 		let src_ea = prog.ea_from_va(state, VA(*addr));
 		let seg    = prog.segment_from_ea(src_ea);
-		let dst_va = VA(seg.read_le_u16(src_ea) as usize);
+		let dst_va = VA(seg.read_le_u16(src_ea) as Offs);
 		let dst_ea = prog.ea_from_va(state, dst_va);
 
 		// sometimes two+ vectors can be pointing at the same EA.
@@ -191,7 +192,7 @@ fn setup_nes_labels(prog: &mut Program) {
 	}
 }
 
-struct StdName(&'static str, usize);
+struct StdName(&'static str, Offs);
 
 const NES_STD_NAMES: &[StdName] = &[
 	StdName("PPU_CTRL_REG1",         0x2000),
@@ -235,9 +236,9 @@ const NES_STD_NAMES: &[StdName] = &[
 ];
 
 const NES_INT_VECS: &[StdName] = &[
-	StdName("VEC_NMI",   VEC_NMI as usize),
-	StdName("VEC_RESET", VEC_RESET as usize),
-	StdName("VEC_IRQ",   VEC_IRQ as usize),
+	StdName("VEC_NMI",   VEC_NMI as Offs),
+	StdName("VEC_RESET", VEC_RESET as Offs),
+	StdName("VEC_IRQ",   VEC_IRQ as Offs),
 ];
 
 // ------------------------------------------------------------------------------------------------
@@ -338,20 +339,20 @@ impl IMmu for NesMmu {
 struct NRom {
 	name:      &'static str,
 	prg0:      SegId,
-	prg0_mask: usize,
-	prg0_base: usize,
+	prg0_mask: Offs,
+	prg0_base: Offs,
 }
 
 impl NRom {
-	fn init(prg0: SegId, prg0_len: usize) -> Mapper {
+	fn init(prg0: SegId, prg0_len: Offs) -> Mapper {
 		Self::_init("<no mapper>", prg0, prg0_len)
 	}
 
-	fn init_cnrom(prg0: SegId, prg0_len: usize) -> Mapper {
+	fn init_cnrom(prg0: SegId, prg0_len: Size) -> Mapper {
 		Self::_init("CNROM", prg0, prg0_len)
 	}
 
-	fn _init(name: &'static str, prg0: SegId, prg0_len: usize) -> Mapper {
+	fn _init(name: &'static str, prg0: SegId, prg0_len: Size) -> Mapper {
 		let prg0_base = 0x10000 - prg0_len;
 		Self { name, prg0, prg0_mask: prg0_len - 1, prg0_base }.into()
 	}
