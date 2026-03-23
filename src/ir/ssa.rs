@@ -256,13 +256,11 @@ impl PhiPruner {
 
 			for arg in phi.args().iter() {
 				// if arg is marked as useless, mark it as useful and push it to the stack.
-				if let Some(arg_info) = self.use_map.get_mut(arg) {
-					if !arg_info.used() {
-						// log::trace!("propagation: marking reg {} as used in bb {}",
-						// 	arg, arg_info.bb());
-						arg_info.mark_used();
-						self.stack.push(*arg);
-					}
+				if let Some(arg_info) = self.use_map.get_mut(arg) && !arg_info.used() {
+					// log::trace!("propagation: marking reg {} as used in bb {}",
+					// 	arg, arg_info.bb());
+					arg_info.mark_used();
+					self.stack.push(*arg);
 				}
 			}
 		}

@@ -172,10 +172,10 @@ impl GBPrinter {
 	}
 
 	fn lookup_desc(self, bytes: &[u8]) -> &'static InstDesc {
-		match bytes {
-			&[0xCB, byte2, ..] => lookup_desc_cb(byte2),
-			&[byte1, ..]       => lookup_desc(byte1).expect("ono"),
-			_                  => unreachable!(),
+		match *bytes {
+			[0xCB, byte2, ..] => lookup_desc_cb(byte2),
+			[byte1, ..]       => lookup_desc(byte1).expect("ono"),
+			_                 => unreachable!(),
 		}
 	}
 }

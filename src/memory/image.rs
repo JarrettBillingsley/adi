@@ -168,7 +168,7 @@ impl Image {
 	/// Convenience ctor to load the data directly from a file.
 	pub fn new_from_file<P: AsRef<std::path::Path>>(filename: P) -> std::io::Result<Self> {
 		let data = std::fs::read(&filename)?;
-		Ok(Self::new(&filename.as_ref().to_string_lossy().into_owned(), &data))
+		Ok(Self::new(&filename.as_ref().to_string_lossy(), &data))
 	}
 
 	/// Create a *new* image whose data is a copy of a range of this one's.

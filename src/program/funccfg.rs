@@ -221,10 +221,8 @@ impl CfgGraph {
 		// g.dump();
 
 		loop {
-			if !remove_self_edges(&mut g) {
-				if !merge_node_with_one_pred(&mut g, head) {
-					break;
-				}
+			if !remove_self_edges(&mut g) && !merge_node_with_one_pred(&mut g, head) {
+				break;
 			}
 		}
 
@@ -245,13 +243,9 @@ impl CfgGraph {
 	doms: &CfgDominators) -> Option<BBId> {
 		let roots = r.dom_roots(doms);
 
-		for root in roots {
-			if r_overlaps(&self.reachable(root, head, doms).r_overlap_of(&irred), &irred) {
-				return Some(root);
-			}
-		}
-
-		None
+		roots.into_iter().find(
+			|&root| r_overlaps(&self.reachable(root, head, doms).r_overlap_of(irred),
+			irred))
 	}
 
 	fn dump(&self) {
@@ -314,7 +308,7 @@ impl ReachableBBs {
 	/// Returns `true` if `self.not_dominated` is empty. NOTE: this alone is not enough to know if
 	/// a function is actually splittable!
 	pub fn splittable(&self) -> bool {
-		self.not_dominated.len() == 0
+		self.not_dominated.is_empty()
 	}
 
 	/// Computes the subset of `not_dominated` whose dominators are not in `not_dominated`. If given

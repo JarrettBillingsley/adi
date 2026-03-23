@@ -181,10 +181,8 @@ impl Program {
 	/// Does the given `ea` refer to a basic block that belongs to the function `fid`? Also works if
 	/// `ea` refers to the middle of a BB within that function.
 	pub(crate) fn ea_is_bb_in_function(&self, ea: EA, fid: FuncId) -> Option<BBId> {
-		if let Some(bbid) = self.span_at_ea(ea).bb() {
-			if self.bbidx.get(bbid).func() == fid {
-				return Some(bbid);
-			}
+		if let Some(bbid) = self.span_at_ea(ea).bb() && self.bbidx.get(bbid).func() == fid {
+			return Some(bbid);
 		}
 
 		None
@@ -488,8 +486,9 @@ impl Program {
 		let ea = given_ea; //self.span_at_ea(given_ea).start();
 
 		// see if there's already a name here.
-		let base_name = if let Some(name) = self.names.name_for_ea(ea) {
-			name.into()
+		// let base_name =
+		if let Some(name) = self.names.name_for_ea(ea) {
+			name
 		} else if ea.is_unresolved() {
 			// name it like "UNRESOLVED_loc_0C30"
 			self.generate_name("UNRESOLVED", VA(ea.offs()))
@@ -523,9 +522,11 @@ impl Program {
 					// no name, so name it "SEGNAME_loc_0C30"
 					self.generate_name(seg.name(), va),
 			}
-		};
+		}
 
-		base_name
+		// ;
+
+		// base_name
 		// TODO: figure out how to do this right
 		// if ea == given_ea {
 		// 	base_name

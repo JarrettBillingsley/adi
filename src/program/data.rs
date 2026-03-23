@@ -808,10 +808,8 @@ impl StructDesc {
 				new_field.name, self.name, prev.name);
 		}
 
-		if let Some(len_idx) = self.vla.get_len_mut() {
-			if *len_idx >= next_idx {
-				*len_idx += 1;
-			}
+		if let Some(len_idx) = self.vla.get_len_mut() && *len_idx >= next_idx {
+			*len_idx += 1;
 		}
 
 		self.size = std::cmp::max(self.size, new_field.next_offset());
@@ -852,11 +850,9 @@ impl StructDesc {
 	/// Remove a field by name. Will remove the VLA field if that's the one with that name.
 	/// Panics if there is no field of that name, or if that field is the VLA's length field.
 	pub fn remove_field_by_name(&mut self, name: &str) {
-		if let Some(vla) = self.vla.get() {
-			if vla.name == name {
-				self.vla = VlaField::None;
-				return;
-			}
+		if let Some(vla) = self.vla.get() && vla.name == name {
+			self.vla = VlaField::None;
+			return;
 		}
 
 		// only want to iterate over the non-VLA fields

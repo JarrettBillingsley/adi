@@ -156,6 +156,7 @@ use toy::{ ToyIrCompiler };
 use mos65xx::{ Mos65xxIrCompiler };
 
 #[enum_dispatch]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum IrCompiler {
 	GBIrCompiler,
 	ToyIrCompiler,

@@ -280,13 +280,11 @@ impl SpanMap {
 			let new_start = old_start + new_len;
 			let mut new_end = old.end;
 
-			if let Some(after) = self.span_after(old_start) {
-				if after.kind == SpanKind::Unk {
-					// ditch that old unknown span!
-					self.spans.remove(&after.start);
-					new_end = after.end;
-					if let Some(l) = &self.listener { l.span_removed(after.start); }
-				}
+			if let Some(after) = self.span_after(old_start) && after.kind == SpanKind::Unk {
+				// ditch that old unknown span!
+				self.spans.remove(&after.start);
+				new_end = after.end;
+				if let Some(l) = &self.listener { l.span_removed(after.start); }
 			}
 
 			// make a new unknown span [new_start .. new_end)

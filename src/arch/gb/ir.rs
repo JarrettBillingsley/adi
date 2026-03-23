@@ -15,19 +15,19 @@ pub(crate) struct GBIrCompiler;
 impl IIrCompiler for GBIrCompiler {
 	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
-		match i.bytes() {
-			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, None, b),
-			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, None, b),
-			_                  => unreachable!(),
+		match *i.bytes() {
+			[0xCB, byte2, ..] => build_ir(lookup_desc_cb(byte2), i, None, b),
+			[byte1, ..]       => build_ir(lookup_desc(byte1).unwrap(), i, None, b),
+			_                 => unreachable!(),
 		}
 	}
 
 	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder) {
 		b.set_ea(i.ea());
-		match i.bytes() {
-			&[0xCB, byte2, ..] => build_ir(&lookup_desc_cb(byte2), i, Some(term), b),
-			&[byte1, ..]       => build_ir(&lookup_desc(byte1).unwrap(), i, Some(term), b),
-			_                  => unreachable!(),
+		match *i.bytes() {
+			[0xCB, byte2, ..] => build_ir(lookup_desc_cb(byte2), i, Some(term), b),
+			[byte1, ..]       => build_ir(lookup_desc(byte1).unwrap(), i, Some(term), b),
+			_                 => unreachable!(),
 		}
 	}
 
@@ -256,8 +256,8 @@ impl IrBuilder {
 	fn push_return_addr(&mut self, ret_addr: VA) -> &mut Self {
 		// push hi then lo
 		self
-		.push8(c8((ret_addr.0 >> 8  ) as u64))
-		.push8(c8((ret_addr.0 & 0xFF) as u64))
+		.push8(c8(ret_addr.0 >> 8  ))
+		.push8(c8(ret_addr.0 & 0xFF))
 	}
 
 	/// Push `ret_addr` to the stack, and then call `dst`.

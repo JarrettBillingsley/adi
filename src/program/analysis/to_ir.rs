@@ -334,7 +334,7 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		// second pass: insert dummy BBs for return-uses after calls
 		for (irbbid, rewrite) in rewrites.into_iter() {
 			match rewrite {
-				IrRewrite::Uses { .. } => {} // already handled
+				IrRewrite::Uses => {} // already handled
 				IrRewrite::Returns => {
 					self.rewrite_returns(irbbid, ret_regs);
 				}

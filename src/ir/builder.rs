@@ -98,7 +98,7 @@ impl IrBuilder {
 	/// Finish building, assert there is only one vec of instructions, and get it.
 	pub(crate) fn finish_one(self) -> Vec<IrInst> {
 		let Self { insts: [mut ret, _], cur, ea: _, next_irbbid: _ } = self;
-		assert_eq!(cur, false);
+		assert!(!cur);
 		ret.shrink_to_fit();
 		ret
 	}
@@ -623,7 +623,7 @@ impl IrBuilder {
 	/// TODO: docme
 	pub(crate) fn cbranch_and_split(&mut self, cond: impl Into<BuildSrc>, dst: impl Into<BuildEA>)
 		-> &mut Self {
-		assert_eq!(self.cur, false);
+		assert!(!self.cur);
 		let cond = cond.into();
 		let dst = dst.into();
 		self.inst(IrInst::cbranch(self.ea, cond.s, dst.ea, self.next_irbbid, cond.n, dst.n));

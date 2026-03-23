@@ -543,11 +543,11 @@ struct DebugWorkaroundThing<'aaaa>(&'aaaa IrCfg, &'aaaa [IrBasicBlock]);
 impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		let DebugWorkaroundThing(cfg, bbs) = *self;
-		writeln!(f, "")?;
+		writeln!(f)?;
 		writeln!(f, "CFG (NOTE!!!! numbers in \"a -> b\" are NOT NECESSARILY BB NUMBERS,")?;
 		writeln!(f, "only trust the actual dot graph output or look at the successors")?;
 		writeln!(f, "at the end of the BBs below):")?;
-		writeln!(f, "")?;
+		writeln!(f)?;
 		writeln!(f, "{:?}", Dot::with_config(cfg, &[DotConfig::EdgeNoLabel]))?;
 
 		for bb in bbs {

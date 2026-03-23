@@ -158,7 +158,7 @@ impl IPrintOutput for AnsiConsolePrintOutput {
 
 /// Trait to abstract the process of looking up names of addresses.
 pub trait INameLookup {
-	/// Given an `MmuState`	and a `VA`, try to find a name for it. Return `None` if none is found.
+	/// Given an `MmuState` and a `VA`, try to find a name for it. Return `None` if none is found.
 	fn lookup(&self, state: MmuState, addr: VA) -> Option<String>;
 
 	/// Similar to `lookup`, but for an `EA`. Default implementation returns the EA converted
