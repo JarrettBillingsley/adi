@@ -487,24 +487,36 @@ impl Debug for IrBasicBlock {
 pub(crate) type IrCfg = DiGraphMap<IrBBId, ()>;
 
 pub(crate) struct IrFunction {
-	real_fid: FuncId,
-	bbs:      Vec<IrBasicBlock>,
-	cfg:      IrCfg,
+	real_fid:    FuncId,
+	bbs:         Vec<IrBasicBlock>,
+	entrypoints: Vec<IrBBId>,
+	exitpoints:  Vec<IrBBId>,
+	cfg:         IrCfg,
 
 	// TODO: any time the bbs/cfg are modified, this needs to be invalidated...
-	consts:   LazyCell<ConstPropResults>,
+	consts:      LazyCell<ConstPropResults>,
 }
 
 impl IrFunction {
 	pub(crate) fn new(
 		real_fid: FuncId,
 		mut bbs: Vec<IrBasicBlock>,
-		cfg: IrCfg
+		cfg: IrCfg,
+		entrypoints: Vec<IrBBId>,
 	) -> Self {
+		let exitpoints = bbs.iter().enumerate().filter_map(|(irbbid, bb)| {
+			match bb.term_inst().kind() {
+				IrInstKind::Ret { .. } => Some(irbbid),
+				_ => None,
+			}
+		}).collect();
+
 		ssa::to_ssa(&mut bbs, &cfg);
 		Self {
 			real_fid,
 			bbs,
+			entrypoints,
+			exitpoints,
 			cfg,
 			consts: LazyCell::new(),
 		}

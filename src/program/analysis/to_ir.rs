@@ -146,12 +146,15 @@ impl Program {
 
 		// 4. build the CFG from the IrBB terminators
 		let cfg = build_ir_cfg(&bbs, extra_edges);
+		let entrypoints = func.entrypoints().iter()
+			.map(|&bbid| eas_to_bbids[&self.bbidx.get(bbid).ea()])
+			.collect();
 
 		// use petgraph::dot::{ Dot, Config as DotConfig };
 		// println!("{:?}", Dot::with_config(&cfg, &[DotConfig::EdgeNoLabel]));
 
 		// 5. create the IrFunction (which converts it to SSA)
-		IrFunction::new(fid, bbs, cfg)
+		IrFunction::new(fid, bbs, cfg, entrypoints)
 	}
 }
 
