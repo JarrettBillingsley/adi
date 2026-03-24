@@ -23,7 +23,7 @@ pub struct EA(Offs);
 
 impl Display for EA {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "{:04X}:{:08X}", self.seg().0, self.offs())
+		write!(f, "{:04X}:{:08X}", self.seg().id, self.offs())
 	}
 }
 
@@ -37,7 +37,7 @@ impl EA {
 	/// Panics if the offset is too big (more than 48 bits).
 	pub fn new(seg: SegId, offs: Offs) -> Self {
 		assert!((offs as Offs) & SEG_MASK == 0);
-		Self(((seg.0 as Offs) << SEG_SHIFT) | (offs as Offs))
+		Self(((seg.id as Offs) << SEG_SHIFT) | (offs as Offs))
 	}
 
 	/// Make a new unresolved EA with the given VA embedded in it.
@@ -57,7 +57,7 @@ impl EA {
 
 	/// The segment ID of this EA.
 	#[inline]
-	pub fn seg(&self) -> SegId { SegId((self.0 >> SEG_SHIFT) as u16) }
+	pub fn seg(&self) -> SegId { SegId::unchecked((self.0 >> SEG_SHIFT) as u16) }
 
 	/// The offset of this EA.
 	#[inline]

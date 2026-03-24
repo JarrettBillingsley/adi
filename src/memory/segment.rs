@@ -13,24 +13,57 @@ use crate::program::{ DataId };
 // SegId
 // ------------------------------------------------------------------------------------------------
 
-/// newtype for segment IDs. each segment gets a unique ID (index into an array). There is a special
-/// "unresolved" value for use by EAs which either have not yet been resolved, or cannot be
-/// resolved.
+/// Newtype for segment IDs. Each segment gets a unique ID.
 #[derive(Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct SegId(pub u16);
+pub struct SegId {
+	pub(crate) id: u16,
+}
+
+/// Public constructor for `SegId`. Panics if given an `id > SegId::LAST_USER`.
+#[allow(non_snake_case)]
+pub fn SegId(id: u16) -> SegId {
+	if id > SegId::LAST_USER {
+		panic!("SegId was given {}; only segments <= {} are valid", id, SegId::LAST_USER);
+	}
+
+	SegId { id }
+}
 
 impl SegId {
-	pub fn unresolved() -> Self {
-		SegId(u16::MAX)
-	}
+	/// Segment ID for "unresolved" addresses (see [`EA::unresolved`]). Can be constructed with
+	/// [`SegId::unresolved`] and tested for with [`SegId::is_unresolved`].
+	pub const UNRESOLVED: u16 = u16::MAX;
+	/// Segment ID for struct definitions.
+	pub const STRUCTS:    u16 = u16::MAX - 1;
+	/// Segment ID for enum definitions.
+	pub const ENUMS:      u16 = u16::MAX - 2;
+	/// Segment ID for bitfield definitions.
+	pub const BITFIELDS:  u16 = u16::MAX - 3;
+	/// Last segment ID allowed for user-defined segments. IDs above this are reserved for internal
+	/// use (like the ones above).
+	pub const LAST_USER:  u16 = u16::MAX - 16;
 
-	pub fn is_unresolved(&self) -> bool {
-		self.0 == u16::MAX
-	}
+	/// Internal unchecked constructor which allows any ID.
+	pub(crate) fn unchecked(id: u16) -> SegId { SegId { id } }
+	/// Construct an unresolved `SegId`.
+	pub fn unresolved() -> Self { SegId { id: Self::UNRESOLVED } }
+	/// Construct a `SegId` that refers to the structs segment.
+	pub fn structs()    -> Self { SegId { id: Self::STRUCTS    } }
+	/// Construct a `SegId` that refers to the enums segment.
+	pub fn enums()      -> Self { SegId { id: Self::ENUMS      } }
+	/// Construct a `SegId` that refers to the bitfields segment.
+	pub fn bitfields()  -> Self { SegId { id: Self::BITFIELDS  } }
 
-	pub fn is_resolved(&self) -> bool {
-		self.0 != u16::MAX
-	}
+	/// Test if a `SegId` is unresolved.
+	pub fn is_unresolved(&self) -> bool { self.id == Self::UNRESOLVED }
+	/// Test if a `SegId` refers to the structs segment.
+	pub fn is_structs(&self)    -> bool { self.id == Self::STRUCTS    }
+	/// Test if a `SegId` refers to the enums segment.
+	pub fn is_enums(&self)      -> bool { self.id == Self::ENUMS      }
+	/// Test if a `SegId` refers to the bitfields segment.
+	pub fn is_bitfields(&self)  -> bool { self.id == Self::BITFIELDS  }
+	/// Test if a `SegId` is a user segment.
+	pub fn is_user(&self)       -> bool { self.id <= Self::LAST_USER  }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -50,21 +83,27 @@ pub struct Segment {
 
 impl Display for Segment {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "id: 0x{:04X}", self.id.id)?;
+
+		match self.base_va {
+			Some(base) => write!(f, " Base VA: 0x{:08X}", base)?,
+			None       => write!(f, " Base VA: (unknown) ")?,
+		}
+
+		write!(f, " {:12}", self.name)?;
+
 		match &self.image {
 			Some(image) => {
 				let orig = image.orig_range();
 
-				write!(f, "{} (image '{}') PA: [{:08X}..{:08X})",
-					self.name, image.name(), orig.start, orig.end)?;
+				write!(f, " (image '{}') PA: [{:08X}..{:08X})",
+					image.name(), orig.start, orig.end)?;
 			}
 			None =>
-				write!(f, "{} (fake)", self.name)?,
+				write!(f, " (fake)")?,
 		}
 
-		match self.base_va {
-			Some(base) => write!(f, " Base VA: {:08X}", base),
-			None       => write!(f, " Base VA: (not determined)"),
-		}
+		Ok(())
 	}
 }
 
@@ -229,7 +268,8 @@ impl Segment {
 
 		assert!(span.is_unknown(), "defining a data item at non-empty EA {}", ea);
 		assert!(span.len() >= size,
-			"defining a data item too big for its span (item is {} bytes, have {})", size, span.len());
+			"defining a data item too big for its span (item is {} bytes, have {})",
+			size, span.len());
 
 		self.spans.define(ea.offs(), size, SpanKind::Data(id));
 	}

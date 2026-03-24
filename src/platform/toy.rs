@@ -83,8 +83,8 @@ impl ILoader for ToyLoader {
 }
 
 fn setup_mmu(segs: &mut SegCollection, rom_img: Image) -> ToyMmu {
-	let rom = segs.add_segment_with_va("ROM", 0x8000, Some(rom_img), VA(0x0000));
-	let ram = segs.add_segment_with_va("RAM", 0x8000, None,          VA(0x8000));
+	let ram = segs.add_with_id_va(SegId(SegId::LAST_USER), "RAM", 0x8000, None, VA(0x8000));
+	let rom = segs.add_with_va("ROM", 0x8000, Some(rom_img), VA(0x0000));
 	ToyMmu { rom, ram }
 }
 

@@ -10,9 +10,19 @@
 - Multi-state BBs/functions
 - Argument/return value/clobber analysis
 - Stack analysis
+- Undo/Redo support
 
 # Imminent tasks!
 
+- **Data analysis**
+	- mapper external RAM and RAM banking
+	- see "data blathering" below, tho I think most of that has been implemented
+	- rather than using `Rc/RefCell` in `Type::Bitfield/Enum/Struct`...
+		- have virtual segments with silly segment numbers, like 0xFFFE is for structs, 0xFFFD for enums, 0xFFFC for bitfields
+		- use `EA` in those types to refer to them
+	- this also gives us inrefs to data types for free, because they're at `EA`s so they can participate in `RefMap`
+		- didn't *really* seem like a good idea to instantly deallocate a type the instant nothing was using it anyway
+	- and this will make `Program` `Send`!
 - IR
 	- `ValSize::_1` for bools?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
@@ -28,10 +38,9 @@
 - **GB IR stress test - test *all* possible opcodes**
 	- I'm just not sure I'm hitting them all with the test ROMs
 - **IR/const prop correctness tests**
-	- validate against emulator output
+	- make a test ROM that can be run in an emulator
+	- validate against emulator output (any emulators output memory traces?)
 	- use a dummy testing mapper/MBC which can be used to output the contents of stores to specific location to output results of const prop
-- **`Program` is not `Send` due to the way data stuff uses `Rc/RefCell`**
-	- is it possible to rearchitect it so it doesn't?
 	
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
@@ -138,9 +147,6 @@
 		- like a very limited decompiler
 	- **IR Dead Store Elimination**
 		- ties into argument/return value/clobber analysis
-	- **Data analysis**
-		- mapper RAM banking
-		- **much more is written below**
 	- **Marking functions as "bankswitch functions"**
 		- if it e.g. takes the bank to switch as an argument
 		- ofc user can help with this, but we should be able to identify candidates

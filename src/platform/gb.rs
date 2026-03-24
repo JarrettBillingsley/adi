@@ -389,7 +389,7 @@ fn rom_banks_to_segments(segs: &mut SegCollection, rom_banks: Vec<Image>) -> Vec
 	rom_banks
 		.into_iter()
 		.enumerate()
-		.map(|(i, bank)| segs.add_segment_with_va(
+		.map(|(i, bank)| segs.add_with_va(
 			&format!("ROM{}", i),
 			0x4000,
 			Some(bank),
@@ -399,12 +399,12 @@ fn rom_banks_to_segments(segs: &mut SegCollection, rom_banks: Vec<Image>) -> Vec
 
 fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 	// TODO: CGB memory map
-	let vram = segs.add_segment_with_va("VRAM",  0x2000, None, VA(0x8000));
-	let ram  = segs.add_segment_with_va("RAM",   0x2000, None, VA(0xC000));
-	let oam  = segs.add_segment_with_va("OAM",     0xA0, None, VA(0xFE00));
-	let io   = segs.add_segment_with_va("IOREG",   0x80, None, VA(0xFF00));
-	let hram = segs.add_segment_with_va("HRAM",    0x7F, None, VA(0xFF80));
-	let ie   = segs.add_segment_with_va("IE",         1, None, VA(0xFFFF));
+	let vram = segs.add_with_id_va(SegId(SegId::LAST_USER - 0), "VRAM",  0x2000, None, VA(0x8000));
+	let ram  = segs.add_with_id_va(SegId(SegId::LAST_USER - 1), "RAM",   0x2000, None, VA(0xC000));
+	let oam  = segs.add_with_id_va(SegId(SegId::LAST_USER - 2), "OAM",     0xA0, None, VA(0xFE00));
+	let io   = segs.add_with_id_va(SegId(SegId::LAST_USER - 3), "IOREG",   0x80, None, VA(0xFF00));
+	let hram = segs.add_with_id_va(SegId(SegId::LAST_USER - 4), "HRAM",    0x7F, None, VA(0xFF80));
+	let ie   = segs.add_with_id_va(SegId(SegId::LAST_USER - 5), "IE",         1, None, VA(0xFFFF));
 
 	// right now impossible but sanity check
 	if cart.header.rom_bank_size != 0x4000 {

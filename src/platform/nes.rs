@@ -84,9 +84,9 @@ impl ILoader for NesLoader {
 
 fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 -> PlatformResult<NesMmu> {
-	let ram = segs.add_segment_with_va("RAM",   0x800, None, VA(0x0000));
-	let ppu = segs.add_segment_with_va("PPU",   0x008, None, VA(0x2000));
-	let io  = segs.add_segment_with_va("IOREG", 0x020, None, VA(0x4000));
+	let ram = segs.add_with_id_va(SegId(SegId::LAST_USER - 0), "RAM",   0x800, None, VA(0x0000));
+	let ppu = segs.add_with_id_va(SegId(SegId::LAST_USER - 1), "PPU",   0x008, None, VA(0x2000));
+	let io  = segs.add_with_id_va(SegId(SegId::LAST_USER - 2), "IOREG", 0x020, None, VA(0x4000));
 
 	// TODO: PRG RAM and RAM banking
 	let mapper = match cart.mapper {
@@ -102,7 +102,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			let prg0_img = Image::new(img.name(), &cart.prg_data);
 			let prg0_len = prg0_img.len();
 			let base_va = if cart.prg_data.len() == 0x4000 { 0xC000 } else { 0x8000 };
-			let prg0 = segs.add_segment_with_va("PRG0", prg0_len, Some(prg0_img), VA(base_va));
+			let prg0 = segs.add_with_va("PRG0", prg0_len, Some(prg0_img), VA(base_va));
 			let ctor = if cart.mapper == 0 { NRom::init } else { NRom::init_cnrom };
 			ctor(prg0, prg0_len)
 		}
@@ -122,7 +122,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			for chunk in iter.by_ref() {
 				// TODO: this sets "orig_offs" to 0 every time.
 				let prg_img = Image::new(img.name(), chunk);
-				let seg_id = segs.add_segment(&format!("PRG{}", all.len()), 0x4000, Some(prg_img));
+				let seg_id = segs.add(&format!("PRG{}", all.len()), 0x4000, Some(prg_img));
 				all.push(seg_id);
 			}
 
@@ -154,7 +154,7 @@ fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 			for chunk in cart.prg_data.chunks_exact(0x8000) {
 				// TODO: this sets "orig_offs" to 0 every time.
 				let prg_img = Image::new(img.name(), chunk);
-				let seg_id = segs.add_segment_with_va(
+				let seg_id = segs.add_with_va(
 					&format!("PRG{}", all.len()), 0x8000, Some(prg_img), VA(0x8000));
 				all.push(seg_id);
 			}

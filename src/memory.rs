@@ -4,7 +4,7 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use parse_display::Display;
 use delegate::delegate;
 
-use crate::{ Offs };
+use crate::{ Offs, Size };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -166,7 +166,7 @@ impl Display for MemAccess {
 pub struct SegCollection {
 	/// The actual segments.
 	segs:         Vec<Segment>,
-	/// Monotonically increasing ID. IDs are never reused
+	/// Monotonically increasing ID. IDs are never reused.
 	next_seg_id:  SegId,
 	/// Maps from segment names to indices into `segs`.
 	seg_name_map: HashMap<String, usize>,
@@ -176,40 +176,92 @@ pub struct SegCollection {
 
 #[allow(clippy::new_without_default)]
 impl SegCollection {
-	/// Makes a new empty collection.
-	pub fn new() -> Self {
-		let mut ret = Self {
-			segs: vec![
-				Segment::new_with_va(SegId::unresolved(), "[UNRESOLVED]", Offs::MAX, None,
-					Some(VA(0)))
-			],
-			next_seg_id: SegId(0),
-			seg_name_map: HashMap::new(),
-			seg_id_map: HashMap::new(),
-		};
+	const UNRESOLVED: &'static str = "[UNRESOLVED]";
+	const STRUCTS:    &'static str = "[STRUCTS]";
+	const ENUMS:      &'static str = "[ENUMS]";
+	const BITFIELDS:  &'static str = "[BITFIELDS]";
 
-		ret.seg_id_map.insert(SegId::unresolved(), 0);
-
-		ret
+	fn check_not_reserved_name(name: &str) {
+		match name {
+			Self::UNRESOLVED | Self::STRUCTS | Self::ENUMS | Self::BITFIELDS =>
+				panic!("'{}' is a reserved name.", name),
+			_ => {}
+		}
 	}
 
-	/// Adds a new segment. Returns its id.
+	/// Makes a new empty collection.
+	pub fn new() -> Self {
+		let dummy = Some(VA(0));
+		let segs = vec![
+			Segment::new_with_va(SegId::unresolved(), Self::UNRESOLVED, Size::MAX, None, dummy),
+			Segment::new_with_va(SegId::structs(),    Self::STRUCTS,    Size::MAX, None, dummy),
+			Segment::new_with_va(SegId::enums(),      Self::ENUMS,      Size::MAX, None, dummy),
+			Segment::new_with_va(SegId::bitfields(),  Self::BITFIELDS,  Size::MAX, None, dummy),
+		];
+
+		let seg_id_map = segs.iter().enumerate()
+			.map(|(i, seg)| (seg.id(), i))
+			.collect();
+
+		Self {
+			segs,
+			next_seg_id:  SegId(0),
+			seg_name_map: HashMap::new(),
+			seg_id_map,
+		}
+	}
+
+	fn generate_id(&mut self) -> SegId {
+		let mut id = self.next_seg_id;
+
+		// want to skip over any used IDs.
+		while self.seg_id_map.contains_key(&id) {
+			if id.id + 1 > SegId::LAST_USER {
+				panic!("Ran out of segment IDs!!!");
+			}
+
+			id = SegId(id.id + 1);
+		}
+
+		// this may be invalid, but it won't give an error until the *next* time we generate an ID.
+		self.next_seg_id = SegId::unchecked(id.id + 1);
+		id
+	}
+
+	/// Adds a new segment with the given ID.
 	///
 	/// # Panics
 	///
-	/// - if `name` is already the name of an existing segment.
-	pub fn add_segment(&mut self, name: &str, size: Offs, image: Option<Image>) -> SegId {
+	/// - if `id` is already in use.
+	/// - if `name` is the name of an existing segment.
+	/// - if `name` is a reserved (internal) segment name.
+	pub fn add_with_id(&mut self, id: SegId, name: &str, size: Size, image: Option<Image>)
+	-> SegId {
+		Self::check_not_reserved_name(name);
+		if self.seg_id_map.contains_key(&id) {
+			panic!("id {:?} is already in use.", id);
+		}
+
 		let idx = self.segs.len();
-
 		let existing = self.seg_name_map.insert(name.into(), idx);
-		assert!(existing.is_none(), "duplicate segment name {}", name);
-
-		let id = self.next_seg_id;
-		self.next_seg_id = SegId(self.next_seg_id.0 + 1);
+		assert!(existing.is_none(), "segment name {} is already in use.", name);
 		self.seg_id_map.insert(id, idx);
-
 		self.segs.push(Segment::new(id, name, size, image));
+		id
+	}
 
+	/// Same as above, but automatically generates an ID for it and returns that.
+	///
+	/// # Panics
+	///
+	/// - if there are no more valid segment IDs left.
+	/// - if `name` is the name of an existing segment.
+	/// - if `name` is a reserved (internal) segment name.
+	pub fn add(&mut self, name: &str, size: Size, image: Option<Image>) -> SegId {
+		Self::check_not_reserved_name(name);
+
+		let id = self.generate_id();
+		self.add_with_id(id, name, size, image);
 		id
 	}
 
@@ -217,12 +269,28 @@ impl SegCollection {
 	///
 	/// # Panics
 	///
-	/// - if `name` is already the name of an existing segment.
-	pub fn add_segment_with_va(&mut self, name: &str, size: Offs, image: Option<Image>,
-	base_va: VA) -> SegId {
-		let ret = self.add_segment(name, size, image);
+	/// - if `name` is the name of an existing segment.
+	/// - if `name` is a reserved (internal) segment name.
+	/// - if there are no more valid segment IDs left.
+	pub fn add_with_va(&mut self, name: &str, size: Size, image: Option<Image>, base_va: VA)
+	-> SegId {
+		let ret = self.add(name, size, image);
 		self.segment_from_id_mut(ret).set_base_va(base_va);
 		ret
+	}
+
+	/// Same as above, but with a given ID.
+	///
+	/// # Panics
+	///
+	/// - if `name` is the name of an existing segment.
+	/// - if `name` is a reserved (internal) segment name.
+	/// - if there are no more valid segment IDs left.
+	pub fn add_with_id_va(&mut self, id: SegId, name: &str, size: Size, image: Option<Image>,
+	base_va: VA) -> SegId {
+		self.add_with_id(id, name, size, image);
+		self.segment_from_id_mut(id).set_base_va(base_va);
+		id
 	}
 
 	/// Given a segment name, get the Segment named that (if any).
@@ -305,7 +373,7 @@ impl Memory {
 	/// How many digits in a formatted address.
 	pub fn digits(&self) -> usize { self.digits }
 	/// The length of the address space.
-	pub fn len(&self) -> Offs { 2_u64.pow(self.bits as u32) }
+	pub fn len(&self) -> Size { 2_u64.pow(self.bits as u32) }
 
 	// ---------------------------------------------------------------------------------------------
 	// MMU
