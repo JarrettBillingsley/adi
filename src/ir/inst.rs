@@ -109,6 +109,10 @@ pub(crate) enum IrInstKind {
 	// either a halt or a dead end terminator
 	Halt,
 
+	// TODO: once indirect jumps/branches are implemented, `IrInstKind::IBranch/ICall` could have
+	// some `Vec` of targets (which would make `IrInstKind` and `IrInst` no longer `Copy` but it's
+	// not that disruptive), but that `Vec` may not be exhaustive... hmmm
+
 	// dst = op src
 	Unary   { dst: IrReg, op: IrUnOp, src: IrSrc,                 dstn: i8, srcn: i8, },
 	// dst = src1 op src2

@@ -48,7 +48,7 @@ impl Span {
 	/// The ID of the segment which owns this span.
 	#[inline] pub fn seg  (&self) -> SegId    { self.seg }
 	/// The length of this span.
-	#[inline] pub fn len  (&self) -> u64      { self.end - self.start }
+	#[inline] pub fn len  (&self) -> Size      { self.end - self.start }
 
 	#[inline] /// If this is an unknown span.
 	pub fn is_unknown(&self) -> bool {

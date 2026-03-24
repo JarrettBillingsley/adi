@@ -1,19 +1,25 @@
 
 # Yak stack
 
+# Major tasks
+
+- IR correctness testing
+- Jump table analysis, indirect jumps and calls
+- Const prop provenance ASTs
+- Data analysis
+- Multi-state BBs/functions
+- Argument/return value/clobber analysis
+- Stack analysis
+
 # Imminent tasks!
 
 - IR
-	- `IrInstKind::IBranch/ICall` could have some `Vec` of targets (which would make `IrInstKind` and `IrInst` no longer `Copy` but it's not that disruptive), but that `Vec` may not be exhaustive... hmmmm not sure, jump tables/indirect calls are a big TODO for now
 	- `ValSize::_1` for bools?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 		- maybe `IIrCompiler` could have a `name_map` method that returns a `Vec<&'static str>` of register names
 		- maybe there could be a macro to declare all the `IrReg`s for an arch that generates this vec for you cause it's already getting annoying (and error-prone, since you have to come up with the indexes yourself based on the sizes of the regs)
 			- and it could also generate the lists of arg/return regs
 		- or maybe not a macro just a builder that's lazily initialized
-- GB
-	- god the mapping between `SynOp/GBOpKind/Operand` is a fucking MESS. kill it
-	- syntax options - `[hl]` vs. `(hl)`, `add a, b` vs. `add b`
 - Mos65xx IR:
 	- reimplement rotates and uses of `iand` which could be bit instructions
 - **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
@@ -102,7 +108,6 @@
 	- **Does state change analysis needs to take multiple entry points into account?**
 	- **License: GPL3?**
 		- it's what Mesen uses and I'm referencing that heavily for Mos65xx so idk
-	- **Refactor `Analysis` cause it really seems to be more like "a function's CFG"**
 	- **Write some more FUCKING tests**
 	- **Evaluate what really should be `pub`, `pub(crate)`, `pub(super)`, or private**
 	- **Does `RefMap` need ordering? (Does this need to be `BTreeMap/Set`?)**
@@ -194,6 +199,7 @@
 		- more mappers (remember to set segment base VA when state changes)
 	- **GB**
 		- more MBCs (remember to set segment base VA when state changes)
+		- syntax options - `[hl]` vs. `(hl)`; `add a, b` vs. `add b`
 	- **Mos65xx**
 		- there are more (unofficial) variations of `NOP`
 		- correct `DOP` addressing modes

@@ -1,6 +1,7 @@
 
 use enum_dispatch::enum_dispatch;
 
+use crate::{ Offs };
 use crate::ir::{ IrBuilder, IrReg };
 use crate::memory::{ Endian, MmuState, EA, VA };
 use crate::program::{ Instruction, BBTerm };
@@ -126,8 +127,8 @@ impl<'dis, 'img> Iterator for DisasAll<'dis, 'img> {
 			match self.disas.disas_inst(&self.img[self.offs ..], self.state, self.va, self.ea) {
 				Ok(inst) => {
 					let size = inst.size();
-					self.va += size as u64;
-					self.ea += size as u64;
+					self.va += size as Offs;
+					self.ea += size as Offs;
 					self.offs += size;
 
 					// terminate iteration if the instruction is a halt

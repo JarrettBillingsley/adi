@@ -3,6 +3,7 @@
 use std::default::Default;
 use std::convert::TryInto;
 
+use crate::{ Offs };
 use crate::program::{
 	Operand,
 	Instruction,
@@ -343,7 +344,7 @@ fn decode_operand(desc: InstDesc, va: VA, img: &[u8]) -> (Option<Operand>, Optio
 			};
 
 			let target = if desc.kind().has_control_target() {
-				Some(VA(addr as u64))
+				Some(VA(addr as Offs))
 			} else {
 				None
 			};
@@ -392,7 +393,7 @@ impl IPrinter for Mos65xxPrinter {
 	// Most of the work is done print_operands, including printing the register;
 	// here we just have to display the displacement as an address.
 	fn print_indir_reg_disp(&self, ctx: &mut PrinterCtx, _reg: u8, disp: i64) -> FmtResult {
-		self.print_va(ctx, VA(disp as u64))
+		self.print_va(ctx, VA(disp as Offs))
 	}
 
 	// TODO: use is_zero_page to customize address display? I think 6502 assemblers
