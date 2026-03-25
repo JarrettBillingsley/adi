@@ -443,24 +443,3 @@ A second dataflow algorithm! This time, it's run on **the real function's CFG.**
 - The state could be one of a set of possible states
 
 The second possibility is not fully handled yet but yeahhhhhhhhh that's it 
-
----
-
-## Conditional call and return handling in the IR
-
-Since I don't wanna deal with having control flow in the IR, conditional calls and returns are handled during building of the IR CFG, so that one BB in the original function can become 2 IR BBs.
-
-The protocol for it is a bit fragile but here's how it works:
-
-- to build the IR for a conditional call instruction:
-	- it *must* call `IrBuilder::cbranch_and_split`
-		- it *must* branch to the `next` that was passed in
-		- it *must* do so when the condition is *not* satisfied
-			- e.g. if the instruction is "call if zero", the branch's `cond` should be `!zero`, in order to skip the call
-	- then it *must* use `IrBuilder::call` as the last instruction
-- to build the IR for a conditional return instruction:
-	- it *must* call `IrBuilder::cbranch_and_split`
-		- it *must* branch to the `next` that was passed in
-		- it *must* do so when the condition *is not* satisfied
-			- e.g. if the instruction is "return if zero", the branch's `cond` should be `!zero`, in order to skip the return and continue on to `next`
-	- then it *must* use `IrBuilder::ret` as the last instruction

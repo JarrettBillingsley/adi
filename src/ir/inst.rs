@@ -11,71 +11,71 @@ use super::*;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[non_exhaustive]
 pub(crate) enum IrUnOp {
-	IntZxt,  // dst = zxt(src)
-	IntSxt,  // dst = sxt(src)
-	IntLo,   // dst = lo(src) (half the number of bits)
-	IntHi,   // dst = hi(src) (half the number of bits)
-	IntNeg,  // dst = -src
-	IntNot,  // dst = ~src
-	BoolNot, // dst = not src
+	Zxt,  // dst = zxt(src)
+	Sxt,  // dst = sxt(src)
+	Lo,   // dst = lo(src) (half the number of bits)
+	Hi,   // dst = hi(src) (half the number of bits)
+	Neg,  // dst = -src
+	INot, // dst = ~src
+	BNot, // dst = not src
 }
 
 /// Binary operations.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[non_exhaustive]
 pub(crate) enum IrBinOp {
-	IntEq,      // dst = s1 == s2
-	IntNe,      // dst = s1 != s2
-	IntSlt,     // dst = s1 < s2  (signed)
-	IntSle,     // dst = s1 <= s2 (signed)
-	IntUlt,     // dst = s1 < s2  (unsigned)
-	IntUle,     // dst = s1 <= s2 (unsigned)
+	Eq,      // dst = s1 == s2
+	Ne,      // dst = s1 != s2
+	Slt,     // dst = s1 < s2  (signed)
+	Sle,     // dst = s1 <= s2 (signed)
+	Ult,     // dst = s1 < s2  (unsigned)
+	Ule,     // dst = s1 <= s2 (unsigned)
 
-	IntUAdd,    // dst = s1 + s2  (unsigned)
-	IntUSub,    // dst = s1 - s2  (unsigned)
+	Add,     // dst = s1 + s2  (any signedness)
+	Sub,     // dst = s1 - s2  (any signedness)
 
-	IntUCarry,  // dst = true if (s1 unsigned+ s2) has carry-out
-	IntSCarry,  // dst = true if (s1 signed+ s2) has carry-out
-	IntSBorrow, // dst = true if (s1 signed- s2) has borrow-out
-	IntCarries, // dst = carry-outs for each column of bits in (s1 unsigned+ s2)
-	IntBorrows, // dst = borrow-outs for each column of bits in (s1 unsigned- s2)
-	IntMul,     // dst = s1 * s2
-	IntUDiv,    // dst = s1 / s2  (unsigned)
-	IntSDiv,    // dst = s1 / s2  (signed)
-	IntUMod,    // dst = s1 % s2  (unsigned)
-	IntSMod,    // dst = s1 % s2  (signed)
+	UCarry,  // dst = true if (s1 unsigned+ s2) has carry-out
+	SCarry,  // dst = true if (s1 signed+ s2) has carry-out
+	SBorrow, // dst = true if (s1 signed- s2) has borrow-out
+	Carries, // dst = carry-outs for each column of bits in (s1 unsigned+ s2)
+	Borrows, // dst = borrow-outs for each column of bits in (s1 unsigned- s2)
+	Mul,     // dst = s1 * s2
+	UDiv,    // dst = s1 / s2  (unsigned)
+	SDiv,    // dst = s1 / s2  (signed)
+	UMod,    // dst = s1 % s2  (unsigned)
+	SMod,    // dst = s1 % s2  (signed)
 
-	IntXor,     // dst = s1 ^ s2
-	IntAnd,     // dst = s1 & s2
-	IntOr,      // dst = s1 | s2
-	IntShl,     // dst = s1 << s2
-	IntUShr,    // dst = s1 >> s2 (unsigned/logical)
-	IntSShr,    // dst = s1 >> s2 (signed/arithmetic)
-	IntRol,     // dst = s1.rotate_left(s2)
-	IntRor,     // dst = s1.rotate_right(s2)
+	IXor,    // dst = s1 ^ s2
+	IAnd,    // dst = s1 & s2
+	IOr,     // dst = s1 | s2
+	Shl,     // dst = s1 << s2
+	UShr,    // dst = s1 >> s2 (unsigned/logical)
+	SShr,    // dst = s1 >> s2 (signed/arithmetic)
+	Rol,     // dst = s1.rotate_left(s2)
+	Ror,     // dst = s1.rotate_right(s2)
 
-	IntPair,    // dst = (s1 in upper bits, s2 in lower bits)
-	IntBit,     // dst = (s1 & (1 << s2)) ? 1 : 0;
+	Pair,    // dst = (s1 in upper bits, s2 in lower bits)
+	Bit,     // dst = (s1 & (1 << s2)) ? 1 : 0;
 
-	BoolXor,    // dst = s1 != s2
-	BoolAnd,    // dst = s1 and s2
-	BoolOr,     // dst = s1 or s2
+	BXor,    // dst = s1 != s2
+	BAnd,    // dst = s1 and s2
+	BOr,     // dst = s1 or s2
 }
 
 /// Ternary operations.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[non_exhaustive]
 pub(crate) enum IrTernOp {
-	IntUAddC,    // dst = s1 + s2 + s3  (unsigned, s3 = bool)
-	IntUSubB,    // dst = s1 - s2 - s3  (unsigned, s3 = bool)
+	AddC,     // dst = s1 + s2 + s3  (any signedness, s3 = bool)
+	SubB,     // dst = s1 - s2 - s3  (any signedness, s3 = bool)
 
-	IntUCarryC,  // dst = true if unsigned (s1 + s2 + s3) has carry-out
-	IntSCarryC,  // dst = true if signed (s1 + s2 + s3) has carry-out
-	IntSBorrowB, // dst = true if signed (s1 - s2 - s3) has borrow-out
-	IntCarriesC, // dst = carry-outs for each column of bits in unsigned (s1 + s2 + s3)
-	IntBorrowsB, // dst = carry-outs for each column of bits in unsigned (s1 - s2 - s3)
+	UCarryC,  // dst = true if unsigned (s1 + s2 + s3) has carry-out
+	SCarryC,  // dst = true if signed (s1 + s2 + s3) has carry-out
+	SBorrowB, // dst = true if signed (s1 - s2 - s3) has borrow-out
+	CarriesC, // dst = carry-outs for each column of bits in unsigned (s1 + s2 + s3)
+	BorrowsB, // dst = carry-outs for each column of bits in unsigned (s1 - s2 - s3)
 
-	IntBitSet,   // dst = (s1 & ~(1 << s2)) | (s3 << s2) (s3 must be 0 or 1)
+	BSet,   // dst = (s1 & ~(1 << s2)) | (s3 << s2) (s3 must be 0 or 1)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -150,120 +150,120 @@ impl Debug for IrInstKind {
 			Nop =>
 				write!(f, "nop"),
 			Use { reg } =>
-				write!(f, "use       {:?}", reg),
+				write!(f, "use      {:?}", reg),
 			Mov { dst, src, dstn, srcn } =>
-				write!(f, "mov       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				write!(f, "mov      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 			Load { dst, addr, dstn, addrn } =>
-				write!(f, "load      {:?}{:?}, [{:?}{:?}]", dst, Opn(dstn), addr, Opn(addrn)),
+				write!(f, "load     {:?}{:?}, [{:?}{:?}]", dst, Opn(dstn), addr, Opn(addrn)),
 			Store { addr, src, addrn, srcn } =>
-				write!(f, "store     [{:?}{:?}], {:?}{:?}", addr, Opn(addrn), src, Opn(srcn)),
+				write!(f, "store    [{:?}{:?}], {:?}{:?}", addr, Opn(addrn), src, Opn(srcn)),
 			Branch { dst, dstn } =>
-				write!(f, "branch    {:?}{:?}", dst, Opn(dstn)),
+				write!(f, "branch   {:?}{:?}", dst, Opn(dstn)),
 			CBranch { cond, dst, cont, condn, dstn } =>
-				write!(f, "cbranch   {:?}{:?} ? {:?}{:?} : {:?}",
+				write!(f, "cbranch  {:?}{:?} ? {:?}{:?} : {:?}",
 					cond, Opn(condn), dst, Opn(dstn), cont),
 			IBranch { dst, dstn } =>
-				write!(f, "ibranch   [{:?}{:?}]", dst, Opn(dstn)),
+				write!(f, "ibranch  [{:?}{:?}]", dst, Opn(dstn)),
 			Call { dst, dstn, cont } =>
-				write!(f, "call      {:?}{:?} (return to {:?})", dst, Opn(dstn), cont),
+				write!(f, "call     {:?}{:?} (return to {:?})", dst, Opn(dstn), cont),
 			ICall { dst, dstn, cont } =>
-				write!(f, "icall     [{:?}{:?}] (return to {:?})", dst, Opn(dstn), cont),
+				write!(f, "icall    [{:?}{:?}] (return to {:?})", dst, Opn(dstn), cont),
 			Ret { dst, dstn } =>
-				write!(f, "ret       [{:?}{:?}]", dst, Opn(dstn)),
+				write!(f, "ret      [{:?}{:?}]", dst, Opn(dstn)),
 			Halt =>
 				write!(f, "halt"),
 
 			Unary { dst, op, src, dstn, srcn } => match op {
-				IntZxt  => write!(f, "izxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				IntSxt  => write!(f, "isxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				IntLo   => write!(f, "ilo       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				IntHi   => write!(f, "ihi       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				IntNeg  => write!(f, "ineg      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				IntNot  => write!(f, "inot      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				BoolNot => write!(f, "bnot      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				Zxt  => write!(f, "zxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				Sxt  => write!(f, "sxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				Lo   => write!(f, "lo       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				Hi   => write!(f, "hi       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				Neg  => write!(f, "neg      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				INot => write!(f, "inot     {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				BNot => write!(f, "bnot     {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
 			},
 
 			Binary { dst, src1, op, src2, dstn, src1n, src2n } => match op {
-				IntEq      => write!(f, "ieq       {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Eq      => write!(f, "eq       {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntNe      => write!(f, "ine       {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Ne      => write!(f, "ne       {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSlt     => write!(f, "islt      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Slt     => write!(f, "slt      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSle     => write!(f, "isle      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Sle     => write!(f, "sle      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUlt     => write!(f, "iult      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Ult     => write!(f, "ult      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUle     => write!(f, "iule      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Ule     => write!(f, "ule      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUAdd    => write!(f, "iuadd     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Add     => write!(f, "add      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUSub    => write!(f, "iusub     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Sub     => write!(f, "sub      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUCarry  => write!(f, "iucarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				UCarry  => write!(f, "ucarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSCarry  => write!(f, "iscarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SCarry  => write!(f, "scarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSBorrow => write!(f, "isborrow  {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SBorrow => write!(f, "sborrow  {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntCarries => write!(f, "icarries  {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Carries => write!(f, "carries  {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntBorrows => write!(f, "iborrows  {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Borrows => write!(f, "borrows  {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntMul     => write!(f, "imul      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Mul     => write!(f, "mul      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUDiv    => write!(f, "iudiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				UDiv    => write!(f, "udiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSDiv    => write!(f, "isdiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SDiv    => write!(f, "sdiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUMod    => write!(f, "iumod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				UMod    => write!(f, "umod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSMod    => write!(f, "ismod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SMod    => write!(f, "smod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntXor     => write!(f, "ixor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				IXor    => write!(f, "ixor     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntAnd     => write!(f, "iand      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				IAnd    => write!(f, "iand     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntOr      => write!(f, "ior       {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				IOr     => write!(f, "ior      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntShl     => write!(f, "ishl      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Shl     => write!(f, "shl      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntUShr    => write!(f, "iushr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				UShr    => write!(f, "ushr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntSShr    => write!(f, "isshr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SShr    => write!(f, "sshr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntRol     => write!(f, "irol      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Rol     => write!(f, "rol      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntRor     => write!(f, "iror      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				Ror     => write!(f, "ror      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntPair    => write!(f, "ipair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
+				Pair    => write!(f, "pair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				IntBit     => write!(f, "ibit      {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}",
+				Bit     => write!(f, "bit      {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				BoolXor    => write!(f, "bxor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				BXor    => write!(f, "bxor     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				BoolAnd    => write!(f, "band      {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				BAnd    => write!(f, "band     {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
-				BoolOr     => write!(f, "bor       {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				BOr     => write!(f, "bor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
 			},
 
 			Ternary { dst, src1, op, src2, src3, dstn, src1n, src2n, src3n } => match op {
-				IntUAddC    => write!(f, "iuaddc    {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				AddC     => write!(f, "addc     {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntUSubB    => write!(f, "iusubb    {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SubB     => write!(f, "subb     {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntUCarryC  => write!(f, "iucarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				UCarryC  => write!(f, "ucarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntSCarryC  => write!(f, "iscarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SCarryC  => write!(f, "scarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntSBorrowB => write!(f, "isborrowb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				SBorrowB => write!(f, "sborrowb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntCarriesC => write!(f, "icarriesc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				CarriesC => write!(f, "carriesc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntBorrowsB => write!(f, "iborrowsb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
+				BorrowsB => write!(f, "borrowsb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
-				IntBitSet   => write!(f, "ibset     {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
+				BSet     => write!(f, "bset     {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
 					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
 			},
 		}
@@ -274,6 +274,10 @@ impl Debug for IrInstKind {
 // IrInst
 // ------------------------------------------------------------------------------------------------
 
+/// An IR instruction.
+///
+/// Every instruction has an `EA` which is the `EA` of the `Instruction` from which it was
+/// generated, which is the first argument to all the constructors.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) struct IrInst {
 	ea:   EA,
@@ -288,433 +292,411 @@ impl Debug for IrInst {
 
 #[allow(clippy::too_many_arguments)]
 impl IrInst {
-	/// TODO: docme
 	pub(crate) fn nop(ea: EA) -> Self {
 		Self { ea, kind: IrInstKind::Nop }
 	}
 
-	/// TODO: docme
 	pub(crate) fn use_(ea: EA, reg: IrReg) -> Self {
 		Self { ea, kind: IrInstKind::Use { reg } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn mov(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
 		Self { ea, kind: IrInstKind::Mov { dst, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn izxt(ea: EA, dst: IrReg, src: IrSrc,
+	pub(crate) fn zxt(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() > src.size());
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntZxt, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::Zxt, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn isxt(ea: EA, dst: IrReg, src: IrSrc,
+	pub(crate) fn sxt(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() > src.size());
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntSxt, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::Sxt, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ilo(ea: EA, dst: IrReg, src: IrSrc,
+	pub(crate) fn lo(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(src.size().is_twice(dst.size()));
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntLo, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::Lo, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ihi(ea: EA, dst: IrReg, src: IrSrc,
+	pub(crate) fn hi(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(src.size().is_twice(dst.size()));
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntHi, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::Hi, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ineg(ea: EA, dst: IrReg, src: IrSrc,
+	pub(crate) fn neg(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNeg, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::Neg, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn inot(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::IntNot, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::INot, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn bnot(ea: EA, dst: IrReg, src: IrSrc,
 		dstn: i8, srcn: i8) -> Self {
 		assert!(dst.size() == src.size());
-		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::BoolNot, src, dstn, srcn } }
+		Self { ea, kind: IrInstKind::Unary { dst, op: IrUnOp::BNot, src, dstn, srcn } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ieq(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn eq(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntEq, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Eq, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ine(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn ne(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntNe, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Ne, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn islt(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn slt(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSlt, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Slt, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn isle(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn sle(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSle, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Sle, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iult(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn ult(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUlt, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Ult, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iule(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn ule(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUle, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Ule, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iuadd(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn add(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Binary {
+			dst, src1, op: IrBinOp::Add, src2, dstn, src1n, src2n } }
+	}
+
+	pub(crate) fn addc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+		assert!(dst.size() == src1.size());
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary {
+			dst, src1, op: IrTernOp::AddC, src2, src3, dstn, src1n, src2n, src3n } }
+	}
+
+	pub(crate) fn sub(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Binary {
+			dst, src1, op: IrBinOp::Sub, src2, dstn, src1n, src2n } }
+	}
+
+	pub(crate) fn subb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+		assert!(dst.size() == src1.size());
+		assert!(src1.size() == src2.size());
+		Self { ea, kind: IrInstKind::Ternary {
+			dst, src1, op: IrTernOp::SubB, src2, src3, dstn, src1n, src2n, src3n } }
+	}
+
+	pub(crate) fn ucarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUAdd, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::UCarry, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iuaddc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn ucarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntUAddC, src2, src3, dstn, src1n, src2n, src3n } }
+			dst, src1, op: IrTernOp::UCarryC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iusub(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn scarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUSub, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::SCarry, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iusubb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn scarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntUSubB, src2, src3, dstn, src1n, src2n, src3n } }
+			dst, src1, op: IrTernOp::SCarryC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iucarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn sborrow(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUCarry, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::SBorrow, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iucarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn sborrowb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntUCarryC, src2, src3, dstn, src1n, src2n, src3n } }
+			dst, src1, op: IrTernOp::SBorrowB, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iscarry(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn carries(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSCarry, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Carries, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iscarryc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn carriesc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntSCarryC, src2, src3, dstn, src1n, src2n, src3n } }
+			dst, src1, op: IrTernOp::CarriesC, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn isborrow(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn borrows(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSBorrow, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Borrows, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn isborrowb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn borrowsb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntSBorrowB, src2, src3, dstn, src1n, src2n, src3n } }
+			dst, src1, op: IrTernOp::BorrowsB, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn icarries(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn mul(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntCarries, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Mul, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn icarriesc(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
-		assert!(src1.size() == src2.size());
-		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntCarriesC, src2, src3, dstn, src1n, src2n, src3n } }
-	}
-
-	/// TODO: docme
-	pub(crate) fn iborrows(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn udiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntBorrows, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::UDiv, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iborrowsb(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
-		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
-		assert!(src1.size() == src2.size());
-		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntBorrowsB, src2, src3, dstn, src1n, src2n, src3n } }
-	}
-
-	/// TODO: docme
-	pub(crate) fn imul(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn sdiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntMul, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::SDiv, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iudiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn umod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUDiv, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::UMod, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn isdiv(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn smod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSDiv, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::SMod, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iumod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
-		dstn: i8, src1n: i8, src2n: i8) -> Self {
-		assert!(src1.size() == src2.size());
-		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUMod, src2, dstn, src1n, src2n } }
-	}
-
-	/// TODO: docme
-	pub(crate) fn ismod(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
-		dstn: i8, src1n: i8, src2n: i8) -> Self {
-		assert!(src1.size() == src2.size());
-		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSMod, src2, dstn, src1n, src2n } }
-	}
-
-	/// TODO: docme
 	pub(crate) fn ixor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntXor, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::IXor, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn iand(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntAnd, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::IAnd, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn ior(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntOr, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::IOr, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ishl(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn shl(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntShl, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Shl, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iushr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn ushr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntUShr, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::UShr, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn isshr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn sshr(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntSShr, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::SShr, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn irol(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn rol(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntRol, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Rol, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn iror(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn ror(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntRor, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Ror, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ipair(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn pair(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
 		assert!(src1.size() == src2.size());
 		assert!(dst.size().is_twice(src1.size()));
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntPair, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Pair, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ibit(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
+	pub(crate) fn bit(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+
+		if let IrSrc::Const(IrConst { val, .. }) = src2 {
+			let num_bits = src1.size().bytes() as u64 * 8;
+			assert!(val < num_bits, "bit position {} exceeds number of bits {}", val, num_bits);
+		}
+
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::IntBit, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::Bit, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
-	pub(crate) fn ibset(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
+	pub(crate) fn bset(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc, src3: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8, src3n: i8) -> Self {
+
+		if let IrSrc::Const(IrConst { val, .. }) = src2 {
+			let num_bits = src1.size().bytes() as u64 * 8;
+			assert!(val < num_bits, "bit position {} exceeds number of bits {}", val, num_bits);
+		}
+
 		Self { ea, kind: IrInstKind::Ternary {
-			dst, src1, op: IrTernOp::IntBitSet, src2, src3, dstn, src1n, src2n, src3n } }
+			dst, src1, op: IrTernOp::BSet, src2, src3, dstn, src1n, src2n, src3n } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn bxor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::BoolXor, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::BXor, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn band(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::BoolAnd, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::BAnd, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn bor(ea: EA, dst: IrReg, src1: IrSrc, src2: IrSrc,
 		dstn: i8, src1n: i8, src2n: i8) -> Self {
+		assert!(dst.size() == src1.size());
 		assert!(src1.size() == src2.size());
 		Self { ea, kind: IrInstKind::Binary {
-			dst, src1, op: IrBinOp::BoolOr, src2, dstn, src1n, src2n } }
+			dst, src1, op: IrBinOp::BOr, src2, dstn, src1n, src2n } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn load(ea: EA, dst: IrReg, addr: IrSrc,
 		dstn: i8, addrn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Load { dst, addr, dstn, addrn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn store(ea: EA, addr: IrSrc, src: IrSrc,
 		addrn: i8, srcn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Store { addr, src, addrn, srcn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn branch(ea: EA, dst: impl Into<IrTarget>,
 		dstn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Branch { dst: dst.into(), dstn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn cbranch(ea: EA, cond: IrSrc, dst: impl Into<IrTarget>, cont: impl Into<IrTarget>,
 		condn: i8, dstn: i8) -> Self {
 		Self { ea, kind: IrInstKind::CBranch { cond, dst: dst.into(), cont: cont.into(),
 			condn, dstn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn ibranch(ea: EA, dst: IrSrc,
 		dstn: i8) -> Self {
 		Self { ea, kind: IrInstKind::IBranch { dst, dstn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn call(ea: EA, dst: impl Into<IrTarget>, cont: impl Into<IrTarget>,
 		dstn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Call { dst: dst.into(), cont: cont.into(), dstn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn icall(ea: EA, dst: IrSrc, cont: impl Into<IrTarget>,
 		dstn: i8) -> Self {
 		Self { ea, kind: IrInstKind::ICall { dst, dstn, cont: cont.into() } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn ret(ea: EA, dst: IrSrc,
 		dstn: i8) -> Self {
 		Self { ea, kind: IrInstKind::Ret { dst, dstn } }
 	}
 
-	/// TODO: docme
 	pub(crate) fn halt(ea: EA) -> Self {
 		Self { ea, kind: IrInstKind::Halt }
 	}

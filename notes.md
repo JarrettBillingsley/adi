@@ -3,15 +3,15 @@
 
 # Major tasks
 
-- IR correctness testing
-- Jump table analysis, indirect jumps and calls
-- Const prop provenance ASTs
 - Data analysis
+- IR correctness testing
+- Jump table analysis, indirect jumps and calls (**depends on data analysis**)
+- Const prop provenance ASTs
 - Multi-state BBs/functions
 - Argument/return value/clobber analysis
-- Type propagation
+- Type propagation (**depends on const prop ASTs**)
 - Stack analysis
-- Undo/Redo support
+- Undo/Redo support (**depends on rearchitecting public API**)
 - Save/Load support
 
 # Imminent tasks!
@@ -27,14 +27,14 @@
 	- and this will make `Program` `Send`!
 	- move data printing into `Program`
 		- it can call some of the `IPrinter` methods for printing numbers, addresses etc.
-- IR
+- **IR**
 	- `ValSize::_1` for bools?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
 		- maybe `IIrCompiler` could have a `name_map` method that returns a `Vec<&'static str>` of register names
 		- maybe there could be a macro to declare all the `IrReg`s for an arch that generates this vec for you cause it's already getting annoying (and error-prone, since you have to come up with the indexes yourself based on the sizes of the regs)
 			- and it could also generate the lists of arg/return regs
 		- or maybe not a macro just a builder that's lazily initialized
-- Mos65xx IR:
+- **Mos65xx IR:**
 	- reimplement rotates and uses of `iand` which could be bit instructions
 - **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
 - **Put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction***
@@ -121,11 +121,11 @@
 		- this way the queue can be analyzed in an executor-based environment instead of being forced onto a second thread
 		- and/or some listener for analysis steps
 	- **Make const prop build ASTs for constant provenance**
+		- want this for back-propagating info to the sources!!! duhh
+			- also makes **type propagation** possible
 		- `constprop::Info::join` arbitrarily picks one of the sources right now, and having an AST node for "phi" would avoid throwing away that info
-		- I feel like there was *a bigger reason* why I wanted to do this but I can't remember rn
 		- this could be used for *way more* than just constant provenance right?
-		- you could have it show little HLL-like snippets of what a sequence of instructions does
-		- like a very limited decompiler
+			- you could have it show little HLL-like snippets of what a sequence of instructions does, like a very limited decompiler
 	- **IR Dead Store Elimination**
 		- ties into argument/return value/clobber analysis
 	- **Marking functions as "bankswitch functions"**

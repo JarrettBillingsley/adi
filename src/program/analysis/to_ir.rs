@@ -124,7 +124,7 @@ impl Program {
 					exitpoints.push(rewrite_irbbid);
 				}
 				_ => {
-					// only insert uses if there is *at least one* out-of-function successor.
+					// it's only an exitpoint if there is *at least one* out-of-function successor.
 					if !self.bb_all_successors_in_function(bbid) {
 						exitpoints.push(rewrite_irbbid);
 					}

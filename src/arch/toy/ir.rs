@@ -108,28 +108,28 @@ impl InstDesc {
 			ADD => {
 				let op0 = r0();
 				let op1 = r1();
-				b.iucarry(REG_CF, op0, op1);
-				b.iuadd  (   op0, op0, op1);
+				b.ucarry(REG_CF, op0, op1);
+				b.add  (   op0, op0, op1);
 			}
 			ADC => {
 				let op0 = r0();
 				let op1 = r1();
 				b.mov( REG_TMPCF, REG_CF);
-				b.iucarryc(REG_CF,    op0, op1, REG_CF);
-				b.iuaddc  (   op0,    op0, op1, REG_TMPCF);
+				b.ucarryc(REG_CF,    op0, op1, REG_CF);
+				b.addc  (   op0,    op0, op1, REG_TMPCF);
 			}
 			SUB => {
 				let op0 = r0();
 				let op1 = r1();
-				b.isborrow(REG_CF, op0, op1);
-				b.iusub(   op0,    op0, op1);
+				b.sborrow(REG_CF, op0, op1);
+				b.sub(   op0,    op0, op1);
 			}
 			SBC => {
 				let op0 = r0();
 				let op1 = r1();
 				b.mov(      REG_TMPCF, REG_CF);
-				b.isborrowb(REG_CF,    op0, op1, REG_CF);
-				b.iusubb(   op0,       op0, op1, REG_TMPCF);
+				b.sborrowb(REG_CF,    op0, op1, REG_CF);
+				b.subb(   op0,       op0, op1, REG_TMPCF);
 			}
 			AND => {
 				let op0 = r0();
@@ -154,18 +154,18 @@ impl InstDesc {
 			CMP => {
 				let op0 = r0();
 				let op1 = r1();
-				b.ieq( REG_ZF, op0, op1);
-				b.islt(REG_NF, op0, op1);
-				b.iult(REG_CF, op0, op1);
+				b.eq( REG_ZF, op0, op1);
+				b.slt(REG_NF, op0, op1);
+				b.ult(REG_CF, op0, op1);
 			}
 			CMC => {
 				let op0 = r0();
 				let op1 = r1();
 				b.mov(      REG_TMPCF, REG_CF);
-				b.isborrowb(REG_CF,    op0, op1, REG_CF);
-				b.iusubb(   REG_TMP,   op0, op1, REG_TMPCF);
-				b.ieq(      REG_ZF, REG_TMP, IrConst::ZERO_8);
-				b.islt(     REG_NF, REG_TMP, IrConst::ZERO_8);
+				b.sborrowb(REG_CF,    op0, op1, REG_CF);
+				b.subb(   REG_TMP,   op0, op1, REG_TMPCF);
+				b.eq(      REG_ZF, REG_TMP, IrConst::ZERO_8);
+				b.slt(     REG_NF, REG_TMP, IrConst::ZERO_8);
 			}
 			BLT => {
 				let term = term.unwrap();
@@ -198,20 +198,20 @@ impl InstDesc {
 				b.branch((dst, 0));
 			}
 			JMPI => {
-				b.ipair(  REG_TMP16, REG_D, REG_C);
+				b.pair(  REG_TMP16, REG_D, REG_C);
 				b.ibranch((REG_TMP16, 0));
 			}
 			CALL => {
 				let term = term.unwrap();
 				let dst = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
-				b.iusub(REG_SP, REG_SP, IrConst::_16(2));
+				b.sub(REG_SP, REG_SP, IrConst::_16(2));
 				b.store(REG_SP, IrConst::_16(i.next_va().0 as u16));
 				b.call ((dst, 0), cont);
 			}
 			CALI => {
 				let cont = term.unwrap().continuation_successor().unwrap();
-				b.ipair(REG_TMP16, REG_D, REG_C);
+				b.pair(REG_TMP16, REG_D, REG_C);
 				b.icall((REG_TMP16, 0), cont);
 			}
 			CALZ => {
@@ -221,13 +221,13 @@ impl InstDesc {
 
 				b.bnot             (REG_TMP, REG_ZF);
 				b.cbranch_and_split(REG_TMP, cont);
-				b.iusub            (REG_SP,  REG_SP, IrConst::_16(2));
+				b.sub            (REG_SP,  REG_SP, IrConst::_16(2));
 				b.store            (REG_SP,  IrConst::_16(i.next_va().0 as u16));
 				b.call             ((dst, 0),  cont);
 			}
 			RET => {
 				b.load( REG_TMP16, REG_SP);
-				b.iuadd(REG_SP, REG_SP, IrConst::_16(2));
+				b.add(REG_SP, REG_SP, IrConst::_16(2));
 				b.ret(  REG_TMP16);
 			}
 			RETZ => {
@@ -236,14 +236,14 @@ impl InstDesc {
 				b.bnot             (REG_TMP, REG_ZF);
 				b.cbranch_and_split(REG_TMP, next);
 				b.load             (REG_TMP16, REG_SP);
-				b.iuadd            (REG_SP, REG_SP, IrConst::_16(2));
+				b.add            (REG_SP, REG_SP, IrConst::_16(2));
 				b.ret              (REG_TMP16);
 			}
 			LD => {
 				let reg = r0();
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
-					b.ipair(REG_TMP16, REG_D, REG_C);
+					b.pair(REG_TMP16, REG_D, REG_C);
 					REG_TMP16.into()
 				} else {
 					r1()
@@ -255,7 +255,7 @@ impl InstDesc {
 				let reg = r0();
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
-					b.ipair(REG_TMP16, REG_D, REG_C);
+					b.pair(REG_TMP16, REG_D, REG_C);
 					REG_TMP16.into()
 				} else {
 					r1()

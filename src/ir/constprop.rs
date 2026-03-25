@@ -257,9 +257,9 @@ fn do_unop(op: IrUnOp, val: u64, src_size: ValSize, dst_size: ValSize) -> u64 {
 	use IrUnOp::*;
 
 	match op {
-		IntZxt => val,
-		// IrInst::isxt ensures that src_size < dst_size
-		IntSxt => match src_size {
+		Zxt => val,
+		// IrInst::sxt ensures that src_size < dst_size
+		Sxt => match src_size {
 			ValSize::_8 =>  match dst_size {
 				ValSize::_16 => val as u8 as i8 as i16 as u16 as u64,
 				ValSize::_32 => val as u8 as i8 as i32 as u32 as u64,
@@ -277,31 +277,31 @@ fn do_unop(op: IrUnOp, val: u64, src_size: ValSize, dst_size: ValSize) -> u64 {
 			}
 			ValSize::_64 => unreachable!(),
 		},
-		IntLo => match src_size {
+		Lo => match src_size {
 			ValSize::_8  => unreachable!(),
 			ValSize::_16 => val & 0xFF,
 			ValSize::_32 => val & 0xFFFF,
 			ValSize::_64 => val & 0xFFFFFFFF,
 		},
-		IntHi => match src_size {
+		Hi => match src_size {
 			ValSize::_8  => unreachable!(),
 			ValSize::_16 => (val >>  8) & 0xFF,
 			ValSize::_32 => (val >> 16) & 0xFFFF,
 			ValSize::_64 => (val >> 32) & 0xFFFFFFFF,
 		},
-		IntNeg => match src_size {
+		Neg => match src_size {
 			ValSize::_8 =>  (-(val as i8 )) as u8 as u64,
 			ValSize::_16 => (-(val as i16)) as u16 as u64,
 			ValSize::_32 => (-(val as i32)) as u32 as u64,
 			ValSize::_64 => (-(val as i64)) as u64,
 		},
-		IntNot => match src_size {
+		INot => match src_size {
 			ValSize::_8 =>  (!(val as i8 )) as u8 as u64,
 			ValSize::_16 => (!(val as i16)) as u16 as u64,
 			ValSize::_32 => (!(val as i32)) as u32 as u64,
 			ValSize::_64 => (!(val as i64)) as u64,
 		},
-		BoolNot => (val == 0) as u64,
+		BNot => (val == 0) as u64,
 	}
 }
 
@@ -363,62 +363,62 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 	use IrBinOp::*;
 
 	let val = match op {
-		IntEq  => (val1 == val2) as u64,
-		IntNe  => (val1 != val2) as u64,
+		Eq  => (val1 == val2) as u64,
+		Ne  => (val1 != val2) as u64,
 
-		IntSlt => match size {
+		Slt => match size {
 			ValSize::_8  => ((val1 as i8)  < (val2 as i8)) as u64,
 			ValSize::_16 => ((val1 as i16) < (val2 as i16)) as u64,
 			ValSize::_32 => ((val1 as i32) < (val2 as i32)) as u64,
 			ValSize::_64 => ((val1 as i64) < (val2 as i64)) as u64,
 		},
-		IntSle => match size {
+		Sle => match size {
 			ValSize::_8  => ((val1 as i8)  <= (val2 as i8)) as u64,
 			ValSize::_16 => ((val1 as i16) <= (val2 as i16)) as u64,
 			ValSize::_32 => ((val1 as i32) <= (val2 as i32)) as u64,
 			ValSize::_64 => ((val1 as i64) <= (val2 as i64)) as u64,
 		},
 
-		IntUlt => (val1 < val2) as u64,
-		IntUle => (val1 <= val2) as u64,
+		Ult => (val1 < val2) as u64,
+		Ule => (val1 <= val2) as u64,
 
-		IntUAdd => match size {
+		Add => match size {
 			ValSize::_8  => (val1 as u8).wrapping_add(val2 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_add(val2 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_add(val2 as u32) as u64,
 			ValSize::_64 => val1.wrapping_add(val2),
 		}
-		IntUSub  => match size {
+		Sub  => match size {
 			ValSize::_8  => (val1 as u8).wrapping_sub(val2 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_sub(val2 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_sub(val2 as u32) as u64,
 			ValSize::_64 => val1.wrapping_sub(val2),
 		}
-		IntUCarry => match size {
+		UCarry => match size {
 			ValSize::_8  => (val1 as u8).overflowing_add(val2 as u8).1 as u64,
 			ValSize::_16 => (val1 as u16).overflowing_add(val2 as u16).1 as u64,
 			ValSize::_32 => (val1 as u32).overflowing_add(val2 as u32).1 as u64,
 			ValSize::_64 => val1.overflowing_add(val2).1 as u64,
 		}
-		IntSCarry => match size {
+		SCarry => match size {
 			ValSize::_8  => (val1 as i8).overflowing_add(val2 as i8).1 as u64,
 			ValSize::_16 => (val1 as i16).overflowing_add(val2 as i16).1 as u64,
 			ValSize::_32 => (val1 as i32).overflowing_add(val2 as i32).1 as u64,
 			ValSize::_64 => (val1 as i64).overflowing_add(val2 as i64).1 as u64,
 		}
-		IntSBorrow => match size {
+		SBorrow => match size {
 			ValSize::_8  => (val1 as i8).overflowing_sub(val2 as i8).1 as u64,
 			ValSize::_16 => (val1 as i16).overflowing_sub(val2 as i16).1 as u64,
 			ValSize::_32 => (val1 as i32).overflowing_sub(val2 as i32).1 as u64,
 			ValSize::_64 => (val1 as i64).overflowing_sub(val2 as i64).1 as u64,
 		}
-		IntCarries => match size {
+		Carries => match size {
 			ValSize::_8  => carries::< 8>(val1, val2, 0),
 			ValSize::_16 => carries::<16>(val1, val2, 0),
 			ValSize::_32 => carries::<32>(val1, val2, 0),
 			ValSize::_64 => carries::<64>(val1, val2, 0),
 		}
-		IntBorrows => match size {
+		Borrows => match size {
 			ValSize::_8  => borrows::< 8>(val1, val2, 0),
 			ValSize::_16 => borrows::<16>(val1, val2, 0),
 			ValSize::_32 => borrows::<32>(val1, val2, 0),
@@ -428,13 +428,13 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 		// : this is poorly-defined. would it make more sense to have an n*n=>2n multiplication
 		// operation?  well we'll punt for now cause I don't forsee implementing arches with
 		// multiplication any time soon.
-		IntMul => match size {
+		Mul => match size {
 			ValSize::_8  => (val1 as u8).wrapping_mul(val2 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_mul(val2 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_mul(val2 as u32) as u64,
 			ValSize::_64 => val1.wrapping_mul(val2),
 		}
-		IntUDiv => {
+		UDiv => {
 			// not using checked_div et al. because the result has to be u64, and this is
 			// less awkward imo
 			if val2 == 0 {
@@ -448,7 +448,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 				}
 			}
 		}
-		IntSDiv => {
+		SDiv => {
 			if val2 == 0 {
 				return None;
 			} else {
@@ -460,7 +460,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 				}
 			}
 		}
-		IntUMod => {
+		UMod => {
 			if val2 == 0 {
 				return None;
 			} else {
@@ -473,7 +473,7 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			}
 		}
 		// TODO: modulo on signed numbers is poorly-defined! aaaah!!!!!
-		IntSMod => {
+		SMod => {
 			if val2 == 0 {
 				return None;
 			} else {
@@ -486,29 +486,29 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 			}
 		}
 
-		IntXor => val1 ^ val2,
-		IntAnd => val1 & val2,
-		IntOr =>  val1 | val2,
+		IXor => val1 ^ val2,
+		IAnd => val1 & val2,
+		IOr =>  val1 | val2,
 
 		// TODO: for all shifts, what if shift distance exceeds bits? checked_shx().unwrap_or
 		// (0) treats it as "all bits shifted off end" but some architectures instead shift only by
 		// lower bits (so e.g. if it's a 16-bit arch, and you shift by 17, it treats it as shifting
 		// by 1). Should that be an option? or give an error? or force arches to mask off the
 		// distance before passing it to a shift? or...?
-		IntShl => match size {
+		Shl => match size {
 			ValSize::_8  => (val1 as u8).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_16 => (val1 as u16).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_32 => (val1 as u32).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_64 => val1.checked_shl(val2 as u32).unwrap_or(0),
 		}
-		IntUShr => match size {
+		UShr => match size {
 			ValSize::_8  => (val1 as u8).checked_shr(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_16 => (val1 as u16).checked_shr(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_32 => (val1 as u32).checked_shr(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_64 => val1.checked_shr(val2 as u32).unwrap_or(0),
 		}
 		// TODO: what if val2 is negative?
-		IntSShr => match size {
+		SShr => match size {
 			ValSize::_8  => (val1 as i8).checked_shr(val2 as u32)
 				.unwrap_or(if (val1 as i8) < 0 { -1 } else { 0 }) as u8 as u64,
 			ValSize::_16 => (val1 as i16).checked_shr(val2 as u32)
@@ -522,30 +522,30 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 		// TODO: all rotates interpret distance modulo number of bits in source, so e.g. for an
 		// 8-bit value, rotating left by 0, 8, 16, 24 etc. all give the same value. I don't think
 		// this is really a problem, but it's something to be aware of/specify.
-		IntRol => match size {
+		Rol => match size {
 			ValSize::_8  => (val1 as u8).rotate_left(val2 as u32) as u64,
 			ValSize::_16 => (val1 as u16).rotate_left(val2 as u32) as u64,
 			ValSize::_32 => (val1 as u32).rotate_left(val2 as u32) as u64,
 			ValSize::_64 => val1.rotate_left(val2 as u32),
 		}
-		IntRor => match size {
+		Ror => match size {
 			ValSize::_8  => (val1 as u8).rotate_right(val2 as u32) as u64,
 			ValSize::_16 => (val1 as u16).rotate_right(val2 as u32) as u64,
 			ValSize::_32 => (val1 as u32).rotate_right(val2 as u32) as u64,
 			ValSize::_64 => val1.rotate_right(val2 as u32),
 		}
 
-		IntPair => (val1 << size as u32) | val2,
+		Pair => (val1 << size as u32) | val2,
 
-		IntBit => {
+		Bit => {
 			let num_bits = size.bytes() as u64 * 8;
 			assert!(val2 < num_bits, "bit position {} exceeds number of bits {}", val2, num_bits);
 			if (val1 & (1 << val2)) != 0 { 1 } else { 0 }
 		}
 
-		BoolXor => (val1 != val2) as u64,
-		BoolAnd => (val1 != 0 && val2 != 0) as u64,
-		BoolOr =>  (val1 != 0 || val2 != 0) as u64,
+		BXor => (val1 != val2) as u64,
+		BAnd => (val1 != 0 && val2 != 0) as u64,
+		BOr =>  (val1 != 0 || val2 != 0) as u64,
 	};
 
 	Some(val)
@@ -555,19 +555,19 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 	use IrTernOp::*;
 
 	match op {
-		IntUAddC => match size {
+		AddC => match size {
 			ValSize::_8 => (val1 as u8).wrapping_add(val2 as u8).wrapping_add(val3 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_add(val2 as u16).wrapping_add(val3 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_add(val2 as u32).wrapping_add(val3 as u32) as u64,
 			ValSize::_64 => val1.wrapping_add(val2).wrapping_add(val3),
 		},
-		IntUSubB => match size {
+		SubB => match size {
 			ValSize::_8 => (val1 as u8).wrapping_sub(val2 as u8).wrapping_sub(val3 as u8) as u64,
 			ValSize::_16 => (val1 as u16).wrapping_sub(val2 as u16).wrapping_sub(val3 as u16) as u64,
 			ValSize::_32 => (val1 as u32).wrapping_sub(val2 as u32).wrapping_sub(val3 as u32) as u64,
 			ValSize::_64 => val1.wrapping_sub(val2).wrapping_sub(val3),
 		},
-		IntUCarryC => {
+		UCarryC => {
 			let (sum, carry) = match size {
 				ValSize::_8 => {
 					let (sum, carry) = (val1 as u8).overflowing_add(val2 as u8);
@@ -598,7 +598,7 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 				}
 			}
 		}
-		IntSCarryC => {
+		SCarryC => {
 			let (sum, carry) = match size {
 				ValSize::_8 => {
 					let (sum, carry) = (val1 as i8).overflowing_add(val2 as i8);
@@ -629,7 +629,7 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 				}
 			}
 		}
-		IntSBorrowB => {
+		SBorrowB => {
 			let (sum, borrow) = match size {
 				ValSize::_8 => {
 					let (sum, borrow) = (val1 as i8).overflowing_sub(val2 as i8);
@@ -660,19 +660,19 @@ fn do_ternop(op: IrTernOp, val1: u64, val2: u64, val3: u64, size: ValSize) -> u6
 				}
 			}
 		}
-		IntCarriesC => match size {
+		CarriesC => match size {
 			ValSize::_8  => carries::< 8>(val1, val2, val3),
 			ValSize::_16 => carries::<16>(val1, val2, val3),
 			ValSize::_32 => carries::<32>(val1, val2, val3),
 			ValSize::_64 => carries::<64>(val1, val2, val3),
 		}
-		IntBorrowsB => match size {
+		BorrowsB => match size {
 			ValSize::_8  => borrows::< 8>(val1, val2, val3),
 			ValSize::_16 => borrows::<16>(val1, val2, val3),
 			ValSize::_32 => borrows::<32>(val1, val2, val3),
 			ValSize::_64 => borrows::<64>(val1, val2, val3),
 		}
-		IntBitSet => {
+		BSet => {
 			let num_bits = size.bytes() as u64 * 8;
 			assert!(val2 < num_bits, "bit position {} exceeds number of bits {}", val2, num_bits);
 			assert!(val3 == 0 || val3 == 1, "src3 must be 0 or 1");

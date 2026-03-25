@@ -110,16 +110,16 @@ impl IrBuilder {
 	/// Named `rr` to match the ISA docs. Returns the temporary register.
 	fn rr(&mut self, reg: Reg) -> IrReg {
 		match reg {
-			Reg::BC => { self.ipair(REG_BC, REG_B, REG_C); REG_BC }
-			Reg::DE => { self.ipair(REG_DE, REG_D, REG_E); REG_DE }
-			Reg::HL => { self.ipair(REG_HL, REG_H, REG_L); REG_HL }
+			Reg::BC => { self.pair(REG_BC, REG_B, REG_C); REG_BC }
+			Reg::DE => { self.pair(REG_DE, REG_D, REG_E); REG_DE }
+			Reg::HL => { self.pair(REG_HL, REG_H, REG_L); REG_HL }
 			_ => panic!("given something other than a paired register"),
 		}
 	}
 
 	/// Set the Z flag to whether or not `reg == 0`.
 	fn z_(&mut self, reg: impl Into<BuildReg>) -> &mut Self {
-		self.ieq(REG_ZF, reg.into(), C0_8)
+		self.eq(REG_ZF, reg.into(), C0_8)
 	}
 
 	/// Set the N flag to a given value.
@@ -130,35 +130,35 @@ impl IrBuilder {
 	/// Set the C flag to the carry out of unsigned `src1 + src2`.
 	fn c_(&mut self, src1: impl Into<BuildSrc>, src2: impl Into<BuildSrc>)
 	-> &mut Self {
-		self.iucarry(REG_CF, src1, src2)
+		self.ucarry(REG_CF, src1, src2)
 	}
 
 	/// Set the C flag to the carry out of unsigned `src1 + src2 + C`.
 	fn c_c(&mut self, src1: impl Into<BuildSrc>, src2: impl Into<BuildSrc>)
 	-> &mut Self {
-		self.iucarryc(REG_CF, src1, src2, REG_CF)
+		self.ucarryc(REG_CF, src1, src2, REG_CF)
 	}
 
 	/// Set the C flag to the carry out of unsigned `src1 - src2`.
 	fn c_b(&mut self, src1: impl Into<BuildSrc>, src2: impl Into<BuildSrc>)
 	-> &mut Self {
-		self.isborrow(REG_CF, src1, src2)
+		self.sborrow(REG_CF, src1, src2)
 	}
 
 	/// Set the C flag to the carry out of unsigned `src1 - src2 - C`.
 	fn c_bc(&mut self, src1: impl Into<BuildSrc>, src2: impl Into<BuildSrc>)
 	-> &mut Self {
-		self.isborrowb(REG_CF, src1, src2, REG_CF)
+		self.sborrowb(REG_CF, src1, src2, REG_CF)
 	}
 
 	/// Sets the C flag to bit `bitn` of register `src`.
 	fn cbit(&mut self, src: impl Into<BuildReg>, bitn: u8) -> &mut Self {
-		self.ibit(REG_CF, src.into(), c8(bitn as u64))
+		self.bit(REG_CF, src.into(), c8(bitn as u64))
 	}
 
 	/// Sets the h flag to bit `bitn` of register `src`.
 	fn hbit(&mut self, src: IrReg, bitn: u8) -> &mut Self {
-		self.ibit(REG_HF, src, c8(bitn as u64))
+		self.bit(REG_HF, src, c8(bitn as u64))
 	}
 
 	/// Set the Z flag to 0.
@@ -181,10 +181,10 @@ impl IrBuilder {
 	fn combine_flags(&mut self, dst: IrReg) -> &mut Self {
 		self
 		.mov  (dst, C0_8)
-		.ibset(dst, dst, C4_8, REG_CF)
-		.ibset(dst, dst, C5_8, REG_HF)
-		.ibset(dst, dst, C6_8, REG_NF)
-		.ibset(dst, dst, C7_8, REG_ZF)
+		.bset(dst, dst, C4_8, REG_CF)
+		.bset(dst, dst, C5_8, REG_HF)
+		.bset(dst, dst, C6_8, REG_NF)
+		.bset(dst, dst, C7_8, REG_ZF)
 	}
 
 	/// Extracts all the flag values from `src` into the flag registers.
@@ -192,8 +192,8 @@ impl IrBuilder {
 		self
 		.cbit(        src, 4)
 		.hbit(        src, 5)
-		.ibit(REG_NF, src, C6_8)
-		.ibit(REG_ZF, src, C7_8)
+		.bit(REG_NF, src, C6_8)
+		.bit(REG_ZF, src, C7_8)
 	}
 }
 
@@ -206,7 +206,7 @@ impl IrBuilder {
 	fn push8(&mut self, src: impl Into<BuildSrc>) -> &mut Self {
 		// full stack convention - subtract before storing
 		self
-		.iusub(REG_SP, REG_SP, C1_16)
+		.sub(REG_SP, REG_SP, C1_16)
 		.store(REG_SP, src)
 	}
 
@@ -215,7 +215,7 @@ impl IrBuilder {
 		// full stack convention - load before adding
 		self
 		.load (dst,    REG_SP)
-		.iuadd(REG_SP, REG_SP, C1_16)
+		.add(REG_SP, REG_SP, C1_16)
 	}
 
 	/// Push a 16-bit value onto the stack as two 8-bit halves, pushing the high half first so that
@@ -271,7 +271,7 @@ impl IrBuilder {
 	fn return_(&mut self) -> &mut Self {
 		self
 		.pop16(REG_W,  REG_Z)
-		.ipair(REG_WZ, REG_W, REG_Z)
+		.pair(REG_WZ, REG_W, REG_Z)
 		.ret  (REG_WZ)
 	}
 
@@ -318,7 +318,7 @@ impl IrBuilder {
 		let reg = reg.into();
 		self
 		.cbit(     reg, 7)
-		.ishl(reg, reg, C1_8)
+		.shl(reg, reg, C1_8)
 		.z_  (reg)
 		.n0  ()
 		.h0  ()
@@ -330,7 +330,7 @@ impl IrBuilder {
 		let reg = reg.into();
 		self
 		.cbit (     reg, 0)
-		.isshr(reg, reg, C1_8)
+		.sshr(reg, reg, C1_8)
 		.z_   (reg)
 		.n0   ()
 		.h0   ()
@@ -342,7 +342,7 @@ impl IrBuilder {
 		let reg = reg.into();
 		self
 		.cbit (     reg, 0)
-		.iushr(reg, reg, C1_8)
+		.ushr(reg, reg, C1_8)
 		.z_   (reg)
 		.n0   ()
 		.h0   ()
@@ -351,11 +351,11 @@ impl IrBuilder {
 	/// Rotate the given `reg` left. The carry flag is set to the MSB of `reg`, but otherwise does
 	/// not participate. If `set_zero_flag`, the zero flag will be set if the result is 0;
 	/// otherwise the zero flag will be set to 0 always. N and H flags are set to 0.
-	fn rol(&mut self, reg: impl Into<BuildReg>, set_zero_flag: bool) -> &mut Self {
+	fn rol_(&mut self, reg: impl Into<BuildReg>, set_zero_flag: bool) -> &mut Self {
 		let reg = reg.into();
 		self
 		.cbit(     reg, 7)
-		.irol(reg, reg, C1_8)
+		.rol(reg, reg, C1_8)
 		.n0  ()
 		.h0  ();
 
@@ -369,11 +369,11 @@ impl IrBuilder {
 	/// Rotate the given `reg` right. The carry flag is set to the MSB of `reg`, but otherwise does
 	/// not participate. If `set_zero_flag`, the zero flag will be set if the result is 0;
 	/// otherwise the zero flag will be set to 0 always. N and H flags are set to 0.
-	fn ror(&mut self, reg: impl Into<BuildReg>, set_zero_flag: bool) -> &mut Self {
+	fn ror_(&mut self, reg: impl Into<BuildReg>, set_zero_flag: bool) -> &mut Self {
 		let reg = reg.into();
 		self
 		.cbit(     reg, 7)
-		.iror(reg, reg, C1_8)
+		.ror(reg, reg, C1_8)
 		.n0  ()
 		.h0  ();
 
@@ -392,8 +392,8 @@ impl IrBuilder {
 		self
 		.mov  (REG_Z, REG_CF)
 		.cbit (       reg, 7)
-		.irol (reg,   reg, C1_8)
-		.ibset(reg,   reg, C0_8, REG_Z)
+		.rol (reg,   reg, C1_8)
+		.bset(reg,   reg, C0_8, REG_Z)
 		.n0   ()
 		.h0   ();
 
@@ -412,8 +412,8 @@ impl IrBuilder {
 		self
 		.mov  (REG_Z, REG_CF)
 		.cbit (       reg, 0)
-		.iror (reg,   reg, C1_8)
-		.ibset(reg,   reg, C7_8, REG_Z)
+		.ror (reg,   reg, C1_8)
+		.bset(reg,   reg, C7_8, REG_Z)
 		.n0   ()
 		.h0   ();
 
@@ -429,7 +429,7 @@ impl IrBuilder {
 	fn swap(&mut self, reg: impl Into<BuildReg>) -> &mut Self {
 		let reg = reg.into();
 		self
-		.irol(reg, reg, C4_8)
+		.rol(reg, reg, C4_8)
 		.z_  (reg)
 		.n0  ()
 		.h0  ()
@@ -440,14 +440,14 @@ impl IrBuilder {
 	/// extracts the components into `REG_H` and `REG_L`.
 	fn inc_dec_hl(&mut self, plus: bool) -> &mut Self {
 		if plus {
-			self.iuadd(REG_HL, REG_HL, C1_16);
+			self.add(REG_HL, REG_HL, C1_16);
 		} else {
-			self.iusub(REG_HL, REG_HL, C1_16);
+			self.sub(REG_HL, REG_HL, C1_16);
 		}
 
 		self
-		.ilo(REG_L, REG_HL)
-		.ihi(REG_H, REG_HL)
+		.lo(REG_L, REG_HL)
+		.hi(REG_H, REG_HL)
 	}
 
 	/// Perform an increment or decrement on `reg`. `delta == 1` increments, `delta == -1`
@@ -463,19 +463,19 @@ impl IrBuilder {
 			1  => {
 				if change_flags {
 					self
-					.icarries(REG_W, reg,   one)
+					.carries(REG_W, reg,   one)
 					.hbit    (       REG_W, 3);
 				}
-				self.iuadd(reg, reg, one);
+				self.add(reg, reg, one);
 				C0_8 // nf
 			}
 			-1 => {
 				if change_flags {
 					self
-					.iborrows(REG_W, REG_A, one)
+					.borrows(REG_W, REG_A, one)
 					.hbit    (       REG_W, 3);
 				}
-				self.iusub(reg, reg, one);
+				self.sub(reg, reg, one);
 				C1_8 // nf
 			}
 			_  => panic!("bad delta"),
@@ -496,13 +496,13 @@ impl IrBuilder {
 		let src = self.rr(reg);
 		self.rr(Reg::HL);
 		self
-		.icarries(REG_WZ, REG_HL, src)
+		.carries(REG_WZ, REG_HL, src)
 		.cbit    (        REG_WZ, 15)
 		.hbit    (        REG_WZ, 11)
-		.iuadd   (REG_HL, REG_HL, src)
+		.add   (REG_HL, REG_HL, src)
 		.n0      ()
-		.ihi     (REG_H,  REG_HL)
-		.ilo     (REG_L,  REG_HL)
+		.hi     (REG_H,  REG_HL)
+		.lo     (REG_L,  REG_HL)
 	}
 
 	/// Do `dst = REG_SP + val` (written `sp + e` in ISA docs), and update flags.
@@ -510,10 +510,10 @@ impl IrBuilder {
 		// it adds the sign-extended operand to SP, as if it were unsigned.
 		let val = (IrConst::_16((val.0 as u64) as u16), val.1);
 		self
-		.icarries(REG_WZ, REG_SP, val)
+		.carries(REG_WZ, REG_SP, val)
 		.cbit    (        REG_WZ, 7)
 		.hbit    (        REG_WZ, 3)
-		.iuadd   (dst,    REG_SP, val)
+		.add   (dst,    REG_SP, val)
 		.z0      ()
 		.n0      ()
 	}
@@ -523,9 +523,9 @@ impl IrBuilder {
 		let src = src.into();
 		self
 		.c_      (       REG_A, src)
-		.icarries(REG_W, REG_A, src)
+		.carries(REG_W, REG_A, src)
 		.hbit    (       REG_W, 3)
-		.iuadd   (REG_A, REG_A, src)
+		.add   (REG_A, REG_A, src)
 		.n0      ()
 		.z_      (REG_A)
 	}
@@ -535,9 +535,9 @@ impl IrBuilder {
 		let src = src.into();
 		self
 		.c_c      (       REG_A, src)
-		.icarriesc(REG_W, REG_A, src, REG_CF)
+		.carriesc(REG_W, REG_A, src, REG_CF)
 		.hbit     (       REG_W, 3)
-		.iuaddc   (REG_A, REG_A, src, REG_CF)
+		.addc   (REG_A, REG_A, src, REG_CF)
 		.n0       ()
 		.z_       (REG_A)
 	}
@@ -547,9 +547,9 @@ impl IrBuilder {
 		let src = src.into();
 		self
 		.c_b     (       REG_A, src)
-		.iborrows(REG_W, REG_A, src)
+		.borrows(REG_W, REG_A, src)
 		.hbit    (       REG_W, 3)
-		.iusub   (dst,   REG_A, src)
+		.sub   (dst,   REG_A, src)
 		.n1      ()
 		.z_      (dst)
 	}
@@ -559,9 +559,9 @@ impl IrBuilder {
 		let src = src.into();
 		self
 		.c_bc     (       REG_A, src)
-		.iborrowsb(REG_W, REG_A, src, REG_CF)
+		.borrowsb(REG_W, REG_A, src, REG_CF)
 		.hbit     (       REG_W, 3)
-		.iusubb   (REG_A, REG_A, src, REG_CF)
+		.subb   (REG_A, REG_A, src, REG_CF)
 		.n1       ()
 		.z_       (REG_A)
 	}
@@ -759,8 +759,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			let tmp_reg = b.rr(reg);
 			b
 			.inc_dec(tmp_reg, 1, false)
-			.ihi    (reg.hi(), tmp_reg)
-			.ilo    (reg.lo(), tmp_reg);
+			.hi    (reg.hi(), tmp_reg)
+			.lo    (reg.lo(), tmp_reg);
 		}
 
 		// inc sp
@@ -784,8 +784,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			let tmp_reg = b.rr(reg);
 			b
 			.inc_dec(tmp_reg, -1, false)
-			.ihi    (reg.hi(), tmp_reg)
-			.ilo    (reg.lo(), tmp_reg);
+			.hi    (reg.hi(), tmp_reg)
+			.lo    (reg.lo(), tmp_reg);
 		}
 
 		// dec sp
@@ -845,32 +845,32 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			b
 			.band (Z, NF, HF)   // Z.0 = NF & HF
 			.band (X, NF, CF)   // X   = NF & CF
-			.ibset(Z, Z, C4, X) // Z.4 = NF & CF
-			.imul (Z, Z, CNEG6) // Z   = Z * -6
+			.bset(Z, Z, C4, X) // Z.4 = NF & CF
+			.mul (Z, Z, CNEG6) // Z   = Z * -6
 
 			// W = addition adjustment { 0x00, 0x06, 0x60, 0x66 }
 			.inot (X, NF)       // X   = !NF
 			.iand (Y, A, C0XF)  // Y   = A & 0xF
-			.iugt (Y, Y, C9)    // Y   = A & 0xF > 9
+			.ugt (Y, Y, C9)    // Y   = A & 0xF > 9
 			.bor  (Y, Y, HF)    // Y   = HF | (A & 0xF > 9)
 			.band (W, X, Y)     // W.0 = !NF & (HF | (A & 0xF > 9))
-			.iugt (Y, A, C0X99) // Y   = A > 0x99
+			.ugt (Y, A, C0X99) // Y   = A > 0x99
 			.bor  (Y, Y, CF)    // Y   = CF | (A > 0x99)
 			.band (Y, Y, X)     // Y   = !NF & (CF | (A > 0x99))
-			.ibset(W, W, C4, Y) // W.4 = !NF & (CF | (A > 0x99))
-			.imul (W, W, C6)    // W   = W * 6
+			.bset(W, W, C4, Y) // W.4 = !NF & (CF | (A > 0x99))
+			.mul (W, W, C6)    // W   = W * 6
 
 			// because the above two values were calculated based on NF and !NF, either they are
 			// both 0 or exactly one is 0. so adding them together has the effect of choosing
 			// between them.
 
 			// Z = adjustment
-			.iuadd(Z, Z, W)     // Z = NF ? Z : W (effectively)
+			.add(Z, Z, W)     // Z = NF ? Z : W (effectively)
 
 			// now we can do the actual addition and set the flags
 			.c_   (    A, Z)
-			.iuadd(A,  A, Z)
-			.ieq  (ZF, A, C0)
+			.add(A,  A, Z)
+			.eq  (ZF, A, C0)
 			.mov  (HF, C0);
 		}
 
@@ -879,9 +879,9 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// {Z0, N0, H0, C*}
 		(RLA,  []) => { b.rolc(REG_A, false); }
-		(RLCA, []) => { b.rol (REG_A, false); }
+		(RLCA, []) => { b.rol_(REG_A, false); }
 		(RRA,  []) => { b.rorc(REG_A, false); }
-		(RRCA, []) => { b.ror (REG_A, false); }
+		(RRCA, []) => { b.ror_(REG_A, false); }
 
 		// {Z*, N0, H0, C*}
 		(SLA, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.sla( reg));    }
@@ -893,12 +893,12 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		(RL,  &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rolc( reg,     true)); }
 		(RL,  &[Srg(reg)]) => {                       b.rolc((reg, 0), true);  }
-		(RLC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rol ( reg,     true)); }
-		(RLC, &[Srg(reg)]) => {                       b.rol ((reg, 0), true);  }
+		(RLC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rol_( reg,     true)); }
+		(RLC, &[Srg(reg)]) => {                       b.rol_((reg, 0), true);  }
 		(RR,  &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rorc( reg,     true)); }
 		(RR,  &[Srg(reg)]) => {                       b.rorc((reg, 0), true);  }
-		(RRC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.ror ( reg,     true)); }
-		(RRC, &[Srg(reg)]) => {                       b.ror ((reg, 0), true);  }
+		(RRC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.ror_( reg,     true)); }
+		(RRC, &[Srg(reg)]) => {                       b.ror_((reg, 0), true);  }
 
 		// {Z*, N0, H0, C0}
 		(SWAP, &[Srg(reg)])   => {                       b.swap(reg);  }
@@ -907,38 +907,38 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		// {Z*, N0, H1, C-}
 		(BIT, &[Op, Srg(reg)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
-			b.ibit(REG_ZF, IrReg::from(reg), c8(bit));
+			b.bit(REG_ZF, IrReg::from(reg), c8(bit));
 		}
 		(BIT, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			// operand 0 is the bit number, operand 1 is [hl]
 			b
 			.load_ind(REG_Z,  (HL, 1))
-			.ibit    (REG_ZF, REG_Z, c8(bit));
+			.bit    (REG_ZF, REG_Z, c8(bit));
 		}
 
 		// no flag changes
 		(RES, &[Op, Srg(reg)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let reg = IrReg::from(reg);
-			b.ibset(reg, reg, c8(bit), C0_8);
+			b.bset(reg, reg, c8(bit), C0_8);
 		}
 		(RES, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			// operand 0 is the bit number, operand 1 is [hl]
-			hl_rmw(b, 1, |b, reg| b.ibset(reg, reg, c8(bit), C0_8));
+			hl_rmw(b, 1, |b, reg| b.bset(reg, reg, c8(bit), C0_8));
 		}
 
 		// no flag changes
 		(SET, &[Op, Srg(reg)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			let reg = IrReg::from(reg);
-			b.ibset(reg, reg, c8(bit), C1_8);
+			b.bset(reg, reg, c8(bit), C1_8);
 		}
 		(SET, [Op, IndReg(HL)]) => {
 			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
 			// operand 0 is the bit number, operand 1 is [hl]
-			hl_rmw(b, 1, |b, reg| b.ibset(reg, reg, c8(bit), C1_8));
+			hl_rmw(b, 1, |b, reg| b.bset(reg, reg, c8(bit), C1_8));
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -964,14 +964,14 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		(JP, [Op]) |
 		(JR, [Op]) => {
 			let term = term.unwrap();
-			let dst = term.one_explicit_successor().unwrap();
+			let dst  = term.one_explicit_successor().unwrap();
 			b.branch((dst, 0));
 		}
 
 		(JP, &[Cc(cond), Op]) |
 		(JR, &[Cc(cond), Op]) => {
 			let term = term.unwrap();
-			let dst = term.one_explicit_successor().unwrap();
+			let dst  = term.one_explicit_successor().unwrap();
 			let cont = term.continuation_successor().unwrap();
 			b.cc_branch(cond, (dst, 0), cont);
 		}
@@ -984,18 +984,18 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		(CALL, [Op]) |
 		(RST,  [Op]) => {
 			let term = term.unwrap();
-			let dst = term.one_explicit_successor().unwrap();
+			let dst  = term.one_explicit_successor().unwrap();
 			let cont = term.continuation_successor().unwrap();
 			b.call_(i.next_va(), (dst, 0), cont);
 		}
 		(CALL, &[Cc(cond), Op]) => {
-			let term = term.unwrap();
-			let dst = term.one_explicit_successor().unwrap();
-			let cont = term.continuation_successor().unwrap();
-			let ra = i.next_va();
-			let cond = b.not_cc(cond);
+			let term     = term.unwrap();
+			let dst      = term.one_explicit_successor().unwrap();
+			let cont     = term.continuation_successor().unwrap();
+			let ra       = i.next_va();
+			let not_cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, cont)
+			.cbranch_and_split(not_cond, cont)
 			.push_return_addr (ra)
 			.call             ((dst, 0), cont);
 		}
@@ -1003,10 +1003,10 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		(RETI, []) |
 		(RET,  []) => { b.return_(); }
 		(RET,  &[Cc(cond)]) => {
-			let cont = term.unwrap().continuation_successor().unwrap();
-			let cond = b.not_cc(cond);
+			let cont     = term.unwrap().continuation_successor().unwrap();
+			let not_cond = b.not_cc(cond);
 			b
-			.cbranch_and_split(cond, cont)
+			.cbranch_and_split(not_cond, cont)
 			.return_();
 		}
 
@@ -1029,8 +1029,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			let Operand::SImm(val) = i.ops()[0] else { panic!() };
 			b
 			.add_sp_e(REG_HL, (val, 0))
-			.ilo     (REG_L,  REG_HL)
-			.ihi     (REG_H,  REG_HL);
+			.lo     (REG_L,  REG_HL)
+			.hi     (REG_H,  REG_HL);
 		}
 
 		// ld rr, nn (0x01, 0x11, 0x21)
@@ -1041,8 +1041,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			// for later tracing back and marking this operand as a reference
 			b
 			.mov(REG_WZ,   (val, 0))
-			.ihi(dst.hi(), REG_WZ)
-			.ilo(dst.lo(), REG_WZ);
+			.hi(dst.hi(), REG_WZ)
+			.lo(dst.lo(), REG_WZ);
 		}
 
 		// ld sp, nn (0x31) (same as above but SP is represented differently)
@@ -1109,9 +1109,9 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 			// split it into two 8-bit stores, little-endian
 			b
-			.ilo  (REG_Z,     REG_SP)
+			.lo  (REG_Z,     REG_SP)
 			.store((dst0, 0), REG_Z)
-			.ihi  (REG_W,     REG_SP)
+			.hi  (REG_W,     REG_SP)
 			// since "dst+1" isn't what they wrote in the operand, we don't associate
 			// the IR operand with it; only on the first store.
 			.store(dst1,      REG_W);
@@ -1125,8 +1125,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		// ld a, [0xFF00 + c] (0xF2)
 		(LDH, [Srg(A), IndReg(C)]) => { // no flag changes
 			b
-			.izxt (REG_WZ,     REG_C)
-			.iuadd(REG_WZ,     REG_WZ, CFF00_16)
+			.zxt (REG_WZ,     REG_C)
+			.add(REG_WZ,     REG_WZ, CFF00_16)
 			.load ((REG_A, 0), REG_WZ);
 		}
 		// ld [0xFF00 + n], a (0xE0)
@@ -1137,8 +1137,8 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		// ld [0xFF00 + c], a (0xE2)
 		(LDH, [IndReg(C), Srg(A)]) => { // no flag changes
 			b
-			.izxt (REG_WZ,      REG_C)
-			.iuadd(REG_WZ,      REG_WZ, CFF00_16)
+			.zxt (REG_WZ,      REG_C)
+			.add(REG_WZ,      REG_WZ, CFF00_16)
 			.store((REG_WZ, 0), REG_A);
 		}
 
