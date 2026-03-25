@@ -165,7 +165,6 @@ impl BasicBlock {
 // ------------------------------------------------------------------------------------------------
 
 /// An index of all basic blocks in the program.
-#[derive(Default)]
 pub struct BBIndex {
 	arena: Arena<BasicBlock>,
 }

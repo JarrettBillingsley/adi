@@ -157,7 +157,6 @@ impl Function {
 
 /// An index of all functions in the program. Functions are created, destroyed, and looked up
 /// through this object.
-#[derive(Default)]
 pub struct FuncIndex {
 	arena: Arena<Function>,
 }

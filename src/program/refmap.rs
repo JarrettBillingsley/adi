@@ -17,7 +17,6 @@ pub type RefSet = BTreeSet<EA>;
 /// A many-to-many mapping of references - "arrows" pointing from one EA to another.
 /// Every EA can have multiple "outrefs" - references *to* other EAs and multiple "inrefs" -
 /// references *from* other EAs.
-#[derive(Default)]
 pub struct RefMap {
 	inrefs:  BTreeMap<EA, RefSet>,
 	outrefs: BTreeMap<EA, RefSet>,

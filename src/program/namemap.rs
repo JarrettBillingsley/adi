@@ -65,7 +65,6 @@ impl<'a> Display for Name<'a> {
 // ------------------------------------------------------------------------------------------------
 
 /// A bidirectional mapping between names and EAs.
-#[derive(Default)]
 pub struct NameMap {
 	names_to_eas: HashMap<String, (EA, NameKind)>,
 	eas_to_names: BTreeMap<EA, (String, NameKind)>,
