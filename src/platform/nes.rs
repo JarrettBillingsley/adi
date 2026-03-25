@@ -84,7 +84,7 @@ impl ILoader for NesLoader {
 
 fn setup_mmu(img: &Image, segs: &mut SegCollection, cart: &Ines)
 -> PlatformResult<NesMmu> {
-	let ram = segs.add_with_id_va(SegId(SegId::LAST_USER - 0), "RAM",   0x800, None, VA(0x0000));
+	let ram = segs.add_with_id_va(SegId(SegId::LAST_USER    ), "RAM",   0x800, None, VA(0x0000));
 	let ppu = segs.add_with_id_va(SegId(SegId::LAST_USER - 1), "PPU",   0x008, None, VA(0x2000));
 	let io  = segs.add_with_id_va(SegId(SegId::LAST_USER - 2), "IOREG", 0x020, None, VA(0x4000));
 

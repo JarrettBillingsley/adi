@@ -399,7 +399,7 @@ fn rom_banks_to_segments(segs: &mut SegCollection, rom_banks: Vec<Image>) -> Vec
 
 fn setup_mmu(segs: &mut SegCollection, cart: GBCart) -> PlatformResult<GBMmu> {
 	// TODO: CGB memory map
-	let vram = segs.add_with_id_va(SegId(SegId::LAST_USER - 0), "VRAM",  0x2000, None, VA(0x8000));
+	let vram = segs.add_with_id_va(SegId(SegId::LAST_USER    ), "VRAM",  0x2000, None, VA(0x8000));
 	let ram  = segs.add_with_id_va(SegId(SegId::LAST_USER - 1), "RAM",   0x2000, None, VA(0xC000));
 	let oam  = segs.add_with_id_va(SegId(SegId::LAST_USER - 2), "OAM",     0xA0, None, VA(0xFE00));
 	let io   = segs.add_with_id_va(SegId(SegId::LAST_USER - 3), "IOREG",   0x80, None, VA(0xFF00));

@@ -746,7 +746,7 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 		Array(arrty) => {
 			let mut ret = String::with_capacity(to_usize(arrty.len() * 4));
 			let sub_ty = arrty.ty();
-			let stride = prog.sizeof_type(&sub_ty).fixed();
+			let stride = prog.sizeof_type(sub_ty).fixed();
 
 			for i in 0 .. arrty.len() {
 				let offs = i * stride;

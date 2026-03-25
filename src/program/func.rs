@@ -162,6 +162,7 @@ pub struct FuncIndex {
 }
 
 impl FuncIndex {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { arena: Arena::new() }
 	}

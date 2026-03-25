@@ -85,7 +85,7 @@
 - **Design issues**
 	- **`BBTerm` and `InstructionKind` really encode *control flow strategies***
 		- so maybe that's what they should be named
-		- also opens up ideas for "custom" control flow set by user (does it continue? does it have a target? multiple targets? does it change state? etc)
+		- also opens up ideas for "custom" control flow set by user (does it continue to the next PC? does it have a target? multiple targets? does it change state? etc)
 	- **MMU State display/encoding**
 		- for showing to the user (esp for more complex MMU state like GB MBC1)
 		- for allowing the user to set the state manually

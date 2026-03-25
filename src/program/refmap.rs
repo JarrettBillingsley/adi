@@ -23,6 +23,7 @@ pub struct RefMap {
 }
 
 impl RefMap {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { inrefs: BTreeMap::new(), outrefs: BTreeMap::new() }
 	}

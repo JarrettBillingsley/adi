@@ -71,6 +71,7 @@ pub struct NameMap {
 }
 
 impl NameMap {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self {
 			names_to_eas: HashMap::new(),

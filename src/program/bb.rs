@@ -170,6 +170,7 @@ pub struct BBIndex {
 }
 
 impl BBIndex {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { arena: Arena::new() }
 	}

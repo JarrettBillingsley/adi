@@ -82,6 +82,7 @@ pub struct DataIndex {
 }
 
 impl DataIndex {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self {
 			arena: Arena::new(),
@@ -216,6 +217,7 @@ pub struct CustomTypeIndex<T, Id> {
 }
 
 impl<T, Id: IId> CustomTypeIndex<T, Id> {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self { arena: HashMap::new(), next: 0 }
 	}
@@ -256,6 +258,7 @@ pub struct TypeIndex {
 }
 
 impl TypeIndex {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self {
 			structs:   StructIndex::new(),
