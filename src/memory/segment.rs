@@ -39,8 +39,8 @@ impl SegId {
 	pub const ENUMS:      u16 = u16::MAX - 2;
 	/// Segment ID for bitfield definitions.
 	pub const BITFIELDS:  u16 = u16::MAX - 3;
-	/// Last segment ID allowed for user-defined segments. IDs above this are reserved for internal
-	/// use (like the ones above).
+	/// Last segment ID allowed for user-defined segments. IDs greater than this are reserved for
+	/// internal use (like the ones above).
 	pub const LAST_USER:  u16 = u16::MAX - 16;
 
 	/// Internal unchecked constructor which allows any ID.
@@ -226,7 +226,7 @@ impl Segment {
 
 	/// Attach or detach a [`SpanMapListener`] to this segment's `SpanMap`. Passing `None` will
 	/// remove any listener currently attached.
-	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener>>) {
+	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener + Send>>) {
 		self.spans.attach_listener(new_listener);
 	}
 

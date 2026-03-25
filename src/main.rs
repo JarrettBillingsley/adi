@@ -16,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Debug)?;
 	setup_panic();
 
-	test_gb()
-	// test_nes()
+	// test_gb()
+	test_nes()
 	// test_toy()
 }
 
@@ -470,8 +470,8 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
 		}
 
-		let ty = Type::array(Type::U16, 41);
-		prog.new_data(None, prog.ea_from_va(state, VA(0x6480)), ty.clone(), ty.size().fixed());
+		let ty = prog.new_array_type(Type::U16, 41);
+		prog.new_data(None, prog.ea_from_va(state, VA(0x6480)), ty.clone(), prog.sizeof_type(&ty).fixed());
 
 		// from jump table at ROM1:6480
 		for va in [
@@ -542,20 +542,20 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
 		}
 		let ea   = prog.ea_from_va(state, VA(0xFFB3));
-		let ty   = Type::array(Type::U8, 24);
-		let size = ty.size().fixed();
+		let ty   = prog.new_array_type(Type::U8, 24);
+		let size = prog.sizeof_type(&ty).fixed();
 		prog.new_data(Some("BANK_CHANGE"), ea, ty, size);
 	} else if img_name.contains("smb.nes") {
 		for va in [0x8231, 0x838B, 0x9218, 0xAEDC] {
 			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
 		}
 		let ea   = prog.ea_from_va(state, VA(0x821A));
-		let ty   = Type::array(Type::ptr(Type::Code, Type::U16), 3);
-		let size = ty.size().fixed();
+		let ty   = prog.new_array_type(prog.new_ptr_type(Type::Code, Type::U16), 3);
+		let size = prog.sizeof_type(&ty).fixed();
 		prog.new_data(Some("array"), ea, ty, size);
 	}
 
-	let ty = Type::ptr(Type::Code, Type::U16);
+	let ty = prog.new_ptr_type(Type::Code, Type::U16);
 	prog.new_data(Some("VEC_NMI_PTR"),   prog.ea_from_va(state, VA(0xFFFA)), ty.clone(), 2);
 	prog.new_data(Some("VEC_RESET_PTR"), prog.ea_from_va(state, VA(0xFFFC)), ty.clone(), 2);
 	prog.new_data(Some("VEC_IRQ_PTR"),   prog.ea_from_va(state, VA(0xFFFE)), ty.clone(), 2);
@@ -746,7 +746,7 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 		Array(arrty) => {
 			let mut ret = String::with_capacity(to_usize(arrty.len() * 4));
 			let sub_ty = arrty.ty();
-			let stride = sub_ty.size().fixed();
+			let stride = prog.sizeof_type(&sub_ty).fixed();
 
 			for i in 0 .. arrty.len() {
 				let offs = i * stride;

@@ -9,8 +9,10 @@
 - Data analysis
 - Multi-state BBs/functions
 - Argument/return value/clobber analysis
+- Type propagation
 - Stack analysis
 - Undo/Redo support
+- Save/Load support
 
 # Imminent tasks!
 
@@ -23,6 +25,8 @@
 	- this also gives us inrefs to data types for free, because they're at `EA`s so they can participate in `RefMap`
 		- didn't *really* seem like a good idea to instantly deallocate a type the instant nothing was using it anyway
 	- and this will make `Program` `Send`!
+	- move data printing into `Program`
+		- it can call some of the `IPrinter` methods for printing numbers, addresses etc.
 - IR
 	- `ValSize::_1` for bools?
 	- god it'd be REALLY nice if the IR printing used the platform's actual register names instead of r0, r1, etc.
@@ -78,40 +82,13 @@
 
 # TODO:
 
-- **Features**
-	- **Function-local labels**
-		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
-		- how to keep it globally-unique for the `NameMap` tho?
-			- well, could leave that to the frontend to deal with it
-			- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
-	- **"Points of interest" to let user know things to investigate**
-		- state changes that can't be automatically determined
-		- jumptables
-		- functions that access particular hardware registers
-	- **Function attributes**
-		- e.g. "bankswitch", "jumptable"
-		- for bankswitch functions, we could **let the user specify some formula for them**
-			- like "when this function is called, the MMU state is set to `(A & 0x7) | 0x10`"
-			- and there can be a little expression parser which turns it into an IR template that can be blobbed down in place of each time the function is called
-	- **Comments (line, repeatable)**
-		- on code, data items, enum values, struct members..
-	- **Custom fields on `Instruction` and `Operand`**
-		- for e.g. remembering which instruction description it is so we don't have to keep looking it up, operands that don't fall into one of the provided categories, etc.
-	- **Alternate mnemonics for instructions**
-		- e.g. on x86 there are `jz` and `je`, which are technically two names for the same instruction, but in some contexts it's being used to check for zero and in other for equality... would be a nice quality-of-life addition
-			- same thing on Mos65xx, `bcs` and `bge` are aliases
-	- **Generating "name + delta" output is a little more subtle than my first attempt**
-		- really these should be rare
-	- **Modifying functions**
-		- removing BBs (mis-analyzed code e.g. after a switch jump or a no-return call)
-		- adding BBs...?
-	- **Control flow depth indentation**
-		- those dumb arrows in IDA/Ghidra/r2/everything are so useless
-		- INDENTATION is what shows control flow
-		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
-		- but maybe this can fall under the same sorta thing as line comments
-
 - **Design issues**
+	- **`BBTerm` and `InstructionKind` really encode *control flow strategies***
+		- so maybe that's what they should be named
+		- also opens up ideas for "custom" control flow set by user (does it continue? does it have a target? multiple targets? does it change state? etc)
+	- **MMU State display/encoding**
+		- for showing to the user (esp for more complex MMU state like GB MBC1)
+		- for allowing the user to set the state manually
 	- **Should IrFunction hold a ref to the owning function?**
 		- would prevent issues like modifying a function and then using the outdated IR
 	- **Does state change analysis needs to take multiple entry points into account?**
@@ -140,6 +117,9 @@
 		- but **I think I'd wanna put this off until after const prop builds ASTs** - not sure what the implications are for custom IR instructions if that's the case
 
 - **Analysis**
+	- **Method to only analyze one queue item**
+		- this way the queue can be analyzed in an executor-based environment instead of being forced onto a second thread
+		- and/or some listener for analysis steps
 	- **Make const prop build ASTs for constant provenance**
 		- wait uhhhhhhhhh
 		- that could be used for *way more* than just constant provenance right?
@@ -204,6 +184,7 @@
 		- std labels need data item once data is implemented
 		- more mappers (remember to set segment base VA when state changes)
 	- **GB**
+		- MMU doesn't yet handle external RAM
 		- more MBCs (remember to set segment base VA when state changes)
 		- syntax options - `[hl]` vs. `(hl)`; `add a, b` vs. `add b`
 	- **Mos65xx**
@@ -215,9 +196,43 @@
 		- **CPU variants/revisions?**
 			- Early (no ROR)
 			- NMOS
-			- CMOS (slightly different behavior
+			- CMOS (slightly different behavior)
 		- decimal mode (ew)
 			- that would require dataflow analysis in and of itself... UGH...
+			- model it as part of the MMU state?? lmao
+
+- **Features**
+	- **Function-local labels**
+		- if none of a code label's inrefs are outside its owning function, it's function-local and can be displayed differently
+		- how to keep it globally-unique for the `NameMap` tho?
+			- well, could leave that to the frontend to deal with it
+			- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
+	- **"Points of interest" to let user know things to investigate**
+		- state changes that can't be automatically determined
+		- jumptables
+		- functions that access particular hardware registers
+	- **Function attributes**
+		- e.g. "bankswitch", "jumptable"
+		- for bankswitch functions, we could **let the user specify some formula for them**
+			- like "when this function is called, the MMU state is set to `(A & 0x7) | 0x10`"
+			- and there can be a little expression parser which turns it into an IR template that can be blobbed down in place of each time the function is called
+	- **Comments (line, repeatable)**
+		- on code, data items, enum values, struct members..
+	- **Custom fields on `Instruction` and `Operand`**
+		- for e.g. remembering which instruction description it is so we don't have to keep looking it up, operands that don't fall into one of the provided categories, etc.
+	- **Alternate mnemonics for instructions**
+		- e.g. on x86 there are `jz` and `je`, which are technically two names for the same instruction, but in some contexts it's being used to check for zero and in other for equality... would be a nice quality-of-life addition
+			- same thing on Mos65xx, `bcs` and `bge` are aliases
+	- **Generating "name + delta" output is a little more subtle than my first attempt**
+		- really these should be rare
+	- **Modifying functions**
+		- removing BBs (mis-analyzed code e.g. after a switch jump or a no-return call)
+		- adding BBs...?
+	- **Control flow depth indentation**
+		- those dumb arrows in IDA/Ghidra/r2/everything are so useless
+		- INDENTATION is what shows control flow
+		- ofc New and Creative Forms of Control Flow abound in hand-written asm so it might not be automatable...
+		- but maybe this can fall under the same sorta thing as line comments
 
 ---
 

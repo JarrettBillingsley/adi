@@ -40,6 +40,18 @@ impl EA {
 		Self(((seg.id as Offs) << SEG_SHIFT) | (offs as Offs))
 	}
 
+	pub(crate) fn new_structs(offs: Offs) -> Self {
+		Self(((SegId::STRUCTS as Offs) << SEG_SHIFT) | offs)
+	}
+
+	pub(crate) fn new_enums(offs: Offs) -> Self {
+		Self(((SegId::ENUMS as Offs) << SEG_SHIFT) | offs)
+	}
+
+	pub(crate) fn new_bitfields(offs: Offs) -> Self {
+		Self(((SegId::BITFIELDS as Offs) << SEG_SHIFT) | offs)
+	}
+
 	/// Make a new unresolved EA with the given VA embedded in it.
 	pub fn unresolved(offs: Offs) -> Self {
 		Self::new(SegId::unresolved(), offs)

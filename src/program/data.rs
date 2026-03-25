@@ -1,8 +1,9 @@
 
-use std::cell::{ RefCell, /*RefMut*/ };
-use std::rc::{ Rc };
-use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::hash::{ Hash };
+use std::collections::{ HashMap };
+use std::fmt::{ Debug, Display, Formatter, Result as FmtResult };
 
+use delegate::delegate;
 use generational_arena::{ Arena, Index };
 
 use crate::{ Size, Offs, to_usize };
@@ -11,14 +12,6 @@ use crate::memory::{ EA };
 // ------------------------------------------------------------------------------------------------
 // Misc
 // ------------------------------------------------------------------------------------------------
-
-/// Type alias for `Rc<RefCell<T>>`.
-pub type RcCell<T> = Rc<RefCell<T>>;
-
-/// Shorthand or `Rc::new(RefCell::new(t))`.
-pub fn rccell<T>(t: T) -> RcCell<T> {
-	Rc::new(RefCell::new(t))
-}
 
 /// Radixes for displaying integer values to the user.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
@@ -29,14 +22,26 @@ pub enum Radix {
 }
 
 // ------------------------------------------------------------------------------------------------
-// DataItem
+// DataId
 // ------------------------------------------------------------------------------------------------
 
 /// Newtype to uniquely identify a single data item.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[derive(PartialEq, Eq, Copy, Clone, Hash)]
 pub struct DataId(pub Index);
 
-/// A single data item.
+impl Debug for DataId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		let (index, generation) = self.0.into_raw_parts();
+		write!(f, "DataId({}, {})", index, generation)
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// DataItem
+// ------------------------------------------------------------------------------------------------
+
+/// A single data item. This is to data what a [`BasicBlock`] is to code. Spans in a `Segment` can
+/// correspond to either code (a `BasicBlock`) or data (a `DataItem`).
 #[derive(Debug)]
 pub struct DataItem {
 	id:    DataId,
@@ -71,20 +76,22 @@ impl DataItem {
 // ------------------------------------------------------------------------------------------------
 
 /// An index of all data items in the program.
-#[derive(Default)]
 pub struct DataIndex {
 	arena: Arena<DataItem>,
+	types: TypeIndex,
 }
 
 impl DataIndex {
 	pub fn new() -> Self {
-		Self { arena: Arena::new() }
+		Self {
+			arena: Arena::new(),
+			types: TypeIndex::new(),
+		}
 	}
 
 	/// Creates a new data item and returns its ID.
-	pub fn new_item(&mut self, ea: EA, ty: Type, size: Size)
-	-> DataId {
-		assert!(size >= ty.min_size());
+	pub fn new_item(&mut self, ea: EA, ty: Type, size: Size) -> DataId {
+		assert!(size >= self.types.min_sizeof(&ty));
 
 		DataId(self.arena.insert_with(move |id| {
 			DataItem::new(DataId(id), ea, ty, size)
@@ -104,6 +111,20 @@ impl DataIndex {
 	/// Iterator over all data items in the index, in arbitrary order.
 	pub fn all_items(&self) -> impl Iterator<Item = (Index, &DataItem)> {
 		self.arena.iter()
+	}
+
+	delegate!{
+		to self.types {
+			pub fn new_array(&self, item_ty: Type, len: Size) -> Type;
+			pub fn ptr(&self, to: Type, kind: Type) -> Type;
+			pub fn new_struct(&mut self, name: String) -> StructId;
+			pub fn new_struct_sized(&mut self, name: String, size: Size) -> StructId;
+			pub fn new_enum(&mut self, name: String, ty: Box<Type>) -> EnumId;
+			pub fn new_bitfield(&mut self, name: &str, bit_size: BitfieldSize) -> BitfieldId;
+			pub fn sizeof(&self, ty: &Type) -> TypeSize;
+			pub fn min_sizeof(&self, ty: &Type) -> Size;
+			pub fn is_fixed_size(&self, ty: &Type) -> bool;
+		}
 	}
 }
 
@@ -140,6 +161,162 @@ impl TypeSize {
 	/// Is this a fixed-size type?
 	pub fn is_fixed(&self) -> bool {
 		matches!(self, TypeSize::Fixed(..))
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// StructId, EnumId, BitfieldId
+// ------------------------------------------------------------------------------------------------
+
+/// Newtype which uniquely identifies a struct type.
+#[derive(PartialEq, Eq, Copy, Clone, Hash)]
+pub struct StructId(Offs);
+
+impl Debug for StructId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "StructId({})", self.0)
+	}
+}
+
+/// Newtype which uniquely identifies an enum type.
+#[derive(PartialEq, Eq, Copy, Clone, Hash)]
+pub struct EnumId(Offs);
+
+impl Debug for EnumId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "EnumId({})", self.0)
+	}
+}
+
+/// Newtype which uniquely identifies a bitfield type.
+#[derive(PartialEq, Eq, Copy, Clone, Hash)]
+pub struct BitfieldId(Offs);
+
+impl Debug for BitfieldId {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "BitfieldId({})", self.0)
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// CustomTypeIndex, StructIndex, EnumIndex, BitfieldIndex
+// ------------------------------------------------------------------------------------------------
+
+pub trait IId: Copy + Eq + Hash {
+	fn new(offs: Offs) -> Self;
+}
+
+impl IId for EnumId     { fn new(offs: Offs) -> Self { Self(offs) } }
+impl IId for StructId   { fn new(offs: Offs) -> Self { Self(offs) } }
+impl IId for BitfieldId { fn new(offs: Offs) -> Self { Self(offs) } }
+
+pub struct CustomTypeIndex<T, Id> {
+	arena: HashMap<Id, T>,
+	next:  Offs,
+}
+
+impl<T, Id: IId> CustomTypeIndex<T, Id> {
+	pub fn new() -> Self {
+		Self { arena: HashMap::new(), next: 0 }
+	}
+
+	fn insert(&mut self, value: T) -> Id {
+		let id = Id::new(self.next);
+		self.next += 1;
+		self.arena.insert(id, value);
+		id
+	}
+
+	pub fn get(&self, id: Id) -> &T {
+		self.arena.get(&id).expect("stale Id")
+	}
+
+	pub fn get_mut(&mut self, id: Id) -> &mut T {
+		self.arena.get_mut(&id).expect("stale Id")
+	}
+
+	pub fn all_enums(&self) -> impl Iterator<Item = (Id, &T)> {
+		self.arena.iter().map(|(id, desc)| (*id, desc))
+	}
+}
+
+type StructIndex   = CustomTypeIndex<StructDesc,   StructId>;
+type EnumIndex     = CustomTypeIndex<EnumDesc,     EnumId>;
+type BitfieldIndex = CustomTypeIndex<BitfieldDesc, BitfieldId>;
+
+// ------------------------------------------------------------------------------------------------
+// TypeIndex
+// ------------------------------------------------------------------------------------------------
+
+/// An index of all custom types in the program.
+pub struct TypeIndex {
+	structs:   StructIndex,
+	enums:     EnumIndex,
+	bitfields: BitfieldIndex,
+}
+
+impl TypeIndex {
+	pub fn new() -> Self {
+		Self {
+			structs:   StructIndex::new(),
+			enums:     EnumIndex::new(),
+			bitfields: BitfieldIndex::new(),
+		}
+	}
+
+	/// Create an array type. Panics if `item_ty` is not a fixed-size type.
+	pub fn new_array(&self, item_ty: Type, len: Size) -> Type {
+		assert!(self.is_fixed_size(&item_ty), "arrays can only hold fixed-size values");
+		Type::Array(ArrayType { ty: Box::new(item_ty), len })
+	}
+
+	/// Create a pointer type. Panics if `kind` is not a strict integer.
+	pub fn ptr(&self, to: Type, kind: Type) -> Type {
+		assert!(kind.is_strict_integer(), "pointers can only be integers");
+		Type::Ptr(PtrType { to: Box::new(to), kind: Box::new(kind) })
+	}
+
+	/// Create a new struct type.
+	///
+	/// Panics if name is empty.
+	pub fn new_struct(&mut self, name: String) -> StructId {
+		self.structs.insert(StructDesc::new(self.structs.next, name))
+	}
+
+	/// Create a new struct type of a given size.
+	///
+	/// Panics if name is empty.
+	pub fn new_struct_sized(&mut self, name: String, size: Size) -> StructId {
+		self.structs.insert(StructDesc::new_sized(self.structs.next, name, size))
+	}
+
+	/// Create a new enum type.
+	///
+	/// Panics if the type is not strictly integral or character, or if the name is empty.
+	pub fn new_enum(&mut self, name: String, ty: Box<Type>) -> EnumId {
+		self.enums.insert(EnumDesc::new(self.enums.next, name, ty))
+	}
+
+	/// Create a new bitfield type.
+	///
+	/// Panics if the name is empty.
+	pub fn new_bitfield(&mut self, name: &str, bit_size: BitfieldSize) -> BitfieldId {
+		self.bitfields.insert(BitfieldDesc::new(self.bitfields.next, name, bit_size))
+	}
+
+	/// Gets the size of a single value of `ty`.
+	pub fn sizeof(&self, ty: &Type) -> TypeSize {
+		ty.size(self)
+	}
+
+	/// Same as `self.sizeof(ty).min_size()`.
+	pub fn min_sizeof(&self, ty: &Type) -> Size {
+		ty.size(self).min_size()
+	}
+
+	/// Same as `self.sizeof(ty).is_fixed()`.
+	pub fn is_fixed_size(&self, ty: &Type) -> bool {
+		ty.size(self).is_fixed()
 	}
 }
 
@@ -207,13 +384,13 @@ pub enum Type {
 	WStrZ(Size),
 
 	/// An enumerated constant.
-	Enum(RcCell<EnumDesc>),
+	Enum(EnumId),
 
 	/// A bitfield.
-	Bitfield(RcCell<BitfieldDesc>),
+	Bitfield(BitfieldId),
 
 	/// A structure.
-	Struct(RcCell<StructDesc>),
+	Struct(StructId),
 
 	/// An array of some type, with the given length.
 	Array(ArrayType),
@@ -226,23 +403,11 @@ pub enum Type {
 }
 
 impl Type {
-	/// ctor for array types. Panics if `ty` is not a fixed-size type.
-	pub fn array(ty: Type, len: Size) -> Self {
-		assert!(ty.size().is_fixed(), "arrays can only hold fixed-size values");
-		Self::Array(ArrayType { ty: Box::new(ty), len })
-	}
-
-	/// ctor for pointer types. Panics if `kind` is not a strict integer.
-	pub fn ptr(to: Type, kind: Type) -> Self {
-		assert!(kind.is_strict_integer(), "pointers can only be integers");
-		Self::Ptr(PtrType { to: Box::new(to), kind: Box::new(kind) })
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
 	/// Gets the size of a single value of this type.
-	pub fn size(&self) -> TypeSize {
+	pub fn size(&self, idx: &TypeIndex) -> TypeSize {
 		use Type::*;
 		use TypeSize::*;
 
@@ -254,24 +419,13 @@ impl Type {
 
 			StrZ(len)                      => Fixed(len + 1),
 			WStrZ(len)                     => Fixed((len + 1) * 2),
-			Enum(desc)                     => desc.borrow().size(),
-			Bitfield(desc)                 => desc.borrow().size(),
-			Struct(desc)                   => desc.borrow().size(),
-			Array(ArrayType { ty, len })   => Fixed(ty.size().fixed() * len),
-			Ptr(PtrType { kind, .. })      => kind.size(),
+			Enum(id)                       => idx.enums    .get(*id).size(idx),
+			Bitfield(id)                   => idx.bitfields.get(*id).size(),
+			Struct(id)                     => idx.structs  .get(*id).size(idx),
+			Array(ArrayType { ty, len })   => Fixed(idx.sizeof(ty).fixed() * len),
+			Ptr(PtrType { kind, .. })      => idx.sizeof(kind),
 		}
 	}
-
-	/// Same as `self.size().min_size()`.
-	pub fn min_size(&self) -> Size {
-		self.size().min_size()
-	}
-
-	/// Same as `self.size().is_fixed()`.
-	pub fn is_fixed_size(&self) -> bool {
-		self.size().is_fixed()
-	}
-
 	/// Primitive types include `Bool`, integers, and `Char/WChar`.
 	pub fn is_primitive(&self) -> bool {
 		use Type::*;
@@ -317,9 +471,9 @@ impl Display for Type {
 			WChar          => write!(f, "wchar"),
 			StrZ(len)      => write!(f, "strz({})", len),
 			WStrZ(len)     => write!(f, "wstrz({})", len),
-			Enum(desc)     => write!(f, "enum {}",     desc.borrow().name()),
-			Bitfield(desc) => write!(f, "bitfield {}", desc.borrow().name()),
-			Struct(desc)   => write!(f, "struct {}",   desc.borrow().name()),
+			Enum(_desc)     => todo!(), // write!(f, "enum {}",     desc.borrow().name()),
+			Bitfield(_desc) => todo!(), // write!(f, "bitfield {}", desc.borrow().name()),
+			Struct(_desc)   => todo!(), // write!(f, "struct {}",   desc.borrow().name()),
 			Array(at)      => write!(f, "{}", at),
 			Ptr(pt)        => write!(f, "{}", pt),
 			Code           => write!(f, "code"),
@@ -354,25 +508,30 @@ impl EnumValue {
 /// A descriptor of an enumerated constant type.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EnumDesc {
-	name:   String,
-	ty:     Box<Type>, // the base type of the values
-	values: Vec<EnumValue>,
+	segoffs: Offs, // offset into the enums segment
+	name:    String,
+	ty:      Box<Type>, // the base type of the values
+	values:  Vec<EnumValue>,
 }
 
 impl EnumDesc {
-	/// ctor. Panics if the type is not strictly integral or character, or if the name is empty.
-	pub fn new(name: String, ty: Box<Type>) -> Self {
+	fn new(segoffs: Offs, name: String, ty: Box<Type>) -> Self {
 		assert!(!name.is_empty());
-		EnumDesc::_check_type(ty.as_ref());
-		Self { name, ty, values: Vec::new() }
+		Self::check_type(ty.as_ref());
+		Self { segoffs, name, ty, values: Vec::new() }
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
+	pub fn id    (&self) -> EnumId          { EnumId(self.segoffs) }
+	pub fn ea    (&self) -> EA              { EA::new_enums(self.segoffs) }
 	pub fn name  (&self) -> &str            { &self.name }
-	pub fn size  (&self) -> TypeSize        { self.ty.size() }
 	pub fn values(&self) -> &Vec<EnumValue> { &self.values }
+
+	pub fn size(&self, idx: &TypeIndex) -> TypeSize {
+		self.ty.size(idx)
+	}
 
 	pub fn has_name (&self, name: &str) -> bool { self.value_by_name(name).is_some() }
 	pub fn has_value(&self, value: u64) -> bool { self.value_by_value(value).is_some() }
@@ -398,7 +557,7 @@ impl EnumDesc {
 
 	/// Change the type of this enum. The type must be strictly integral or character.
 	pub fn set_type(&mut self, new_type: Box<Type>) {
-		EnumDesc::_check_type(new_type.as_ref());
+		EnumDesc::check_type(new_type.as_ref());
 		self.ty = new_type;
 	}
 
@@ -430,7 +589,7 @@ impl EnumDesc {
 	// ---------------------------------------------------------------------------------------------
 	// Private
 
-	pub fn _check_type(ty: &Type) {
+	pub fn check_type(ty: &Type) {
 		use Type::*;
 		match ty {
 			I8 | I16 | I32 | I64 | U8 | U16 | U32 | U64 | Char | WChar => {},
@@ -474,7 +633,7 @@ impl BitfieldField {
 	/// if the name is empty.
 	pub fn new(name: &str, ty: Box<Type>, radix: Radix, bit_pos: Offs, bit_size: Offs) -> Self {
 		assert!(!name.is_empty());
-		BitfieldField::_check_type(ty.as_ref());
+		BitfieldField::check_type(ty.as_ref());
 		Self { name: name.into(), ty, radix, bit_pos, bit_size, }
 	}
 
@@ -483,7 +642,7 @@ impl BitfieldField {
 		self.bit_pos + self.bit_size
 	}
 
-	pub fn _check_type(ty: &Type) {
+	pub fn check_type(ty: &Type) {
 		use Type::*;
 		assert!(ty.is_loose_integer() && !matches!(ty, Enum(..)), "invalid bitfield field type");
 	}
@@ -492,6 +651,7 @@ impl BitfieldField {
 /// A descriptor of a bitfield type.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BitfieldDesc {
+	segoffs:  Offs, // offset into the bitfields segment
 	name:     String,
 	bit_size: BitfieldSize,
 	fields:   Vec<BitfieldField>,
@@ -499,9 +659,10 @@ pub struct BitfieldDesc {
 
 impl BitfieldDesc {
 	/// ctor. Panics if the name is empty.
-	pub fn new(name: &str, bit_size: BitfieldSize) -> Self {
+	pub fn new(segoffs: Offs, name: &str, bit_size: BitfieldSize) -> Self {
 		assert!(!name.is_empty());
 		Self {
+			segoffs,
 			name: name.into(),
 			bit_size,
 			fields: Vec::new()
@@ -511,8 +672,10 @@ impl BitfieldDesc {
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
-	pub fn name(&self)   -> &str                { &self.name }
-	pub fn size(&self)   -> TypeSize            { self.bit_size.size() }
+	pub fn id  (&self) -> BitfieldId  { BitfieldId(self.segoffs) }
+	pub fn ea  (&self) -> EA          { EA::new_bitfields(self.segoffs) }
+	pub fn name(&self) -> &str        { &self.name }
+	pub fn size(&self) -> TypeSize    { self.bit_size.size() }
 
 	/// Iterator over the fields. They are kept in position order (starting at LSB).
 	pub fn fields(&self) -> &Vec<BitfieldField> { &self.fields }
@@ -606,17 +769,21 @@ impl StructField {
 	}
 
 	/// The size of this field, without padding.
-	pub fn size(&self) -> TypeSize { self.ty.size() }
+	pub fn size(&self, idx: &TypeIndex) -> TypeSize {
+		self.ty.size(idx)
+	}
 
 	/// Its offset within the structure.
 	pub fn offset(&self) -> Offs { self.offset }
 
 	/// The offset of the first byte after this field. Panics if this is a VLA.
-	pub fn next_offset(&self) -> Offs { self.offset + self.size().fixed() }
+	pub fn next_offset(&self, idx: &TypeIndex) -> Offs {
+		self.offset + self.size(idx).fixed()
+	}
 
 	/// The range of offsets this field covers. Panics if this is a VLA.
-	pub fn offset_range(&self) -> core::ops::Range<Offs> {
-		self.offset .. self.next_offset()
+	pub fn offset_range(&self, idx: &TypeIndex) -> core::ops::Range<Offs> {
+		self.offset .. self.next_offset(idx)
 	}
 
 	/// Set its offset within the structure.
@@ -681,6 +848,7 @@ impl VlaField {
 /// A descriptor of a struct type.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StructDesc {
+	segoffs: Offs, // offset into the structs segment
 	name:    String,
 	fields:  Vec<StructField>,
 	size:    Size,
@@ -688,28 +856,27 @@ pub struct StructDesc {
 }
 
 impl StructDesc {
-	/// ctor. Panics if name is empty.
-	pub fn new(name: String) -> Self {
-		Self::new_sized(name, 0)
+	fn new(segoffs: Offs, name: String) -> Self {
+		Self::new_sized(segoffs, name, 0)
 	}
 
-	/// ctor. Panics if name is empty.
-	pub fn new_sized(name: String, size: Size) -> Self {
+	fn new_sized(segoffs: Offs, name: String, size: Size) -> Self {
 		assert!(!name.is_empty());
-		Self { name, fields: Vec::new(), size, vla: VlaField::None }
+		Self { segoffs, name, fields: Vec::new(), size, vla: VlaField::None }
 	}
 
 	// ---------------------------------------------------------------------------------------------
 	// Getters
 
+	pub fn id    (&self) -> StructId { StructId(self.segoffs) }
+	pub fn ea    (&self) -> EA       { EA::new_structs(self.segoffs) }
+
 	/// Its name.
 	pub fn name(&self) -> &str { &self.name }
 
-	/// The size of this struct, which may or may not be fixed depending on whether
-	/// it has a VLA member. The size includes any padding/empty bytes.
-	pub fn size(&self) -> TypeSize {
+	fn size(&self, idx: &TypeIndex) -> TypeSize {
 		if let Some(vla) = self.vla.get() {
-			TypeSize::Variable(self.size + vla.ty.min_size())
+			TypeSize::Variable(self.size + idx.min_sizeof(&vla.ty))
 		} else {
 			TypeSize::Fixed(self.size)
 		}
@@ -768,12 +935,12 @@ impl StructDesc {
 	}
 
 	/// Change the size of this struct. Panics if it would delete any fields (incl. a VLA field).
-	pub fn set_size(&mut self, new_size: Size) {
+	pub fn set_size(&mut self, new_size: Size, idx: &TypeIndex) {
 		if new_size < self.size {
 			assert!(self.vla.is_none());
 
 			if !self.fields.is_empty() {
-				assert!(self.fields.last().unwrap().next_offset() <= new_size);
+				assert!(self.fields.last().unwrap().next_offset(idx) <= new_size);
 			}
 		}
 
@@ -782,10 +949,10 @@ impl StructDesc {
 
 	/// Add a new field. Panics if there is already a field of the same name; or if the field
 	/// is not fixed-size; or if it would overlap an existing field.
-	pub fn add_field(&mut self, new_field: StructField) {
+	pub fn add_field(&mut self, new_field: StructField, idx: &TypeIndex) {
 		// TODO: detect & reject recursive data types
 
-		assert!(new_field.size().is_fixed(),
+		assert!(new_field.size(idx).is_fixed(),
 			"trying to add variable-size field '{}' to struct '{}'", new_field.name, self.name);
 		assert!(!self.has_field_named(&new_field.name),
 			"duplicate named field '{}' in struct '{}'", new_field.name, self.name);
@@ -798,13 +965,13 @@ impl StructDesc {
 
 		if next_idx < self.fields.len() {
 			let next = &self.fields[next_idx];
-			assert!(new_field.next_offset() <= next.offset, "new field '{}' overlaps {}::{}",
+			assert!(new_field.next_offset(idx) <= next.offset, "new field '{}' overlaps {}::{}",
 				new_field.name, self.name, next.name);
 		}
 
 		if next_idx > 0 {
 			let prev = &self.fields[next_idx - 1];
-			assert!(prev.next_offset() <= new_field.offset, "new field '{}' overlaps {}::{}",
+			assert!(prev.next_offset(idx) <= new_field.offset, "new field '{}' overlaps {}::{}",
 				new_field.name, self.name, prev.name);
 		}
 
@@ -812,7 +979,7 @@ impl StructDesc {
 			*len_idx += 1;
 		}
 
-		self.size = std::cmp::max(self.size, new_field.next_offset());
+		self.size = std::cmp::max(self.size, new_field.next_offset(idx));
 		self.fields.insert(next_idx, new_field);
 	}
 
@@ -824,10 +991,11 @@ impl StructDesc {
 	/// Panics if there is already a field of the same name; or if the field is not fixed-size;
 	/// or if there is already a VLA field; or if `len_field` is given but is an invalid index,
 	/// or refers to a field which is not an unsigned integer type.
-	pub fn add_vla_field(&mut self, new_field: StructField, len_field: Option<usize>) {
+	pub fn add_vla_field(&mut self, new_field: StructField, len_field: Option<usize>,
+	idx: &TypeIndex) {
 		assert!(!self.has_field_named(&new_field.name), "duplicate named field '{}' in struct '{}'",
 			new_field.name, self.name);
-		assert!(new_field.size().is_fixed(), "cannot have variable-size VLA items in struct '{}'",
+		assert!(new_field.size(idx).is_fixed(), "cannot have variable-size VLA items in struct '{}'",
 			self.name);
 		assert!(self.vla.is_none(), "struct '{}' already has a VLA field", self.name);
 

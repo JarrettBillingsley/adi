@@ -143,7 +143,7 @@ pub(crate) struct SpanMap {
 	seg:      SegId,
 	spans:    BTreeMap<Offs, SpanInternal>,
 	end:      Offs,
-	listener: Option<Box<dyn SpanMapListener>>,
+	listener: Option<Box<dyn SpanMapListener + Send>>,
 }
 
 // The span map actually uses this type - only the end and kind fields, since the start
@@ -171,7 +171,7 @@ impl SpanMap {
 
 	/// Attach or detach a [`SpanMapListener`] to this `SpanMap`. Passing `None` will remove any
 	/// listener currently attached.
-	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener>>) {
+	pub fn attach_listener(&mut self, new_listener: Option<Box<dyn SpanMapListener + Send>>) {
 		self.listener = new_listener;
 	}
 
