@@ -13,20 +13,18 @@ use super::*;
 pub(crate) struct GBIrCompiler;
 
 impl IIrCompiler for GBIrCompiler {
-	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder) {
-		b.set_ea(i.ea());
-		match *i.bytes() {
-			[0xCB, byte2, ..] => build_ir(lookup_desc_cb(byte2), i, None, b),
-			[byte1, ..]       => build_ir(lookup_desc(byte1).unwrap(), i, None, b),
+	fn build_ir(&self, b: &mut IrBuilder) {
+		match *b.inst().bytes() {
+			[0xCB, byte2, ..] => build_ir(lookup_desc_cb(byte2), None, b),
+			[byte1, ..]       => build_ir(lookup_desc(byte1).unwrap(), None, b),
 			_                 => unreachable!(),
 		}
 	}
 
-	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder) {
-		b.set_ea(i.ea());
-		match *i.bytes() {
-			[0xCB, byte2, ..] => build_ir(lookup_desc_cb(byte2), i, Some(term), b),
-			[byte1, ..]       => build_ir(lookup_desc(byte1).unwrap(), i, Some(term), b),
+	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm) {
+		match *b.inst().bytes() {
+			[0xCB, byte2, ..] => build_ir(lookup_desc_cb(byte2), Some(term), b),
+			[byte1, ..]       => build_ir(lookup_desc(byte1).unwrap(), Some(term), b),
 			_                 => unreachable!(),
 		}
 	}
@@ -105,7 +103,7 @@ impl From<Reg> for IrReg {
 // Register and flag handling
 // ------------------------------------------------------------------------------------------------
 
-impl IrBuilder {
+impl IrBuilder<'_> {
 	/// Pair the constituent registers of a paired register into its corresponding `REG_XX`.
 	/// Named `rr` to match the ISA docs. Returns the temporary register.
 	fn rr(&mut self, reg: Reg) -> IrReg {
@@ -201,7 +199,7 @@ impl IrBuilder {
 // Memory
 // ------------------------------------------------------------------------------------------------
 
-impl IrBuilder {
+impl IrBuilder<'_> {
 	/// Push an 8-bit value `src` onto the stack.
 	fn push8(&mut self, src: impl Into<BuildSrc>) -> &mut Self {
 		// full stack convention - subtract before storing
@@ -251,7 +249,7 @@ impl IrBuilder {
 // Control flow
 // ------------------------------------------------------------------------------------------------
 
-impl IrBuilder {
+impl IrBuilder<'_> {
 	/// Push the return address to the stack.
 	fn push_return_addr(&mut self, ret_addr: VA) -> &mut Self {
 		// push hi then lo
@@ -302,16 +300,19 @@ impl IrBuilder {
 // Computation
 // ------------------------------------------------------------------------------------------------
 
-/// Perform some read-modify-write operation using `[hl]` as the source/dest. `callback` is passed a
-/// temporary register containing the 8-bit value loaded from `[hl]`; it must place the result back
-/// into this same register, and it must not modify `REG_HL`.
-fn hl_rmw(b: &mut IrBuilder, hln: i8, callback: impl Fn(&mut IrBuilder, IrReg) -> &mut IrBuilder) {
-	b.load_ind(REG_Z, (Reg::HL, hln));
-	callback  (b, REG_Z);
-	b.store   ((REG_HL, hln), REG_Z);
-}
+impl IrBuilder<'_> {
+	/// Begin some read-modify-write operation using `[hl]` as the source/dest. The returned `IrReg`
+	/// holds the value loaded from `[hl]`. You must put the result back into the same register.
+	fn hl_rmw_start(&mut self, hln: i8) -> IrReg {
+		self.load_ind(REG_Z, (Reg::HL, hln));
+		REG_Z
+	}
 
-impl IrBuilder {
+	/// End some read-modify-write operation using `[hl]` as the source/dest.
+	fn hl_rmw_end(&mut self, hln: i8) -> &mut Self {
+		self.store((REG_HL, hln), REG_Z)
+	}
+
 	/// Shift the given `reg` left. The carry flag is set to the MSB of `reg`, and the zero flag is
 	/// set if the result is 0. N and H flags are set to 0.
 	fn sla(&mut self, reg: impl Into<BuildReg>) -> &mut Self {
@@ -599,7 +600,7 @@ impl IrBuilder {
 // Computation
 // ------------------------------------------------------------------------------------------------
 
-fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
+fn build_ir<'i>(desc: &InstDesc, term: Option<&BBTerm>, b: &mut IrBuilder<'i>) {
 	use { MetaOp::*, SynOp::*, Reg::* };
 
 	match (desc.meta_op(), desc.syn_ops()) {
@@ -622,7 +623,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// add sp, e
 		(ADD, [Srg(SP), Op]) => { // {Z0, N0, H*, C*}
-			let Operand::SImm(val) = i.ops()[0] else { panic!() };
+			let Operand::SImm(val) = b.inst().ops()[0] else { panic!() };
 			b.add_sp_e(REG_SP, (val, 0));
 		}
 
@@ -638,7 +639,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// add n
 		(ADD, [Srg(A), Op]) => { // {Z*, N0, H*, C*}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.add_a(c8(val));
 		}
 
@@ -654,7 +655,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// adc n
 		(ADC, [Srg(A), Op]) => { // {Z*, N0, H*, C*}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.adc_a(c8(val));
 		}
 
@@ -670,7 +671,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// sub n
 		(SUB, [Srg(A), Op]) => { // {Z*, N1, H*, C*}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.sub_(REG_A, c8(val));
 		}
 
@@ -686,7 +687,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// cp n
 		(CP, [Srg(A), Op]) => { // {Z*, N1, H*, C*}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.sub_(REG_W, c8(val));
 		}
 
@@ -702,7 +703,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// sbc n
 		(SBC, [Srg(A), Op]) => { // {Z*, N1, H*, C*}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.sbc_a(c8(val));
 		}
 
@@ -718,7 +719,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// and n
 		(AND, [Srg(A), Op]) => { // {Z*, N0, H1, C0}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.and_a(c8(val));
 		}
 
@@ -734,7 +735,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// or n
 		(OR, [Srg(A), Op]) => { // {Z*, N0, H0, C0}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.or_a(c8(val));
 		}
 
@@ -750,7 +751,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// xor n
 		(XOR, [Srg(A), Op]) => { // {Z*, N0, H0, C0}
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.xor_a(c8(val));
 		}
 
@@ -776,7 +777,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// inc [hl]
 		(INC, [IndReg(HL)]) => {  // {Z*, N0, H*, C-}
-			hl_rmw(b, 0, |b, reg| b.inc_dec(reg, 1, true));
+			let reg = b.hl_rmw_start(0); b.inc_dec(reg, 1, true); b.hl_rmw_end(0);
 		}
 
 		// dec bc, inc de, inc hl
@@ -801,7 +802,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// dec [hl]
 		(DEC, [IndReg(HL)]) => {  // {Z*, N0, H*, C-}
-			hl_rmw(b, 0, |b, reg| b.inc_dec(reg, -1, true));
+			let reg = b.hl_rmw_start(0); b.inc_dec(reg, -1, true); b.hl_rmw_end(0);
 		}
 
 		// cpl a
@@ -884,33 +885,33 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		(RRCA, []) => { b.ror_(REG_A, false); }
 
 		// {Z*, N0, H0, C*}
-		(SLA, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.sla( reg));    }
-		(SLA, &[Srg(reg)]) => {                       b.sla((reg, 0)); }
-		(SRA, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.sra( reg));    }
-		(SRA, &[Srg(reg)]) => {                       b.sra((reg, 0)); }
-		(SRL, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.srl( reg));    }
-		(SRL, &[Srg(reg)]) => {                       b.srl((reg, 0)); }
+		(SLA, &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.sla( reg    ); b.hl_rmw_end(0); }
+		(SLA, &[Srg(reg)]) => {                              b.sla((reg, 0)); }
+		(SRA, &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.sra( reg    ); b.hl_rmw_end(0); }
+		(SRA, &[Srg(reg)]) => {                              b.sra((reg, 0)); }
+		(SRL, &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.srl( reg    ); b.hl_rmw_end(0); }
+		(SRL, &[Srg(reg)]) => {                              b.srl((reg, 0)); }
 
-		(RL,  &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rolc( reg,     true)); }
-		(RL,  &[Srg(reg)]) => {                       b.rolc((reg, 0), true);  }
-		(RLC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rol_( reg,     true)); }
-		(RLC, &[Srg(reg)]) => {                       b.rol_((reg, 0), true);  }
-		(RR,  &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.rorc( reg,     true)); }
-		(RR,  &[Srg(reg)]) => {                       b.rorc((reg, 0), true);  }
-		(RRC, &[Srg(HL)])  => { hl_rmw(b, 0, |b, reg| b.ror_( reg,     true)); }
-		(RRC, &[Srg(reg)]) => {                       b.ror_((reg, 0), true);  }
+		(RL,  &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.rolc( reg,     true); b.hl_rmw_end(0); }
+		(RL,  &[Srg(reg)]) => {                              b.rolc((reg, 0), true);                  }
+		(RLC, &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.rol_( reg,     true); b.hl_rmw_end(0); }
+		(RLC, &[Srg(reg)]) => {                              b.rol_((reg, 0), true);                  }
+		(RR,  &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.rorc( reg,     true); b.hl_rmw_end(0); }
+		(RR,  &[Srg(reg)]) => {                              b.rorc((reg, 0), true);                  }
+		(RRC, &[Srg(HL)])  => { let reg = b.hl_rmw_start(0); b.ror_( reg,     true); b.hl_rmw_end(0); }
+		(RRC, &[Srg(reg)]) => {                              b.ror_((reg, 0), true);                  }
 
 		// {Z*, N0, H0, C0}
-		(SWAP, &[Srg(reg)])   => {                       b.swap(reg);  }
-		(SWAP, &[IndReg(HL)]) => { hl_rmw(b, 0, |b, reg| b.swap(reg)); }
+		(SWAP, &[Srg(reg)])   => {                              b.swap(reg);                  }
+		(SWAP, &[IndReg(HL)]) => { let reg = b.hl_rmw_start(0); b.swap(reg); b.hl_rmw_end(0); }
 
 		// {Z*, N0, H1, C-}
 		(BIT, &[Op, Srg(reg)]) => {
-			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+			let Operand::UImm(bit) = b.inst().ops()[0] else { panic!() };
 			b.bit(REG_ZF, IrReg::from(reg), c8(bit));
 		}
 		(BIT, [Op, IndReg(HL)]) => {
-			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+			let Operand::UImm(bit) = b.inst().ops()[0] else { panic!() };
 			// operand 0 is the bit number, operand 1 is [hl]
 			b
 			.load_ind(REG_Z,  (HL, 1))
@@ -919,26 +920,26 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// no flag changes
 		(RES, &[Op, Srg(reg)]) => {
-			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+			let Operand::UImm(bit) = b.inst().ops()[0] else { panic!() };
 			let reg = IrReg::from(reg);
 			b.bset(reg, reg, c8(bit), C0_8);
 		}
 		(RES, [Op, IndReg(HL)]) => {
-			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+			let Operand::UImm(bit) = b.inst().ops()[0] else { panic!() };
 			// operand 0 is the bit number, operand 1 is [hl]
-			hl_rmw(b, 1, |b, reg| b.bset(reg, reg, c8(bit), C0_8));
+			let reg = b.hl_rmw_start(1); b.bset(reg, reg, c8(bit), C0_8); b.hl_rmw_end(1);
 		}
 
 		// no flag changes
 		(SET, &[Op, Srg(reg)]) => {
-			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+			let Operand::UImm(bit) = b.inst().ops()[0] else { panic!() };
 			let reg = IrReg::from(reg);
 			b.bset(reg, reg, c8(bit), C1_8);
 		}
 		(SET, [Op, IndReg(HL)]) => {
-			let Operand::UImm(bit) = i.ops()[0] else { panic!() };
+			let Operand::UImm(bit) = b.inst().ops()[0] else { panic!() };
 			// operand 0 is the bit number, operand 1 is [hl]
-			hl_rmw(b, 1, |b, reg| b.bset(reg, reg, c8(bit), C1_8));
+			let reg = b.hl_rmw_start(1); b.bset(reg, reg, c8(bit), C1_8); b.hl_rmw_end(1);
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -986,13 +987,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 			let term = term.unwrap();
 			let dst  = term.one_explicit_successor().unwrap();
 			let cont = term.continuation_successor().unwrap();
-			b.call_(i.next_va(), (dst, 0), cont);
+			b.call_(b.inst().next_va(), (dst, 0), cont);
 		}
 		(CALL, &[Cc(cond), Op]) => {
 			let term     = term.unwrap();
 			let dst      = term.one_explicit_successor().unwrap();
 			let cont     = term.continuation_successor().unwrap();
-			let ra       = i.next_va();
+			let ra       = b.inst().next_va();
 			let not_cond = b.not_cc(cond);
 			b
 			.cbranch_and_split(not_cond, cont)
@@ -1026,7 +1027,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// ld hl, sp+e (0xF8)
 		(LD, &[Srg(HL), SpPlusOp]) => { // {Z0, N0, H]*, C*}
-			let Operand::SImm(val) = i.ops()[0] else { panic!() };
+			let Operand::SImm(val) = b.inst().ops()[0] else { panic!() };
 			b
 			.add_sp_e(REG_HL, (val, 0))
 			.lo     (REG_L,  REG_HL)
@@ -1035,7 +1036,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// ld rr, nn (0x01, 0x11, 0x21)
 		(LD, &[Srg(dst @ (BC | DE | HL)), Op]) => { // no flag changes
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			let val = IrConst::_16(val as u16);
 			// seems silly to do this, but it's to preserve the original source operand in the IR,
 			// for later tracing back and marking this operand as a reference
@@ -1047,13 +1048,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// ld sp, nn (0x31) (same as above but SP is represented differently)
 		(LD, &[Srg(SP), Op]) => { // no flag changes
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.mov(REG_SP, (IrConst::_16(val as u16), 0));
 		}
 
 		// ld r, n (various)
 		(LD, &[Srg(dst), Op]) => { // no flag changes
-			let Operand::UImm(val) = i.ops()[0] else { panic!() };
+			let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 			b.mov(dst, (c8(val), 0));
 		}
 
@@ -1069,13 +1070,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// ld a, [nn] (0xFA)
 		(LD, &[Srg(A), IndOp]) => { // no flag changes
-			let Operand::Mem(src, _) = i.ops()[0] else { panic!() };
+			let Operand::Mem(src, _) = b.inst().ops()[0] else { panic!() };
 			b.load(REG_A, (IrConst::_16(src.0 as u16), 0));
 		}
 
 		// ld [nn], a (0xEA)
 		(LD, &[IndOp, Srg(A)]) => { // no flag changes
-			let Operand::Mem(dst, _) = i.ops()[0] else { panic!() };
+			let Operand::Mem(dst, _) = b.inst().ops()[0] else { panic!() };
 			b.store((IrConst::_16(dst.0 as u16), 0), REG_A);
 		}
 
@@ -1097,13 +1098,13 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// ld [hl], n (0x36)
 		(LD, &[IndReg(HL), Op2]) => { // no flag changes
-			let Operand::UImm(src) = i.ops()[1] else { panic!() };
+			let Operand::UImm(src) = b.inst().ops()[1] else { panic!() };
 			b.store_ind((HL, 0), (c8(src), 1));
 		}
 
 		// ld [nn], sp (0x08)
 		(LD, &[IndOp, Srg(SP)]) => { // no flag changes
-			let Operand::Mem(dst, _) = i.ops()[0] else { panic!() };
+			let Operand::Mem(dst, _) = b.inst().ops()[0] else { panic!() };
 			let dst0 = IrConst::_16(dst.0 as u16);
 			let dst1 = IrConst::_16((dst.0 + 1) as u16);
 
@@ -1119,7 +1120,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 
 		// ld a, [0xFF00 + n] (0xF0)
 		(LDH, [Srg(A), IndOp]) => { // no flag changes
-			let Operand::Mem(src, _) = i.ops()[0] else { panic!() };
+			let Operand::Mem(src, _) = b.inst().ops()[0] else { panic!() };
 			b.load(REG_A, (IrConst::_16(src.0 as u16), 0));
 		}
 		// ld a, [0xFF00 + c] (0xF2)
@@ -1131,7 +1132,7 @@ fn build_ir(desc: &InstDesc, i: &Instruction, term: Option<&BBTerm>, b: &mut IrB
 		}
 		// ld [0xFF00 + n], a (0xE0)
 		(LDH, [IndOp, Srg(A)]) => { // no flag changes
-			let Operand::Mem(dst, _) = i.ops()[0] else { panic!() };
+			let Operand::Mem(dst, _) = b.inst().ops()[0] else { panic!() };
 			b.store((IrConst::_16(dst.0 as u16), 0), REG_A);
 		}
 		// ld [0xFF00 + c], a (0xE2)

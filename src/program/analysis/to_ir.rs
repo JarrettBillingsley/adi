@@ -67,9 +67,12 @@ impl Program {
 
 			// SAFETY: BasicBlock::new asserts that insts is non-empty
 			let (last, rest) = bb.insts().split_last().unwrap();
-			rest.iter().for_each(|inst|
-				compiler.build_ir(inst, &mut b));
-			compiler.build_ir_term(last, &bb.term, &mut b);
+			rest.iter().for_each(|inst| {
+				b.set_inst(inst);
+				compiler.build_ir(&mut b)
+			});
+			b.set_inst(&last);
+			compiler.build_ir_term(&mut b, &bb.term);
 
 			match bb.term {
 				BBTerm::FallThru { cont } |

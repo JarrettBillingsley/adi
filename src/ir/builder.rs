@@ -1,6 +1,7 @@
 
 use crate::ir::{ IrInst, IrSrc, IrReg, IrBBId };
 use crate::memory::{ EA };
+use crate::program::{ Instruction };
 
 // ------------------------------------------------------------------------------------------------
 // BuildReg, BuildSrc, BuildEA
@@ -76,14 +77,15 @@ impl From<EA> for BuildEA {
 // ------------------------------------------------------------------------------------------------
 
 /// Helper for building blocks of IR instructions.
-pub(crate) struct IrBuilder {
+pub(crate) struct IrBuilder<'i> {
 	insts:       [Vec<IrInst>; 2],
 	cur:         bool,
 	ea:          EA,
+	inst:        Option<&'i Instruction>,
 	next_irbbid: IrBBId,
 }
 
-impl IrBuilder {
+impl<'i> IrBuilder<'i> {
 	/// Constructor. `next_irbbid` is the ID of the IR BB which will be used as the continuation
 	/// target if `cbranch_and_split` is called. If you don't plan on calling that, you can just
 	/// pass `0`.
@@ -94,6 +96,7 @@ impl IrBuilder {
 			insts:       [Vec::with_capacity(8), vec![]],
 			cur:         false,
 			ea:          EA::unresolved(0),
+			inst:        None,
 			next_irbbid,
 		}
 	}
@@ -101,7 +104,7 @@ impl IrBuilder {
 	/// Finish building and get the finished vecs of instructions. (There can be more than one, if
 	/// `cbranch_and_split` was called.)
 	pub(crate) fn finish(self) -> (Vec<IrInst>, Option<Vec<IrInst>>) {
-		let Self { insts: [mut ret1, mut ret2], cur, ea: _, next_irbbid: _ } = self;
+		let Self { insts: [mut ret1, mut ret2], cur, .. } = self;
 
 		ret1.shrink_to_fit();
 		if cur {
@@ -114,18 +117,28 @@ impl IrBuilder {
 
 	/// Finish building, assert there is only one vec of instructions, and get it.
 	pub(crate) fn finish_one(self) -> Vec<IrInst> {
-		let Self { insts: [mut ret, _], cur, ea: _, next_irbbid: _ } = self;
+		let Self { insts: [mut ret, _], cur, .. } = self;
 		assert!(!cur);
 		ret.shrink_to_fit();
 		ret
 	}
 
-	/// Set the current EA that will be used for subsequent IR instructions.
+	/// Get the current `Instruction` being translated.
+	pub(crate) fn inst(&self) -> &'i Instruction {
+		self.inst.unwrap()
+	}
+
+	pub(crate) fn set_inst(&mut self, inst: &'i Instruction) {
+		self.ea = inst.ea();
+		self.inst = Some(inst);
+	}
+
 	pub(crate) fn set_ea(&mut self, ea: EA) {
+		assert!(self.inst.is_none());
 		self.ea = ea;
 	}
 
-	fn inst(&mut self, inst: IrInst) -> &mut Self {
+	fn push_inst(&mut self, inst: IrInst) -> &mut Self {
 		self.insts[self.cur as usize].push(inst);
 		self
 	}
@@ -136,11 +149,11 @@ impl IrBuilder {
 // ------------------------------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-impl IrBuilder {
+impl IrBuilder<'_> {
 	/// No operation. You can use this as a placeholder for unimplemented IR instructions, so that
 	/// the resulting IR BB is not empty.
 	pub(crate) fn nop(&mut self) -> &mut Self {
-		self.inst(IrInst::nop(self.ea))
+		self.push_inst(IrInst::nop(self.ea))
 	}
 
 	/// A dummy "use" of `reg`. This tells data analysis algorithms that `reg`'s value is read in
@@ -150,7 +163,7 @@ impl IrBuilder {
 	/// potential return values. You might use this for implicit inputs to an instruction whose
 	/// outputs aren't actually computed from that input.
 	pub(crate) fn use_(&mut self, reg: IrReg) -> &mut Self {
-		self.inst(IrInst::use_(self.ea, reg))
+		self.push_inst(IrInst::use_(self.ea, reg))
 	}
 
 	/// Copies a value from `src` to `dst`.
@@ -159,7 +172,7 @@ impl IrBuilder {
 	pub(crate) fn mov(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::mov(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::mov(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 }
 
@@ -168,14 +181,14 @@ impl IrBuilder {
 // ------------------------------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-impl IrBuilder {
+impl IrBuilder<'_> {
 	/// Zero-extends `src`.
 	///
 	/// Panics if `dst` is not bigger than `src`.
 	pub(crate) fn zxt(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::zxt(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::zxt(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Zero-extends `src`.
@@ -184,7 +197,7 @@ impl IrBuilder {
 	pub(crate) fn sxt(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::sxt(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::sxt(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Extracts the low half of `src`. One complementary operation to `pair`.
@@ -193,7 +206,7 @@ impl IrBuilder {
 	pub(crate) fn lo(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::lo(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::lo(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Extracts the high half of `src`. One complementary operation to `pair`.
@@ -202,7 +215,7 @@ impl IrBuilder {
 	pub(crate) fn hi(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::hi(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::hi(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Negates `src` (using 2's complement negation).
@@ -211,7 +224,7 @@ impl IrBuilder {
 	pub(crate) fn neg(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::neg(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::neg(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Bitwise NOTs the integer `src` (aka "bitwise complement" or "1s' complement").
@@ -220,7 +233,7 @@ impl IrBuilder {
 	pub(crate) fn inot(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::inot(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::inot(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Logically NOTs `src`. `src` is not required to be a boolean value; it can be any integer. If
@@ -230,7 +243,7 @@ impl IrBuilder {
 	pub(crate) fn bnot(&mut self, dst: impl Into<BuildReg>, src: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
 		let src = src.into();
-		self.inst(IrInst::bnot(self.ea, dst.r, src.s, dst.n, src.n))
+		self.push_inst(IrInst::bnot(self.ea, dst.r, src.s, dst.n, src.n))
 	}
 
 	/// Tests if `src1 == src2`. The result is a boolean (0 = false, 1 = true).
@@ -241,7 +254,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::eq(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::eq(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Tests if `src1 != src2`. The result is a boolean (0 = false, 1 = true).
@@ -252,7 +265,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ne(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ne(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Tests if `src1 < src2` signed. The result is a boolean (0 = false, 1 = true).
@@ -263,7 +276,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::slt(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::slt(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Tests if `src1 <= src2` signed. The result is a boolean (0 = false, 1 = true).
@@ -274,7 +287,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::sle(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::sle(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Tests if `src1 > src2` signed. The result is a boolean (0 = false, 1 = true).
@@ -305,7 +318,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ult(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ult(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Tests if `src1 <= src2` unsigned. The result is a boolean (0 = false, 1 = true).
@@ -316,7 +329,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ule(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ule(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Tests if `src1 > src2` unsigned. The result is a boolean (0 = false, 1 = true).
@@ -349,7 +362,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::add(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::add(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes `src1 + src2 + src3` and truncates the result to the same number of bits. `src3` is
@@ -364,7 +377,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::addc(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::addc(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -379,7 +392,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::sub(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::sub(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes `src1 - src2 - src3` as `src1 + ~src2 + ~src3 + 2` and truncates the result to the
@@ -395,7 +408,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::subb(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::subb(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -418,7 +431,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ucarry(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ucarry(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the unsigned carry-out of `src1 + src2 + src3`.
@@ -432,7 +445,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::ucarryc(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::ucarryc(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -446,7 +459,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::scarry(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::scarry(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the signed carry-out of `src1 + src2 + src3`.
@@ -460,7 +473,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::scarryc(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::scarryc(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -475,7 +488,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::sborrow(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::sborrow(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the signed borrow-out of `src1 - src2 - src3`. This uses the convention that the
@@ -490,7 +503,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::sborrowb(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::sborrowb(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -509,7 +522,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::carries(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::carries(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes *all* carry-outs for all places in `src1 + src2 + src3`. Works like `carries` but
@@ -527,7 +540,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::carriesc(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::carriesc(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -545,7 +558,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::borrows(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::borrows(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes *all* borrow-outs for all places in `src1 - src2 - src3`. This uses the convention
@@ -563,7 +576,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::borrowsb(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::borrowsb(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -578,7 +591,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::mul(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::mul(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the quotient of `src1 / src2` unsigned.
@@ -589,7 +602,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::udiv(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::udiv(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the quotient of `src1 / src2` signed.
@@ -600,7 +613,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::sdiv(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::sdiv(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the remainder of `src1 / src2` (i.e. `src1 % src2`) unsigned.
@@ -611,7 +624,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::umod(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::umod(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the remainder of `src1 / src2` (i.e. `src1 % src2`) signed.
@@ -625,7 +638,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::smod(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::smod(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes bitwise XOR, `src1 ^ src2`.
@@ -636,7 +649,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ixor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ixor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes bitwise AND, `src1 & src2`.
@@ -647,7 +660,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::iand(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::iand(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes bitwise OR, `src1 | src2`.
@@ -658,7 +671,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ior(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ior(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes left-shift, `src1 << src2`.
@@ -674,7 +687,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::shl(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::shl(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes unsigned or "logical" right-shift, `src1 >>> src2`.
@@ -687,7 +700,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ushr(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ushr(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes signed or "arithmetic" right-shift, `src1 >> src2`.
@@ -704,7 +717,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::sshr(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::sshr(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes `src1` rotated left by `src2` bits.
@@ -718,7 +731,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::rol(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::rol(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes `src1` rotated right by `src2` bits.
@@ -731,7 +744,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::ror(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::ror(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Pairs two smaller values into a single larger value twice the size. `src1` becomes the high
@@ -748,7 +761,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::pair(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::pair(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Extracts bit number `src2` from `src1`; the result is either 0 or 1.
@@ -762,7 +775,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::bit(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::bit(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes `src1` with bit number `src2` set to the value of `src3`, which must be either 0 or
@@ -779,7 +792,7 @@ impl IrBuilder {
 		let src1 = src1.into();
 		let src2 = src2.into();
 		let src3 = src3.into();
-		self.inst(IrInst::bset(self.ea, dst.r, src1.s, src2.s, src3.s,
+		self.push_inst(IrInst::bset(self.ea, dst.r, src1.s, src2.s, src3.s,
 			dst.n, src1.n, src2.n, src3.n))
 	}
 
@@ -792,7 +805,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::bxor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::bxor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the logical AND of booleans `src1` and `src2`.
@@ -803,7 +816,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::band(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::band(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Computes the logical AND of booleans `src1` and `src2`.
@@ -814,7 +827,7 @@ impl IrBuilder {
 		let dst = dst.into();
 		let src1 = src1.into();
 		let src2 = src2.into();
-		self.inst(IrInst::bor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
+		self.push_inst(IrInst::bor(self.ea, dst.r, src1.s, src2.s, dst.n, src1.n, src2.n))
 	}
 
 	/// Loads from memory address `addr` into `dst`. The size of the loaded value is `dst.size()`.
@@ -822,7 +835,7 @@ impl IrBuilder {
 		-> &mut Self {
 		let dst = dst.into();
 		let addr = addr.into();
-		self.inst(IrInst::load(self.ea, dst.r, addr.s, dst.n, addr.n))
+		self.push_inst(IrInst::load(self.ea, dst.r, addr.s, dst.n, addr.n))
 	}
 
 	/// Stores into memory address `addr` the value from `src`. The size of the stored value is
@@ -831,7 +844,7 @@ impl IrBuilder {
 		-> &mut Self {
 		let src = src.into();
 		let addr = addr.into();
-		self.inst(IrInst::store(self.ea, addr.s, src.s, addr.n, src.n))
+		self.push_inst(IrInst::store(self.ea, addr.s, src.s, addr.n, src.n))
 	}
 }
 
@@ -840,12 +853,12 @@ impl IrBuilder {
 // ------------------------------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-impl IrBuilder {
+impl IrBuilder<'_> {
 	/// Unconditionally jump or branch to `dst`. The `EA` should come from the `BBTerm` that was
 	/// passed to `build_ir_term`.
 	pub(crate) fn branch(&mut self, dst: impl Into<BuildEA>) -> &mut Self {
 		let dst = dst.into();
-		self.inst(IrInst::branch(self.ea, dst.ea, dst.n))
+		self.push_inst(IrInst::branch(self.ea, dst.ea, dst.n))
 	}
 
 	/// If `cond` is true, jump or branch to `dst`; else continue at address `cont`.
@@ -856,7 +869,7 @@ impl IrBuilder {
 		let cond = cond.into();
 		let dst = dst.into();
 		let cont = cont.into();
-		self.inst(IrInst::cbranch(self.ea, cond.s, dst.ea, cont.ea, cond.n, dst.n))
+		self.push_inst(IrInst::cbranch(self.ea, cond.s, dst.ea, cont.ea, cond.n, dst.n))
 	}
 
 	/// This is used to implement conditional calls and returns. It splits this basic block into two
@@ -884,7 +897,7 @@ impl IrBuilder {
 		assert!(!self.cur);
 		let not_cond = not_cond.into();
 		let cont = cont.into();
-		self.inst(IrInst::cbranch(
+		self.push_inst(IrInst::cbranch(
 			self.ea, not_cond.s, cont.ea, self.next_irbbid, not_cond.n, cont.n));
 		self.cur = true;
 		self
@@ -894,7 +907,7 @@ impl IrBuilder {
 	/// program counter register.)
 	pub(crate) fn ibranch(&mut self, dst: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
-		self.inst(IrInst::ibranch(self.ea, dst.s, dst.n))
+		self.push_inst(IrInst::ibranch(self.ea, dst.s, dst.n))
 	}
 
 	/// Call `dst`, and continue executing at `cont` after the call completes.
@@ -903,7 +916,7 @@ impl IrBuilder {
 	pub(crate) fn call(&mut self, dst: impl Into<BuildEA>, cont: impl Into<BuildEA>) -> &mut Self {
 		let dst = dst.into();
 		let cont = cont.into();
-		self.inst(IrInst::call(self.ea, dst.ea, cont.ea, dst.n))
+		self.push_inst(IrInst::call(self.ea, dst.ea, cont.ea, dst.n))
 	}
 
 	/// Indirectly call `dst`, and continue executing at `cont` after the call completes. (i.e.
@@ -914,18 +927,18 @@ impl IrBuilder {
 		-> &mut Self {
 		let dst = dst.into();
 		let cont = cont.into();
-		self.inst(IrInst::icall(self.ea, dst.s, cont.ea, dst.n))
+		self.push_inst(IrInst::icall(self.ea, dst.s, cont.ea, dst.n))
 	}
 
 	/// Return from this function using `dst` as the return address. For example, it might have been
 	/// popped off the stack immediately before this instruction.
 	pub(crate) fn ret(&mut self, dst: impl Into<BuildSrc>) -> &mut Self {
 		let dst = dst.into();
-		self.inst(IrInst::ret(self.ea, dst.s, dst.n))
+		self.push_inst(IrInst::ret(self.ea, dst.s, dst.n))
 	}
 
 	/// Halt. The CPU stops executing instructions and never resumes.
 	pub(crate) fn halt(&mut self) -> &mut Self {
-		self.inst(IrInst::halt(self.ea))
+		self.push_inst(IrInst::halt(self.ea))
 	}
 }

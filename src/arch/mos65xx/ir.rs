@@ -15,14 +15,12 @@ use super::*;
 pub(crate) struct Mos65xxIrCompiler;
 
 impl IIrCompiler for Mos65xxIrCompiler {
-	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder) {
-		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).build_ir(i, None, b);
+	fn build_ir(&self, b: &mut IrBuilder) {
+		lookup_desc(b.inst().bytes()[0]).build_ir(None, b);
 	}
 
-	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder) {
-		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).build_ir(i, Some(term), b);
+	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm) {
+		lookup_desc(b.inst().bytes()[0]).build_ir(Some(term), b);
 	}
 
 	fn arg_regs(&self) -> &'static [IrReg] {
@@ -82,7 +80,7 @@ impl InstDesc {
 	/// Returned source is either a constant, REG_TMP2 (for zero-page addresses), or REG_TMP16.
 	///
 	/// Panics if called on an instruction with implicit addressing. Caller is responsible for that.
-	fn get_operand(&self, i: &Instruction, b: &mut IrBuilder) -> IrSrc {
+	fn get_operand(&self, b: &mut IrBuilder) -> IrSrc {
 		use AddrMode::*;
 		use MemIndir::*;
 
@@ -90,13 +88,13 @@ impl InstDesc {
 			IMP => { panic!("get_operand shouldn't be called on instructions with no operand"); }
 			// Immediate (1 byte), e.g. `lda #$30`.
 			IMM => {
-				let Operand::UImm(val) = i.ops()[0] else { panic!() };
+				let Operand::UImm(val) = b.inst().ops()[0] else { panic!() };
 				IrConst::_8(val as u8).into()
 			}
 			// Zero-page absolute (1 byte), e.g. `lda $10`.
 			ZPG => {
 				// R|W|RW
-				let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				let Operand::Mem(va, _) = b.inst().ops()[0] else { panic!() };
 				IrConst::_16(va.0 as u16).into()
 			}
 			// Zero-page, X- or Y-indexed (1 byte), e.g. `lda $80,X`.
@@ -104,7 +102,7 @@ impl InstDesc {
 			ZPX | ZPY => {
 				// ZPX: R|W|RW
 				// ZPY: R|W
-				let Operand::Indir(RegDisp { reg, disp }, _) = i.ops()[0] else { panic!() };
+				let Operand::Indir(RegDisp { reg, disp }, _) = b.inst().ops()[0] else { panic!() };
 
 				// using tmp2 here so that resulting address is in the range [0, 255].
 				// tmp2 = reg + disp
@@ -114,7 +112,7 @@ impl InstDesc {
 			// Absolute (2 bytes), e.g. `lda $8040`.
 			ABS => {
 				// R|W|RW
-				let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				let Operand::Mem(va, _) = b.inst().ops()[0] else { panic!() };
 				IrConst::_16(va.0 as u16).into()
 			}
 			// Absolute, X- or Y-indexed (2 bytes), e.g. `lda $8040,X`
@@ -122,7 +120,7 @@ impl InstDesc {
 			ABX | ABY => {
 				// ABX: R|W|RW
 				// ABY: R|W
-				let Operand::Indir(RegDisp { reg, disp }, _) = i.ops()[0] else { panic!() };
+				let Operand::Indir(RegDisp { reg, disp }, _) = b.inst().ops()[0] else { panic!() };
 
 				// tmp16 = zxt(reg)
 				// tmp16 += disp
@@ -133,7 +131,7 @@ impl InstDesc {
 			// Indirect (2 bytes); used only for indirect jump i.e. `jmp ($2000)`.
 			IND => {
 				// R
-				let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				let Operand::Mem(va, _) = b.inst().ops()[0] else { panic!() };
 				let va = va.0 as u16;
 
 				// TODO: this addressing mode may or may not cross page boundaries depending on CPU
@@ -167,7 +165,7 @@ impl InstDesc {
 			//  be loaded from `0x00FF` and `0x0000`.
 			IZX => {
 				// R
-				let Operand::Indir(RegDisp { disp, .. }, _) = i.ops()[0] else { panic!() };
+				let Operand::Indir(RegDisp { disp, .. }, _) = b.inst().ops()[0] else { panic!() };
 
 				// tmp2 = X + disp  (wraps at 8 bits)
 				b.add(REG_TMP2, REG_X, (IrConst::_8(disp as u8), 0));
@@ -194,7 +192,7 @@ impl InstDesc {
 			//  does a full 16-bit add.
 			IZY => {
 				// R
-				let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				let Operand::Mem(va, _) = b.inst().ops()[0] else { panic!() };
 				let va = va.0;
 
 				if va == 0xFF {
@@ -222,14 +220,14 @@ impl InstDesc {
 			REL => {
 				panic!("get_operand shouldn't be called on instructions with control flow targets");
 				// Target
-				// let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				// let Operand::Mem(va, _) = b.inst().ops()[0] else { panic!() };
 				// IrConst::_16(va.0 as u16).into()
 			}
 			// Alias for `ABS` but for `jmp`/`jsr` instructions, to distinguish their operand types.
 			LAB => {
 				panic!("get_operand shouldn't be called on instructions with control flow targets");
 				// Target
-				// let Operand::Mem(va, _) = i.ops()[0] else { panic!() };
+				// let Operand::Mem(va, _) = b.inst().ops()[0] else { panic!() };
 				// IrConst::_16(va.0 as u16).into()
 			}
 		}
@@ -237,7 +235,7 @@ impl InstDesc {
 
 	/// Gets the actual value of the operand, performing a load if needed, and places the value
 	/// into `dst`.
-	fn get_operand_value_into(&self, dst: IrReg, i: &Instruction, b: &mut IrBuilder) {
+	fn get_operand_value_into(&self, dst: IrReg, b: &mut IrBuilder) {
 
 		use AddrMode::*;
 
@@ -247,17 +245,17 @@ impl InstDesc {
 			}
 			IMM => {
 				// just a constant, assign it
-				let val = self.get_operand(i, b);
+				let val = self.get_operand(b);
 				b.mov(dst, (val, 0));
 			}
 			ZPG | ABS => {
 				// needs a load, and that load references the operand
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load(dst, (addr, 0));
 			}
 			ZPX | ZPY | ABX | ABY | IZX | IZY => {
 				// needs a load, but that load does *not* reference the operand
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load(dst, addr);
 			}
 		}
@@ -282,8 +280,8 @@ impl InstDesc {
 	/// Push the return address to the stack. It's always the instruction's address + 2, despite the
 	/// address *actually* being 3 bytes away. This is fixed by `rts` which adds 1 to the pulled
 	/// address.
-	fn push_return_addr(&self, i: &Instruction, b: &mut IrBuilder) {
-	 	let ret_addr = (i.va().0 + 2) as u16;
+	fn push_return_addr(&self, b: &mut IrBuilder) {
+	 	let ret_addr = (b.inst().va().0 + 2) as u16;
 		// push hi then lo
 		self.push8(IrConst::_8((ret_addr >> 8  ) as u8), b);
 		self.push8(IrConst::_8((ret_addr & 0xFF) as u8), b);
@@ -369,7 +367,7 @@ impl InstDesc {
 	// NES games which rely on dummy read done by `sta $4000,X` to acknowledge pending APU IRQs
 	// - Cobra Triangle
 	// - Ironsword: Wizards and Warriors II
-	pub(super) fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
+	pub(super) fn build_ir(&self, term: Option<&BBTerm>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
 		match self.meta_op {
@@ -391,20 +389,20 @@ impl InstDesc {
 			// Addition/subtraction ALU
 			ADC => { // NZCV
 				if self.addr_mode == AddrMode::IMM {
-					let val = self.get_operand(i, b);
+					let val = self.get_operand(b);
 					self.add_(val, 0, b);
 				} else {
-					self.get_operand_value_into(REG_TMP1, i, b);
+					self.get_operand_value_into(REG_TMP1, b);
 					self.add_(REG_TMP1, -1, b);
 				}
 			}
 			SBC => { // NZCV
 				if self.addr_mode == AddrMode::IMM {
-					let val = self.get_operand(i, b);
+					let val = self.get_operand(b);
 					b.inot(REG_TMP1, val);
 					self.add_(REG_TMP1, 0, b);
 				} else {
-					self.get_operand_value_into(REG_TMP1, i, b);
+					self.get_operand_value_into(REG_TMP1, b);
 					b.inot(REG_TMP1, REG_TMP1);
 					self.add_(REG_TMP1, -1, b);
 				}
@@ -412,7 +410,7 @@ impl InstDesc {
 
 			// 'crements
 			DEC => { // NZ
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load (REG_TMP1, (addr, 0));
 				b.sub(REG_TMP1, REG_TMP1, IrConst::ONE_8);
 				b.store((addr, 0), REG_TMP1);
@@ -427,7 +425,7 @@ impl InstDesc {
 				self.set_nz(REG_Y, b);
 			}
 			INC => { // NZ
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load (REG_TMP1, (addr, 0));
 				b.add(REG_TMP1, REG_TMP1, IrConst::ONE_8);
 				b.store((addr, 0), REG_TMP1);
@@ -445,36 +443,36 @@ impl InstDesc {
 			// Bitwise ALU
 			AND => { // NZ
 				if self.addr_mode == AddrMode::IMM {
-					let src = self.get_operand(i, b);
+					let src = self.get_operand(b);
 					b.iand(REG_A, REG_A, (src, 0));
 				} else {
-					self.get_operand_value_into(REG_TMP1, i, b);
+					self.get_operand_value_into(REG_TMP1, b);
 					b.iand(REG_A, REG_A, REG_TMP1);
 				}
 				self.set_nz(REG_A, b);
 			}
 			ORA => { // NZ
 				if self.addr_mode == AddrMode::IMM {
-					let src = self.get_operand(i, b);
+					let src = self.get_operand(b);
 					b.ior(REG_A, REG_A, (src, 0));
 				} else {
-					self.get_operand_value_into(REG_TMP1, i, b);
+					self.get_operand_value_into(REG_TMP1, b);
 					b.ior(REG_A, REG_A, REG_TMP1);
 				}
 				self.set_nz(REG_A, b);
 			}
 			EOR => { // NZ
 				if self.addr_mode == AddrMode::IMM {
-					let src = self.get_operand(i, b);
+					let src = self.get_operand(b);
 					b.ixor(REG_A, REG_A, (src, 0));
 				} else {
-					self.get_operand_value_into(REG_TMP1, i, b);
+					self.get_operand_value_into(REG_TMP1, b);
 					b.ixor(REG_A, REG_A, REG_TMP1);
 				}
 				self.set_nz(REG_A, b);
 			}
 			BIT => { // NZV (NF = mem.7, VF = mem.6, ZF = whether A&op is 0)
-				self.get_operand_value_into(REG_TMP1, i, b);
+				self.get_operand_value_into(REG_TMP1, b);
 				b.bit(REG_NF,   REG_TMP1, IrConst::_8(7));
 				b.bit(REG_VF,   REG_TMP1, IrConst::_8(6));
 				b.iand(REG_TMP1, REG_TMP1, REG_A);
@@ -484,24 +482,24 @@ impl InstDesc {
 			// Comparisons
 			CMP => { // NZC
 				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
-				self.get_operand_value_into(REG_TMP1, i, b);
+				self.get_operand_value_into(REG_TMP1, b);
 				self.cmp(REG_A, (REG_TMP1, opn), b);
 			}
 			CPX => { // NZC
 				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
-				self.get_operand_value_into(REG_TMP1, i, b);
+				self.get_operand_value_into(REG_TMP1, b);
 				self.cmp(REG_X, (REG_TMP1, opn), b);
 			}
 			CPY => { // NZC
 				let opn = if self.addr_mode == AddrMode::IMM { 0 } else { -1 };
-				self.get_operand_value_into(REG_TMP1, i, b);
+				self.get_operand_value_into(REG_TMP1, b);
 				self.cmp(REG_Y, (REG_TMP1, opn), b);
 			}
 
 			// Shifts and rotates
 			// TODO: BOY this stuff is begging to be abstracted
 			ASL => { // NZC
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load (REG_TMP1, (addr, 0));
 
 				// if the number is "negative" then the MSB is 1 so set the carry flag
@@ -517,7 +515,7 @@ impl InstDesc {
 				self.set_nz(REG_A, b);
 			}
 			LSR => { // NZC (NF = 0, hardcoded)
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load (REG_TMP1, (addr, 0));
 
 				// cf = (tmp1 & 1) (i.e. if LSB is 1, set CF)
@@ -534,7 +532,7 @@ impl InstDesc {
 				self.set_nz(REG_A, b);
 			}
 			ROL => { // NZC
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load (REG_TMP1, (addr, 0));
 
 				b.mov(REG_TMP2, REG_CF);                     // tmp2 = cf
@@ -553,7 +551,7 @@ impl InstDesc {
 				self.set_nz(REG_A, b);
 			}
 			ROR => { // NZC
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.load (REG_TMP1, (addr, 0));
 
 				b.mov(REG_TMP2, REG_CF);     // tmp2 = cf
@@ -598,7 +596,7 @@ impl InstDesc {
 						b.branch((dst, 0));
 					}
 					AddrMode::IND => {
-						let dst_ind = self.get_operand(i, b);
+						let dst_ind = self.get_operand(b);
 						b.ibranch(dst_ind);
 					}
 					_ => panic!(),
@@ -608,14 +606,14 @@ impl InstDesc {
 				let term = term.unwrap();
 				let dst = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
-				self.push_return_addr(i, b);
+				self.push_return_addr(b);
 				b.call((dst, 0), cont);
 			}
 			RTS => { // no flags changed
 				self.return_(b, true);
 			}
 			BRK => { // IF = 1
-				self.push_return_addr(i, b);
+				self.push_return_addr(b);
 				// pushed flags include break flag set to 1, which is what we want
 				self.push_flags(b);
 				b.mov    (REG_IF,    IrConst::ONE_8); // set IF
@@ -686,27 +684,27 @@ impl InstDesc {
 
 			// Loads and sores
 			LDA | LDAI => { // NZ
-				self.get_operand_value_into(REG_A, i, b);
+				self.get_operand_value_into(REG_A, b);
 				self.set_nz(REG_A, b);
 			}
 			LDX | LDXI => { // NZ
-				self.get_operand_value_into(REG_X, i, b);
+				self.get_operand_value_into(REG_X, b);
 				self.set_nz(REG_X, b);
 			}
 			LDY | LDYI => { // NZ
-				self.get_operand_value_into(REG_Y, i, b);
+				self.get_operand_value_into(REG_Y, b);
 				self.set_nz(REG_Y, b);
 			}
 			STA => { // no flags changed
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.store((addr, 0), REG_A);
 			}
 			STX => { // no flags changed
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.store((addr, 0), REG_X);
 			}
 			STY => { // no flags changed
-				let addr = self.get_operand(i, b);
+				let addr = self.get_operand(b);
 				b.store((addr, 0), REG_Y);
 			}
 

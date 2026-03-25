@@ -11,14 +11,12 @@ use super::*;
 pub(crate) struct ToyIrCompiler;
 
 impl IIrCompiler for ToyIrCompiler {
-	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder) {
-		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, None, b);
+	fn build_ir(&self, b: &mut IrBuilder) {
+		lookup_desc(b.inst().bytes()[0]).expect("ono").build_ir(None, b);
 	}
 
-	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder) {
-		b.set_ea(i.ea());
-		lookup_desc(i.bytes()[0]).expect("ono").build_ir(i, Some(term), b);
+	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm) {
+		lookup_desc(b.inst().bytes()[0]).expect("ono").build_ir(Some(term), b);
 	}
 
 	fn arg_regs(&self) -> &'static [IrReg] {
@@ -90,15 +88,15 @@ impl InstDesc {
 		}
 	}
 
-	pub(super) fn build_ir(&self, i: &Instruction, term: Option<&BBTerm>, b: &mut IrBuilder) {
+	pub(super) fn build_ir(&self, term: Option<&BBTerm>, b: &mut IrBuilder) {
 		use MetaOp::*;
 
 		let r0 = | | -> BuildReg {
-			(reg_to_ir_reg(inst_reg(i, 0)), 0).into()
+			(reg_to_ir_reg(inst_reg(b.inst(), 0)), 0).into()
 		};
 
 		let r1 = | | -> BuildSrc {
-			(self.r1(i), 1).into()
+			(self.r1(b.inst()), 1).into()
 		};
 
 		match self.meta_op {
@@ -206,7 +204,7 @@ impl InstDesc {
 				let dst = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
 				b.sub(REG_SP, REG_SP, IrConst::_16(2));
-				b.store(REG_SP, IrConst::_16(i.next_va().0 as u16));
+				b.store(REG_SP, IrConst::_16(b.inst().next_va().0 as u16));
 				b.call ((dst, 0), cont);
 			}
 			CALI => {
@@ -222,7 +220,7 @@ impl InstDesc {
 				b.bnot             (REG_TMP, REG_ZF);
 				b.cbranch_and_split(REG_TMP, cont);
 				b.sub            (REG_SP,  REG_SP, IrConst::_16(2));
-				b.store            (REG_SP,  IrConst::_16(i.next_va().0 as u16));
+				b.store            (REG_SP,  IrConst::_16(b.inst().next_va().0 as u16));
 				b.call             ((dst, 0),  cont);
 			}
 			RET => {
@@ -242,7 +240,7 @@ impl InstDesc {
 			LD => {
 				let reg = r0();
 
-				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
+				let addr = if self.addr_mode == AddrMode::RR && inst_reg(b.inst(), 1) == Reg::DC {
 					b.pair(REG_TMP16, REG_D, REG_C);
 					REG_TMP16.into()
 				} else {
@@ -254,7 +252,7 @@ impl InstDesc {
 			ST => {
 				let reg = r0();
 
-				let addr = if self.addr_mode == AddrMode::RR && inst_reg(i, 1) == Reg::DC {
+				let addr = if self.addr_mode == AddrMode::RR && inst_reg(b.inst(), 1) == Reg::DC {
 					b.pair(REG_TMP16, REG_D, REG_C);
 					REG_TMP16.into()
 				} else {

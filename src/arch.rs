@@ -167,13 +167,13 @@ pub(crate) enum IrCompiler {
 /// Trait for IR Compilers.
 #[enum_dispatch(IrCompiler)]
 pub(crate) trait IIrCompiler: Sized + Sync + Send {
-	/// Convert the instruction into a sequence of IR instructions. This is called for all
-	/// instructions other than the terminator.
-	fn build_ir(&self, i: &Instruction, b: &mut IrBuilder);
+	/// Convert `b.inst()` into a sequence of IR instructions. This is called for all instructions
+	/// other than the terminator.
+	fn build_ir(&self, b: &mut IrBuilder);
 
 	/// Convert the terminating instruction of a basic block into a sequence of IR instructions.
 	/// `term` is the basic block's terminator, used to encode control flow targets.
-	fn build_ir_term(&self, i: &Instruction, term: &BBTerm, b: &mut IrBuilder);
+	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm);
 
 	/// Give a set of registers which can be used to pass arguments.
 	fn arg_regs(&self) -> &'static [IrReg];
