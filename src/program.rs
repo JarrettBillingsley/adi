@@ -334,24 +334,24 @@ impl Program {
 			#[call(get_mut)]
 			pub fn get_data_mut(&mut self, id: DataId) -> &mut DataItem;
 
-			#[call(new_array)]
-			pub fn new_array_type(&self, item_ty: Type, len: Size) -> Type;
+			#[call(array)]
+			pub fn type_array(&self, item_ty: &Type, len: Size) -> Type;
 			#[call(ptr)]
-			pub fn new_ptr_type(&self, to: Type, kind: Type) -> Type;
+			pub fn type_ptr(&self, to: &Type, kind: &Type) -> Type;
 			#[call(new_struct)]
-			pub fn new_struct_type(&mut self, name: String) -> StructId;
+			pub fn type_new_struct(&mut self, name: &str) -> StructId;
 			#[call(new_struct_sized)]
-			pub fn new_struct_type_sized(&mut self, name: String, size: Size) -> StructId;
+			pub fn type_new_struct_sized(&mut self, name: &str, size: Size) -> StructId;
 			#[call(new_enum)]
-			pub fn new_enum_type(&mut self, name: String, ty: Box<Type>) -> EnumId;
+			pub fn type_new_enum(&mut self, name: &str, ty: Box<Type>) -> EnumId;
 			#[call(new_bitfield)]
-			pub fn new_bitfield_type(&mut self, name: &str, bit_size: BitfieldSize) -> BitfieldId;
+			pub fn type_new_bitfield(&mut self, name: &str, bit_size: BitfieldSize) -> BitfieldId;
 			#[call(sizeof)]
-			pub fn sizeof_type(&self, ty: &Type) -> TypeSize;
+			pub fn type_sizeof(&self, ty: &Type) -> TypeSize;
 			#[call(min_sizeof)]
-			pub fn min_sizeof_type(&self, ty: &Type) -> Size;
+			pub fn type_min_sizeof(&self, ty: &Type) -> Size;
 			#[call(is_fixed_size)]
-			pub fn is_fixed_size_type(&self, ty: &Type) -> bool;
+			pub fn type_is_fixed_size(&self, ty: &Type) -> bool;
 
 		}
 	}
@@ -380,7 +380,7 @@ impl Program {
 
 	/// Creates a new data item at the given EA. If a `name` is given, adds that name as a
 	/// `NameKind::User` name. Returns its ID.
-	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: Type, size: Size) -> DataId {
+	pub fn new_data(&mut self, name: Option<&str>, ea: EA, ty: &Type, size: Size) -> DataId {
 		let did = self.data.new_item(ea, ty, size);
 		let seg = self.segment_from_ea_mut(ea);
 		seg.span_make_data(ea, size, did);

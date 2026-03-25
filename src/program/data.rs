@@ -52,8 +52,8 @@ pub struct DataItem {
 }
 
 impl DataItem {
-	fn new(id: DataId, ea: EA, ty: Type, size: Size) -> Self {
-		Self { id, ea, ty, size, radix: Radix::Hex }
+	fn new(id: DataId, ea: EA, ty: &Type, size: Size) -> Self {
+		Self { id, ea, ty: ty.clone(), size, radix: Radix::Hex }
 	}
 
 	/// Its unique ID.
@@ -91,8 +91,8 @@ impl DataIndex {
 	}
 
 	/// Creates a new data item and returns its ID.
-	pub fn new_item(&mut self, ea: EA, ty: Type, size: Size) -> DataId {
-		assert!(size >= self.types.min_sizeof(&ty));
+	pub fn new_item(&mut self, ea: EA, ty: &Type, size: Size) -> DataId {
+		assert!(size >= self.types.min_sizeof(ty));
 
 		DataId(self.arena.insert_with(move |id| {
 			DataItem::new(DataId(id), ea, ty, size)
@@ -116,11 +116,11 @@ impl DataIndex {
 
 	delegate!{
 		to self.types {
-			pub fn new_array(&self, item_ty: Type, len: Size) -> Type;
-			pub fn ptr(&self, to: Type, kind: Type) -> Type;
-			pub fn new_struct(&mut self, name: String) -> StructId;
-			pub fn new_struct_sized(&mut self, name: String, size: Size) -> StructId;
-			pub fn new_enum(&mut self, name: String, ty: Box<Type>) -> EnumId;
+			pub fn array(&self, item_ty: &Type, len: Size) -> Type;
+			pub fn ptr(&self, to: &Type, kind: &Type) -> Type;
+			pub fn new_struct(&mut self, name: &str) -> StructId;
+			pub fn new_struct_sized(&mut self, name: &str, size: Size) -> StructId;
+			pub fn new_enum(&mut self, name: &str, ty: Box<Type>) -> EnumId;
 			pub fn new_bitfield(&mut self, name: &str, bit_size: BitfieldSize) -> BitfieldId;
 			pub fn sizeof(&self, ty: &Type) -> TypeSize;
 			pub fn min_sizeof(&self, ty: &Type) -> Size;
@@ -268,35 +268,35 @@ impl TypeIndex {
 	}
 
 	/// Create an array type. Panics if `item_ty` is not a fixed-size type.
-	pub fn new_array(&self, item_ty: Type, len: Size) -> Type {
+	pub fn array(&self, item_ty: &Type, len: Size) -> Type {
 		assert!(self.is_fixed_size(&item_ty), "arrays can only hold fixed-size values");
-		Type::Array(ArrayType { ty: Box::new(item_ty), len })
+		Type::Array(ArrayType { ty: Box::new(item_ty.clone()), len })
 	}
 
 	/// Create a pointer type. Panics if `kind` is not a strict integer.
-	pub fn ptr(&self, to: Type, kind: Type) -> Type {
+	pub fn ptr(&self, to: &Type, kind: &Type) -> Type {
 		assert!(kind.is_strict_integer(), "pointers can only be integers");
-		Type::Ptr(PtrType { to: Box::new(to), kind: Box::new(kind) })
+		Type::Ptr(PtrType { to: Box::new(to.clone()), kind: Box::new(kind.clone()) })
 	}
 
 	/// Create a new struct type.
 	///
 	/// Panics if name is empty.
-	pub fn new_struct(&mut self, name: String) -> StructId {
+	pub fn new_struct(&mut self, name: &str) -> StructId {
 		self.structs.insert(StructDesc::new(self.structs.next, name))
 	}
 
 	/// Create a new struct type of a given size.
 	///
 	/// Panics if name is empty.
-	pub fn new_struct_sized(&mut self, name: String, size: Size) -> StructId {
+	pub fn new_struct_sized(&mut self, name: &str, size: Size) -> StructId {
 		self.structs.insert(StructDesc::new_sized(self.structs.next, name, size))
 	}
 
 	/// Create a new enum type.
 	///
 	/// Panics if the type is not strictly integral or character, or if the name is empty.
-	pub fn new_enum(&mut self, name: String, ty: Box<Type>) -> EnumId {
+	pub fn new_enum(&mut self, name: &str, ty: Box<Type>) -> EnumId {
 		self.enums.insert(EnumDesc::new(self.enums.next, name, ty))
 	}
 
@@ -518,10 +518,15 @@ pub struct EnumDesc {
 }
 
 impl EnumDesc {
-	fn new(segoffs: Offs, name: String, ty: Box<Type>) -> Self {
+	fn new(segoffs: Offs, name: &str, ty: Box<Type>) -> Self {
 		assert!(!name.is_empty());
 		Self::check_type(ty.as_ref());
-		Self { segoffs, name, ty, values: Vec::new() }
+		Self {
+			segoffs,
+			name: name.into(),
+			ty,
+			values: Vec::new()
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -859,13 +864,19 @@ pub struct StructDesc {
 }
 
 impl StructDesc {
-	fn new(segoffs: Offs, name: String) -> Self {
+	fn new(segoffs: Offs, name: &str) -> Self {
 		Self::new_sized(segoffs, name, 0)
 	}
 
-	fn new_sized(segoffs: Offs, name: String, size: Size) -> Self {
+	fn new_sized(segoffs: Offs, name: &str, size: Size) -> Self {
 		assert!(!name.is_empty());
-		Self { segoffs, name, fields: Vec::new(), size, vla: VlaField::None }
+		Self {
+			segoffs,
+			name:   name.into(),
+			size,
+			fields: Vec::new(),
+			vla:    VlaField::None
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------

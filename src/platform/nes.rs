@@ -13,7 +13,7 @@ use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture, VEC_NMI, VEC_IRQ, VEC_RESET };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
 	SegId, EA };
-use crate::program::{ Program };
+use crate::program::{ Program, Type };
 
 // ------------------------------------------------------------------------------------------------
 // NesPlatform
@@ -176,6 +176,8 @@ fn setup_nes_labels(prog: &mut Program) {
 		prog.add_hardware_name_va(name, state, VA(*addr));
 	}
 
+	let ptr_ty = prog.type_ptr(&Type::Code, &Type::U16);
+
 	for StdName(name, addr) in NES_INT_VECS {
 		let src_ea = prog.ea_from_va(state, VA(*addr));
 		let seg    = prog.segment_from_ea(src_ea);
@@ -187,7 +189,7 @@ fn setup_nes_labels(prog: &mut Program) {
 			prog.add_hardware_name_va(name, state, dst_va);
 		}
 
-		// TODO: add a data item for each of these EAs
+		prog.new_data(Some(&format!("{}_PTR", name)), src_ea, &ptr_ty, 2);
 		prog.add_ref(src_ea, dst_ea);
 	}
 }
