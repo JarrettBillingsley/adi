@@ -626,3 +626,10 @@ fn va_range_to_ea_range(range: impl RangeBounds<VA>, f: impl Fn(VA) -> EA)
 
 	(start, end)
 }
+
+#[cfg(test)]
+#[test]
+fn test_program_is_send() {
+	fn g<T: Send>(){}
+	g::<Program>();
+}
