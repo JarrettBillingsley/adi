@@ -503,14 +503,8 @@ impl IrFunction {
 		mut bbs: Vec<IrBasicBlock>,
 		cfg: IrCfg,
 		entrypoints: Vec<IrBBId>,
+		exitpoints: Vec<IrBBId>,
 	) -> Self {
-		let exitpoints = bbs.iter().enumerate().filter_map(|(irbbid, bb)| {
-			match bb.term_inst().kind() {
-				IrInstKind::Ret { .. } => Some(irbbid),
-				_ => None,
-			}
-		}).collect();
-
 		ssa::to_ssa(&mut bbs, &cfg);
 		Self {
 			real_fid,

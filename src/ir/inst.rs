@@ -9,6 +9,7 @@ use super::*;
 
 /// Unary operations.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub(crate) enum IrUnOp {
 	IntZxt,  // dst = zxt(src)
 	IntSxt,  // dst = sxt(src)
@@ -21,6 +22,7 @@ pub(crate) enum IrUnOp {
 
 /// Binary operations.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub(crate) enum IrBinOp {
 	IntEq,      // dst = s1 == s2
 	IntNe,      // dst = s1 != s2
@@ -62,6 +64,7 @@ pub(crate) enum IrBinOp {
 
 /// Ternary operations.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub(crate) enum IrTernOp {
 	IntUAddC,    // dst = s1 + s2 + s3  (unsigned, s3 = bool)
 	IntUSubB,    // dst = s1 - s2 - s3  (unsigned, s3 = bool)
@@ -81,6 +84,7 @@ pub(crate) enum IrTernOp {
 
 /// Represents IR instructions.
 #[derive(PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub(crate) enum IrInstKind {
 	// no operation
 	Nop,

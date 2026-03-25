@@ -121,8 +121,9 @@
 		- this way the queue can be analyzed in an executor-based environment instead of being forced onto a second thread
 		- and/or some listener for analysis steps
 	- **Make const prop build ASTs for constant provenance**
-		- wait uhhhhhhhhh
-		- that could be used for *way more* than just constant provenance right?
+		- `constprop::Info::join` arbitrarily picks one of the sources right now, and having an AST node for "phi" would avoid throwing away that info
+		- I feel like there was *a bigger reason* why I wanted to do this but I can't remember rn
+		- this could be used for *way more* than just constant provenance right?
 		- you could have it show little HLL-like snippets of what a sequence of instructions does
 		- like a very limited decompiler
 	- **IR Dead Store Elimination**

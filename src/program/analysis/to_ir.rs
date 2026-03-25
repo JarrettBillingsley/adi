@@ -52,8 +52,11 @@ impl Program {
 		// in here; the second half is handled by the "extra_edges" above
 		let mut eas_to_bbids: HashMap<EA, IrBBId> = HashMap::new();
 
-		// rewrites that need to be done on the IR after it's been built
-		let mut rewrites: Vec<(IrBBId, IrRewrite)> = vec![];
+		// exitpoints from the function
+		let mut exitpoints: Vec<IrBBId> = vec![];
+
+		// BBs which need to have dummy `mov _, <return>` added after them
+		let mut callpoints: Vec<IrBBId> = vec![];
 
 		for (irbbid, bbid) in func.all_bbs().enumerate() {
 			let bb = self.get_bb(bbid);
@@ -118,12 +121,12 @@ impl Program {
 				// always insert, before final
 				Return { .. } => {
 					// before, ret regs
-					rewrites.push((rewrite_irbbid, IrRewrite::Uses));
+					exitpoints.push(rewrite_irbbid);
 				}
 				_ => {
 					// only insert uses if there is *at least one* out-of-function successor.
 					if !self.bb_all_successors_in_function(bbid) {
-						rewrites.push((rewrite_irbbid, IrRewrite::Uses));
+						exitpoints.push(rewrite_irbbid);
 					}
 				}
 			}
@@ -131,7 +134,7 @@ impl Program {
 			// if cont is an in-function successor, it needs return-insertion
 			if let Call { cont, .. } | IndirCall { cont, .. } = bb.term &&
 			self.ea_is_bb_in_function(cont, bb.func()).is_some() {
-				rewrites.push((rewrite_irbbid, IrRewrite::Returns));
+				callpoints.push(rewrite_irbbid);
 			}
 		}
 
@@ -142,7 +145,7 @@ impl Program {
 		fixup_ir_targets(&mut bbs, &eas_to_bbids);
 
 		// 3. perform rewrites
-		IrRewriter::new(&compiler, &mut bbs).perform_rewrites(rewrites);
+		IrRewriter::new(&compiler, &mut bbs).perform_rewrites(&exitpoints, callpoints);
 
 		// 4. build the CFG from the IrBB terminators
 		let cfg = build_ir_cfg(&bbs, extra_edges);
@@ -154,7 +157,7 @@ impl Program {
 		// println!("{:?}", Dot::with_config(&cfg, &[DotConfig::EdgeNoLabel]));
 
 		// 5. create the IrFunction (which converts it to SSA)
-		IrFunction::new(fid, bbs, cfg, entrypoints)
+		IrFunction::new(fid, bbs, cfg, entrypoints, exitpoints)
 	}
 }
 
@@ -293,16 +296,6 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 }
 
 // ------------------------------------------------------------------------------------------------
-// IrRewrite
-// ------------------------------------------------------------------------------------------------
-
-#[derive(Debug, Copy, Clone)]
-pub(crate) enum IrRewrite {
-	Uses,
-	Returns,
-}
-
-// ------------------------------------------------------------------------------------------------
 // IrRewriter
 // ------------------------------------------------------------------------------------------------
 
@@ -323,25 +316,18 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 		}
 	}
 
-	fn perform_rewrites(&mut self, rewrites: Vec<(IrBBId, IrRewrite)>) {
+	fn perform_rewrites(&mut self, exitpoints: &[IrBBId], callpoints: Vec<IrBBId>) {
 		let arg_regs = self.compiler.arg_regs();
 		let ret_regs = self.compiler.return_regs();
 
-		// first pass: insert uses
-		for (irbbid, rewrite) in rewrites.iter() {
-			if let IrRewrite::Uses = rewrite {
-				insert_dummy_uses(&mut self.bbs[*irbbid], arg_regs, ret_regs);
-			}
+		// first pass: insert uses before function exits
+		for irbbid in exitpoints.iter() {
+			insert_dummy_uses(&mut self.bbs[*irbbid], arg_regs, ret_regs);
 		}
 
 		// second pass: insert dummy BBs for return-uses after calls
-		for (irbbid, rewrite) in rewrites.into_iter() {
-			match rewrite {
-				IrRewrite::Uses => {} // already handled
-				IrRewrite::Returns => {
-					self.rewrite_returns(irbbid, ret_regs);
-				}
-			}
+		for irbbid in callpoints.into_iter() {
+			self.rewrite_returns(irbbid, ret_regs);
 		}
 
 		self.bbs.append(&mut self.new_bbs);
@@ -382,8 +368,8 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 				*cont = IrTarget::Internal(new_cont);
 				old_cont
 			}
-			_ => panic!("IrRewrite::Returns put on bb{} which ended with something other than \
-					`Call` or `ICall`.", irbbid),
+			_ => panic!("bb{} marked for return-insertion should have ended with `Call` or `ICall` \
+				but ended with {:?} instead", irbbid, bb.term_inst().kind()),
 		}
 	}
 }
