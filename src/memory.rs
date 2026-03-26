@@ -443,10 +443,13 @@ impl Memory {
 
 	/// Gets the VA which corresponds to this EA, if any.
 	pub fn va_for_ea(&self, state: MmuState, ea: EA) -> Option<VA> {
-		if ea.is_unresolved() {
-			Some(VA(ea.offs()))
-		} else {
-			self.mmu.va_for_ea(state, ea)
+		match ea.seg().id {
+			SegId::STRUCTS |
+			SegId::ENUMS |
+			SegId::BITFIELDS |
+			SegId::UNRESOLVED      => Some(VA(ea.offs())),
+			0 ..= SegId::LAST_USER => self.mmu.va_for_ea(state, ea),
+			_                      => unimplemented!("was a new reserved segment added?"),
 		}
 	}
 
