@@ -62,8 +62,11 @@ Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 		- none.
 - 5 (mmc5/exrom) **e.g. castlevania 3**
 	- *PRG ROM*
-		- ..... it's complicated.
+		- ..... it's complicated. there are 4 modes: 1 32KB bank, 2 16KB banks, 1 16KB bank and 2 8KB banks, and 4 8KB banks.
+		- however apparently only *one game* (Castlevania 3) uses the 1x16KB+2x8KB mode, and *all others* use the 4x8KB mode. nothing uses the 1x32KB or 2x16KB modes.
 	- *PRG RAM*
+		- usually, **8KB banks** at `6000`, up to 128KB (16 banks)
+		- *however* it's also possible to map the PRG RAM to `8000` (!) as a 16KB bank, but doesn't seem like anything other than "Bandit Kings of Ancient China" does this
 - 19 (namco N129/N163) **e.g. star wars (N129), rolling thunder (N163)**
 	- *PRG ROM*
 		- **8KB** banks, up to **512KB** (64 banks) total
