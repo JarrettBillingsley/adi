@@ -568,3 +568,49 @@ There are two main problems:
 So I don't think it'd work out.
 
 Instead, I guess each IrFunction needs to keep a list of heads (entry points) and tails (return points).
+
+---
+
+## Const prop ASTs are built... how to apply them?
+
+let's say you have:
+
+	0000:00000001	ld  h, 0xC0
+	0000:00000003	ld  l, 0xDD
+	0000:00000005	inc l
+	0000:00000006	ld  a, [hl]
+
+so the const tree for hl at 0000:00000006 is like...
+
+	pair
+		hi = const 0xC0 @ 0000:00000001 {0}
+		lo = add
+			const 0xDD @ 0000:00000003 {0}
+			const 0x01 @ 0000:00000005
+
+this is a little weird because:
+
+	0000:00000001	ld  h, 0xC0 => this is hi(0xC0DE)
+	0000:00000003	ld  l, 0xDD => this is *not* lo(0xC0DE)... it's `lo(0xC0DE) - 1`!
+	0000:00000005	inc l       => this participates... but do we care?
+	0000:00000006	ld  a, [hl]
+
+what's the right thing to do here?
+
+- allow arbitrarily complex expressions to be displayed in place of instruction constant operands?
+- not put anything on `ld l, 0xDD` despite it really being a memory address piece, albeit one that is never accessed?
+
+hmmmmmmmmmmmmmm
+
+also the way the IR works, for this sequence
+
+	0000:00000010	ld hl, 0xC0DE
+	0000:00000013	ld a, [hl]
+
+the const tree for hl at 0000:00000013 looks like
+
+	pair @ 0000:00000013 {0}
+		hi = hi(0xC0DE) @ 0000:00000010 {0}
+		lo = lo(0xC0DE) @ 0000:00000010 {0}
+
+so we'd have to unify those two sides of the pair and make sure to put a Full ref on 0000:00000010 op 0, rather than trying to put two half refs...

@@ -58,11 +58,11 @@ impl Program {
 
 		let irfunc = self.func_to_ir(fid);
 		// debug!("------------------------------------------------------------------");
-		// debug!("Constants:");
-		// let consts = irfunc.constants();
-		// for (reg, (val, from)) in consts {
-		// 	debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
-		// }
+		debug!("Constants:");
+		let consts = irfunc.constants();
+		for (reg, (val, from)) in consts.regs() {
+			debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
+		}
 		// debug!("{:?}", irfunc);
 
 		let addr_bits = self.plat.arch().addr_bits();
@@ -76,7 +76,7 @@ impl Program {
 
 		let mut changes: Vec<(EA, MmuState)> = vec![];
 
-		for ConstAddr { bbid, ea, opn, addr, kind, srcs } in irfunc.const_addrs() {
+		for ConstAddr { bbid, ea, opn, addr, kind, src } in irfunc.const_addrs() {
 			// 1. add OpInfo::Ref to each constant operand
 			let bb = self.bbidx.get_mut(bbid);
 			let inst = bb.inst_at_ea_mut(ea).unwrap(); // safe because of above
@@ -136,7 +136,7 @@ impl Program {
 
 			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
 			// (or have const_addrs do that for us)
-			let _ = srcs;
+			let _ = src;
 		}
 
 		// TODO: if any *existing* BBTerm::StateChange terminators were *not* seen in const_addrs,

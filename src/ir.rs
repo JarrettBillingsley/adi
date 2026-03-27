@@ -87,7 +87,7 @@ impl ValSize {
 pub(crate) struct IrReg {
 	size:   ValSize,
 	offset: u16,
-	gen_:    Option<u32>
+	gen_:   Option<u32>
 }
 
 impl Debug for IrReg {
@@ -556,6 +556,7 @@ impl IrFunction {
 
 	/// Eliminate any dead stores from the IR.
 	pub(crate) fn elim_dead_stores(&mut self) {
+		// TODO: invalidate self.consts
 		elim_dead_stores(&mut self.bbs);
 	}
 }

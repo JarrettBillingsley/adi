@@ -1,6 +1,6 @@
 
 use crate::{ EA, MemAccess, BBId, IrTarget, IrInst, IrFunction, IrSrc, IrInstKind, IrConst,
-	ConstPropResults };
+	ConstPropResults, NodeId };
 
 // ------------------------------------------------------------------------------------------------
 // Finding loads/stores with constant addresses
@@ -55,12 +55,12 @@ pub(crate) struct ConstAddr {
 	pub opn:     usize,
 	pub addr:    EA, // may or may not be resolved!
 	pub kind:    ConstAddrKind,
-	pub srcs:    [Option<IrSrc>; 3],
+	pub src:     Option<NodeId>,
 }
 
 impl ConstAddr {
 	pub(crate) fn dump(&self) {
-		let ConstAddr { bbid, ea, opn, addr, kind, srcs } = self;
+		let ConstAddr { bbid, ea, opn, addr, kind, src } = self;
 		use ConstAddrKind::*;
 		println!("{:?} in {:?} operand {} is a {} <from {:?}>",
 			ea,
@@ -73,7 +73,7 @@ impl ConstAddr {
 				Offset           => format!("reference to {}", addr),
 				Target           => format!("control flow dst to {}", addr),
 			},
-			srcs);
+			src);
 	}
 }
 
@@ -107,7 +107,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 							IrTarget::External(ea) => ea,
 						},
 						kind: ConstAddrKind::Target,
-						srcs: [None, None, None],
+						src: None,
 					});
 				}
 
@@ -116,17 +116,23 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 				IrInstKind::IBranch { dst: addr, dstn: opn, .. } |
 				IrInstKind::ICall   { dst: addr, dstn: opn, .. }  if opn >= 0 => {
 					let addr = match addr {
-						IrSrc::Const(IrConst { val, .. }) => Some((val, [None, None, None])),
-						IrSrc::Reg(r)                     => self.consts.get(&r).copied(),
+						IrSrc::Const(IrConst { val, .. }) => Some((val, None)),
+						IrSrc::Reg(r)                     => self.consts.get(&r).copied().map(|(v, n)| (v, Some(n))),
 						_                                 => None,
 					};
 
-					if let Some((addr, srcs)) = addr {
+					if let Some((addr, src)) = addr {
 						let addr = EA::unresolved(addr);
 
 						let kind = match inst.kind() {
-							IrInstKind::Load{ .. }  => ConstAddrKind::Load,
-							IrInstKind::Store{ .. } => ConstAddrKind::Store(val),
+							IrInstKind::Load{ .. }  => {
+
+								ConstAddrKind::Load
+							}
+							IrInstKind::Store{ .. } => {
+
+								ConstAddrKind::Store(val)
+							}
 							_                       => ConstAddrKind::Target,
 						};
 
@@ -136,7 +142,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 							opn:  opn as usize,
 							addr,
 							kind,
-							srcs,
+							src,
 						});
 					}
 				}

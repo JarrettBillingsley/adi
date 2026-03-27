@@ -24,44 +24,292 @@ mod tests;
 /// The sources can be used to propagate information backwards, such as in cases
 /// where a constant address is computed by combining two smaller pieces, and those
 /// smaller pieces need to be marked as references to that address.
-pub(crate) type ConstPropResults = BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])>;
+#[derive(Debug)]
+pub(crate) struct ConstPropResults {
+	regs:  BTreeMap<IrReg, (u64, NodeId)>,
+	nodes: Vec<Node>,
+}
+
+impl ConstPropResults {
+	pub(crate) fn get(&self, r: &IrReg) -> Option<&(u64, NodeId)> {
+		self.regs.get(r)
+	}
+
+	pub(crate) fn regs(&self) -> impl Iterator<Item = (&IrReg, &(u64, NodeId))> {
+		self.regs.iter()
+	}
+}
 
 /// Runs constant propagation on the given IR code and CFG.
 pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
 	// since each variable is only assigned once, there's no need to track changing state -
 	// the state of a variable is determined at its def.
-	let mut prop = Propagator::new(bbs);
+	let mut prop = ConstProp::new(bbs);
 	prop.run(cfg);
 	prop.finish()
+}
+
+// ------------------------------------------------------------------------------------------------
+// AST types
+// ------------------------------------------------------------------------------------------------
+
+/// Unique node identifier within this IrFunction.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub(crate) struct NodeId(usize);
+
+/// Kinds of AST nodes.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum NodeKind {
+	Const   { c:  IrConst,  cn: i8 },
+	Unary   { op: IrUnOp,   src:  NodeId, srcn:  i8 },
+	Binary  { op: IrBinOp,  src1: NodeId, src2: NodeId, src1n: i8, src2n: i8 },
+	Ternary { op: IrTernOp, src1: NodeId, src2: NodeId, src3: NodeId,
+		src1n: i8, src2n: i8, src3n: i8 },
+	// TODO: phi nodes?
+}
+
+/// A single AST node, associated with an instruction, which contains both the computed constant
+/// value and the kind of AST node it is (which can refer to other AST nodes).
+///
+/// A constant node identifies which instruction (`ea`) and which operand of that instruction
+/// (`NodeKind::Const { cn }`) was the source of a constant. Everything else is just fluff I guess?
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) struct Node {
+	pub(crate) id:   NodeId,
+	pub(crate) ea:   EA,
+	pub(crate) kind: NodeKind,
+}
+
+impl Node {
+	fn new(id: NodeId, ea: EA, kind: NodeKind) -> Self {
+		Self { id, ea, kind }
+	}
+}
+
+/// A collection of AST nodes associated with a single IrFunction.
+struct Nodes {
+	nodes: Vec<Node>,
+}
+
+impl Nodes {
+	fn new() -> Self {
+		Self { nodes: vec![] }
+	}
+
+	fn new_node(&mut self, ea: EA, kind: NodeKind) -> NodeId {
+		let id = NodeId(self.nodes.len());
+		self.nodes.push(Node::new(id, ea, kind));
+		id
+	}
+
+	fn new_const(&mut self, ea: EA, c: IrConst, cn: i8) -> Info {
+		Info::Some {
+			val:  c.val(),
+			from: self.new_node(ea, NodeKind::Const { c, cn })
+		}
+	}
+
+	fn new_unary(&mut self, ea: EA, val: u64, op: IrUnOp,
+		src: NodeId, srcn: i8) -> Info {
+		Info::Some {
+			val,
+			from: self.new_node(ea, NodeKind::Unary { op, src, srcn })
+		}
+	}
+
+	fn new_binary(&mut self, ea: EA, val: u64, op: IrBinOp,
+		src1: NodeId, src2: NodeId, src1n: i8, src2n: i8) -> Info {
+		Info::Some {
+			val,
+			from: self.new_node(ea, NodeKind::Binary { op, src1, src2, src1n, src2n })
+		}
+	}
+
+	fn new_ternary(&mut self, ea: EA, val: u64, op: IrTernOp,
+		src1: NodeId, src2: NodeId, src3: NodeId, src1n: i8, src2n: i8, src3n: i8) -> Info {
+		Info::Some {
+			val,
+			from: self.new_node(ea, NodeKind::Ternary {
+				op, src1, src2, src3, src1n, src2n, src3n })
+		}
+	}
+
+	fn ea_of(&self, node: NodeId) -> EA {
+		self.nodes[node.0].ea
+	}
+
+	pub(crate) fn dump(&self, root: NodeId) {
+		self.dump_rec(root);
+		println!();
+	}
+
+	fn dump_unop(&self, op: IrUnOp, src: NodeId) {
+		use IrUnOp::*;
+		match op {
+			Zxt  => print!("zxt("),
+			Sxt  => print!("sxt("),
+			Lo   => print!("lo("),
+			Hi   => print!("hi("),
+			Neg  => print!("-"),
+			INot => print!("~"),
+			BNot => print!("!"),
+		}
+
+		self.dump_rec(src);
+
+		match op {
+			Zxt | Sxt | Lo | Hi => print!(")"),
+			_                   => {}
+		}
+	}
+
+	fn dump_func2(&self, name: &str, sep: &str, src1: NodeId, src2: NodeId) {
+		print!("{}(", name);
+		self.dump_rec(src1);
+		print!("{}", sep);
+		self.dump_rec(src2);
+		print!(")");
+	}
+
+	fn dump_func3(&self, name: &str, sep: &str, src1: NodeId, src2: NodeId, src3: NodeId) {
+		print!("{}(", name);
+		self.dump_rec(src1);
+		print!("{}", sep);
+		self.dump_rec(src2);
+		print!("{}", sep);
+		self.dump_rec(src3);
+		print!(")");
+	}
+
+	fn dump_binop(&self, op: IrBinOp, src1: NodeId, src2: NodeId) {
+		use IrBinOp::*;
+
+		match op {
+			UCarry  => self.dump_func2("ucarry",  " + ", src1, src2),
+			SCarry  => self.dump_func2("scarry",  " + ", src1, src2),
+			SBorrow => self.dump_func2("sborrow", " - ", src1, src2),
+			Carries => self.dump_func2("carries", " + ", src1, src2),
+			Borrows => self.dump_func2("borrows", " - ", src1, src2),
+			_ => {
+				print!("((");
+				self.dump_rec(src1);
+				print!(")");
+
+				match op {
+					Eq   => print!(" == "),
+					Ne   => print!(" != "),
+					Slt  => print!(" <s "),
+					Sle  => print!(" <=s "),
+					Ult  => print!(" <u "),
+					Ule  => print!(" <=u "),
+					Add  => print!(" + "),
+					Sub  => print!(" - "),
+					Mul  => print!(" * "),
+					UDiv => print!(" /u "),
+					SDiv => print!(" /s "),
+					UMod => print!(" %u "),
+					SMod => print!(" %s "),
+					IXor => print!(" ^ "),
+					IAnd => print!(" & "),
+					IOr  => print!(" | "),
+					Shl  => print!(" << "),
+					UShr => print!(" >>> "),
+					SShr => print!(" >> "),
+					Rol  => print!(" <<r "),
+					Ror  => print!(" >>r "),
+					Pair => print!(" : "),
+					Bit  => print!(" ."),
+					BXor => print!(" ^^ "),
+					BAnd => print!(" && "),
+					BOr  => print!(" || "),
+					_    => unreachable!(),
+				}
+
+				print!("(");
+				self.dump_rec(src2);
+				print!("))");
+			}
+		}
+	}
+
+	fn dump_ternop(&self, op: IrTernOp, src1: NodeId, src2: NodeId, src3: NodeId) {
+		use IrTernOp::*;
+
+		match op {
+			UCarryC  => self.dump_func3("ucarryc",  " + ", src1, src2, src3),
+			SCarryC  => self.dump_func3("scarryc",  " + ", src1, src2, src3),
+			SBorrowB => self.dump_func3("sborrowb", " - ", src1, src2, src3),
+			CarriesC => self.dump_func3("carries",  " + ", src1, src2, src3),
+			BorrowsB => self.dump_func3("borrows",  " - ", src1, src2, src3),
+			BSet => {
+				print!("bset((");
+				self.dump_rec(src1);
+				print!(").(");
+				self.dump_rec(src2);
+				print!("), ");
+				self.dump_rec(src3);
+				print!(")");
+			}
+			_ => {
+				let sep = match op {
+					AddC => ") + (",
+					SubB => ") - (",
+					_    => unreachable!(),
+				};
+
+				print!("((");
+				self.dump_rec(src1);
+				print!("{}", sep);
+				self.dump_rec(src2);
+				print!("{}", sep);
+				self.dump_rec(src3);
+				print!("))");
+			}
+		}
+	}
+
+	fn dump_rec(&self, root: NodeId) {
+		let root = &self.nodes[root.0];
+
+		use NodeKind::*;
+		match root.kind {
+			Const   { c, .. }                    => print!("{:?}", c),
+			Unary   { op, src, .. }              => self.dump_unop(op, src),
+			Binary  { op, src1, src2, .. }       => self.dump_binop(op, src1, src2),
+			Ternary { op, src1, src2, src3, .. } => self.dump_ternop(op, src1, src2, src3),
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
 // Info
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 enum Info {
-	Unk,       // ??? dunno
-	Some {     // some constant, including where we got that value (up to 3 sources)
-		val: u64,
-		from: [Option<IrSrc>; 3],
-	},
-	Any,       // could be anything
+	/// ??? dunno
+	Unk,
+	/// some known constant; `from` is the root of the AST tree that computed this value
+	Some { val: u64, from: NodeId },
+	/// could be anything
+	Any,
 }
 
-impl Info {
-	fn some1(val: u64, src1: IrSrc) -> Self {
-		Self::Some { val, from: [Some(src1), None, None] }
-	}
-
-	fn some2(val: u64, src1: IrSrc, src2: IrSrc) -> Self {
-		Self::Some { val, from: [Some(src1), Some(src2), None] }
-	}
-
-	fn some3(val: u64, src1: IrSrc, src2: IrSrc, src3: IrSrc) -> Self {
-		Self::Some { val, from: [Some(src1), Some(src2), Some(src3)] }
+// this manual impl is necessary because otherwise, it will take `Some { from }` into account
+// which ruins termination.
+impl std::cmp::PartialEq for Info {
+	fn eq(&self, other: &Self) -> bool {
+		use Info::*;
+		match (self, other) {
+			(Unk, Unk) => true,
+			(Some { val: val1, ..}, Some { val: val2, .. }) => val1 == val2,
+			(Any, Any) => true,
+			_ => false,
+		}
 	}
 }
+
+impl std::cmp::Eq for Info {}
 
 impl JoinSemiLattice for Info {
 	fn join(&mut self, other: &Self) -> bool {
@@ -71,8 +319,9 @@ impl JoinSemiLattice for Info {
 			(Unk, x)                     => **x,
 			(x, Unk)                     => **x,
 			(Any, _) | (_, Any)          => Any,
-			(Some { val: a, from: from1 }, Some { val: b, from: _from2 }) if a == b => {
+			(Some { val: a, from: from1 }, Some { val: b, from: from2 }) if a == b => {
 				// TODO: how DO we handle this? just pick from1 or from2 or merge them somehow?
+				// have a phi node in the AST?
 				Some { val: *a, from: *from1 }
 			}
 			_                            => Any,
@@ -88,38 +337,57 @@ impl JoinSemiLattice for Info {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Propagator
+// ConstProp
 // ------------------------------------------------------------------------------------------------
 
-struct Propagator<'bb> {
-	bbs:   &'bb [IrBasicBlock],
-	state: BTreeMap<IrReg, Info>,
+struct ConstPropState {
+	regs:  BTreeMap<IrReg, Info>,
+	nodes: Nodes,
 }
 
-impl<'bb> Propagator<'bb> {
+struct ConstProp<'bb> {
+	bbs:   &'bb [IrBasicBlock],
+	state: ConstPropState,
+}
+
+impl<'bb> ConstProp<'bb> {
 	fn new(bbs: &'bb [IrBasicBlock]) -> Self {
 		Self {
-			state: find_all_regs(bbs)
-				.into_iter()
-				.map(|r| (r, Info::Unk))
-				.collect(),
+			state: ConstPropState {
+				regs: find_all_regs(bbs)
+					.into_iter()
+					.map(|r| (r, Info::Unk))
+					.collect(),
+				nodes: Nodes::new(),
+			},
 			bbs,
 		}
 	}
 
-	fn finish(self) -> BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])> {
-		self.state
+	// TODO: change API for this
+	fn finish(self) -> ConstPropResults {
+		let regs = self.state.regs
 			.into_iter()
 			.filter_map(|(reg, info)|
 				match info {
 					Info::Unk | Info::Any => None,
-					Info::Some { val, from } => Some((reg, (val, from))),
+					Info::Some { val, from } => {
+						// print!("{:>8} = 0x{:04X} @ {:?} from ",
+						// 	format!("{:?}", reg), val, self.state.nodes.ea_of(from));
+						// self.state.nodes.dump(from);
+						Some((reg, (val, from)))
+					}
 				})
-			.collect()
+			.collect();
+
+		ConstPropResults {
+			regs,
+			nodes: self.state.nodes.nodes,
+		}
 	}
 }
 
-impl<'bb> DataflowAlgorithm for Propagator<'bb> {
+impl<'bb> DataflowAlgorithm for ConstProp<'bb> {
 	type ID = IrBBId;
 
 	fn visit(&mut self, bbid: IrBBId) -> bool {
@@ -141,15 +409,15 @@ impl<'bb> DataflowAlgorithm for Propagator<'bb> {
 // Phi join function
 // ------------------------------------------------------------------------------------------------
 
-fn phi_join(phi: &IrPhi, state: &mut BTreeMap<IrReg, Info>) -> bool {
-	let mut reg_state = state[phi.dst_reg()];
+fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
+	let mut reg_state = state.regs[phi.dst_reg()];
 	let mut changed = false;
 
 	for arg in phi.args() {
-		changed |= reg_state.join(&state[arg]);
+		changed |= reg_state.join(&state.regs[arg]);
 	}
 
-	state.insert(*phi.dst_reg(), reg_state);
+	state.regs.insert(*phi.dst_reg(), reg_state);
 	changed
 }
 
@@ -157,13 +425,13 @@ fn phi_join(phi: &IrPhi, state: &mut BTreeMap<IrReg, Info>) -> bool {
 // Transfer function
 // ------------------------------------------------------------------------------------------------
 
-fn transfer(inst: &IrInst, state: &mut BTreeMap<IrReg, Info>) -> bool {
+fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 	use IrInstKind::*;
 
-	let src_to_info = |src: IrSrc, state: &BTreeMap<IrReg, Info>| {
+	let src_to_info = |src: IrSrc, srcn: i8, state: &mut ConstPropState| {
 		match src {
-			IrSrc::Reg(reg)   => state[&reg],
-			IrSrc::Const(c)   => Info::some1(c.val(), src),
+			IrSrc::Reg(reg)   => state.regs[&reg],
+			IrSrc::Const(c)   => state.nodes.new_const(inst.ea(), c, srcn),
 			IrSrc::Return(..) => Info::Any,
 		}
 	};
@@ -173,14 +441,15 @@ fn transfer(inst: &IrInst, state: &mut BTreeMap<IrReg, Info>) -> bool {
 		Nop | Use { .. } | Store { .. } | Branch { .. } | CBranch { .. } | IBranch { .. }
 		| Call { .. } | ICall { .. } | Ret { .. } | Halt => None,
 
-		Mov  { dst, src, .. } => Some((dst, src_to_info(src, state))),
-		Load { dst, .. }      => Some((dst, Info::Any)),
+		Mov  { dst, src, srcn, .. } => Some((dst, src_to_info(src, srcn, state))),
+		Load { dst, .. }            => Some((dst, Info::Any)),
 
-		Unary { dst, op, src, .. } => {
-			let src_info = src_to_info(src, state);
+		Unary { dst, op, src, srcn, .. } => {
+			let src_info = src_to_info(src, srcn, state);
 			let new_info = match src_info {
-				Info::Some { val, .. } => {
-					Info::some1(do_unop(op, val, src.size(), dst.size()), src)
+				Info::Some { val, from } => {
+					let result = do_unop(op, val, src.size(), dst.size());
+					state.nodes.new_unary(inst.ea(), result, op, from, srcn)
 				},
 				_ => Info::Any,
 			};
@@ -188,15 +457,16 @@ fn transfer(inst: &IrInst, state: &mut BTreeMap<IrReg, Info>) -> bool {
 			Some((dst, new_info))
 		}
 
-		Binary { dst, src1, op, src2, .. } => {
-			let src1_info = src_to_info(src1, state);
-			let src2_info = src_to_info(src2, state);
+		Binary { dst, src1, op, src2, src1n, src2n, .. } => {
+			let src1_info = src_to_info(src1, src1n, state);
+			let src2_info = src_to_info(src2, src2n, state);
 
 			let new_info = match (src1_info, src2_info) {
-				(Info::Some { val: val1, .. }, Info::Some { val: val2, .. }) => {
+				(Info::Some { val: val1, from: from1 }, Info::Some { val: val2, from: from2 }) => {
 					match do_binop(op, val1, val2, src1.size()) {
-						Some(new_val) => Info::some2(new_val, src1, src2),
-						None          => Info::Any,
+						Some(result) => state.nodes.new_binary(
+							inst.ea(), result, op, from1, from2, src1n, src2n),
+						None => Info::Any,
 					}
 				}
 				_ => Info::Any,
@@ -205,17 +475,20 @@ fn transfer(inst: &IrInst, state: &mut BTreeMap<IrReg, Info>) -> bool {
 			Some((dst, new_info))
 		}
 
-		Ternary { dst, src1, op, src2, src3, .. } => {
-			let src1_info = src_to_info(src1, state);
-			let src2_info = src_to_info(src2, state);
-			let src3_info = src_to_info(src3, state);
+		Ternary { dst, src1, op, src2, src3, src1n, src2n, src3n, .. } => {
+			let src1_info = src_to_info(src1, src1n, state);
+			let src2_info = src_to_info(src2, src2n, state);
+			let src3_info = src_to_info(src3, src3n, state);
 
 			let new_info = match (src1_info, src2_info, src3_info) {
-				(	Info::Some{ val: val1, .. },
-					Info::Some{ val: val2, .. },
-					Info::Some{ val: val3, .. }) =>
+				(	Info::Some{ val: val1, from: from1, .. },
+					Info::Some{ val: val2, from: from2, .. },
+					Info::Some{ val: val3, from: from3, .. }) => {
 
-					Info::some3(do_ternop(op, val1, val2, val3, src1.size()), src1, src2, src3),
+					let result = do_ternop(op, val1, val2, val3, src1.size());
+					state.nodes.new_ternary(
+						inst.ea(), result, op, from1, from2, from3, src1n, src2n, src3n)
+				}
 				_ => Info::Any,
 			};
 
@@ -225,8 +498,8 @@ fn transfer(inst: &IrInst, state: &mut BTreeMap<IrReg, Info>) -> bool {
 
 	match thing {
 		Some((var, new_info)) => {
-			let changed = state[&var] != new_info;
-			state.insert(var, new_info);
+			let changed = state.regs[&var] != new_info;
+			state.regs.insert(var, new_info);
 			changed
 		}
 		_ => false
@@ -470,11 +743,6 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 		IAnd => val1 & val2,
 		IOr =>  val1 | val2,
 
-		// TODO: for all shifts, what if shift distance exceeds bits? checked_shx().unwrap_or
-		// (0) treats it as "all bits shifted off end" but some architectures instead shift only by
-		// lower bits (so e.g. if it's a 16-bit arch, and you shift by 17, it treats it as shifting
-		// by 1). Should that be an option? or give an error? or force arches to mask off the
-		// distance before passing it to a shift? or...?
 		Shl => match size {
 			ValSize::_8  => (val1 as u8).checked_shl(val2 as u32).unwrap_or(0) as u64,
 			ValSize::_16 => (val1 as u16).checked_shl(val2 as u32).unwrap_or(0) as u64,
@@ -499,9 +767,6 @@ fn do_binop(op: IrBinOp, val1: u64, val2: u64, size: ValSize) -> Option<u64> {
 				.unwrap_or(if (val1 as i64) < 0 { -1 } else { 0 }) as u64,
 		}
 
-		// TODO: all rotates interpret distance modulo number of bits in source, so e.g. for an
-		// 8-bit value, rotating left by 0, 8, 16, 24 etc. all give the same value. I don't think
-		// this is really a problem, but it's something to be aware of/specify.
 		Rol => match size {
 			ValSize::_8  => (val1 as u8).rotate_left(val2 as u32) as u64,
 			ValSize::_16 => (val1 as u16).rotate_left(val2 as u32) as u64,
