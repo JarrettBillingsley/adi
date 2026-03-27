@@ -6,6 +6,8 @@ According to https://web.archive.org/web/20211205042651/http://bootgod.dyndns.or
 Most common in descending order: 1, 4, 2, 0, 3, 7, 206, 11, 5, 19
 
 - 1 (mmc1/sxrom) **e.g. dragon warrior**
+	- **one of the only mappers that uses a *serial interface***
+		- god that's annoying that it's the most popular...
 	- *PRG ROM*
 		- each bank is **16KB**
 		- PRG banking unused/disabled if prg0 size <= 32KB

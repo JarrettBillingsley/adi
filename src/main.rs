@@ -564,10 +564,10 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		// "tests/data/smb.nes";           // 0   (nrom)
 		// "tests/data/arkanoid.nes";      // 3   (cnrom)
 		// "tests/data/battletoads.nes";   // 7   (axrom)
-		// I HAVE NO ROM FOR THIS          // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
-		"tests/data/exodus.nes";        // 11  (color dreams)
+		// NO ROM: e.g. gauntlet // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
+		"tests/data/exodus.nes"; // 11  (color dreams)
 		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
-		// I HAVE NO ROM FOR THIS          // 19 (namco N129/N163)          *UNIMPLEMENTED*
+		// NO ROM: e.g. star wars, rolling thunder // 19 (namco N129/N163)          *UNIMPLEMENTED*
 	let img = Image::new_from_file(img_name)?;
 
 	let (mut prog, start_ea) = program_from_image(img)?;
