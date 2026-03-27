@@ -17,8 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_panic();
 
 	// test_gb()
-	test_nes()
-	// test_toy()
+	// test_nes()
+	test_toy()
 }
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
@@ -50,6 +50,7 @@ struct ToyTest {
 	image:  Vec<u8>,
 	name:   &'static str,
 	labels: Vec<(String, VA)>,
+	data:   Vec<(String, VA, Type, Size)>,
 }
 
 fn toy_test_all_instructions() -> ToyTest {
@@ -109,7 +110,8 @@ fn toy_test_all_instructions() -> ToyTest {
 		labels: vec![
 			("indir_func".to_string(), VA(0x1234)),
 			("func".to_string(), VA(0x7FFE)),
-		]
+		],
+		data: vec![],
 	}
 }
 
@@ -164,7 +166,8 @@ fn toy_test_ssa() -> ToyTest {
 		name:  "<toy_test_ssa>",
 		labels: vec![
 			("f".into(), VA(0x40)),
-		]
+		],
+		data: vec![],
 	}
 }
 
@@ -199,7 +202,8 @@ fn toy_test_const_prop() -> ToyTest {
 	ToyTest {
 		image: b.finish(),
 		name:  "<toy_test_const_prop>",
-		labels: vec![]
+		labels: vec![],
+		data: vec![],
 	}
 }
 
@@ -229,7 +233,8 @@ fn toy_test_calls() -> ToyTest {
 		labels: vec![
 			("func_first_half".to_string(), VA(FUNC_FIRST_HALF)),
 			("func_second_half".to_string(), VA(func_second_half)),
-		]
+		],
+		data: vec![],
 	}
 }
 
@@ -258,7 +263,8 @@ fn toy_test_loop() -> ToyTest {
 		labels: vec![
 			("_loop_top".to_string(), VA(loop_top)),
 			("_loop_end".to_string(), VA(loop_end)),
-		]
+		],
+		data: vec![],
 	}
 }
 
@@ -374,7 +380,8 @@ fn toy_test_state_change() -> ToyTest {
 			("func2".to_string(), VA(FUNC2)),
 			("func3".to_string(), VA(FUNC3)),
 			("state_change_func".to_string(), VA(STATE_CHANGE_FUNC)),
-		]
+		],
+		data: vec![],
 	}
 }
 
@@ -403,6 +410,47 @@ fn toy_test_ccall_cret() -> ToyTest {
 		name:  "<toy_test_ccall_cret>",
 		labels: vec![
 			("func1".to_string(), VA(FUNC1)),
+		],
+		data: vec![],
+	}
+}
+
+fn toy_test_data() -> ToyTest {
+	use adi::arch::toy::{ Reg, ToyBuilder };
+	use Reg::*;
+
+	let mut b = ToyBuilder::new();
+	b.ret();
+	let bfalse = b.append(&[0x00]);
+	let btrue  = b.append(&[0x01]);
+	let ubyte =  b.append(&[0x94]);
+	let sbyte =  b.append(&[0x94]);
+	let sshort = b.append(&[0x33, 0x94]);
+	let ushort = b.append(&[0x33, 0x94]);
+	let uint =   b.append(&[0x33, 0x00, 0x01, 0x94]);
+	let sint =   b.append(&[0x33, 0x00, 0x01, 0x94]);
+	let ulong =  b.append(&[0x33, 0x00, 0x01, 0x00, 0x02, 0x04, 0x06, 0x94]);
+	let slong =  b.append(&[0x33, 0x00, 0x01, 0x00, 0x02, 0x04, 0x06, 0x94]);
+	let char_ =  b.append(&[b'x']);
+	let wchar =  b.append(&[b'X', 0x00]);
+
+	ToyTest {
+		image: b.finish(),
+		name:  "<toy_test_data>",
+		labels: vec![],
+		data: vec![
+			("bfalse".to_string(), VA(bfalse), Type::Bool,  1),
+			("btrue" .to_string(), VA(btrue),  Type::Bool,  1),
+			("ubyte" .to_string(), VA(ubyte),  Type::U8,    1),
+			("sbyte" .to_string(), VA(sbyte),  Type::S8,    1),
+			("ushort".to_string(), VA(ushort), Type::U16,   2),
+			("sshort".to_string(), VA(sshort), Type::S16,   2),
+			("uint"  .to_string(), VA(uint),   Type::U32,   4),
+			("sint"  .to_string(), VA(sint),   Type::S32,   4),
+			("ulong" .to_string(), VA(ulong),  Type::U64,   8),
+			("slong" .to_string(), VA(slong),  Type::S64,   8),
+			("char"  .to_string(), VA(char_),  Type::Char,  1),
+			("wchar" .to_string(), VA(wchar),  Type::WChar, 2),
 		]
 	}
 }
@@ -414,7 +462,8 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_calls();
 	// let test = toy_test_loop()
 	// let test = toy_test_state_change();
-	let test = toy_test_ccall_cret();
+	// let test = toy_test_ccall_cret();
+	let test = toy_test_data();
 
 	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
 	prog.add_name("main", start_ea, false);
@@ -422,6 +471,12 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 
 	for (name, va) in test.labels {
 		prog.add_name_va(&name, state, va, false);
+	}
+
+	for (name, va, ty, size) in test.data {
+		let ea = prog.ea_from_va(state, va);
+		let id = prog.new_data(Some(&name), ea, &ty, size);
+		prog.get_data_mut(id).set_radix(Radix::Dec);
 	}
 
 	println!("{}", prog);
@@ -696,7 +751,7 @@ fn show_data(prog: &Program, data: &DataItem) {
 	let size = data.size();
 
 	println!("{}", divider);
-	let msg = format!("; {} byte(s), type {}", size, data.ty());
+	let msg = format!("; {} byte(s), type {:?}", size, data.ty());
 	println!("{}: {}", prog.name_of_ea(start).name.truecolor(127, 63, 0), msg.green());
 
 	let seg = prog.segment_from_ea(start);
@@ -718,10 +773,10 @@ fn interpret_data(prog: &Program, radix: Radix, ty: &Type, slice: &ImageSlice) -
 	match ty {
 		Bool => format!("{}", slice.read_u8(0) != 0),
 
-		I8  => interpret_int(slice.read_u8(0) as i64, 8, radix),
-		I16 => interpret_int(slice.read_u16(0, endian) as i64, 16, radix),
-		I32 => interpret_int(slice.read_u32(0, endian) as i64, 32, radix),
-		I64 => interpret_int(slice.read_u64(0, endian) as i64, 64, radix),
+		S8  => interpret_int(slice.read_u8(0) as i8 as i64, 8, radix),
+		S16 => interpret_int(slice.read_u16(0, endian) as i16 as i64, 16, radix),
+		S32 => interpret_int(slice.read_u32(0, endian) as i32 as i64, 32, radix),
+		S64 => interpret_int(slice.read_u64(0, endian) as i64, 64, radix),
 
 		U8  => interpret_uint(slice.read_u8(0) as u64, 8, radix),
 		U16 => interpret_uint(slice.read_u16(0, endian) as u64, 16, radix),
@@ -774,20 +829,28 @@ fn interpret_char(val: char) -> String {
 	format!("'{}'", val.escape_default())
 }
 
+fn mask_to(nbits: usize, v: u64) -> u64 {
+	if nbits < 64 {
+		v & ((1 << nbits) - 1)
+	} else {
+		v
+	}
+}
+
 fn interpret_int(val: i64, bits: usize, radix: Radix) -> String {
 	match radix {
-		Radix::Bin => format!("0b{:0width$b}", val, width = bits),
+		Radix::Bin => format!("0b{:0width$b}", mask_to(bits, val as u64), width = bits),
 		Radix::Dec => format!("{}", val),
-		Radix::Hex => format!("0x{:0width$X}", val, width = bits / 4),
+		Radix::Hex => format!("0x{:0width$X}", mask_to(bits, val as u64), width = bits / 4),
 	}
 }
 
 // really the only difference is the Dec case
 fn interpret_uint(val: u64, bits: usize, radix: Radix) -> String {
 	match radix {
-		Radix::Bin => format!("0b{:0width$b}", val, width = bits),
+		Radix::Bin => format!("0b{:0width$b}", mask_to(bits, val), width = bits),
 		Radix::Dec => format!("{}", val),
-		Radix::Hex => format!("0x{:0width$X}", val, width = bits / 4),
+		Radix::Hex => format!("0x{:0width$X}", mask_to(bits, val), width = bits / 4),
 	}
 }
 

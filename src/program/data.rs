@@ -1,7 +1,7 @@
 
 use std::hash::{ Hash };
 use std::collections::{ HashMap };
-use std::fmt::{ Debug, Display, Formatter, Result as FmtResult };
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 use generational_arena::{ Arena, Index };
@@ -327,7 +327,7 @@ impl TypeIndex {
 // Type
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct ArrayType {
 	ty:  Box<Type>,
 	len: Size,
@@ -339,13 +339,13 @@ impl ArrayType {
 	pub fn len(&self) -> Size { self.len }
 }
 
-impl Display for ArrayType {
+impl Debug for ArrayType {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "{}[{}]", self.ty, self.len)
+		write!(f, "{:?}[{}]", self.ty, self.len)
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct PtrType {
 	to:   Box<Type>,
 	kind: Box<Type>,
@@ -356,20 +356,20 @@ impl PtrType {
 	pub fn kind(&self) -> &Type { self.kind.as_ref() }
 }
 
-impl Display for PtrType {
+impl Debug for PtrType {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "{} ptr to {}", self.kind, self.to)
+		write!(f, "{:?} ptr to {:?}", self.kind, self.to)
 	}
 }
 
 /// The possible types.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Type {
 	/// 1 byte, true/false.
 	Bool,
 
 	/// Signed integers.
-	I8, I16, I32, I64,
+	S8, S16, S32, S64,
 
 	/// Unsigned integers.
 	U8, U16, U32, U64,
@@ -415,10 +415,10 @@ impl Type {
 		use TypeSize::*;
 
 		match self {
-			I8  | U8  | Bool | Char | Code => Fixed(1),
-			I16 | U16 | WChar              => Fixed(2),
-			I32 | U32                      => Fixed(4),
-			I64 | U64                      => Fixed(8),
+			S8  | U8  | Bool | Char | Code => Fixed(1),
+			S16 | U16 | WChar              => Fixed(2),
+			S32 | U32                      => Fixed(4),
+			S64 | U64                      => Fixed(8),
 
 			StrZ(len)                      => Fixed(len + 1),
 			WStrZ(len)                     => Fixed((len + 1) * 2),
@@ -432,20 +432,20 @@ impl Type {
 	/// Primitive types include `Bool`, integers, and `Char/WChar`.
 	pub fn is_primitive(&self) -> bool {
 		use Type::*;
-		matches!(self, Bool | I8 | I16 | I32 | I64 | U8 | U16 | U32 | U64 | Char | WChar)
+		matches!(self, Bool | S8 | S16 | S32 | S64 | U8 | U16 | U32 | U64 | Char | WChar)
 	}
 
-	/// "Strict" integers are just the primitive integer types (`U8-U64, I8-I64`).
+	/// "Strict" integers are just the primitive integer types (`U8-U64, S8-S64`).
 	pub fn is_strict_integer(&self) -> bool {
 		use Type::*;
-		matches!(self, I8 | I16 | I32 | I64 | U8 | U16 | U32 | U64)
+		matches!(self, S8 | S16 | S32 | S64 | U8 | U16 | U32 | U64)
 	}
 
 	/// "Loose" integers are anything represented as integers (including `Bool`, `Char/WChar`,
 	/// enums, and bitfields).
 	pub fn is_loose_integer(&self) -> bool {
 		use Type::*;
-		matches!(self, Bool | I8 | I16 | I32 | I64 | U8 | U16 | U32 | U64 | Char | WChar |
+		matches!(self, Bool | S8 | S16 | S32 | S64 | U8 | U16 | U32 | U64 | Char | WChar |
 			Enum(..) | Bitfield(..))
 	}
 
@@ -456,30 +456,30 @@ impl Type {
 	}
 }
 
-impl Display for Type {
+impl Debug for Type {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		use Type::*;
 
 		match self {
-			Bool           => write!(f, "bool"),
-			I8             => write!(f, "i8"),
-			I16            => write!(f, "i16"),
-			I32            => write!(f, "i32"),
-			I64            => write!(f, "i64"),
-			U8             => write!(f, "u8"),
-			U16            => write!(f, "u16"),
-			U32            => write!(f, "u32"),
-			U64            => write!(f, "u64"),
-			Char           => write!(f, "char"),
-			WChar          => write!(f, "wchar"),
-			StrZ(len)      => write!(f, "strz({})", len),
-			WStrZ(len)     => write!(f, "wstrz({})", len),
-			Enum(_desc)     => todo!(), // write!(f, "enum {}",     desc.borrow().name()),
-			Bitfield(_desc) => todo!(), // write!(f, "bitfield {}", desc.borrow().name()),
-			Struct(_desc)   => todo!(), // write!(f, "struct {}",   desc.borrow().name()),
-			Array(at)      => write!(f, "{}", at),
-			Ptr(pt)        => write!(f, "{}", pt),
-			Code           => write!(f, "code"),
+			Bool         => write!(f, "bool"),
+			S8           => write!(f, "S8"),
+			S16          => write!(f, "S16"),
+			S32          => write!(f, "S32"),
+			S64          => write!(f, "S64"),
+			U8           => write!(f, "u8"),
+			U16          => write!(f, "u16"),
+			U32          => write!(f, "u32"),
+			U64          => write!(f, "u64"),
+			Char         => write!(f, "char"),
+			WChar        => write!(f, "wchar"),
+			StrZ(len)    => write!(f, "strz({})", len),
+			WStrZ(len)   => write!(f, "wstrz({})", len),
+			Enum(id)     => write!(f, "enum(id = {})",     id.0),
+			Bitfield(id) => write!(f, "bitfield(id = {})", id.0),
+			Struct(id)   => write!(f, "struct(id = {})",   id.0),
+			Array(at)    => write!(f, "{:?}", at),
+			Ptr(pt)      => write!(f, "{:?}", pt),
+			Code         => write!(f, "code"),
 		}
 	}
 }
@@ -600,7 +600,7 @@ impl EnumDesc {
 	pub fn check_type(ty: &Type) {
 		use Type::*;
 		match ty {
-			I8 | I16 | I32 | I64 | U8 | U16 | U32 | U64 | Char | WChar => {},
+			S8 | S16 | S32 | S64 | U8 | U16 | U32 | U64 | Char | WChar => {},
 			_ => panic!("invalid enum type {:?}", ty)
 		}
 	}
