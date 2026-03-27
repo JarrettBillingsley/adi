@@ -100,8 +100,6 @@
 		- it's what Mesen uses and I'm referencing that heavily for Mos65xx so idk
 	- **Write some more FUCKING tests**
 	- **Evaluate what really should be `pub`, `pub(crate)`, `pub(super)`, or private**
-	- **Does `RefMap` need ordering? (Does this need to be `BTreeMap/Set`?)**
-		- I feel like no...
 	- **Is there duplication of info between `OpInfo::Ref` and `RefMap`?**
 		- On the one hand, we kinda need `OpInfo::Ref` to know *which* operand is doing the reference; `RefMap` only operates on an `EA -> [EA]` basis so all references in the instruction are flattened into a single entry
 		- On the other hand, we kinda need `RefMap` in order to support fast cross-reference lookups

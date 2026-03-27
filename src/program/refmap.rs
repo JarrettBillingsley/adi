@@ -1,9 +1,9 @@
 
 use std::collections::{
-	BTreeMap,
-	BTreeSet,
+	HashMap,
+	HashSet,
 
-	btree_map::Iter as BTreeIter,
+	hash_map::Iter as HashIter,
 };
 
 use crate::memory::EA;
@@ -12,20 +12,20 @@ use crate::memory::EA;
 // RefMap
 // ------------------------------------------------------------------------------------------------
 
-pub type RefSet = BTreeSet<EA>;
+pub type RefSet = HashSet<EA>;
 
 /// A many-to-many mapping of references - "arrows" pointing from one EA to another.
 /// Every EA can have multiple "outrefs" - references *to* other EAs and multiple "inrefs" -
 /// references *from* other EAs.
 pub struct RefMap {
-	inrefs:  BTreeMap<EA, RefSet>,
-	outrefs: BTreeMap<EA, RefSet>,
+	inrefs:  HashMap<EA, RefSet>,
+	outrefs: HashMap<EA, RefSet>,
 }
 
 impl RefMap {
 	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
-		Self { inrefs: BTreeMap::new(), outrefs: BTreeMap::new() }
+		Self { inrefs: HashMap::new(), outrefs: HashMap::new() }
 	}
 
 	/// Add a reference from `src` to `dst`.
@@ -79,7 +79,7 @@ impl RefMap {
 	}
 
 	/// Iterator over all outrefs in the entire map.
-	pub fn all_outrefs(&self) -> BTreeIter<'_, EA, RefSet> {
+	pub fn all_outrefs(&self) -> HashIter<'_, EA, RefSet> {
 		self.outrefs.iter()
 	}
 

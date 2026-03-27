@@ -559,13 +559,13 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		// "tests/data/gauntlet.nes";      // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
 		// "tests/data/smb3.nes";          // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
 		// "tests/data/megaman.nes";       // 2   (uxrom)
-		// "tests/data/10yf.nes";          // 0   (nrom)
+		"tests/data/10yf.nes";          // 0   (nrom)
 		// "tests/data/duckhunt.nes";      // 0   (nrom)
 		// "tests/data/smb.nes";           // 0   (nrom)
 		// "tests/data/arkanoid.nes";      // 3   (cnrom)
 		// "tests/data/battletoads.nes";   // 7   (axrom)
 		// NO ROM: e.g. gauntlet // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
-		"tests/data/exodus.nes"; // 11  (color dreams)
+		// "tests/data/exodus.nes"; // 11  (color dreams)
 		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
 		// NO ROM: e.g. star wars, rolling thunder // 19 (namco N129/N163)          *UNIMPLEMENTED*
 	let img = Image::new_from_file(img_name)?;
