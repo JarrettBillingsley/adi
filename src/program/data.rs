@@ -1,10 +1,11 @@
 
 use std::hash::{ Hash };
-use std::collections::{ HashMap };
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use delegate::delegate;
 use generational_arena::{ Arena, Index };
+
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 
 use crate::{ Size, Offs, to_usize };
 use crate::memory::{ EA };

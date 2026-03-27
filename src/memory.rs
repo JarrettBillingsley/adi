@@ -1,8 +1,10 @@
-use std::collections::HashMap;
+
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
 use parse_display::Display;
 use delegate::delegate;
+
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 
 use crate::{ Offs, Size };
 

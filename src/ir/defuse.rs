@@ -1,5 +1,5 @@
 
-use std::collections::{ HashMap };
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 use super::*;
 
 // ------------------------------------------------------------------------------------------------

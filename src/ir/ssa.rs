@@ -1,5 +1,7 @@
 
-use std::collections::{ BTreeSet, BTreeMap, HashMap, VecDeque };
+use std::collections::{ BTreeSet, BTreeMap, VecDeque };
+
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 
 use petgraph::{ Direction };
 

@@ -3,6 +3,7 @@
 mod inttypes;
 pub mod arch;
 mod dataflow;
+mod fxhash;
 mod ir;
 mod memory;
 mod platform;

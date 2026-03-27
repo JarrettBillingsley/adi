@@ -1,8 +1,9 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
-use std::collections::{ HashMap };
 
 use parse_display::{ Display };
 use enum_dispatch::enum_dispatch;
+
+use crate::fxhash::{ FxHashMap as HashMap };
 
 use crate::{ Size, Offs };
 use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };

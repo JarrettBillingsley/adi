@@ -1,5 +1,5 @@
 
-use std::collections::{ HashMap, HashSet };
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
 use crate::program::{ Program, BBTerm, FuncId };
 use crate::memory::{ EA } ;

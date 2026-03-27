@@ -1,7 +1,9 @@
 //! Generic dataflow algorithm framework.
 
 use std::hash::{ Hash };
-use std::collections::{ VecDeque, HashSet };
+use std::collections::{ VecDeque };
+
+use crate::fxhash::{ FxHashSet as HashSet, FxHashSetEx };
 
 // ------------------------------------------------------------------------------------------------
 // JoinSemiLattice

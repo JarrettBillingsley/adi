@@ -1,10 +1,7 @@
 
-use std::collections::{
-	HashMap,
-	HashSet,
+use std::collections::hash_map::{ Iter as HashIter };
 
-	hash_map::Iter as HashIter,
-};
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet };
 
 use crate::memory::EA;
 

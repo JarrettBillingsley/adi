@@ -2,11 +2,12 @@
 use std::borrow::{ Cow };
 use std::collections::{
 	BTreeMap,
-	HashMap,
 	hash_map::Iter as HashIter,
 };
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::ops::RangeBounds;
+
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 
 use crate::memory::EA;
 

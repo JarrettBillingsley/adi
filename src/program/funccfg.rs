@@ -1,11 +1,11 @@
 
-use std::collections::{ HashMap, HashSet };
-
 use lazycell::LazyCell;
 use smallvec::{ SmallVec };
 use delegate::delegate;
 use petgraph::algo::dominators::{ simple_fast as simple_fast_dominators, Dominators };
 use petgraph::graphmap::{ DiGraphMap };
+
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
 use crate::{ BBId, Function, Program };
 use crate::dataflow::{ DataflowCfg };

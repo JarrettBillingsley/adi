@@ -1,8 +1,9 @@
 
-use std::collections::{ HashMap, HashSet };
-use std::iter::{ IntoIterator} ;
+use std::iter::{ IntoIterator };
 
 use log::*;
+
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet };
 
 use crate::{ Size };
 use crate::dataflow::{ JoinSemiLattice, DataflowAlgorithm };
@@ -291,7 +292,7 @@ impl JoinSemiLattice for StateInfo {
 			(Unk, x)                     => (*x).clone(),
 			(x, Unk)                     => (*x).clone(),
 			(Some(a), Some(b)) if a == b => Some(*a),
-			(Some(a), Some(b))           => Multi(HashSet::from([*a, *b])),
+			(Some(a), Some(b))           => Multi(HashSet::from_iter([*a, *b].into_iter())),
 			(Some(a), Multi(m))          => Multi({ let mut s = m.clone(); s.insert(*a); s}),
 			(Multi(m), Some(a))          => Multi({ let mut s = m.clone(); s.insert(*a); s}),
 			(Multi(m1), Multi(m2))       => Multi(m1.union(m2).copied().collect()),
