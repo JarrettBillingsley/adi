@@ -472,7 +472,20 @@ impl Memory {
 
 impl Display for Memory {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		use std::collections::{ HashSet };
+		let images: HashSet<_> = self.segs.iter()
+			.filter_map(Segment::image)
+			.map(Image::name)
+			.collect();
+
 		writeln!(f, "Memory: 0x{:X} bytes, {}-endian", self.len(), self.endianness)?;
+
+		if images.len() == 1 {
+			writeln!(f, "Image: {:?}", images.iter().next().unwrap())?;
+		} else {
+			writeln!(f, "Images: {:?}", images)?;
+		}
+
 		writeln!(f, "MMU: {}", self.mmu)?;
 		writeln!(f, "\nSegments:")?;
 

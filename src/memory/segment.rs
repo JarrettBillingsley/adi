@@ -138,7 +138,7 @@ impl Segment {
 	/// Human-readable name.
 	#[inline] pub fn name (&self) -> &String        { &self.name }
 	/// Image which this is mapped to, if any.
-	#[inline] pub fn image(&self) -> &Option<Image> { &self.image }
+	#[inline] pub fn image(&self) -> Option<&Image> { self.image.as_ref() }
 	/// Length in bytes.
 	#[inline] pub fn len(&self) -> Size             { self.size }
 

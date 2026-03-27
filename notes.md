@@ -3,13 +3,13 @@
 
 # Major tasks
 
-- Data analysis
-- IR correctness testing
-- Jump table analysis, indirect jumps and calls (**depends on data analysis**)
 - Const prop provenance ASTs
+- Type propagation (**depends on const prop ASTs**)
+- Data analysis (***good* analysis depends on type propagation**)
+- Jump table analysis, indirect jumps and calls (**depends on data analysis**)
+- IR correctness testing
 - Multi-state BBs/functions
 - Argument/return value/clobber analysis
-- Type propagation (**depends on const prop ASTs**)
 - Stack analysis
 - Undo/Redo support (**depends on rearchitecting public API**)
 - Save/Load support
@@ -17,14 +17,18 @@
 # Imminent tasks!
 
 - **Data analysis**
+	- new data analysis pass that runs after refs
+		- inspects outrefs and takes closer look at `OpInfo::Ref` operands
+		- creates data items of appropriate sizes and types based on the loads and stores
+	- some issues...
+		- `OpInfo::Ref` doesn't say the size or type of the load or store, just `MemAccess`
+		- I'm not sure how smart this can be made without having type information
+			- like, knowing whether a 1-byte load is accessing a bool, char, u8, s8, etc. is really only possible by knowing how that loaded value is used after the load
+	- **"data flow" analysis?**
+		- like, you see a store into OAM. **how was that value computed?** that could be back-propagated to discover the shadow OAM.
 	- mapper external RAM and RAM banking
 	- see "data blathering" below, tho I think most of that has been implemented
-	- rather than using `Rc/RefCell` in `Type::Bitfield/Enum/Struct`...
-		- have virtual segments with silly segment numbers, like 0xFFFE is for structs, 0xFFFD for enums, 0xFFFC for bitfields
-		- use `EA` in those types to refer to them
-	- this also gives us inrefs to data types for free, because they're at `EA`s so they can participate in `RefMap`
-		- didn't *really* seem like a good idea to instantly deallocate a type the instant nothing was using it anyway
-	- and this will make `Program` `Send`!
+	- compound types have `EA`s so they can participate in `RefMap`
 	- move data printing into `Program`
 		- it can call some of the `IPrinter` methods for printing numbers, addresses etc.
 - **IR**
@@ -34,17 +38,17 @@
 		- maybe there could be a macro to declare all the `IrReg`s for an arch that generates this vec for you cause it's already getting annoying (and error-prone, since you have to come up with the indexes yourself based on the sizes of the regs)
 			- and it could also generate the lists of arg/return regs
 		- or maybe not a macro just a builder that's lazily initialized
-- **Mos65xx IR:**
-	- reimplement rotates and uses of `iand` which could be bit instructions
-- **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
-- **Put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction***
-	- ...and that all operands in the source instruction are referenced by the IR
-- **GB IR stress test - test *all* possible opcodes**
-	- I'm just not sure I'm hitting them all with the test ROMs
-- **IR/const prop correctness tests**
-	- make a test ROM that can be run in an emulator
-	- validate against emulator output (any emulators output memory traces?)
-	- use a dummy testing mapper/MBC which can be used to output the contents of stores to specific location to output results of const prop
+	- **Mos65xx IR:**
+		- reimplement rotates and uses of `iand` which could be bit instructions
+	- **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
+	- **Put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction***
+		- ...and that all operands in the source instruction are referenced by the IR
+	- **GB IR stress test - test *all* possible opcodes**
+		- I'm just not sure I'm hitting them all with the test ROMs
+	- **IR/const prop correctness tests**
+		- make a test ROM that can be run in an emulator
+		- validate against emulator output (any emulators output memory traces?)
+		- use a dummy testing mapper/MBC which can be used to output the contents of stores to specific location to output results of const prop
 	
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
