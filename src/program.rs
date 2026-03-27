@@ -1,6 +1,7 @@
 
 use std::borrow::{ Cow };
 use std::collections::{
+	btree_map::Iter as BTreeIter,
 	hash_map::Iter as HashIter,
 };
 use std::ops::{ Bound, RangeBounds };
@@ -583,7 +584,7 @@ impl Program {
 			/// Get all outrefs from a given EA, or None if there aren't any.
 			pub fn get_outrefs(&self, src: EA) -> Option<&RefSet>;
 			/// Iterator over all outrefs in the entire map.
-			pub fn all_outrefs(&self) -> HashIter<'_, EA, RefSet>;
+			pub fn all_outrefs(&self) -> BTreeIter<'_, EA, RefSet>;
 		}
 	}
 
