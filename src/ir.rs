@@ -6,8 +6,10 @@ use lazycell::{ LazyCell };
 use petgraph::{
 	graphmap::{ DiGraphMap },
 	dot::{ Dot, Config as DotConfig },
+	visit::{ DfsPostOrder },
 };
 
+use crate::dataflow::{ DataflowCfg };
 use crate::memory::{ EA };
 use crate::program::{ BBId, FuncId };
 
@@ -481,10 +483,34 @@ impl Debug for IrBasicBlock {
 }
 
 // ------------------------------------------------------------------------------------------------
-// IrFunction
+// IrCfg
 // ------------------------------------------------------------------------------------------------
 
 pub(crate) type IrCfg = DiGraphMap<IrBBId, ()>;
+
+impl DataflowCfg<IrBBId> for IrCfg {
+	fn num_nodes(&self) -> usize {
+		self.node_count()
+	}
+
+	fn initial_order(&self) -> impl Iterator<Item = IrBBId> {
+		let mut rpo = Vec::<IrBBId>::with_capacity(self.num_nodes());
+		let mut postorder = DfsPostOrder::new(self, 0);
+		while let Some(id) = postorder.next(self) {
+			rpo.push(id);
+		}
+
+		rpo.into_iter().rev()
+	}
+
+	fn successors(&self, id: IrBBId) -> impl Iterator<Item = IrBBId> {
+		self.edges(id).map(|(_, succ, _)| succ)
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+// IrFunction
+// ------------------------------------------------------------------------------------------------
 
 pub(crate) struct IrFunction {
 	real_fid:    FuncId,

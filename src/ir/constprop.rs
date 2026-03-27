@@ -1,9 +1,7 @@
 
 use std::collections::{ BTreeMap };
 
-use petgraph::visit::{ DfsPostOrder };
-
-use crate::dataflow::{ JoinSemiLattice, DataflowCfg, DataflowAlgorithm };
+use crate::dataflow::{ JoinSemiLattice, DataflowAlgorithm };
 
 use super::*;
 
@@ -13,6 +11,29 @@ use super::*;
 
 #[cfg(test)]
 mod tests;
+
+// ------------------------------------------------------------------------------------------------
+// Public interface
+// ------------------------------------------------------------------------------------------------
+
+/// Results of constant propagation. It maps from IR Registers to a tuple of:
+///
+/// - The determined constant value for that register
+/// - A list of up to 3 sources from which that constant was computed
+///
+/// The sources can be used to propagate information backwards, such as in cases
+/// where a constant address is computed by combining two smaller pieces, and those
+/// smaller pieces need to be marked as references to that address.
+pub(crate) type ConstPropResults = BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])>;
+
+/// Runs constant propagation on the given IR code and CFG.
+pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
+	// since each variable is only assigned once, there's no need to track changing state -
+	// the state of a variable is determined at its def.
+	let mut prop = Propagator::new(bbs);
+	prop.run(cfg);
+	prop.finish()
+}
 
 // ------------------------------------------------------------------------------------------------
 // Info
@@ -70,50 +91,9 @@ impl JoinSemiLattice for Info {
 // Propagator
 // ------------------------------------------------------------------------------------------------
 
-impl DataflowCfg<IrBBId> for IrCfg {
-	fn num_nodes(&self) -> usize {
-		self.node_count()
-	}
-
-	fn initial_order(&self) -> impl Iterator<Item = IrBBId> {
-		let mut rpo = Vec::<IrBBId>::with_capacity(self.num_nodes());
-		let mut postorder = DfsPostOrder::new(self, 0);
-		while let Some(id) = postorder.next(self) {
-			rpo.push(id);
-		}
-
-		rpo.into_iter().rev()
-	}
-
-	fn successors(&self, id: IrBBId) -> impl Iterator<Item = IrBBId> {
-		self.edges(id).map(|(_, succ, _)| succ)
-	}
-}
-
-/// Results of constant propagation. It maps from IR Registers to a tuple of:
-///
-/// - The determined constant value for that register
-/// - A list of up to 3 sources from which that constant was computed
-///
-/// The sources can be used to propagate information backwards, such as in cases
-/// where a constant address is computed by combining two smaller pieces, and those
-/// smaller pieces need to be marked as references to that address.
-pub(crate) type ConstPropResults = BTreeMap<IrReg, (u64, [Option<IrSrc>; 3])>;
-
-type ConstPropState = BTreeMap<IrReg, Info>;
-
-/// Runs constant propagation on the given IR code and CFG.
-pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPropResults {
-	// since each variable is only assigned once, there's no need to track changing state -
-	// the state of a variable is determined at its def.
-	let mut prop = Propagator::new(bbs);
-	prop.run(cfg);
-	prop.finish()
-}
-
 struct Propagator<'bb> {
 	bbs:   &'bb [IrBasicBlock],
-	state: ConstPropState,
+	state: BTreeMap<IrReg, Info>,
 }
 
 impl<'bb> Propagator<'bb> {
@@ -161,7 +141,7 @@ impl<'bb> DataflowAlgorithm for Propagator<'bb> {
 // Phi join function
 // ------------------------------------------------------------------------------------------------
 
-fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
+fn phi_join(phi: &IrPhi, state: &mut BTreeMap<IrReg, Info>) -> bool {
 	let mut reg_state = state[phi.dst_reg()];
 	let mut changed = false;
 
@@ -177,10 +157,10 @@ fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
 // Transfer function
 // ------------------------------------------------------------------------------------------------
 
-fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
+fn transfer(inst: &IrInst, state: &mut BTreeMap<IrReg, Info>) -> bool {
 	use IrInstKind::*;
 
-	let src_to_info = |src: IrSrc, state: &ConstPropState| {
+	let src_to_info = |src: IrSrc, state: &BTreeMap<IrReg, Info>| {
 		match src {
 			IrSrc::Reg(reg)   => state[&reg],
 			IrSrc::Const(c)   => Info::some1(c.val(), src),
