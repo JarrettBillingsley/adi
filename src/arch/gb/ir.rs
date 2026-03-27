@@ -1060,12 +1060,12 @@ fn build_ir<'i>(desc: &InstDesc, term: Option<&BBTerm>, b: &mut IrBuilder<'i>) {
 
 		// ld r, [rr] (various)
 		(LD, &[Srg(dst), IndReg(src @ (BC | DE | HL))]) => { // no flag changes
-			b.load_ind(dst, (src, -1));
+			b.load_ind(dst, (src, 0));
 		}
 
 		// ld [rr], r (various)
 		(LD, &[IndReg(dst @ (BC | DE | HL)), Srg(src)]) => { // no flag changes
-			b.store_ind((dst, -1), IrReg::from(src));
+			b.store_ind((dst, 0), IrReg::from(src));
 		}
 
 		// ld a, [nn] (0xFA)
@@ -1126,9 +1126,9 @@ fn build_ir<'i>(desc: &InstDesc, term: Option<&BBTerm>, b: &mut IrBuilder<'i>) {
 		// ld a, [0xFF00 + c] (0xF2)
 		(LDH, [Srg(A), IndReg(C)]) => { // no flag changes
 			b
-			.zxt (REG_WZ,     REG_C)
-			.add(REG_WZ,     REG_WZ, CFF00_16)
-			.load ((REG_A, 0), REG_WZ);
+			.zxt (REG_WZ, REG_C)
+			.add (REG_WZ, REG_WZ, CFF00_16)
+			.load(REG_A,  (REG_WZ, 0));
 		}
 		// ld [0xFF00 + n], a (0xE0)
 		(LDH, [IndOp, Srg(A)]) => { // no flag changes
@@ -1138,8 +1138,8 @@ fn build_ir<'i>(desc: &InstDesc, term: Option<&BBTerm>, b: &mut IrBuilder<'i>) {
 		// ld [0xFF00 + c], a (0xE2)
 		(LDH, [IndReg(C), Srg(A)]) => { // no flag changes
 			b
-			.zxt (REG_WZ,      REG_C)
-			.add(REG_WZ,      REG_WZ, CFF00_16)
+			.zxt  (REG_WZ,      REG_C)
+			.add  (REG_WZ,      REG_WZ, CFF00_16)
 			.store((REG_WZ, 0), REG_A);
 		}
 
