@@ -1,6 +1,8 @@
 
 use std::collections::{ BTreeMap };
 
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
+
 use crate::dataflow::{ JoinSemiLattice, DataflowAlgorithm };
 
 use super::*;
@@ -27,7 +29,7 @@ mod tests;
 #[derive(Debug)]
 pub(crate) struct ConstPropResults {
 	regs:  BTreeMap<IrReg, (u64, NodeId)>,
-	nodes: Vec<Node>,
+	nodes: Nodes,
 }
 
 impl ConstPropResults {
@@ -37,6 +39,10 @@ impl ConstPropResults {
 
 	pub(crate) fn regs(&self) -> impl Iterator<Item = (&IrReg, &(u64, NodeId))> {
 		self.regs.iter()
+	}
+
+	pub(crate) fn dump_node(&self, node: NodeId) {
+		self.nodes.dump(node);
 	}
 }
 
@@ -87,6 +93,7 @@ impl Node {
 }
 
 /// A collection of AST nodes associated with a single IrFunction.
+#[derive(Debug)]
 struct Nodes {
 	nodes: Vec<Node>,
 }
@@ -139,145 +146,171 @@ impl Nodes {
 	}
 
 	pub(crate) fn dump(&self, root: NodeId) {
-		self.dump_rec(root);
+		// self.dump_rec(Indent(0), root);
+		self.dump_arrows(root);
 		println!();
 	}
 
-	fn dump_unop(&self, op: IrUnOp, src: NodeId) {
-		use IrUnOp::*;
-		match op {
-			Zxt  => print!("zxt("),
-			Sxt  => print!("sxt("),
-			Lo   => print!("lo("),
-			Hi   => print!("hi("),
-			Neg  => print!("-"),
-			INot => print!("~"),
-			BNot => print!("!"),
-		}
+	fn dump_arrows(&self, node: NodeId) {
+		use NodeKind::*;
+		let n = &self.nodes[node.0];
 
-		self.dump_rec(src);
+		if let Const { c, cn } = n.kind {
+			println!("{0} [ label=\"(id = {0})\\n{1}\\n{2} {3:?} {4:?}\"]",
+				node.0, n.ea, self.opstr(n), Opn(cn), c);
+		} else {
+			println!("{0} [ label=\"(id = {0})\\n{1}\\n{2}\"]", node.0, n.ea, self.opstr(n));
 
-		match op {
-			Zxt | Sxt | Lo | Hi => print!(")"),
-			_                   => {}
-		}
-	}
-
-	fn dump_func2(&self, name: &str, sep: &str, src1: NodeId, src2: NodeId) {
-		print!("{}(", name);
-		self.dump_rec(src1);
-		print!("{}", sep);
-		self.dump_rec(src2);
-		print!(")");
-	}
-
-	fn dump_func3(&self, name: &str, sep: &str, src1: NodeId, src2: NodeId, src3: NodeId) {
-		print!("{}(", name);
-		self.dump_rec(src1);
-		print!("{}", sep);
-		self.dump_rec(src2);
-		print!("{}", sep);
-		self.dump_rec(src3);
-		print!(")");
-	}
-
-	fn dump_binop(&self, op: IrBinOp, src1: NodeId, src2: NodeId) {
-		use IrBinOp::*;
-
-		match op {
-			UCarry  => self.dump_func2("ucarry",  " + ", src1, src2),
-			SCarry  => self.dump_func2("scarry",  " + ", src1, src2),
-			SBorrow => self.dump_func2("sborrow", " - ", src1, src2),
-			Carries => self.dump_func2("carries", " + ", src1, src2),
-			Borrows => self.dump_func2("borrows", " - ", src1, src2),
-			_ => {
-				print!("((");
-				self.dump_rec(src1);
-				print!(")");
-
-				match op {
-					Eq   => print!(" == "),
-					Ne   => print!(" != "),
-					Slt  => print!(" <s "),
-					Sle  => print!(" <=s "),
-					Ult  => print!(" <u "),
-					Ule  => print!(" <=u "),
-					Add  => print!(" + "),
-					Sub  => print!(" - "),
-					Mul  => print!(" * "),
-					UDiv => print!(" /u "),
-					SDiv => print!(" /s "),
-					UMod => print!(" %u "),
-					SMod => print!(" %s "),
-					IXor => print!(" ^ "),
-					IAnd => print!(" & "),
-					IOr  => print!(" | "),
-					Shl  => print!(" << "),
-					UShr => print!(" >>> "),
-					SShr => print!(" >> "),
-					Rol  => print!(" <<r "),
-					Ror  => print!(" >>r "),
-					Pair => print!(" : "),
-					Bit  => print!(" ."),
-					BXor => print!(" ^^ "),
-					BAnd => print!(" && "),
-					BOr  => print!(" || "),
-					_    => unreachable!(),
+			match n.kind {
+				Const { .. } => {},
+				Unary { src, .. } => {
+					println!("{} -> {}", node.0, src.0);
+					self.dump_arrows(src);
 				}
-
-				print!("(");
-				self.dump_rec(src2);
-				print!("))");
+				Binary { src1, src2, .. } => {
+					println!("{} -> {}", node.0, src1.0);
+					println!("{} -> {}", node.0, src2.0);
+					self.dump_arrows(src1);
+					self.dump_arrows(src2);
+				}
+				Ternary { src1, src2, src3, .. } => {
+					println!("{} -> {}", node.0, src1.0);
+					println!("{} -> {}", node.0, src2.0);
+					println!("{} -> {}", node.0, src3.0);
+					self.dump_arrows(src1);
+					self.dump_arrows(src2);
+					self.dump_arrows(src3);
+				}
 			}
 		}
 	}
 
-	fn dump_ternop(&self, op: IrTernOp, src1: NodeId, src2: NodeId, src3: NodeId) {
-		use IrTernOp::*;
+	fn dump_rec(&self, indent: Indent, node: NodeId) {
+		let node = &self.nodes[node.0];
 
-		match op {
-			UCarryC  => self.dump_func3("ucarryc",  " + ", src1, src2, src3),
-			SCarryC  => self.dump_func3("scarryc",  " + ", src1, src2, src3),
-			SBorrowB => self.dump_func3("sborrowb", " - ", src1, src2, src3),
-			CarriesC => self.dump_func3("carries",  " + ", src1, src2, src3),
-			BorrowsB => self.dump_func3("borrows",  " - ", src1, src2, src3),
-			BSet => {
-				print!("bset((");
-				self.dump_rec(src1);
-				print!(").(");
-				self.dump_rec(src2);
-				print!("), ");
-				self.dump_rec(src3);
-				print!(")");
-			}
-			_ => {
-				let sep = match op {
-					AddC => ") + (",
-					SubB => ") - (",
-					_    => unreachable!(),
-				};
-
-				print!("((");
-				self.dump_rec(src1);
-				print!("{}", sep);
-				self.dump_rec(src2);
-				print!("{}", sep);
-				self.dump_rec(src3);
-				print!("))");
-			}
-		}
-	}
-
-	fn dump_rec(&self, root: NodeId) {
-		let root = &self.nodes[root.0];
+		// 0000:00000000 name
+		print!("{} (id = {:<3}) {}", node.ea, node.id.0, self.opstr(node));
 
 		use NodeKind::*;
-		match root.kind {
-			Const   { c, .. }                    => print!("{:?}", c),
-			Unary   { op, src, .. }              => self.dump_unop(op, src),
-			Binary  { op, src1, src2, .. }       => self.dump_binop(op, src1, src2),
-			Ternary { op, src1, src2, src3, .. } => self.dump_ternop(op, src1, src2, src3),
+		match node.kind {
+			Const   { c, cn } => print!(" {:?} {:?}", Opn(cn), c),
+			Unary   { op: _, src, srcn } => {
+				let indent = indent + 1;
+				print!("\n{}{:?}", indent, Opn(srcn));
+				self.dump_rec(indent, src);
+			}
+			Binary  { op: _, src1, src2, src1n, src2n } => {
+				let indent = indent + 1;
+				print!("\n{}{:?}", indent, Opn(src1n));
+				self.dump_rec(indent, src1);
+				print!("\n{}{:?}", indent, Opn(src2n));
+				self.dump_rec(indent, src2);
+			}
+			Ternary { op: _, src1, src2, src3, src1n, src2n, src3n } => {
+				let indent = indent + 1;
+				print!("\n{}{:?}", indent, Opn(src1n));
+				self.dump_rec(indent, src1);
+				print!("\n{}{:?}", indent, Opn(src2n));
+				self.dump_rec(indent, src2);
+				print!("\n{}{:?}", indent, Opn(src3n));
+				self.dump_rec(indent, src3);
+			}
 		}
+	}
+
+	fn opstr(&self, node: &Node) -> &'static str {
+		use NodeKind::*;
+		use IrUnOp::*;
+		use IrBinOp::*;
+		use IrTernOp::*;
+		match node.kind {
+			Const { .. } => "const",
+			Unary { op, .. } => match op {
+				Zxt  => "zxt",
+				Sxt  => "sxt",
+				Lo   => "lo",
+				Hi   => "hi",
+				Neg  => "neg",
+				INot => "inot",
+				BNot => "bnot",
+			}
+			Binary { op, .. } => match op {
+				Eq      => "eq",
+				Ne      => "ne",
+				Slt     => "slt",
+				Sle     => "sle",
+				Ult     => "ult",
+				Ule     => "ule",
+				Add     => "add",
+				Sub     => "sub",
+				UCarry  => "ucarry",
+				SCarry  => "scarry",
+				SBorrow => "sborrow",
+				Carries => "carries",
+				Borrows => "borrows",
+				Mul     => "mul",
+				UDiv    => "udiv",
+				SDiv    => "sdiv",
+				UMod    => "umod",
+				SMod    => "smod",
+				IXor    => "ixor",
+				IAnd    => "iand",
+				IOr     => "ior",
+				Shl     => "shl",
+				UShr    => "ushr",
+				SShr    => "sshr",
+				Rol     => "rol",
+				Ror     => "ror",
+				Pair    => "pair",
+				Bit     => "bit",
+				BXor    => "bxor",
+				BAnd    => "band",
+				BOr     => "bor",
+			}
+			Ternary { op, .. } => match op {
+				AddC     => "addc",
+				SubB     => "subb",
+				UCarryC  => "ucarryc",
+				SCarryC  => "scarryc",
+				SBorrowB => "sborrowb",
+				CarriesC => "carriesc",
+				BorrowsB => "borrowsb",
+				BSet     => "bset",
+			}
+		}
+	}
+}
+
+// helper type for printing out operand numbers more easily
+#[derive(PartialEq, Eq, Clone, Copy)]
+struct Opn(i8);
+
+impl Debug for Opn {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		if self.0 >= 0 {
+			write!(f, "{{{}}}", self.0)
+		} else {
+			write!(f, "   ")
+		}
+	}
+}
+
+#[derive(Copy, Clone)]
+struct Indent(usize);
+
+impl std::ops::Add<usize> for Indent {
+	type Output = Self;
+	fn add(self, other: usize) -> Self {
+		Indent(self.0 + other)
+	}
+}
+
+impl std::fmt::Display for Indent {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		for _ in 0 .. self.0 {
+			write!(f, "  ")?;
+		}
+		Ok(())
 	}
 }
 
@@ -364,8 +397,65 @@ impl<'bb> ConstProp<'bb> {
 		}
 	}
 
-	// TODO: change API for this
-	fn finish(self) -> ConstPropResults {
+	fn simplify(&mut self) {
+		let mut replacements: HashMap<NodeId, NodeId> = HashMap::new();
+
+		use NodeKind::*;
+		use IrUnOp::*;
+		use IrBinOp::*;
+
+		let nodes = &mut self.state.nodes.nodes;
+
+		for n in nodes.iter() {
+			// look for pair(hi(x), lo(x)) and replace with x
+			if let Binary { op: Pair, src1, src2, .. } = n.kind {
+				match (nodes[src1.0].kind, nodes[src2.0].kind) {
+					(Unary { op: Hi, src: x, .. }, Unary { op: Lo, src: y, .. }) if x == y => {
+						replacements.insert(n.id, x);
+					}
+					_ => {}
+				}
+			}
+		}
+
+		let repl = |src: &mut NodeId, srcn: Option<&mut i8>| {
+			if let Some(replacement) = replacements.get(src) {
+				*src = *replacement;
+
+				if let Some(srcn) = srcn {
+					*srcn = -1;
+				}
+			}
+		};
+
+		for n in nodes.iter_mut() {
+			match &mut n.kind {
+				Const { .. } => {},
+				Unary { src, srcn, .. } => {
+					repl(src, Some(srcn));
+				}
+				Binary { src1, src2, src1n, src2n, .. } => {
+					repl(src1, Some(src1n));
+					repl(src2, Some(src2n));
+				}
+				Ternary { src1, src2, src3, src1n, src2n, src3n, .. } => {
+					repl(src1, Some(src1n));
+					repl(src2, Some(src2n));
+					repl(src3, Some(src3n));
+				}
+			}
+		}
+
+		for (_, mut info) in self.state.regs.iter_mut() {
+			if let Info::Some { from, .. } = &mut info {
+				repl(from, None);
+			}
+		}
+	}
+
+	fn finish(mut self) -> ConstPropResults {
+		self.simplify();
+
 		let regs = self.state.regs
 			.into_iter()
 			.filter_map(|(reg, info)|
@@ -382,7 +472,7 @@ impl<'bb> ConstProp<'bb> {
 
 		ConstPropResults {
 			regs,
-			nodes: self.state.nodes.nodes,
+			nodes: self.state.nodes,
 		}
 	}
 }

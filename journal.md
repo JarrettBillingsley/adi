@@ -583,10 +583,10 @@ let's say you have:
 so the const tree for hl at 0000:00000006 is like...
 
 	pair
-		hi = const 0xC0 @ 0000:00000001 {0}
+		hi = 0000:00000001 const 0xC0 {0}
 		lo = add
-			const 0xDD @ 0000:00000003 {0}
-			const 0x01 @ 0000:00000005
+			0000:00000003 const 0xDD {0}
+			0000:00000005 const 0x01
 
 this is a little weird because:
 
@@ -609,8 +609,21 @@ also the way the IR works, for this sequence
 
 the const tree for hl at 0000:00000013 looks like
 
-	pair @ 0000:00000013 {0}
-		hi = hi(0xC0DE) @ 0000:00000010 {0}
-		lo = lo(0xC0DE) @ 0000:00000010 {0}
+	0000:00000013 pair
+		hi = 0000:00000010 hi(0xC0DE) {0}
+		lo = 0000:00000010 lo(0xC0DE) {0}
 
 so we'd have to unify those two sides of the pair and make sure to put a Full ref on 0000:00000010 op 0, rather than trying to put two half refs...
+
+..................
+
+wait this is a DAG meaning the leaves could be used in multiple different addresses
+
+	0000:00000020	ld h, 0xD0 => hi(0xD00D)? or hi(0xD0AD)???
+	0000:00000022	ld l, 0x0D
+	0000:00000024	ld a, [hl] => 0xD00D
+	0000:00000025   ld l, 0xAD
+	0000:00000027	ld b, [hl] => 0xD0AD
+
+AAAAAAAAAAAAAAAAAAA
+

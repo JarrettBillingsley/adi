@@ -76,6 +76,8 @@ impl Program {
 
 		let mut changes: Vec<(EA, MmuState)> = vec![];
 
+		let consts = irfunc.constants();
+
 		for ConstAddr { bbid, ea, opn, addr, kind, src } in irfunc.const_addrs() {
 			// 1. add OpInfo::Ref to each constant operand
 			let bb = self.bbidx.get_mut(bbid);
@@ -104,6 +106,14 @@ impl Program {
 			// 2. detect instruction state changes
 			match kind {
 				ConstAddrKind::Load | ConstAddrKind::Store(..) => {
+					let val = if let ConstAddrKind::Store(val) = kind { val } else { None };
+					let load = kind == ConstAddrKind::Load;
+
+					match src {
+						Some(src) => { trace!("  const addr {} @ {}", addr, ea); consts.dump_node(src); }
+						None =>      { trace!("  const addr {} @ {} with no source", addr, ea); }
+					}
+
 					// The only instructions marked MemAccess::R/W are loads and stores which, in
 					// the IR, do not have resolved EAs. So, the EA here must be unresolved, in
 					// which case it can be turned back into a VA.
@@ -111,8 +121,6 @@ impl Program {
 
 					let old_state = bb.mmu_state();
 					let addr = VA(addr.offs());
-					let val = if let ConstAddrKind::Store(val) = kind { val } else { None };
-					let load = kind == ConstAddrKind::Load;
 
 					match self.mem.state_change(old_state, addr, val, load) {
 						StateChange::None => {
@@ -131,7 +139,12 @@ impl Program {
 					}
 				}
 
-				ConstAddrKind::Target | ConstAddrKind::Offset => {}
+				ConstAddrKind::Target | ConstAddrKind::Offset => {
+					if let Some(src) = src {
+						trace!("  (nontrivial static control flow target at {} to {})", ea, addr);
+						consts.dump_node(src);
+					}
+				}
 			}
 
 			// TODO: once constprop makes AST, recursively visit instructions based on `srcs`
@@ -151,7 +164,7 @@ impl Program {
 	fn func_apply_state_changes(&mut self, fid: FuncId, changes: Vec<(EA, MmuState)>) {
 		debug!("- applying state changes");
 
-		for (ea, new_state) in changes.into_iter() {
+		for (ea, state_after) in changes.into_iter() {
 			let bbid = self.span_at_ea(ea).bb().expect("I mean it's in here cause it was in a BB");
 
 			let inst = self.bbidx.get(bbid).inst_at_ea(ea)
@@ -173,10 +186,10 @@ impl Program {
 
 			let target = match self.bbidx.get(bbid).term() {
 				BBTerm::FallThru { cont } => *cont,
-				BBTerm::StateChange { cont, state_after: old_new_state }  => {
-					assert_eq!(new_state, *old_new_state,
-						"BB already had a StateChange terminator, but its old \"new state\" and \
-						its new \"new state\" don't match");
+				BBTerm::StateChange { cont, state_after: old_state_after }  => {
+					assert_eq!(state_after, *old_state_after,
+						"BB already had a StateChange terminator, but its old \"after state\" and \
+						its new \"after state\" don't match");
 					*cont
 				}
 				_ => {
@@ -186,7 +199,7 @@ impl Program {
 			};
 
 			*self.bbidx.get_mut(bbid).term_mut() =
-				BBTerm::StateChange { cont: target, state_after: new_state } ;
+				BBTerm::StateChange { cont: target, state_after } ;
 			let bb = self.bbidx.get(bbid);
 			debug!("rewrote terminator of BB {:?} @ {:?} to {:?}", bbid, bb.ea(), bb.term());
 		}
