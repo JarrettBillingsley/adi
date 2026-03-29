@@ -4,6 +4,7 @@
 *.chr
 *.gb
 *.nes
+*.sms
 tests/data/smb*
 *.sublime-project
 *.sublime-workspace
