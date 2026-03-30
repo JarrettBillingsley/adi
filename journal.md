@@ -622,8 +622,9 @@ wait this is a DAG meaning the leaves could be used in multiple different addres
 	0000:00000020	ld h, 0xD0 => hi(0xD00D)? or hi(0xD0AD)???
 	0000:00000022	ld l, 0x0D
 	0000:00000024	ld a, [hl] => 0xD00D
-	0000:00000025   ld l, 0xAD
+	0000:00000025	ld l, 0xAD
 	0000:00000027	ld b, [hl] => 0xD0AD
 
 AAAAAAAAAAAAAAAAAAA
 
+So, in a case like this, as long as *all* addresses derived from it start with the same half, we can arbitrarily pick one... otherwise, uhhhhhhhhhh POI on it? or just pick the "first" one?

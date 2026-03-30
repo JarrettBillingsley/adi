@@ -28,7 +28,6 @@
 		- like, you see a store into OAM. **how was that value computed?** that could be back-propagated to discover the shadow OAM.
 	- mapper external RAM and RAM banking
 	- see "data blathering" below, tho I think most of that has been implemented
-	- compound types have `EA`s so they can participate in `RefMap`
 	- move data printing into `Program`
 		- it can call some of the `IPrinter` methods for printing numbers, addresses etc.
 - **IR**
@@ -38,7 +37,7 @@
 	- **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
 	- **Put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction***
 		- ...and that all operands in the source instruction are referenced by the IR
-	- **GB IR stress test - test *all* possible opcodes**
+	- **IR stress tests - test *all* possible opcodes for each arch**
 		- I'm just not sure I'm hitting them all with the test ROMs
 	- **IR/const prop correctness tests**
 		- make a test ROM that can be run in an emulator
