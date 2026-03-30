@@ -9,6 +9,7 @@ use petgraph::{
 	visit::{ DfsPostOrder },
 };
 
+use crate::arch::{ IrCompiler, IIrCompiler };
 use crate::dataflow::{ DataflowCfg };
 use crate::memory::{ EA };
 use crate::program::{ BBId, FuncId };
@@ -92,15 +93,27 @@ pub(crate) struct IrReg {
 
 impl Debug for IrReg {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		if let Some(gen_) = self.gen_ {
-			write!(f, "r{}_{}.{}", self.offset, gen_, self.size.name())
-		} else {
-			write!(f, "r{}.{}", self.offset, self.size.name())
-		}
+		self.debug_fmt(f, None)
 	}
 }
 
 impl IrReg {
+	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+		// have to do it like this for borrowing reasons
+		match compiler {
+			Some(compiler) => self.debug_fmt_name(f, compiler.reg_name(self.offset)),
+			None           => self.debug_fmt_name(f, &format!("r{}", self.offset)),
+		}
+	}
+
+	fn debug_fmt_name(&self, f: &mut Formatter, name: &str) -> FmtResult {
+		if let Some(gen_) = self.gen_ {
+			write!(f, "{}_{}.{}", name, gen_, self.size.name())
+		} else {
+			write!(f, "{}.{}", name, self.size.name())
+		}
+	}
+
 	/// Constructs an 8-bit register.
 	pub(crate) const fn reg8(offset: u16) -> Self {
 		Self { size: ValSize::_8, offset, gen_: None }
@@ -240,15 +253,19 @@ pub(crate) enum IrSrc {
 
 impl Debug for IrSrc {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		match self {
-			IrSrc::Reg(p)    => write!(f, "{:?}", p),
-			IrSrc::Const(c)  => write!(f, "{:?}", c),
-			IrSrc::Return(s) => write!(f, "<return.{}>", s.name()),
-		}
+		self.debug_fmt(f, None)
 	}
 }
 
 impl IrSrc {
+	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+		match self {
+			IrSrc::Reg(r)    => r.debug_fmt(f, compiler),
+			IrSrc::Const(c)  => write!(f, "{:?}", c),
+			IrSrc::Return(s) => write!(f, "<return.{}>", s.name()),
+		}
+	}
+
 	pub(crate) fn ret(reg: IrReg) -> Self {
 		IrSrc::Return(reg.size())
 	}
@@ -334,24 +351,29 @@ impl IrPhi {
 	fn args_mut(&mut self) -> &mut [IrReg] {
 		&mut self.args
 	}
-}
 
-impl Debug for IrPhi {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "{:?} = φ", self.dst)?;
-		write!(f, "(")?;
+	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+		self.dst.debug_fmt(f, compiler)?;
+		write!(f, " = φ(")?;
 
 		let mut args = self.args.iter();
 
 		if let Some(arg) = args.next() {
-			write!(f, "{:?}", arg)?;
+			arg.debug_fmt(f, compiler)?;
 
 			for arg in args {
-				write!(f, ", {:?}", arg)?;
+				write!(f, ", ")?;
+				arg.debug_fmt(f, compiler)?;
 			}
 		}
 
 		write!(f, ")")
+	}
+}
+
+impl Debug for IrPhi {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		self.debug_fmt(f, None)
 	}
 }
 
@@ -460,14 +482,14 @@ impl IrBasicBlock {
 	pub(crate) fn term_inst_mut(&mut self) -> &mut IrInst {
 		self.insts.last_mut().unwrap()
 	}
-}
 
-impl Debug for IrBasicBlock {
-	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		writeln!(f, "bb{}: (real BB: {:?})", self.id, self.real_bbid)?;
 
 		for p in self.phis.iter() {
-			writeln!(f, "    {:?}", p)?;
+			write!(f, "    ")?;
+			p.debug_fmt(f, compiler)?;
+			writeln!(f)?;
 		}
 
 		if !self.phis.is_empty() {
@@ -475,10 +497,18 @@ impl Debug for IrBasicBlock {
 		}
 
 		for i in self.insts.iter() {
-			writeln!(f, "    {:?}", i)?;
+			write!(f, "    ")?;
+			i.debug_fmt(f, compiler)?;
+			writeln!(f)?;
 		}
 
 		Ok(())
+	}
+}
+
+impl Debug for IrBasicBlock {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		self.debug_fmt(f, None)
 	}
 }
 
@@ -559,23 +589,33 @@ impl IrFunction {
 		// TODO: invalidate self.consts
 		elim_dead_stores(&mut self.bbs);
 	}
+
+	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+		writeln!(f, "-------------------------------------------------------")?;
+		writeln!(f, "IR for {:?}", self.real_fid)?;
+		writeln!(f, "{:?}", DebugWorkaroundThing(&self.cfg, &self.bbs, compiler))
+	}
 }
 
 impl Debug for IrFunction {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		writeln!(f, "-------------------------------------------------------")?;
-		writeln!(f, "IR for {:?}", self.real_fid)?;
-		writeln!(f, "{:?}", DebugWorkaroundThing(&self.cfg, &self.bbs))
+		self.debug_fmt(f, None)
 	}
 }
 
-// WOw!!!! look at all the dumb bullshit I have to do just to reuse one piece of code as both
-// a Debug::fmt impl and a standalone function!!!!!!! AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-struct DebugWorkaroundThing<'aaaa>(&'aaaa IrCfg, &'aaaa [IrBasicBlock]);
+pub(crate) struct IrFunctionWithNames<'f, 'c>(pub &'f IrFunction, pub &'c IrCompiler);
 
-impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
+impl<'f, 'c> Debug for IrFunctionWithNames<'f, 'c> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		let DebugWorkaroundThing(cfg, bbs) = *self;
+		self.0.debug_fmt(f, Some(self.1))
+	}
+}
+
+struct DebugWorkaroundThing<'a, 'b>(&'a IrCfg, &'a [IrBasicBlock], Option<&'b IrCompiler>);
+
+impl<'a, 'b> Debug for DebugWorkaroundThing<'a, 'b> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		let DebugWorkaroundThing(cfg, bbs, compiler) = *self;
 		writeln!(f)?;
 		writeln!(f, "CFG (NOTE!!!! numbers in \"a -> b\" are NOT NECESSARILY BB NUMBERS,")?;
 		writeln!(f, "only trust the actual dot graph output or look at the successors")?;
@@ -584,7 +624,7 @@ impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
 		writeln!(f, "{:?}", Dot::with_config(cfg, &[DotConfig::EdgeNoLabel]))?;
 
 		for bb in bbs {
-			Debug::fmt(&bb, f)?;
+			bb.debug_fmt(f, compiler)?;
 
 			for dst in cfg.edges(bb.id).map(|(_, n, _)|n) {
 				writeln!(f, "    -> bb{}", dst)?;
@@ -596,5 +636,5 @@ impl<'aaaa> Debug for DebugWorkaroundThing<'aaaa> {
 }
 
 pub(crate) fn debug_dump_ir_cfg_and_bbs(cfg: &IrCfg, bbs: &[IrBasicBlock]) {
-	log::debug!("{:?}", DebugWorkaroundThing(cfg, bbs));
+	log::debug!("{:?}", DebugWorkaroundThing(cfg, bbs, None));
 }

@@ -128,143 +128,188 @@ pub(crate) enum IrInstKind {
 
 // helper type for printing out operand numbers more easily
 #[derive(PartialEq, Eq, Clone, Copy)]
-struct Opn<'a>(&'a i8);
+struct Opn(i8);
 
-impl<'a> Debug for Opn<'a> {
+impl Debug for Opn {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		if *self.0 >= 0 {
-			write!(f, "{{{}}}", *self.0)?
+		if self.0 >= 0 {
+			write!(f, "{{{}}}", self.0)?
 		}
 		Ok(())
 	}
 }
 
+// helper type for printing out registers more easily
+#[derive(Clone, Copy)]
+struct RegDbg<'c>(IrReg, Option<&'c IrCompiler>);
+
+impl<'c> Debug for RegDbg<'c> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		self.0.debug_fmt(f, self.1)
+	}
+}
+
+// helper type for printing out IrSrcs more easily
+#[derive(Clone, Copy)]
+struct SrcDbg<'c>(IrSrc, Option<&'c IrCompiler>);
+
+impl<'c> Debug for SrcDbg<'c> {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		self.0.debug_fmt(f, self.1)
+	}
+}
+
 impl Debug for IrInstKind {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		self.debug_fmt(f, None)
+	}
+}
+
+impl IrInstKind {
+	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		use IrInstKind::*;
 		use IrUnOp::*;
 		use IrBinOp::*;
 		use IrTernOp::*;
 
-		match self {
+		let r = |dst: IrReg| -> RegDbg { RegDbg(dst, compiler) };
+		let s = |src: IrSrc| -> SrcDbg { SrcDbg(src, compiler) };
+
+		match *self {
 			Nop =>
 				write!(f, "nop"),
 			Use { reg } =>
-				write!(f, "use      {:?}", reg),
+				write!(f, "use      {:?}", r(reg)),
 			Mov { dst, src, dstn, srcn } =>
-				write!(f, "mov      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				write!(f, "mov      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
 			Load { dst, addr, dstn, addrn } =>
-				write!(f, "load     {:?}{:?}, [{:?}{:?}]", dst, Opn(dstn), addr, Opn(addrn)),
+				write!(f, "load     {:?}{:?}, [{:?}{:?}]", r(dst), Opn(dstn), s(addr), Opn(addrn)),
 			Store { addr, src, addrn, srcn } =>
-				write!(f, "store    [{:?}{:?}], {:?}{:?}", addr, Opn(addrn), src, Opn(srcn)),
+				write!(f, "store    [{:?}{:?}], {:?}{:?}", s(addr), Opn(addrn), s(src), Opn(srcn)),
+
 			Branch { dst, dstn } =>
 				write!(f, "branch   {:?}{:?}", dst, Opn(dstn)),
 			CBranch { cond, dst, cont, condn, dstn } =>
 				write!(f, "cbranch  {:?}{:?} ? {:?}{:?} : {:?}",
-					cond, Opn(condn), dst, Opn(dstn), cont),
+					s(cond), Opn(condn), dst, Opn(dstn), cont),
 			IBranch { dst, dstn } =>
-				write!(f, "ibranch  [{:?}{:?}]", dst, Opn(dstn)),
+				write!(f, "ibranch  [{:?}{:?}]", s(dst), Opn(dstn)),
 			Call { dst, dstn, cont } =>
 				write!(f, "call     {:?}{:?} (return to {:?})", dst, Opn(dstn), cont),
 			ICall { dst, dstn, cont } =>
-				write!(f, "icall    [{:?}{:?}] (return to {:?})", dst, Opn(dstn), cont),
+				write!(f, "icall    [{:?}{:?}] (return to {:?})", s(dst), Opn(dstn), cont),
 			Ret { dst, dstn } =>
-				write!(f, "ret      [{:?}{:?}]", dst, Opn(dstn)),
+				write!(f, "ret      [{:?}{:?}]", s(dst), Opn(dstn)),
 			Halt =>
 				write!(f, "halt"),
 
 			Unary { dst, op, src, dstn, srcn } => match op {
-				Zxt  => write!(f, "zxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				Sxt  => write!(f, "sxt      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				Lo   => write!(f, "lo       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				Hi   => write!(f, "hi       {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				Neg  => write!(f, "neg      {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				INot => write!(f, "inot     {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
-				BNot => write!(f, "bnot     {:?}{:?}, {:?}{:?}", dst, Opn(dstn), src, Opn(srcn)),
+				Zxt  =>
+					write!(f, "zxt      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				Sxt  =>
+					write!(f, "sxt      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				Lo   =>
+					write!(f, "lo       {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				Hi   =>
+					write!(f, "hi       {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				Neg  =>
+					write!(f, "neg      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				INot =>
+					write!(f, "inot     {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				BNot =>
+					write!(f, "bnot     {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
 			},
 
 			Binary { dst, src1, op, src2, dstn, src1n, src2n } => match op {
 				Eq      => write!(f, "eq       {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Ne      => write!(f, "ne       {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Slt     => write!(f, "slt      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Sle     => write!(f, "sle      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Ult     => write!(f, "ult      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Ule     => write!(f, "ule      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Add     => write!(f, "add      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Sub     => write!(f, "sub      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				UCarry  => write!(f, "ucarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				SCarry  => write!(f, "scarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				SBorrow => write!(f, "sborrow  {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Carries => write!(f, "carries  {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Borrows => write!(f, "borrows  {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Mul     => write!(f, "mul      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				UDiv    => write!(f, "udiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				SDiv    => write!(f, "sdiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				UMod    => write!(f, "umod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				SMod    => write!(f, "smod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				IXor    => write!(f, "ixor     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				IAnd    => write!(f, "iand     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				IOr     => write!(f, "ior      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Shl     => write!(f, "shl      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				UShr    => write!(f, "ushr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				SShr    => write!(f, "sshr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Rol     => write!(f, "rol      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Ror     => write!(f, "ror      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Pair    => write!(f, "pair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				Bit     => write!(f, "bit      {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				BXor    => write!(f, "bxor     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				BAnd    => write!(f, "band     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 				BOr     => write!(f, "bor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
 			},
 
 			Ternary { dst, src1, op, src2, src3, dstn, src1n, src2n, src3n } => match op {
 				AddC     => write!(f, "addc     {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				SubB     => write!(f, "subb     {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				UCarryC  => write!(f, "ucarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				SCarryC  => write!(f, "scarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				SBorrowB => write!(f, "sborrowb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				CarriesC => write!(f, "carriesc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				BorrowsB => write!(f, "borrowsb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 				BSet     => write!(f, "bset     {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
-					dst, Opn(dstn), src1, Opn(src1n), src2, Opn(src2n), src3, Opn(src3n)),
+					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
+					Opn(src3n)),
 			},
 		}
 	}
@@ -286,12 +331,17 @@ pub(crate) struct IrInst {
 
 impl Debug for IrInst {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "{:?} {:?}", self.ea, self.kind)
+		self.debug_fmt(f, None)
 	}
 }
 
 #[allow(clippy::too_many_arguments)]
 impl IrInst {
+	pub(crate) fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+		write!(f, "{:?} ", self.ea)?;
+		self.kind.debug_fmt(f, compiler)
+	}
+
 	pub(crate) fn nop(ea: EA) -> Self {
 		Self { ea, kind: IrInstKind::Nop }
 	}

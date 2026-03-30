@@ -12,7 +12,7 @@ use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ CfgPredecessors };
 use crate::memory::{ MmuState, VA, EA, StateChange };
-use crate::ir::{ ConstAddr, ConstAddrKind };
+use crate::ir::{ ConstAddr, ConstAddrKind, IrFunctionWithNames };
 
 // ------------------------------------------------------------------------------------------------
 // Function static analysis
@@ -63,7 +63,7 @@ impl Program {
 		for (reg, (val, from)) in consts.regs() {
 			debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
 		}
-		// debug!("{:?}", irfunc);
+		// debug!("{:?}", IrFunctionWithNames(&irfunc, &self.plat.arch().new_ir_compiler()));
 
 		let addr_bits = self.plat.arch().addr_bits();
 
@@ -110,8 +110,13 @@ impl Program {
 					let load = kind == ConstAddrKind::Load;
 
 					match src {
-						Some(src) => { trace!("  const addr {} @ {}", addr, ea); consts.dump_node(src); }
-						None =>      { trace!("  const addr {} @ {} with no source", addr, ea); }
+						Some(src) => {
+							trace!("  const addr {} @ {} with source", addr, ea);
+							consts.dump_node(src);
+						}
+						None => {
+							trace!("  const addr {} @ {} with no source", addr, ea);
+						}
 					}
 
 					// The only instructions marked MemAccess::R/W are loads and stores which, in

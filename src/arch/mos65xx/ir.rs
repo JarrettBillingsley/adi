@@ -34,6 +34,26 @@ impl IIrCompiler for Mos65xxIrCompiler {
 	fn stack_ptr_reg(&self) -> IrReg {
 		REG_S
 	}
+
+	fn reg_name(&self, offset: u16) -> &'static str {
+		match offset {
+			x if x == REG_A.offset()       => "a",
+			x if x == REG_X.offset()       => "x",
+			x if x == REG_Y.offset()       => "y",
+			x if x == REG_S.offset()       => "s",
+			x if x == REG_CF.offset()      => "cf",
+			x if x == REG_ZF.offset()      => "zf",
+			x if x == REG_IF.offset()      => "if",
+			x if x == REG_DF.offset()      => "df",
+			x if x == REG_VF.offset()      => "vf",
+			x if x == REG_NF.offset()      => "nf",
+			x if x == REG_TMP1.offset()    => "tmp1",
+			x if x == REG_TMP2.offset()    => "tmp2",
+			x if x == REG_TMP16.offset()   => "tmp16",
+			x if x == REG_TMP16_2.offset() => "tmp16_2",
+			_ => panic!(),
+		}
+	}
 }
 
 const REG_A:  IrReg = IrReg::reg8(0);

@@ -32,6 +32,32 @@ impl IIrCompiler for GBIrCompiler {
 	fn arg_regs     (&self) -> &'static [IrReg] { ARG_REGS }
 	fn return_regs  (&self) -> &'static [IrReg] { RETURN_REGS }
 	fn stack_ptr_reg(&self) -> IrReg            { REG_SP }
+
+	fn reg_name(&self, offset: u16) -> &'static str {
+		match offset {
+			x if x == REG_A.offset()  => "a",
+			x if x == REG_B.offset()  => "b",
+			x if x == REG_C.offset()  => "c",
+			x if x == REG_D.offset()  => "d",
+			x if x == REG_E.offset()  => "e",
+			x if x == REG_H.offset()  => "h",
+			x if x == REG_L.offset()  => "l",
+			x if x == REG_CF.offset() => "cf",
+			x if x == REG_HF.offset() => "hf",
+			x if x == REG_NF.offset() => "nf",
+			x if x == REG_ZF.offset() => "zf",
+			x if x == REG_SP.offset() => "sp",
+			x if x == REG_W.offset()  => "w",
+			x if x == REG_X.offset()  => "x",
+			x if x == REG_Y.offset()  => "y",
+			x if x == REG_Z.offset()  => "z",
+			x if x == REG_BC.offset() => "bc",
+			x if x == REG_DE.offset() => "de",
+			x if x == REG_HL.offset() => "hl",
+			x if x == REG_WZ.offset() => "wz",
+			_ => panic!(),
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

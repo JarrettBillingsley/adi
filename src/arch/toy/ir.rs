@@ -30,6 +30,23 @@ impl IIrCompiler for ToyIrCompiler {
 	fn stack_ptr_reg(&self) -> IrReg {
 		REG_SP
 	}
+
+	fn reg_name(&self, offset: u16) -> &'static str {
+		match offset {
+			x if x == REG_A.offset()     => "a",
+			x if x == REG_B.offset()     => "b",
+			x if x == REG_C.offset()     => "c",
+			x if x == REG_D.offset()     => "d",
+			x if x == REG_SP.offset()    => "sp",
+			x if x == REG_NF.offset()    => "nf",
+			x if x == REG_ZF.offset()    => "zf",
+			x if x == REG_CF.offset()    => "cf",
+			x if x == REG_TMP.offset()   => "tmp",
+			x if x == REG_TMP16.offset() => "tmp16",
+			x if x == REG_TMPCF.offset() => "tmpcf",
+			_ => panic!(),
+		}
+	}
 }
 
 const REG_A:     IrReg = IrReg::reg8 (0);
@@ -107,27 +124,27 @@ impl InstDesc {
 				let op0 = r0();
 				let op1 = r1();
 				b.ucarry(REG_CF, op0, op1);
-				b.add  (   op0, op0, op1);
+				b.add   (op0,    op0, op1);
 			}
 			ADC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.mov( REG_TMPCF, REG_CF);
+				b.mov    (REG_TMPCF, REG_CF);
 				b.ucarryc(REG_CF,    op0, op1, REG_CF);
-				b.addc  (   op0,    op0, op1, REG_TMPCF);
+				b.addc   (op0,       op0, op1, REG_TMPCF);
 			}
 			SUB => {
 				let op0 = r0();
 				let op1 = r1();
 				b.sborrow(REG_CF, op0, op1);
-				b.sub(   op0,    op0, op1);
+				b.sub    (op0,    op0, op1);
 			}
 			SBC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.mov(      REG_TMPCF, REG_CF);
+				b.mov     (REG_TMPCF, REG_CF);
 				b.sborrowb(REG_CF,    op0, op1, REG_CF);
-				b.subb(   op0,       op0, op1, REG_TMPCF);
+				b.subb    (op0,       op0, op1, REG_TMPCF);
 			}
 			AND => {
 				let op0 = r0();
@@ -152,43 +169,43 @@ impl InstDesc {
 			CMP => {
 				let op0 = r0();
 				let op1 = r1();
-				b.eq( REG_ZF, op0, op1);
+				b.eq (REG_ZF, op0, op1);
 				b.slt(REG_NF, op0, op1);
 				b.ult(REG_CF, op0, op1);
 			}
 			CMC => {
 				let op0 = r0();
 				let op1 = r1();
-				b.mov(      REG_TMPCF, REG_CF);
-				b.sborrowb(REG_CF,    op0, op1, REG_CF);
-				b.subb(   REG_TMP,   op0, op1, REG_TMPCF);
-				b.eq(      REG_ZF, REG_TMP, IrConst::ZERO_8);
-				b.slt(     REG_NF, REG_TMP, IrConst::ZERO_8);
+				b.mov     (REG_TMPCF, REG_CF);
+				b.sborrowb(REG_CF,    op0,     op1, REG_CF);
+				b.subb    (REG_TMP,   op0,     op1, REG_TMPCF);
+				b.eq      (REG_ZF,    REG_TMP, IrConst::ZERO_8);
+				b.slt     (REG_NF,    REG_TMP, IrConst::ZERO_8);
 			}
 			BLT => {
 				let term = term.unwrap();
-				let dst = term.one_explicit_successor().unwrap();
+				let dst  = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
 				b.cbranch(REG_NF, (dst, 0), cont);
 			}
 			BLE => {
 				let term = term.unwrap();
-				let dst = term.one_explicit_successor().unwrap();
+				let dst  = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
-				b.bor(    REG_TMP, REG_CF, REG_ZF);
+				b.bor    (REG_TMP, REG_CF, REG_ZF);
 				b.cbranch(REG_TMP, (dst, 0),   cont);
 			}
 			BEQ => {
 				let term = term.unwrap();
-				let dst = term.one_explicit_successor().unwrap();
+				let dst  = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
 				b.cbranch(REG_ZF, (dst, 0), cont);
 			}
 			BNE => {
 				let term = term.unwrap();
-				let dst = term.one_explicit_successor().unwrap();
+				let dst  = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
-				b.bnot(   REG_TMP, REG_ZF);
+				b.bnot   (REG_TMP, REG_ZF);
 				b.cbranch(REG_TMP, (dst, 0), cont);
 			}
 			JMP => {
@@ -196,37 +213,37 @@ impl InstDesc {
 				b.branch((dst, 0));
 			}
 			JMPI => {
-				b.pair(  REG_TMP16, REG_D, REG_C);
+				b.pair   (REG_TMP16, REG_D, REG_C);
 				b.ibranch((REG_TMP16, 0));
 			}
 			CALL => {
 				let term = term.unwrap();
-				let dst = term.one_explicit_successor().unwrap();
+				let dst  = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
-				b.sub(REG_SP, REG_SP, IrConst::_16(2));
+				b.sub  (REG_SP, REG_SP, IrConst::_16(2));
 				b.store(REG_SP, IrConst::_16(b.inst().next_va().0 as u16));
 				b.call ((dst, 0), cont);
 			}
 			CALI => {
 				let cont = term.unwrap().continuation_successor().unwrap();
-				b.pair(REG_TMP16, REG_D, REG_C);
+				b.pair (REG_TMP16, REG_D, REG_C);
 				b.icall((REG_TMP16, 0), cont);
 			}
 			CALZ => {
 				let term = term.unwrap();
-				let dst = term.one_explicit_successor().unwrap();
+				let dst  = term.one_explicit_successor().unwrap();
 				let cont = term.continuation_successor().unwrap();
 
 				b.bnot             (REG_TMP, REG_ZF);
 				b.cbranch_and_split(REG_TMP, cont);
-				b.sub            (REG_SP,  REG_SP, IrConst::_16(2));
+				b.sub              (REG_SP,  REG_SP, IrConst::_16(2));
 				b.store            (REG_SP,  IrConst::_16(b.inst().next_va().0 as u16));
 				b.call             ((dst, 0),  cont);
 			}
 			RET => {
-				b.load( REG_TMP16, REG_SP);
-				b.add(REG_SP, REG_SP, IrConst::_16(2));
-				b.ret(  REG_TMP16);
+				b.load(REG_TMP16, REG_SP);
+				b.add (REG_SP, REG_SP, IrConst::_16(2));
+				b.ret (REG_TMP16);
 			}
 			RETZ => {
 				let next = term.unwrap().continuation_successor().unwrap();
@@ -234,7 +251,7 @@ impl InstDesc {
 				b.bnot             (REG_TMP, REG_ZF);
 				b.cbranch_and_split(REG_TMP, next);
 				b.load             (REG_TMP16, REG_SP);
-				b.add            (REG_SP, REG_SP, IrConst::_16(2));
+				b.add              (REG_SP, REG_SP, IrConst::_16(2));
 				b.ret              (REG_TMP16);
 			}
 			LD => {

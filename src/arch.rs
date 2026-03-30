@@ -183,6 +183,9 @@ pub(crate) trait IIrCompiler: Sized + Sync + Send {
 
 	/// Give the register which represents the stack pointer.
 	fn stack_ptr_reg(&self) -> IrReg;
+
+	/// Give the name of a register from its offset, or panic if the offset is invalid.
+	fn reg_name(&self, offset: u16) -> &'static str;
 }
 
 // ------------------------------------------------------------------------------------------------
