@@ -125,15 +125,9 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 						let addr = EA::unresolved(addr);
 
 						let kind = match inst.kind() {
-							IrInstKind::Load{ .. }  => {
-
-								ConstAddrKind::Load
-							}
-							IrInstKind::Store{ .. } => {
-
-								ConstAddrKind::Store(val)
-							}
-							_                       => ConstAddrKind::Target,
+							IrInstKind::Load { .. }  => ConstAddrKind::Load,
+							IrInstKind::Store { .. } => ConstAddrKind::Store(val),
+							_                        => ConstAddrKind::Target,
 						};
 
 						return Some(ConstAddr {

@@ -12,7 +12,7 @@ use crate::arch::{ IArchitecture };
 use crate::platform::{ IPlatform };
 use crate::program::{ CfgPredecessors };
 use crate::memory::{ MmuState, VA, EA, StateChange };
-use crate::ir::{ ConstAddr, ConstAddrKind, IrFunctionWithNames };
+use crate::ir::{ ConstAddr, ConstAddrKind };
 
 // ------------------------------------------------------------------------------------------------
 // Function static analysis
@@ -63,7 +63,8 @@ impl Program {
 		for (reg, (val, from)) in consts.regs() {
 			debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
 		}
-		// debug!("{:?}", IrFunctionWithNames(&irfunc, &self.plat.arch().new_ir_compiler()));
+		// debug!("{:?}", crate::ir::IrFunctionWithNames(
+		// 	&irfunc, &self.plat.arch().new_ir_compiler()));
 
 		let addr_bits = self.plat.arch().addr_bits();
 

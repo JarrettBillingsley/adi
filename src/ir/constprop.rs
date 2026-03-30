@@ -219,64 +219,11 @@ impl Nodes {
 	}
 
 	fn opstr(&self, node: &Node) -> &'static str {
-		use NodeKind::*;
-		use IrUnOp::*;
-		use IrBinOp::*;
-		use IrTernOp::*;
 		match node.kind {
-			Const { .. } => "const",
-			Unary { op, .. } => match op {
-				Zxt  => "zxt",
-				Sxt  => "sxt",
-				Lo   => "lo",
-				Hi   => "hi",
-				Neg  => "neg",
-				INot => "inot",
-				BNot => "bnot",
-			}
-			Binary { op, .. } => match op {
-				Eq      => "eq",
-				Ne      => "ne",
-				Slt     => "slt",
-				Sle     => "sle",
-				Ult     => "ult",
-				Ule     => "ule",
-				Add     => "add",
-				Sub     => "sub",
-				UCarry  => "ucarry",
-				SCarry  => "scarry",
-				SBorrow => "sborrow",
-				Carries => "carries",
-				Borrows => "borrows",
-				Mul     => "mul",
-				UDiv    => "udiv",
-				SDiv    => "sdiv",
-				UMod    => "umod",
-				SMod    => "smod",
-				IXor    => "ixor",
-				IAnd    => "iand",
-				IOr     => "ior",
-				Shl     => "shl",
-				UShr    => "ushr",
-				SShr    => "sshr",
-				Rol     => "rol",
-				Ror     => "ror",
-				Pair    => "pair",
-				Bit     => "bit",
-				BXor    => "bxor",
-				BAnd    => "band",
-				BOr     => "bor",
-			}
-			Ternary { op, .. } => match op {
-				AddC     => "addc",
-				SubB     => "subb",
-				UCarryC  => "ucarryc",
-				SCarryC  => "scarryc",
-				SBorrowB => "sborrowb",
-				CarriesC => "carriesc",
-				BorrowsB => "borrowsb",
-				BSet     => "bset",
-			}
+			NodeKind::Const   { .. }     => "const",
+			NodeKind::Unary   { op, .. } => op.name(),
+			NodeKind::Binary  { op, .. } => op.name(),
+			NodeKind::Ternary { op, .. } => op.name(),
 		}
 	}
 }

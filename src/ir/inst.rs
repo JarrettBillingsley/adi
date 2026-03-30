@@ -78,6 +78,76 @@ pub(crate) enum IrTernOp {
 	BSet,   // dst = (s1 & ~(1 << s2)) | (s3 << s2) (s3 must be 0 or 1)
 }
 
+impl IrUnOp {
+	pub(crate) fn name(&self) -> &'static str {
+		use IrUnOp::*;
+		match self {
+			Zxt  => "zxt",
+			Sxt  => "sxt",
+			Lo   => "lo",
+			Hi   => "hi",
+			Neg  => "neg",
+			INot => "inot",
+			BNot => "bnot",
+		}
+	}
+}
+
+impl IrBinOp {
+	pub(crate) fn name(&self) -> &'static str {
+		use IrBinOp::*;
+		match self {
+			Eq      => "eq",
+			Ne      => "ne",
+			Slt     => "slt",
+			Sle     => "sle",
+			Ult     => "ult",
+			Ule     => "ule",
+			Add     => "add",
+			Sub     => "sub",
+			UCarry  => "ucarry",
+			SCarry  => "scarry",
+			SBorrow => "sborrow",
+			Carries => "carries",
+			Borrows => "borrows",
+			Mul     => "mul",
+			UDiv    => "udiv",
+			SDiv    => "sdiv",
+			UMod    => "umod",
+			SMod    => "smod",
+			IXor    => "ixor",
+			IAnd    => "iand",
+			IOr     => "ior",
+			Shl     => "shl",
+			UShr    => "ushr",
+			SShr    => "sshr",
+			Rol     => "rol",
+			Ror     => "ror",
+			Pair    => "pair",
+			Bit     => "bit",
+			BXor    => "bxor",
+			BAnd    => "band",
+			BOr     => "bor",
+		}
+	}
+}
+
+impl IrTernOp {
+	pub(crate) fn name(&self) -> &'static str {
+		use IrTernOp::*;
+		match self {
+			AddC     => "addc",
+			SubB     => "subb",
+			UCarryC  => "ucarryc",
+			SCarryC  => "scarryc",
+			SBorrowB => "sborrowb",
+			CarriesC => "carriesc",
+			BorrowsB => "borrowsb",
+			BSet     => "bset",
+		}
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // IrInstKind
 // ------------------------------------------------------------------------------------------------
@@ -166,150 +236,85 @@ impl Debug for IrInstKind {
 }
 
 impl IrInstKind {
+	pub(crate) fn name(&self) -> &'static str {
+		use IrInstKind::*;
+
+		match self {
+			Nop                => "nop",
+			Use     { .. }     => "use",
+			Mov     { .. }     => "mov",
+			Load    { .. }     => "load",
+			Store   { .. }     => "store",
+			Branch  { .. }     => "branch",
+			CBranch { .. }     => "cbranch",
+			IBranch { .. }     => "ibranch",
+			Call    { .. }     => "call",
+			ICall   { .. }     => "icall",
+			Ret     { .. }     => "ret",
+			Halt               => "halt",
+			Unary   { op, .. } => op.name(),
+			Binary  { op, .. } => op.name(),
+			Ternary { op, .. } => op.name(),
+		}
+	}
+
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		use IrInstKind::*;
-		use IrUnOp::*;
-		use IrBinOp::*;
-		use IrTernOp::*;
 
 		let r = |dst: IrReg| -> RegDbg { RegDbg(dst, compiler) };
 		let s = |src: IrSrc| -> SrcDbg { SrcDbg(src, compiler) };
 
+		write!(f, "{:<8} ", self.name())?;
+
 		match *self {
 			Nop =>
-				write!(f, "nop"),
+				Ok(()),
 			Use { reg } =>
-				write!(f, "use      {:?}", r(reg)),
+				write!(f, "{:?}", r(reg)),
 			Mov { dst, src, dstn, srcn } =>
-				write!(f, "mov      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
+				write!(f, "{:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
 			Load { dst, addr, dstn, addrn } =>
-				write!(f, "load     {:?}{:?}, [{:?}{:?}]", r(dst), Opn(dstn), s(addr), Opn(addrn)),
+				write!(f, "{:?}{:?}, [{:?}{:?}]", r(dst), Opn(dstn), s(addr), Opn(addrn)),
 			Store { addr, src, addrn, srcn } =>
-				write!(f, "store    [{:?}{:?}], {:?}{:?}", s(addr), Opn(addrn), s(src), Opn(srcn)),
+				write!(f, "[{:?}{:?}], {:?}{:?}", s(addr), Opn(addrn), s(src), Opn(srcn)),
 
 			Branch { dst, dstn } =>
-				write!(f, "branch   {:?}{:?}", dst, Opn(dstn)),
+				write!(f, "{:?}{:?}", dst, Opn(dstn)),
 			CBranch { cond, dst, cont, condn, dstn } =>
-				write!(f, "cbranch  {:?}{:?} ? {:?}{:?} : {:?}",
-					s(cond), Opn(condn), dst, Opn(dstn), cont),
+				write!(f, "{:?}{:?} ? {:?}{:?} : {:?}", s(cond), Opn(condn), dst, Opn(dstn), cont),
 			IBranch { dst, dstn } =>
-				write!(f, "ibranch  [{:?}{:?}]", s(dst), Opn(dstn)),
+				write!(f, "[{:?}{:?}]", s(dst), Opn(dstn)),
 			Call { dst, dstn, cont } =>
-				write!(f, "call     {:?}{:?} (return to {:?})", dst, Opn(dstn), cont),
+				write!(f, "{:?}{:?} (return to {:?})", dst, Opn(dstn), cont),
 			ICall { dst, dstn, cont } =>
-				write!(f, "icall    [{:?}{:?}] (return to {:?})", s(dst), Opn(dstn), cont),
+				write!(f, "[{:?}{:?}] (return to {:?})", s(dst), Opn(dstn), cont),
 			Ret { dst, dstn } =>
-				write!(f, "ret      [{:?}{:?}]", s(dst), Opn(dstn)),
+				write!(f, "[{:?}{:?}]", s(dst), Opn(dstn)),
 			Halt =>
-				write!(f, "halt"),
+				Ok(()),
 
-			Unary { dst, op, src, dstn, srcn } => match op {
-				Zxt  =>
-					write!(f, "zxt      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-				Sxt  =>
-					write!(f, "sxt      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-				Lo   =>
-					write!(f, "lo       {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-				Hi   =>
-					write!(f, "hi       {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-				Neg  =>
-					write!(f, "neg      {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-				INot =>
-					write!(f, "inot     {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-				BNot =>
-					write!(f, "bnot     {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
-			},
+			Unary { dst, op: _, src, dstn, srcn } =>
+				write!(f, "{:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
 
 			Binary { dst, src1, op, src2, dstn, src1n, src2n } => match op {
-				Eq      => write!(f, "eq       {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Ne      => write!(f, "ne       {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Slt     => write!(f, "slt      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Sle     => write!(f, "sle      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Ult     => write!(f, "ult      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Ule     => write!(f, "ule      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Add     => write!(f, "add      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Sub     => write!(f, "sub      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				UCarry  => write!(f, "ucarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				SCarry  => write!(f, "scarry   {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				SBorrow => write!(f, "sborrow  {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Carries => write!(f, "carries  {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Borrows => write!(f, "borrows  {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Mul     => write!(f, "mul      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				UDiv    => write!(f, "udiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				SDiv    => write!(f, "sdiv     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				UMod    => write!(f, "umod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				SMod    => write!(f, "smod     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				IXor    => write!(f, "ixor     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				IAnd    => write!(f, "iand     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				IOr     => write!(f, "ior      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Shl     => write!(f, "shl      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				UShr    => write!(f, "ushr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				SShr    => write!(f, "sshr     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Rol     => write!(f, "rol      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Ror     => write!(f, "ror      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Pair    => write!(f, "pair     {:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				Bit     => write!(f, "bit      {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				BXor    => write!(f, "bxor     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				BAnd    => write!(f, "band     {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-				BOr     => write!(f, "bor      {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n)),
-			},
+				IrBinOp::Pair =>
+					write!(f, "{:?}{:?}, hi = {:?}{:?}, lo = {:?}{:?}", r(dst), Opn(dstn),
+						s(src1), Opn(src1n), s(src2), Opn(src2n)),
+				IrBinOp::Bit =>
+					write!(f, "{:?}{:?}, {:?}{:?}, bit# = {:?}{:?}", r(dst), Opn(dstn),
+						s(src1), Opn(src1n), s(src2), Opn(src2n)),
+				_ =>
+					write!(f, "{:?}{:?}, {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn),
+						s(src1), Opn(src1n), s(src2), Opn(src2n)),
+			}
 
 			Ternary { dst, src1, op, src2, src3, dstn, src1n, src2n, src3n } => match op {
-				AddC     => write!(f, "addc     {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				SubB     => write!(f, "subb     {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				UCarryC  => write!(f, "ucarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				SCarryC  => write!(f, "scarryc  {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				SBorrowB => write!(f, "sborrowb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				CarriesC => write!(f, "carriesc {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				BorrowsB => write!(f, "borrowsb {:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
-				BSet     => write!(f, "bset     {:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}",
-					r(dst), Opn(dstn), s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3),
-					Opn(src3n)),
+				IrTernOp::BSet =>
+					write!(f, "{:?}{:?}, {:?}{:?}, bit# = {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn),
+						s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3), Opn(src3n)),
+				_ =>
+					write!(f, "{:?}{:?}, {:?}{:?}, {:?}{:?}, {:?}{:?}", r(dst), Opn(dstn),
+						s(src1), Opn(src1n), s(src2), Opn(src2n), s(src3), Opn(src3n)),
 			},
 		}
 	}
