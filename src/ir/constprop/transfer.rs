@@ -10,7 +10,7 @@ pub(super) fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 	let src_to_info = |src: IrSrc, srcn: i8, state: &mut ConstPropState| {
 		match src {
 			IrSrc::Reg(reg)   => state.regs[&reg],
-			IrSrc::Const(c)   => state.nodes.new_const(inst.ea(), c, srcn),
+			IrSrc::Const(c)   => state.nodes.new_const(false, inst.ea(), c, srcn),
 			IrSrc::Return(..) => Info::Any,
 		}
 	};
@@ -26,9 +26,9 @@ pub(super) fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 		Unary { dst, op, src, srcn, .. } => {
 			let src_info = src_to_info(src, srcn, state);
 			let new_info = match src_info {
-				Info::Some { val, from } => {
+				Info::Some { val, from, is_multi } => {
 					let result = do_unop(op, val, src.size(), dst.size());
-					state.nodes.new_unary(inst.ea(), result, op, from, srcn)
+					state.nodes.new_unary(is_multi, inst.ea(), result, op, from, srcn)
 				},
 				_ => Info::Any,
 			};
@@ -41,9 +41,10 @@ pub(super) fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 			let src2_info = src_to_info(src2, src2n, state);
 
 			let new_info = match (src1_info, src2_info) {
-				(Info::Some { val: val1, from: from1 }, Info::Some { val: val2, from: from2 }) => {
+				(Info::Some { val: val1, from: from1, is_multi: is_multi1 },
+				Info::Some { val: val2, from: from2, is_multi: is_multi2 }) => {
 					match do_binop(op, val1, val2, src1.size()) {
-						Some(result) => state.nodes.new_binary(
+						Some(result) => state.nodes.new_binary(is_multi1 || is_multi2,
 							inst.ea(), result, op, from1, from2, src1n, src2n),
 						None => Info::Any,
 					}
@@ -60,12 +61,12 @@ pub(super) fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 			let src3_info = src_to_info(src3, src3n, state);
 
 			let new_info = match (src1_info, src2_info, src3_info) {
-				(	Info::Some{ val: val1, from: from1, .. },
-					Info::Some{ val: val2, from: from2, .. },
-					Info::Some{ val: val3, from: from3, .. }) => {
+				(	Info::Some{ val: val1, from: from1, is_multi: is_multi1 },
+					Info::Some{ val: val2, from: from2, is_multi: is_multi2 },
+					Info::Some{ val: val3, from: from3, is_multi: is_multi3 }) => {
 
 					let result = do_ternop(op, val1, val2, val3, src1.size());
-					state.nodes.new_ternary(
+					state.nodes.new_ternary(is_multi1 || is_multi2 || is_multi3,
 						inst.ea(), result, op, from1, from2, from3, src1n, src2n, src3n)
 				}
 				_ => Info::Any,
@@ -78,6 +79,7 @@ pub(super) fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 	match thing {
 		Some((var, new_info)) => {
 			let changed = state.regs[&var] != new_info;
+			// if changed { log::trace!("  const transfer {:?} {:?}", var, new_info); }
 			state.regs.insert(var, new_info);
 			changed
 		}

@@ -1,4 +1,5 @@
 
+use std::fmt::{ Debug, Formatter, Result as FmtResult };
 use std::collections::{ BTreeMap };
 
 use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
@@ -23,26 +24,40 @@ use transfer::*;
 // Public interface
 // ------------------------------------------------------------------------------------------------
 
-/// Results of constant propagation. It maps from IR Registers to a tuple of:
-///
-/// - The determined constant value for that register
-/// - A list of up to 3 sources from which that constant was computed
-///
-/// The sources can be used to propagate information backwards, such as in cases
-/// where a constant address is computed by combining two smaller pieces, and those
-/// smaller pieces need to be marked as references to that address.
+/// Results of constant propagation.
 #[derive(Debug)]
 pub(crate) struct ConstPropResults {
-	regs:  BTreeMap<IrReg, (u64, NodeId)>,
+	regs:  BTreeMap<IrReg, ConstPropResult>,
 	nodes: Nodes,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ConstPropResult {
+	/// The computed value for this register. If `is_multi`, this is only one possible value.
+	pub(crate) val:      u64,
+	/// The root of the node DAG which describes the computation which produced `val`.
+	pub(crate) node:     NodeId,
+	/// If false, this is the only possible constant value for this register; otherwise, `val` is
+	/// one possibility, but not the only. Commonly this happens in loops where a register's value
+	/// is known for the first iteration but not subsequent ones.
+	pub(crate) is_multi: bool,
+}
+
+impl Debug for ConstPropResult {
+	fn fmt(&self, f: &mut Formatter) -> FmtResult {
+		write!(f, "{:08X}{} <from {:?}>",
+			self.val,
+			if self.is_multi { " (and others)" } else { "" },
+			self.node)
+	}
+}
+
 impl ConstPropResults {
-	pub(crate) fn get(&self, r: &IrReg) -> Option<&(u64, NodeId)> {
+	pub(crate) fn get(&self, r: &IrReg) -> Option<&ConstPropResult> {
 		self.regs.get(r)
 	}
 
-	pub(crate) fn regs(&self) -> impl Iterator<Item = (&IrReg, &(u64, NodeId))> {
+	pub(crate) fn regs(&self) -> impl Iterator<Item = (&IrReg, &ConstPropResult)> {
 		self.regs.iter()
 	}
 
@@ -68,9 +83,11 @@ pub(crate) fn propagate_constants(bbs: &[IrBasicBlock], cfg: &IrCfg) -> ConstPro
 enum Info {
 	/// ??? dunno
 	Unk,
-	/// some known constant; `from` is the root of the AST tree that computed this value
-	Some { val: u64, from: NodeId },
-	/// could be anything
+	/// some known constant. `from` is the root of the AST tree that computed this value. if
+	/// `is_multi`, this is only one of multiple possible constants, but all known values are
+	/// constant.
+	Some { val: u64, from: NodeId, is_multi: bool },
+	/// could be anything (non-constant)
 	Any,
 }
 
@@ -81,7 +98,9 @@ impl std::cmp::PartialEq for Info {
 		use Info::*;
 		match (self, other) {
 			(Unk, Unk) => true,
-			(Some { val: val1, ..}, Some { val: val2, .. }) => val1 == val2,
+			(Some { val: val1, is_multi: is_multi1, from: _ },
+			Some { val: val2, is_multi: is_multi2, from: _ }) =>
+				val1 == val2 && is_multi1 == is_multi2,
 			(Any, Any) => true,
 			_ => false,
 		}
@@ -94,19 +113,55 @@ impl JoinSemiLattice for Info {
 	fn join(&mut self, other: &Self) -> bool {
 		use Info::*;
 
+		//   ↪Unk ------------------+
+		//     ↓                    ↓
+		//  ↪Some(multi=false) --→ Any↩
+		//     ↓                    ↑
+		//  ↪Some(multi=true) ------+
+
+		// log::trace!("    joining {:?} with {:?}", self, other);
+
 		let new = match (&self, &other) {
-			(Unk, x)                     => **x,
-			(x, Unk)                     => **x,
-			(Any, _) | (_, Any)          => Any,
-			(Some { val: a, from: from1 }, Some { val: b, from: from2 }) if a == b => {
-				// TODO: how DO we handle this? just pick from1 or from2 or merge them somehow?
-				// have a phi node in the AST?
-				Some { val: *a, from: *from1 }
+			// Unk -> Unk
+			(Unk, Unk) => Unk,
+
+			// Unk -> Some
+			// Unk -> Any
+			(Unk, x @ Some { .. }) |
+			(Unk, x @ Any)         => **x,
+			(x @ Some { .. }, Unk) |
+			(x @ Any, Unk)         => **x,
+
+			// Some -> Any
+			(Any, Some { .. }) |
+			(Some { .. }, Any) => Any,
+
+			// Some(false) -> Some(false)
+			// Some(false) -> Some(true)
+			(Some { val: a, from: from1, is_multi: false },
+			Some { val: b, from: _from2, is_multi: false }) => {
+				if a == b {
+					// TODO: how DO we handle this? just pick from1 or from2 or merge them somehow?
+					// have a phi node in the AST?
+					Some { val: *a, from: *from1, is_multi: false }
+				} else {
+					// just pick the first one.
+					Some { val: *a, from: *from1, is_multi: true }
+				}
 			}
-			_                            => Any,
+
+			// Some(true) -> Some(true)
+			(Some { val: a, from: from1, is_multi: false }, Some { is_multi: true, .. }) |
+			(Some { val: a, from: from1, is_multi: true  }, Some { .. }) =>
+				Some { val: *a, from: *from1, is_multi: true },
+
+			// Any -> Any
+			(Any, Any) => Any,
 		};
 
+
 		if *self != new {
+			// log::trace!("      => {:?}", new);
 			*self = new;
 			true
 		} else {
@@ -207,11 +262,11 @@ impl<'bb> ConstProp<'bb> {
 			.filter_map(|(reg, info)|
 				match info {
 					Info::Unk | Info::Any => None,
-					Info::Some { val, from } => {
+					Info::Some { val, from, is_multi } => {
 						// print!("{:>8} = 0x{:04X} @ {:?} from ",
 						// 	format!("{:?}", reg), val, self.state.nodes.ea_of(from));
 						// self.state.nodes.dump(from);
-						Some((reg, (val, from)))
+						Some((reg, ConstPropResult { val, node: from, is_multi }))
 					}
 				})
 			.collect();
@@ -248,6 +303,8 @@ impl<'bb> DataflowAlgorithm for ConstProp<'bb> {
 fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
 	let mut reg_state = state.regs[phi.dst_reg()];
 	let mut changed = false;
+
+	// log::trace!("  const phi join {:?}", phi.dst_reg());
 
 	for arg in phi.args() {
 		changed |= reg_state.join(&state.regs[arg]);

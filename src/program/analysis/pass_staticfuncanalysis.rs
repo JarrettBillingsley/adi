@@ -58,13 +58,14 @@ impl Program {
 
 		let irfunc = self.func_to_ir(fid);
 		// debug!("------------------------------------------------------------------");
-		debug!("Constants:");
-		let consts = irfunc.constants();
-		for (reg, (val, from)) in consts.regs() {
-			debug!("{:?} = {:08X} <from {:?}>", reg, val, from);
-		}
+		// let compiler = self.plat.arch().new_ir_compiler();
+		// let consts = irfunc.constants();
+		// debug!("Constants:");
+		// for (reg, result) in consts.regs() {
+		// 	debug!("{:?} = {:?}", crate::ir::RegDbg(*reg, Some(&compiler)), result);
+		// }
 		// debug!("{:?}", crate::ir::IrFunctionWithNames(
-		// 	&irfunc, &self.plat.arch().new_ir_compiler()));
+		// 	&irfunc, &compiler));
 
 		let addr_bits = self.plat.arch().addr_bits();
 
@@ -79,7 +80,7 @@ impl Program {
 
 		let consts = irfunc.constants();
 
-		for ConstAddr { bbid, ea, opn, addr, kind, src } in irfunc.const_addrs() {
+		for ConstAddr { bbid, ea, opn, addr, kind, src, is_multi } in irfunc.const_addrs() {
 			// 1. add OpInfo::Ref to each constant operand
 			let bb = self.bbidx.get_mut(bbid);
 			let inst = bb.inst_at_ea_mut(ea).unwrap(); // safe because of above
@@ -110,15 +111,20 @@ impl Program {
 					let val = if let ConstAddrKind::Store(val) = kind { val } else { None };
 					let load = kind == ConstAddrKind::Load;
 
-					match src {
-						Some(src) => {
-							trace!("  const addr {} @ {} with source", addr, ea);
-							consts.dump_node(src);
-						}
-						None => {
-							trace!("  const addr {} @ {} with no source", addr, ea);
-						}
-					}
+					// match src {
+					// 	Some(src) => {
+					// 		log::trace!("  const addr {} @ {} with source (multi = {})",
+					// 			addr, ea, is_multi);
+					// 		consts.dump_node(src);
+					// 	}
+					// 	None => {
+					// 		log::trace!("  const addr {} @ {} with no source (multi = {})",
+					// 			addr, ea, is_multi);
+					// 	}
+					// }
+
+					// TODO: point of interest on is_multi addresses
+					let _ = is_multi;
 
 					// The only instructions marked MemAccess::R/W are loads and stores which, in
 					// the IR, do not have resolved EAs. So, the EA here must be unresolved, in

@@ -55,35 +55,39 @@ impl Nodes {
 		id
 	}
 
-	pub(super) fn new_const(&mut self, ea: EA, c: IrConst, cn: i8) -> Info {
+	pub(super) fn new_const(&mut self, is_multi: bool, ea: EA, c: IrConst, cn: i8) -> Info {
 		Info::Some {
 			val:  c.val(),
-			from: self.new_node(ea, NodeKind::Const { c, cn })
+			from: self.new_node(ea, NodeKind::Const { c, cn }),
+			is_multi,
 		}
 	}
 
-	pub(super) fn new_unary(&mut self, ea: EA, val: u64, op: IrUnOp,
+	pub(super) fn new_unary(&mut self, is_multi: bool, ea: EA, val: u64, op: IrUnOp,
 		src: NodeId, srcn: i8) -> Info {
 		Info::Some {
 			val,
-			from: self.new_node(ea, NodeKind::Unary { op, src, srcn })
+			from: self.new_node(ea, NodeKind::Unary { op, src, srcn }),
+			is_multi,
 		}
 	}
 
-	pub(super) fn new_binary(&mut self, ea: EA, val: u64, op: IrBinOp,
+	pub(super) fn new_binary(&mut self, is_multi: bool, ea: EA, val: u64, op: IrBinOp,
 		src1: NodeId, src2: NodeId, src1n: i8, src2n: i8) -> Info {
 		Info::Some {
 			val,
-			from: self.new_node(ea, NodeKind::Binary { op, src1, src2, src1n, src2n })
+			from: self.new_node(ea, NodeKind::Binary { op, src1, src2, src1n, src2n }),
+			is_multi,
 		}
 	}
 
-	pub(super) fn new_ternary(&mut self, ea: EA, val: u64, op: IrTernOp,
+	pub(super) fn new_ternary(&mut self, is_multi: bool, ea: EA, val: u64, op: IrTernOp,
 		src1: NodeId, src2: NodeId, src3: NodeId, src1n: i8, src2n: i8, src3n: i8) -> Info {
 		Info::Some {
 			val,
 			from: self.new_node(ea, NodeKind::Ternary {
-				op, src1, src2, src3, src1n, src2n, src3n })
+				op, src1, src2, src3, src1n, src2n, src3n }),
+			is_multi,
 		}
 	}
 

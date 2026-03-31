@@ -211,7 +211,7 @@ impl Debug for Opn {
 
 // helper type for printing out registers more easily
 #[derive(Clone, Copy)]
-struct RegDbg<'c>(IrReg, Option<&'c IrCompiler>);
+pub(crate) struct RegDbg<'c>(pub(crate) IrReg, pub(crate) Option<&'c IrCompiler>);
 
 impl<'c> Debug for RegDbg<'c> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
@@ -221,7 +221,7 @@ impl<'c> Debug for RegDbg<'c> {
 
 // helper type for printing out IrSrcs more easily
 #[derive(Clone, Copy)]
-struct SrcDbg<'c>(IrSrc, Option<&'c IrCompiler>);
+pub(crate) struct SrcDbg<'c>(pub(crate) IrSrc, pub(crate) Option<&'c IrCompiler>);
 
 impl<'c> Debug for SrcDbg<'c> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {

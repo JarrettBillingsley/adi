@@ -259,7 +259,7 @@ impl InstDesc {
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(b.inst(), 1) == Reg::DC {
 					b.pair(REG_TMP16, REG_D, REG_C);
-					REG_TMP16.into()
+					(REG_TMP16, 1).into()
 				} else {
 					r1()
 				};
@@ -271,7 +271,7 @@ impl InstDesc {
 
 				let addr = if self.addr_mode == AddrMode::RR && inst_reg(b.inst(), 1) == Reg::DC {
 					b.pair(REG_TMP16, REG_D, REG_C);
-					REG_TMP16.into()
+					(REG_TMP16, 0).into()
 				} else {
 					r1()
 				};

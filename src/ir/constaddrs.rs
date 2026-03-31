@@ -50,19 +50,20 @@ impl ConstAddrKind {
 }
 
 pub(crate) struct ConstAddr {
-	pub bbid:    BBId,
-	pub ea:      EA,
-	pub opn:     usize,
-	pub addr:    EA, // may or may not be resolved!
-	pub kind:    ConstAddrKind,
-	pub src:     Option<NodeId>,
+	pub bbid:     BBId,
+	pub ea:       EA,
+	pub opn:      usize,
+	pub addr:     EA, // may or may not be resolved!
+	pub kind:     ConstAddrKind,
+	pub src:      Option<NodeId>,
+	pub is_multi: bool,
 }
 
 impl ConstAddr {
 	pub(crate) fn dump(&self) {
-		let ConstAddr { bbid, ea, opn, addr, kind, src } = self;
+		let ConstAddr { bbid, ea, opn, addr, kind, src, is_multi } = self;
 		use ConstAddrKind::*;
-		println!("{:?} in {:?} operand {} is a {} <from {:?}>",
+		println!("{:?} in {:?} operand {} is a {} {} <from {:?}>",
 			ea,
 			bbid,
 			opn,
@@ -73,6 +74,7 @@ impl ConstAddr {
 				Offset           => format!("reference to {}", addr),
 				Target           => format!("control flow dst to {}", addr),
 			},
+			if *is_multi { "(and possibly others)" } else { "" },
 			src);
 	}
 }
@@ -87,7 +89,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 				IrInstKind::Store { src, .. } => {
 					match src {
 						IrSrc::Const(IrConst { val, .. }) => Some(val),
-						IrSrc::Reg(r) => self.consts.get(&r).map(|(val, _)| *val),
+						IrSrc::Reg(r) => self.consts.get(&r).map(|result| result.val),
 						_ => None,
 					}
 				},
@@ -108,6 +110,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 						},
 						kind: ConstAddrKind::Target,
 						src: None,
+						is_multi: false,
 					});
 				}
 
@@ -116,12 +119,13 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 				IrInstKind::IBranch { dst: addr, dstn: opn, .. } |
 				IrInstKind::ICall   { dst: addr, dstn: opn, .. }  if opn >= 0 => {
 					let addr = match addr {
-						IrSrc::Const(IrConst { val, .. }) => Some((val, None)),
-						IrSrc::Reg(r)                     => self.consts.get(&r).copied().map(|(v, n)| (v, Some(n))),
+						IrSrc::Const(IrConst { val, .. }) => Some((val, None, false)),
+						IrSrc::Reg(r)                     => self.consts.get(&r).copied()
+							.map(|result| (result.val, Some(result.node), result.is_multi)),
 						_                                 => None,
 					};
 
-					if let Some((addr, src)) = addr {
+					if let Some((addr, src, is_multi)) = addr {
 						let addr = EA::unresolved(addr);
 
 						let kind = match inst.kind() {
@@ -137,6 +141,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 							addr,
 							kind,
 							src,
+							is_multi,
 						});
 					}
 				}

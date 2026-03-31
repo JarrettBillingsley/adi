@@ -16,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 
-	// test_gb()
-	test_nes()
+	test_gb()
+	// test_nes()
 	// test_toy()
 }
 
@@ -181,6 +181,8 @@ fn toy_test_const_prop() -> ToyTest {
 	b.mov(C, B);
 	b.mov(D, A);
 	b.ld(A, DC);
+	b.movi(D, 0x90);
+	b.ld(A, DC);
 
 	b.movi(A, 0x10);
 	b.addi(A, 0x20);
@@ -197,12 +199,21 @@ fn toy_test_const_prop() -> ToyTest {
 	b.movi(B, 0x69);
 	b.sti(B, 0x8002);
 
+	b.movi(A, 5);
+	b.movi(D, 0x84);
+	let loop_start =
+	b.mov(C, A);
+	b.ld(B, DC);
+	b.addi(A, 0xFF);
+	b.cmpi(A, 0);
+	b.beq_to(loop_start);
+
 	b.ret();
 
 	ToyTest {
 		image: b.finish(),
 		name:  "<toy_test_const_prop>",
-		labels: vec![],
+		labels: vec![("_loop_start".into(), VA(loop_start))],
 		data: vec![],
 	}
 }
@@ -458,12 +469,12 @@ fn toy_test_data() -> ToyTest {
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
-	// let test = toy_test_const_prop();
+	let test = toy_test_const_prop();
 	// let test = toy_test_calls();
 	// let test = toy_test_loop()
 	// let test = toy_test_state_change();
 	// let test = toy_test_ccall_cret();
-	let test = toy_test_data();
+	// let test = toy_test_data();
 
 	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
 	prog.add_name("main", start_ea, false);
