@@ -627,4 +627,4 @@ wait this is a DAG meaning the leaves could be used in multiple different addres
 
 AAAAAAAAAAAAAAAAAAA
 
-So, in a case like this, as long as *all* addresses derived from it start with the same half, we can arbitrarily pick one... otherwise, uhhhhhhhhhh POI on it? or just pick the "first" one?
+So, in a case like this, as long as *all* addresses derived from it start with the same half, we can arbitrarily pick one... otherwise, uhhhhhhhhhh point of interest on it? or just pick the "first" one?

@@ -4,18 +4,32 @@
 # Major tasks
 
 - Const prop provenance ASTs
-- Type propagation (**depends on const prop ASTs**)
+- Argument/return value/clobber analysis
+- Type propagation (**depends on const prop ASTs** and **arg/ret/clobber analysis**)
 - Data analysis (***good* analysis depends on type propagation**)
 - Jump table analysis, indirect jumps and calls (**depends on data analysis**)
 - IR correctness testing
 - Multi-state BBs/functions
-- Argument/return value/clobber analysis
 - Stack analysis
+- Rearchitect public API to avoid returning `&mut`
 - Undo/Redo support (**depends on rearchitecting public API**)
 - Save/Load support
 
 # Imminent tasks!
 
+- **Const prop provenance ASTs**
+	- come up with OpInfo::Ref for halves of addresses
+- **Type propagation**
+	- give `DataItems` the ability to have separate load/store types
+		- e.g. NES `$4107` is APU frame counter on write, joypad 2 on read
+	- define data items for all hardware registers
+	- type propagation algo is like const prop except:
+		- non-const values are also taken into account
+		- the info for each register is a type, or union of types
+		- ohhhh this is type reconstruction... maybe implement a form of HM
+	- but wait, **we kinda need argument/return/clobber analysis for type propagation to work**
+		- there's just not enough information at the level of a single function to say much
+		- ouughhg
 - **Data analysis**
 	- new data analysis pass that runs after refs
 		- inspects outrefs and takes closer look at `OpInfo::Ref` operands
@@ -72,7 +86,7 @@
 			- **BUUUUUUUUUUUUUUUUUUUUUUUUUUT** something could split the BB between the `lda` and the `bne` and ffffffffffffffuck it all up lol. aAHGHAHGlLlL
 	- I think what makes the most sense then is:
 		- un-make the BB which can never be run
-		- put a POI there
+		- put a point of interest there
 	- **BUT THIS IS IMPORTANT:** since this is changing the function's CFG, it means it needs to rerun the static analysis pass. **but that means it's rescheduling itself.**
 		- so something else needs to be put at that address/on the BB that owns the terminator to say "hey, we analyzed this before, don't do it again" or else it could loop infinitely
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
@@ -239,27 +253,24 @@ The problem with doing any kind of dead store elim on this SSA is that we don't 
 
 I will define **exit point** as anywhere where control flow leaves the function permanently. A return *is just one example;* there are also tailcalls, tailbranches, fallthroughs, etc.
 
-At any exit point (and there can be more than one in the function!), any currently-live value *might* be a return value. We don't know, because there are no calling conventions. Similarly before a call, any value *might* be an argument.
+A **return point** is special kind of exit point: where the function returns. A function can have multiple return points.
+
+At any exit point (and there can be more than one in the function!), any currently-live value *might* be a return value. We don't know, because there are no calling conventions. Similarly before a call or tailcall, any value *might* be an argument.
+
+The dummy `use`s inserted at each exit point really encode **the most-recent generation of each register available at that point.**
 
 Argument and return value analysis would have to be done in a particular order - on the **call graph,** from leaves to root. Basic idea:
 
 - If a function uses a _0 value, **that is an argument to that function.**
-- If the caller uses one of those auto-generated defs that comes after a `call` instruction, **that is a return value from the *callee*.**
+- If a function uses one of the `r = <return>`s insterted after a `call` instruction, **that is a return value from the *callee*.**
 
-Each arch's IR compiler needs to give more info to the IR analyzer:
+The arg/return value regs from `IIrCompiler` can be used as the "worst case" starting points for the algorithm which can then prune them down from there (e.g. if a function never uses a `_0` reg, then it cannot possibly be an argument........ unless it (tail)calls a function which does, and it just passes that reg through!)
 
-- A list of regs which can be used as args (like, all of them)
-- A list of regs which can be used as returns (again, all of them)
-
-These can be used as the "worst case" starting points for the algorithm which can then prune them down from there (e.g. if a function never uses a _0 reg, then it cannot possibly be an argument........ unless it (tail)calls a function which does, and it just passes that reg through!)
-
-A **return point** is special kind of exit point: where the function returns. A function can have multiple return points.
-
-Insight: *if a function **only** has return points, and uses a _0 reg at **all** return point points, then it does not take/return that register at all.* Why:
+Insight: *if **all** exit points are return points, and for some reg r, there is a `use r_0` at **all** return point points, then it does not take/return that register at all.* Why:
 
 - If there are *only* return points (and no other kinds of exit points), then the register cannot be needed by this function, the callee. The caller may need it, but *not* the callee.
 	- (By contrast, **if there are any non-return exit points (e.g. a tailcall),** it could mean that the register is an argument passed through to the tailcalled function!)
-- Each return point is annotated with uses of all currently-live registers.
+- Each return point is annotated with uses of all currently-live registers (the `use`s).
 - If that register is changed at any point in the function, any use of it thereafter will have a nonzero generation.
 - If there are multiple return points, and it's been changed in **any** control path, then **at least one** of the return point uses will use a nonzero generation of that register.
 - Therefore, if all return points use the zero generation, then it can't have been assigned anywhere and is unaffected by the function.
@@ -273,6 +284,38 @@ The *meaning* of "is unaffected" is ambiguous, however. It could be:
 	- e.g. `s` registers in MIPS; not using one maintains the agreement that they will have the same value on exit as on entry
 - Something that really *was* an argument, but the code was rewritten and it went unused, so even though the caller sets it before each call, it never gets read
 - I'm sure there are other cases I'm not thinking of...
+
+---
+
+## Register Usage Analysis (arg/ret/clobber) algorithm thoughts
+
+1. build whole-program call graph.
+	- there can be multiple entry points (e.g. reset + interrupt vectors)
+	- there will be leaf functions
+	- there will be in-between functions
+	- there will be recursive functions, both self- and mutually-recursive
+		- identify mutually-recursive functions as "clumps" to be analyzed together
+2. starting from the leaves...
+	- determining arguments is easy - if `_0` is used anywhere in the function, that's an argument.
+	- determining clobbers is easy - any reg with nonzero generation at any exitpoint is clobbered.
+	- determining return vals is more complicated
+		- if **any *caller* uses the `r = <return>` value after a call to this function,** then that's a return value from this function.
+	- return vals are a subset of clobbers
+		- can remove them from that set
+	- then each `Function` needs to remember those three sets - args, rets, clobbers
+	- **how does dead store elimination tie into it?**
+		- well, the `r = <return>`s can be pruned **only if the callee's rets set has been determined.** only insert them for things in that set.
+		- also, the `use reg`s should only be inserted for those regs which are *actually* arguments to the function.
+		- `to_ir` needs to take this into account instead of only using `IIrCompiler::arg/ret_regs`
+		- *however* it's possible for buggy code to use "unaffected" registers...
+			- e.g. a function expects a return value in `a` but the callee never put anything in `a`
+			- in that case pruning the `a = <return>` would lead to a mis-analysis of the caller.... or would it
+				- cause it would say "you're using some value of `a` computed in this function, not the callee" which *is technically right!* hmmmmmm
+	- **what about recursive functions?**
+		- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
+		- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
+	- eventually this will lead to the entire call graph being analyzed
+		- and all functions' register usages being determined
 
 ---
 
