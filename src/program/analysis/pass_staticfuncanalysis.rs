@@ -317,7 +317,7 @@ impl JoinSemiLattice for StateInfo {
 			(Unk, x)                     => (*x).clone(),
 			(x, Unk)                     => (*x).clone(),
 			(Some(a), Some(b)) if a == b => Some(*a),
-			(Some(a), Some(b))           => Multi(HashSet::from_iter([*a, *b].into_iter())),
+			(Some(a), Some(b))           => Multi(HashSet::from_iter([*a, *b])),
 			(Some(a), Multi(m))          => Multi({ let mut s = m.clone(); s.insert(*a); s}),
 			(Multi(m), Some(a))          => Multi({ let mut s = m.clone(); s.insert(*a); s}),
 			(Multi(m1), Multi(m2))       => Multi(m1.union(m2).copied().collect()),

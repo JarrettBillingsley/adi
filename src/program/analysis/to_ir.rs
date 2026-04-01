@@ -71,7 +71,7 @@ impl Program {
 				b.set_inst(inst);
 				compiler.build_ir(&mut b)
 			});
-			b.set_inst(&last);
+			b.set_inst(last);
 			compiler.build_ir_term(&mut b, &bb.term);
 
 			match bb.term {

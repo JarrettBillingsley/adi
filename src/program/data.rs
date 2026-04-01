@@ -270,7 +270,7 @@ impl TypeIndex {
 
 	/// Create an array type. Panics if `item_ty` is not a fixed-size type.
 	pub fn array(&self, item_ty: &Type, len: Size) -> Type {
-		assert!(self.is_fixed_size(&item_ty), "arrays can only hold fixed-size values");
+		assert!(self.is_fixed_size(item_ty), "arrays can only hold fixed-size values");
 		Type::Array(ArrayType { ty: Box::new(item_ty.clone()), len })
 	}
 

@@ -44,6 +44,7 @@ pub(super) struct Nodes {
 	pub(super) nodes: Vec<Node>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Nodes {
 	pub(super) fn new() -> Self {
 		Self { nodes: vec![] }

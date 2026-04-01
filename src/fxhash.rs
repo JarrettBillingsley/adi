@@ -12,7 +12,7 @@ impl<T> FxHashSetEx for FxHashSet<T> {
 	}
 
 	fn with_capacity(cap: usize) -> Self {
-		Self::with_capacity_and_hasher(cap, FxBuildHasher::default())
+		Self::with_capacity_and_hasher(cap, FxBuildHasher)
 	}
 }
 

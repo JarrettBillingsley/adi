@@ -179,8 +179,12 @@ impl Function {
 		}
 	}
 
-	pub(crate) fn reg_use(&mut self) -> Option<&FuncRegUseInfo> {
+	pub(crate) fn reg_use(&self) -> Option<&FuncRegUseInfo> {
 		self.reg_use.as_ref()
+	}
+
+	pub(crate) fn reg_use_mut(&mut self) -> &mut Option<FuncRegUseInfo> {
+		&mut self.reg_use
 	}
 }
 
