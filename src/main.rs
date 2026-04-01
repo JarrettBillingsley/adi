@@ -16,9 +16,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 
-	test_gb()
+	// test_gb()
 	// test_nes()
-	// test_toy()
+	test_toy()
 }
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
@@ -469,8 +469,8 @@ fn toy_test_data() -> ToyTest {
 fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	// let test = toy_test_all_instructions();
 	// let test = toy_test_ssa();
-	let test = toy_test_const_prop();
-	// let test = toy_test_calls();
+	// let test = toy_test_const_prop();
+	let test = toy_test_calls();
 	// let test = toy_test_loop()
 	// let test = toy_test_state_change();
 	// let test = toy_test_ccall_cret();
@@ -501,6 +501,9 @@ fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
 	for segid in prog.all_image_segs() {
 		show_segment(&prog, segid);
 	}
+
+	let cg = prog.build_call_graph();
+	prog.dump_call_graph(&cg);
 
 	Ok(())
 }
@@ -557,6 +560,9 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 	for segid in prog.all_image_segs() {
 		show_segment(&prog, segid);
 	}
+
+	let cg = prog.build_call_graph();
+	prog.dump_call_graph(&cg);
 
 	Ok(())
 }

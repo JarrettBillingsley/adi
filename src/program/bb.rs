@@ -2,6 +2,7 @@
 use std::iter::Chain;
 use std::option;
 use std::slice;
+use std::ops::{ Range };
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use generational_arena::{ Arena, Index };
@@ -53,6 +54,14 @@ impl BasicBlock {
 	pub fn ea(&self) -> EA { self.ea }
 	/// Where its terminator (last instruction) is located.
 	pub fn term_ea(&self) -> EA { self.term_inst().ea() }
+	/// The range of EAs this BB covers, `[inclusive, exclusive)`.
+	///
+	/// WARNING: the upper end of this range may not be a valid EA and may cause panics if used as
+	/// one. It should ONLY be used as a range bound (i.e. to be compared against).
+	pub fn ea_range(&self) -> Range<EA> {
+		let ti = self.term_inst();
+		self.ea .. ti.ea() + ti.size() as Size
+	}
 	/// How it ends, and what its successors are.
 	pub fn term(&self) -> &BBTerm  { &self.term }
 	/// Same as above, but mutable.
@@ -245,6 +254,12 @@ pub type Successors<'a> = Chain<option::IntoIter<&'a EA>, slice::Iter<'a, EA>>;
 pub type SuccessorsMut<'a> = Chain<option::IntoIter<&'a mut EA>, slice::IterMut<'a, EA>>;
 
 impl BBTerm {
+	/// Return true if this terminator is either `Call` or `IndirCall`. Tailcalls/tailbranches are
+	/// not covered by this.
+	pub fn is_call(&self) -> bool {
+		matches!(self, BBTerm::Call { .. } | BBTerm::IndirCall { .. })
+	}
+
 	/// If this terminator has a "continuation" successor (i.e. a successor which is run immediately
 	/// after the terminating instruction runs, like after a call or return), returns Some.
 	pub fn continuation_successor(&self) -> Option<EA> {
