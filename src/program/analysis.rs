@@ -14,6 +14,7 @@ pub mod pass_splitfunc;
 pub mod pass_staticfuncanalysis;
 pub mod pass_refs;
 pub mod pass_jumptable;
+pub mod pass_regusage;
 
 // ------------------------------------------------------------------------------------------------
 // AnalysisQueue
@@ -25,6 +26,7 @@ pub(crate) struct AnalysisQueue {
 	func_analysis_queue: WorkQueue<FuncId>,
 	func_refs_queue:     WorkQueue<FuncId>,
 	jump_table_queue:    WorkQueue<EA>,
+	reg_usage_queue:     bool,
 }
 
 impl AnalysisQueue {
@@ -35,12 +37,13 @@ impl AnalysisQueue {
 			func_analysis_queue: WorkQueue::new(50),
 			func_refs_queue:     WorkQueue::new(50),
 			jump_table_queue:    WorkQueue::new(50),
+			reg_usage_queue:     false,
 		}
 	}
 
 	/// Puts an EA on the queue that should be the start of a function.
 	pub(crate) fn enqueue_new_func(&mut self, state: MmuState, ea: EA) {
-		self.new_func_queue.enqueue((ea, state))
+		self.new_func_queue.enqueue((ea, state));
 	}
 
 	/// Schedules a function to attempt to be split at the given EA.
@@ -60,7 +63,12 @@ impl AnalysisQueue {
 
 	/// Puts an EA on the queue that should be the jump instruction for a jump table.
 	pub(crate) fn enqueue_jump_table(&mut self, ea: EA) {
-		self.jump_table_queue.enqueue(ea)
+		self.jump_table_queue.enqueue(ea);
+	}
+
+	/// Schedules a whole-program register usage analysis.
+	pub(crate) fn enqueue_reg_usage(&mut self) {
+		self.reg_usage_queue = true;
 	}
 }
 
@@ -88,6 +96,10 @@ impl Program {
 				continue;
 			} else if let Some(ea) = self.queue.jump_table_queue.dequeue() {
 				self.jump_table_pass(ea);
+				continue;
+			} else if self.queue.reg_usage_queue {
+				self.queue.reg_usage_queue = false;
+				self.reg_usage_pass();
 				continue;
 			}
 
