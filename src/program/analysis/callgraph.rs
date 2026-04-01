@@ -36,10 +36,12 @@ impl Program {
 		let mut g = CallGraph::new();
 
 		for (_, func) in self.funcs.all_funcs() {
-			g.add_node(func.id());
+			let fid = func.id();
+			// add all functions, in case there are any disconnected from the rest of the graph
+			g.add_node(fid);
+
+			// then add an edge to every outref
 		}
-
-
 
 		ProgramCallGraph::new(g)
 	}
