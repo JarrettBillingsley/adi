@@ -35,7 +35,7 @@ impl IIrCompiler for Mos65xxIrCompiler {
 		REG_S
 	}
 
-	fn reg_name(&self, offset: u16) -> &'static str {
+	fn reg_name(&self, offset: u8) -> &'static str {
 		match offset {
 			x if x == REG_A.offset()       => "a",
 			x if x == REG_X.offset()       => "x",

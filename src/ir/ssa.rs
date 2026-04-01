@@ -122,8 +122,8 @@ fn rename_regs(
 }
 
 struct RegRenamer {
-	counters: BTreeMap<u16, u32>,
-	stacks:   BTreeMap<u16, Vec<u32>>,
+	counters: BTreeMap<u8, u32>,
+	stacks:   BTreeMap<u8, Vec<u32>>,
 }
 
 impl RegRenamer {
@@ -145,7 +145,7 @@ impl RegRenamer {
 			.unwrap()
 	}
 
-	fn visit_assignment_dst(&mut self, reg: &mut IrReg, to_pop: &mut BTreeMap<u16, usize>) {
+	fn visit_assignment_dst(&mut self, reg: &mut IrReg, to_pop: &mut BTreeMap<u8, usize>) {
 		let offset = reg.offset();
 		let i = self.counters[&offset];
 		let new_reg = reg.sub(i);
@@ -156,7 +156,7 @@ impl RegRenamer {
 	}
 
 	fn search(&mut self, bbid: IrBBId, bbs: &mut [IrBasicBlock], cfg: &IrCfg, doms: &DomTree) {
-		let mut to_pop = BTreeMap::<u16, usize>::new();
+		let mut to_pop = BTreeMap::<u8, usize>::new();
 		let bb = &mut bbs[bbid];
 
 		// 1. update instructions in this bb

@@ -31,7 +31,7 @@ impl IIrCompiler for ToyIrCompiler {
 		REG_SP
 	}
 
-	fn reg_name(&self, offset: u16) -> &'static str {
+	fn reg_name(&self, offset: u8) -> &'static str {
 		match offset {
 			x if x == REG_A.offset()     => "a",
 			x if x == REG_B.offset()     => "b",
@@ -82,7 +82,7 @@ fn inst_reg(i: &Instruction, op: usize) -> Reg {
 		_ => panic!("not a register operand"),
 	};
 
-	decode_reg(reg as u8)
+	decode_reg(reg)
 }
 
 fn inst_addr(i: &Instruction, op: usize) -> VA {

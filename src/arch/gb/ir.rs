@@ -33,7 +33,7 @@ impl IIrCompiler for GBIrCompiler {
 	fn return_regs  (&self) -> &'static [IrReg] { RETURN_REGS }
 	fn stack_ptr_reg(&self) -> IrReg            { REG_SP }
 
-	fn reg_name(&self, offset: u16) -> &'static str {
+	fn reg_name(&self, offset: u8) -> &'static str {
 		match offset {
 			x if x == REG_A.offset()  => "a",
 			x if x == REG_B.offset()  => "b",

@@ -1,10 +1,6 @@
 
 # Yak stack
 
-- thinking about limiting IR to 64/128 registers and using u8 instead of u16 for IR reg indexes
-- ... to represent functions' register usage efficiently
-- ... to do register usage analysis
-
 # Major tasks
 
 - Const prop provenance ASTs

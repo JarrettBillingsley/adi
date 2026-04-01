@@ -87,7 +87,7 @@ impl ValSize {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub(crate) struct IrReg {
 	size:   ValSize,
-	offset: u16,
+	offset: u8,
 	gen_:   Option<u32>
 }
 
@@ -97,7 +97,13 @@ impl Debug for IrReg {
 	}
 }
 
+/// Integer type which can be used as a bitset to represent registers.
+pub(crate) type IrRegSetType = u64;
+
 impl IrReg {
+	/// Maximum valid IR register offset.
+	pub(crate) const MAX: u8 = IrRegSetType::BITS as u8 - 1;
+
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		// have to do it like this for borrowing reasons
 		match compiler {
@@ -114,23 +120,27 @@ impl IrReg {
 		}
 	}
 
-	/// Constructs an 8-bit register.
-	pub(crate) const fn reg8(offset: u16) -> Self {
+	/// Constructs an 8-bit register. Panics if `offset` > `IrReg::MAX`.
+	pub(crate) const fn reg8(offset: u8) -> Self {
+		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
 		Self { size: ValSize::_8, offset, gen_: None }
 	}
 
-	/// Constructs a 16-bit register.
-	pub(crate) const fn reg16(offset: u16) -> Self {
+	/// Constructs a 16-bit register. Panics if `offset` > `IrReg::MAX`.
+	pub(crate) const fn reg16(offset: u8) -> Self {
+		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
 		Self { size: ValSize::_16, offset, gen_: None }
 	}
 
-	/// Constructs a 32-bit register.
-	pub(crate) const fn reg32(offset: u16) -> Self {
+	/// Constructs a 32-bit register. Panics if `offset` > `IrReg::MAX`.
+	pub(crate) const fn reg32(offset: u8) -> Self {
+		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
 		Self { size: ValSize::_32, offset, gen_: None }
 	}
 
-	/// Constructs a 64-bit register.
-	pub(crate) const fn reg64(offset: u16) -> Self {
+	/// Constructs a 64-bit register. Panics if `offset` > `IrReg::MAX`.
+	pub(crate) const fn reg64(offset: u8) -> Self {
+		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
 		Self { size: ValSize::_64, offset, gen_: None }
 	}
 
@@ -142,7 +152,7 @@ impl IrReg {
 
 	/// Its offset into the registers "segment."
 	#[inline]
-	pub(crate) fn offset(&self) -> u16 {
+	pub(crate) fn offset(&self) -> u8 {
 		self.offset
 	}
 
