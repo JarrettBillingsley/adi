@@ -1,11 +1,15 @@
 
 # Yak stack
 
+- thinking about limiting IR to 64/128 registers and using u8 instead of u16 for IR reg indexes
+- ... to represent functions' register usage efficiently
+- ... to do register usage analysis
+
 # Major tasks
 
 - Const prop provenance ASTs
-- Argument/return value/clobber analysis
-- Type propagation (**depends on const prop ASTs** and **arg/ret/clobber analysis**)
+- Register usage analysis
+- Type propagation (**depends on const prop ASTs** and **register usage analysis**)
 - Data analysis (***good* analysis depends on type propagation**)
 - Jump table analysis, indirect jumps and calls (**depends on data analysis**)
 - IR correctness testing
@@ -27,7 +31,7 @@
 		- non-const values are also taken into account
 		- the info for each register is a type, or union of types
 		- ohhhh this is type reconstruction... maybe implement a form of HM
-	- but wait, **we kinda need argument/return/clobber analysis for type propagation to work**
+	- but wait, **we kinda need register usage analysis for type propagation to work**
 		- there's just not enough information at the level of a single function to say much
 		- ouughhg
 - **Data analysis**
@@ -98,6 +102,27 @@
 	- **`BBTerm` and `InstructionKind` really encode *control flow strategies***
 		- so maybe that's what they should be named
 		- also opens up ideas for "custom" control flow set by user (does it continue to the next PC? does it have a target? multiple targets? does it change state? etc)
+		- summary of current and proposed control flow kinds (maybe this can be unified into a single struct rather than enum variants?):
+
+			| Kind          | Num Dests   | Continues?  | Changes State? | Conditional? |
+			|:--------------|:------------|:------------|:---------------|:-------------|
+			| `DeadEnd`     | 0           | false       | false          | false        |
+			| `Halt`        | 0           | false       | false          | false        |
+			| `Return`      | 0           | maybe       | false          | false        |
+			| `FallThru`    | 0           | true        | false          | false        |
+			| `Jump`        | 1           | false       | false          | false        |
+			| `Call`        | 1           | true        | false          | maybe        |
+			| `BANK_SWITCH` | 1           | true        | true           | maybe        |
+			| `NO_RETURN`   | 1           | false       | false          | maybe        |
+			| `Cond`        | 1           | true        | false          | false        |
+			| `IndirCall`   | many        | true        | false          | false        |
+			| `IndirJump`   | many        | false       | false          | false        |
+			| `JUMP_TABLE`  | many        | false       | false          | false        |
+			| `StateChange` | 0           | true        | true           | false        |
+
+			- `DeadEnd` and `Halt` have the same properties, but different meanings
+			- `IndirJump` and `JUMP_TABLE` have the same properties, but different meanings
+
 	- **MMU State display/encoding**
 		- for showing to the user (esp for more complex MMU state like GB MBC1)
 		- for allowing the user to set the state manually
@@ -137,7 +162,7 @@
 		- this could be used for *way more* than just constant provenance right?
 			- you could have it show little HLL-like snippets of what a sequence of instructions does, like a very limited decompiler
 	- **IR Dead Store Elimination**
-		- ties into argument/return value/clobber analysis
+		- ties into register usage analysis
 	- **Marking functions as "bankswitch functions"**
 		- if it e.g. takes the bank to switch as an argument
 		- ofc user can help with this, but we should be able to identify candidates
@@ -182,7 +207,7 @@
 	- **Ensure each segment's base VA is the same every time it's mapped in**
 		- this is a big fuckin assumption on my part, that each e.g. ROM block will be mapped into the same VA window every time it's accessed
 		- during state change analysis, whenever state changes, check with the mapped-in segments to see if their VA is the same as it ever was
-	- **Argument/return value/clobber analysis**
+	- **register usage analysis**
 		- very low-priority pass, done on whole program call graph
 		- can be used to prune `use` and `=<return>` in IR, which gives better info for const prop, which allows better MMU state determination
 			- so it could trigger MMU state analysis again on just about every function in the program lol
@@ -247,7 +272,7 @@
 
 ---
 
-## Dead store elimination and argument/return value/clobber analysis thoughts
+## Dead store elimination and register usage analysis thoughts
 
 The problem with doing any kind of dead store elim on this SSA is that we don't actually know which values are used **in the presence of function calls and returns.**
 
@@ -295,13 +320,20 @@ The *meaning* of "is unaffected" is ambiguous, however. It could be:
 	- there will be in-between functions
 	- there will be recursive functions, both self- and mutually-recursive
 		- identify mutually-recursive functions as "clumps" to be analyzed together
-2. starting from the leaves...
+		- use tarjan's to identify SCCs
+			- heyyyyy petgraph's tarjan's algo also returns the SCCs in postorder, meaning we already have the order in which to visit things!
+	- there may even be isolated functions (either unused code or, through analysis, got stranded)
+		- but I don't think we need to treat those differently...?
+2. starting from the leaves, for each function:
 	- determining arguments is easy - if `_0` is used anywhere in the function, that's an argument.
 	- determining clobbers is easy - any reg with nonzero generation at any exitpoint is clobbered.
-	- determining return vals is more complicated
-		- if **any *caller* uses the `r = <return>` value after a call to this function,** then that's a return value from this function.
-	- return vals are a subset of clobbers
-		- can remove them from that set
+	- determining return vals: **for each caller,**
+		- generate its IR *using the determined argument regs for the callee, and clobbered regs as its return values,*
+		- do DSE on the caller's IR
+		- any remaining `r = <return>` after a call to the callee is a *true* return value and not just a clobber.
+		- the return values are the **union of all of these sets.**
+			- since return vals are a subset of clobbers, we can implement this as moving a reg from the clobber set to the retval set
+				- can early-out if clobber set becomes empty!
 	- then each `Function` needs to remember those three sets - args, rets, clobbers
 	- **how does dead store elimination tie into it?**
 		- well, the `r = <return>`s can be pruned **only if the callee's rets set has been determined.** only insert them for things in that set.
