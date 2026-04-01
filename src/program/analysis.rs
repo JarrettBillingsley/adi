@@ -7,6 +7,7 @@ use crate::dataflow::{ WorkQueue };
 // Submodules
 // ------------------------------------------------------------------------------------------------
 
+pub mod callgraph;
 pub mod misc;
 pub mod regset;
 pub mod to_ir;

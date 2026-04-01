@@ -13,7 +13,7 @@ use crate::program::{ BBId, analysis::regset::RegSet };
 // ------------------------------------------------------------------------------------------------
 
 /// Newtype which uniquely identifies a `Function`.
-#[derive(PartialEq, Eq, Copy, Clone, Hash)]
+#[derive(PartialEq, Eq, Copy, Clone, Hash, PartialOrd, Ord)]
 pub struct FuncId(pub Index);
 
 impl Debug for FuncId {
