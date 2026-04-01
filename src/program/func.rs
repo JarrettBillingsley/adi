@@ -6,7 +6,7 @@ use generational_arena::{ Arena, Index };
 use smallvec::{ SmallVec };
 
 use crate::memory::{ EA };
-use crate::program::{ BBId };
+use crate::program::{ BBId, analysis::regset::RegSet };
 
 // ------------------------------------------------------------------------------------------------
 // FuncId
@@ -39,6 +39,32 @@ bitflags! {
 }
 
 // ------------------------------------------------------------------------------------------------
+// FuncRegUseInfo
+// ------------------------------------------------------------------------------------------------
+
+/// How a function uses or affects registers.
+#[derive(Debug)]
+pub(crate) struct FuncRegUseInfo {
+	/// Which registers this function changes. Whether that register is a return value or just a
+	/// clobber is determined by `aux`.
+	changed: RegSet,
+	/// - If a register is in `changed`:
+	///     - If it's in `aux`, it's a return value.
+	///     - Else, it's a clobber (changed by the function but not used as a return value).
+	/// - If a register is *not* in `changed:
+	///     - If it's in `aux`, it's an argument.
+	///     - Else, it's unused by/unaffected by this function.
+	aux:     RegSet,
+}
+
+impl FuncRegUseInfo {
+	// arg:     !changed &  aux
+	// ret:      changed &  aux
+	// clobber:  changed & !aux
+	// unaff:   !changed & !aux
+}
+
+// ------------------------------------------------------------------------------------------------
 // Function
 // ------------------------------------------------------------------------------------------------
 
@@ -56,6 +82,8 @@ pub struct Function {
 	pub(crate) bbs: Vec<BBId>,
 	/// The IDs of the `BasicBlock`s which are entry points into this function.
 	pub(crate) entrypoints: SmallVec<[BBId; 2]>,
+	/// Register use info, or `None` if register usage hasn't yet been analyzed.
+	reg_use: Option<FuncRegUseInfo>,
 }
 
 impl Function {
@@ -128,7 +156,8 @@ impl Function {
 			ea,
 			attrs: FuncAttrs::NONE,
 			bbs,
-			entrypoints
+			entrypoints,
+			reg_use: None,
 		}
 	}
 
@@ -148,6 +177,10 @@ impl Function {
 		} else {
 			false
 		}
+	}
+
+	pub(crate) fn reg_use(&mut self) -> Option<&FuncRegUseInfo> {
+		self.reg_use.as_ref()
 	}
 }
 
