@@ -10,11 +10,10 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use delegate::delegate;
 
 use crate::{ Size, Offs };
-use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintOutput, FmtWritePrintOutput,
-	IArchitecture };
+use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintOutput, FmtWritePrintOutput };
 use crate::memory::{ Memory, MmuState, StateChange, EA, VA, SegId, Span, SpanKind, Segment,
 	Endian };
-use crate::platform::{ Platform, IPlatform };
+use crate::platform::{ Platform };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules

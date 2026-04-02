@@ -1,8 +1,7 @@
 
 # Yak stack
 
-- figuring out where to put some one-time-initialized arch-specific reg info (`IIrCompiler::arch_regs` to `RegSet` and some mapping from reg index to `ValSize`) - on `Architecture` itself? turn `Architecture` into `ArchitectureKind` and then wrap that in a struct?
-- ...to make func_to_ir use functions' analyzed registers if available
+- make func_to_ir use functions' analyzed registers if available
 - ...to do register usage analysis.
 
 # Major tasks

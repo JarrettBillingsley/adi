@@ -6,7 +6,7 @@ use enum_dispatch::enum_dispatch;
 use crate::fxhash::{ FxHashMap as HashMap };
 
 use crate::{ Size, Offs };
-use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
+use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError, Platform };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::gb::{ GBArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId, EA };
@@ -24,7 +24,7 @@ impl GBPlatform {
 
 impl IPlatform for GBPlatform {
 	fn arch(&self) -> Architecture {
-		GBArchitecture.into()
+		Architecture::new(GBArchitecture.into())
 	}
 }
 
@@ -377,7 +377,7 @@ impl ILoader for GBLoader {
 			mmu.into()
 		);
 
-		let mut prog = Program::new(mem, GBPlatform::new().into());
+		let mut prog = Program::new(mem, Platform::new(GBPlatform::new().into()));
 		setup_gb_labels(&mut prog);
 
 		let reset = prog.ea_from_name("RESET");

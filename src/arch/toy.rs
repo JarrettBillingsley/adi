@@ -393,6 +393,7 @@ impl IPrinter for ToyPrinter {
 // Architecture
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
 pub struct ToyArchitecture;
 
 impl IArchitecture for ToyArchitecture {

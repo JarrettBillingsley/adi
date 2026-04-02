@@ -1,10 +1,11 @@
 
+use delegate::delegate;
 use enum_dispatch::enum_dispatch;
 
 use crate::{ Offs };
-use crate::ir::{ IrBuilder, IrReg };
+use crate::ir::{ IrBuilder, IrReg, ValSize };
 use crate::memory::{ Endian, MmuState, EA, VA };
-use crate::program::{ Instruction, BBTerm };
+use crate::program::{ Instruction, BBTerm, RegSet };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -196,14 +197,15 @@ use mos65xx::{ Mos65xxArchitecture };
 use toy::{ ToyArchitecture };
 
 #[enum_dispatch]
-pub enum Architecture {
+#[derive(Clone, Copy)]
+pub enum ArchitectureKind {
 	GBArchitecture,
 	Mos65xxArchitecture,
 	ToyArchitecture,
 }
 
-#[enum_dispatch(Architecture)]
-pub(crate) trait IArchitecture: Sized + Sync + Send {
+#[enum_dispatch(ArchitectureKind)]
+pub(crate) trait IArchitecture: Sized + Sync + Send + Clone + Copy {
 	/// The system's endianness.
 	fn endianness(&self) -> Endian;
 	/// How many bits in an address.
@@ -214,4 +216,55 @@ pub(crate) trait IArchitecture: Sized + Sync + Send {
 	fn new_printer(&self) -> Printer;
 	/// Construct a new IR compiler.
 	fn new_ir_compiler(&self) -> IrCompiler;
+}
+
+#[derive(Clone)]
+pub struct Architecture {
+	kind: ArchitectureKind,
+	arch_regs: RegSet,
+	reg_sizes: [ValSize; IrReg::MAX_NUM],
+}
+
+impl Architecture {
+	pub(crate) fn new(kind: ArchitectureKind) -> Self {
+		let mut arch_regs = RegSet::new();
+		let mut reg_sizes = [ValSize::_8; IrReg::MAX_NUM];
+
+		for reg in kind.new_ir_compiler().arch_regs() {
+			arch_regs.insert(reg.offset());
+			reg_sizes[reg.offset() as usize] = reg.size();
+		}
+
+		// TODO
+
+		Self {
+			kind,
+			arch_regs,
+			reg_sizes,
+		}
+	}
+
+	delegate! {
+		to self.kind {
+			/// The system's endianness.
+			pub(crate) fn endianness(&self) -> Endian;
+			/// How many bits in an address.
+			pub(crate) fn addr_bits(&self) -> usize;
+			/// Construct a new disassembler.
+			pub(crate) fn new_disassembler(&self) -> Disassembler;
+			/// Construct a new printer.
+			pub(crate) fn new_printer(&self) -> Printer;
+			/// Construct a new IR compiler.
+			pub(crate) fn new_ir_compiler(&self) -> IrCompiler;
+		}
+	}
+
+	pub(crate) fn arch_reg_set(&self) -> RegSet {
+		self.arch_regs
+	}
+
+	pub(crate) fn arch_reg_size(&self, offset: u8) -> ValSize {
+		assert!(self.arch_regs.contains(offset));
+		self.reg_sizes[offset as usize]
+	}
 }

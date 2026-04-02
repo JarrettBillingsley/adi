@@ -606,6 +606,7 @@ impl IPrinter for Mos65xxPrinter {
 // Architecture
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
 pub struct Mos65xxArchitecture;
 
 impl IArchitecture for Mos65xxArchitecture {

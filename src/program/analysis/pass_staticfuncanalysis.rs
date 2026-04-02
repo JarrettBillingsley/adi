@@ -8,8 +8,6 @@ use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet };
 use crate::{ Size };
 use crate::dataflow::{ JoinSemiLattice, DataflowAlgorithm };
 use crate::program::{ Program, BBId, BBTerm, FuncId, OpInfo, RefInfo, Operand };
-use crate::arch::{ IArchitecture };
-use crate::platform::{ IPlatform };
 use crate::program::{ CfgPredecessors };
 use crate::memory::{ MmuState, VA, EA, StateChange };
 use crate::ir::{ ConstAddr, ConstAddrKind };

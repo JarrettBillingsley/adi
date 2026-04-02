@@ -85,6 +85,7 @@ impl IInterpreter for ARCH_NAME_HERE_Interpreter {
 // Architecture
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
 pub struct ARCH_NAME_HERE_Architecture;
 
 impl IArchitecture for ARCH_NAME_HERE_Architecture {

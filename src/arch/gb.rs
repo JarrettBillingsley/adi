@@ -315,6 +315,7 @@ impl IPrinter for GBPrinter {
 // Architecture
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
 pub struct GBArchitecture;
 
 impl IArchitecture for GBArchitecture {

@@ -32,7 +32,7 @@ use toy::{ ToyPlatform };
 
 #[enum_dispatch]
 #[derive(Display)]
-pub enum Platform {
+pub enum PlatformKind {
 	#[display("{0}")]
 	GBPlatform,
 	#[display("{0}")]
@@ -41,9 +41,29 @@ pub enum Platform {
 	ToyPlatform,
 }
 
-#[enum_dispatch(Platform)]
+#[enum_dispatch(PlatformKind)]
 pub trait IPlatform: Display + Sized {
 	fn arch(&self) -> Architecture;
+}
+
+#[derive(Display)]
+#[display("{kind}")]
+pub struct Platform {
+	kind: PlatformKind,
+	arch: Architecture,
+}
+
+impl Platform {
+	fn new(kind: PlatformKind) -> Self {
+		Self {
+			arch: kind.arch(),
+			kind,
+		}
+	}
+
+	pub fn arch(&self) -> &Architecture {
+		&self.arch
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

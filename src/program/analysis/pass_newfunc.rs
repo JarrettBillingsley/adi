@@ -4,8 +4,6 @@ use std::collections::{ VecDeque };
 use log::*;
 
 use crate::{ Size };
-use crate::arch::{ IArchitecture };
-use crate::platform::{ IPlatform };
 use crate::program::{ Instruction, InstructionKind, Program, BBId, BBTerm, FuncId };
 use crate::memory::{ MmuState, EA, ImageSliceable, SpanKind, VA, SegId, Segment };
 

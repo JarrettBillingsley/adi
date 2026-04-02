@@ -101,8 +101,10 @@ impl Debug for IrReg {
 pub(crate) type IrRegSetType = u64;
 
 impl IrReg {
+	/// Number of valid registers.
+	pub(crate) const MAX_NUM: usize = IrRegSetType::BITS as usize;
 	/// Maximum valid IR register offset.
-	pub(crate) const MAX: u8 = IrRegSetType::BITS as u8 - 1;
+	pub(crate) const MAX: u8 = Self::MAX_NUM as u8 - 1;
 
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		// have to do it like this for borrowing reasons

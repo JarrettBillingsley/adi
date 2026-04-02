@@ -3,8 +3,7 @@ use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, Fx
 
 use crate::program::{ Program, BBTerm, FuncId, RegSet, Function };
 use crate::memory::{ EA } ;
-use crate::arch::{ IArchitecture, IIrCompiler };
-use crate::platform::{ IPlatform };
+use crate::arch::{ IIrCompiler };
 use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrBBId, IrCfg, IrInst, IrReg, IrSrc,
 	IrInstKind, IrTarget };
 

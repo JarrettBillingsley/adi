@@ -9,7 +9,7 @@ use enum_dispatch::enum_dispatch;
 use crate::fxhash::{ FxHashMap as HashMap };
 
 use crate::{ Size, Offs };
-use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
+use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError, Platform };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::mos65xx::{ Mos65xxArchitecture, VEC_NMI, VEC_IRQ, VEC_RESET };
 use crate::memory::{ ImageRead, Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image,
@@ -28,7 +28,7 @@ impl NesPlatform {
 
 impl IPlatform for NesPlatform {
 	fn arch(&self) -> Architecture {
-		Mos65xxArchitecture.into()
+		Architecture::new(Mos65xxArchitecture.into())
 	}
 }
 
@@ -73,7 +73,7 @@ impl ILoader for NesLoader {
 		);
 
 		// 4. create Program
-		let mut prog = Program::new(mem, NesPlatform::new().into());
+		let mut prog = Program::new(mem, Platform::new(NesPlatform::new().into()));
 
 		// 5. setup default names
 		setup_nes_labels(&mut prog);

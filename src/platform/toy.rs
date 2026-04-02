@@ -1,6 +1,6 @@
 use std::fmt::{ Display, Formatter, Result as FmtResult };
 
-use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError };
+use crate::platform::{ IPlatform, ILoader, PlatformResult, PlatformError, Platform };
 use crate::arch::{ Architecture, IArchitecture };
 use crate::arch::toy::{ ToyArchitecture };
 use crate::memory::{ Memory, SegCollection, VA, IMmu, MmuState, StateChange, Image, SegId,
@@ -19,7 +19,7 @@ impl ToyPlatform {
 
 impl IPlatform for ToyPlatform {
 	fn arch(&self) -> Architecture {
-		ToyArchitecture.into()
+		Architecture::new(ToyArchitecture.into())
 	}
 }
 
@@ -71,7 +71,7 @@ impl ILoader for ToyLoader {
 			mmu.into()
 		);
 
-		let mut prog = Program::new(mem, ToyPlatform::new().into());
+		let mut prog = Program::new(mem, Platform::new(ToyPlatform::new().into()));
 
 		let state = prog.initial_mmu_state();
 		prog.add_hardware_name_va("BANK", state, VA(0xFFFF));
