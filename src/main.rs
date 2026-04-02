@@ -49,24 +49,14 @@ fn setup_panic() {
 // ------------------------------------------------------------------------------------------------
 
 fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
+	prog.enqueue_reg_usage();
 	prog.analyze_queue();
 
-	println!("found {} functions.", prog.all_funcs().count());
+	// println!("found {} functions.", prog.all_funcs().count());
 
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
-
-	let cg = prog.build_call_graph();
-	prog.dump_call_graph(&cg);
-
-	let sccs = cg.sccs();
-
-	println!("SCCs: ");
-
-	for scc in sccs.into_iter() {
-		println!("  {:?}", scc);
-	}
+	// for segid in prog.all_image_segs() {
+	// 	show_segment(&prog, segid);
+	// }
 
 	// for (ea, name) in prog.all_names_by_ea() {
 	// 	println!("{} {:25} {:?}", ea, name.name, name.kind);

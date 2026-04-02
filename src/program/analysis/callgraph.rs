@@ -2,6 +2,7 @@
 use std::marker::{ PhantomData };
 
 use petgraph::{
+	Direction,
 	graphmap::{ DiGraphMap },
 	dot::{ Dot, Config as DotConfig },
 	algo::{ tarjan_scc },
@@ -28,6 +29,16 @@ impl<'a> ProgramCallGraph<'a> {
 	// TODO: make pub(crate)
 	pub fn sccs(&self) -> Vec<Vec<FuncId>> {
 		tarjan_scc(&self.g)
+	}
+
+	// TODO: make pub(crate)
+	pub fn callers_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
+		self.g.edges_directed(fid, Direction::Incoming).map(|(_, dst, _)| dst)
+	}
+
+	// TODO: make pub(crate)
+	pub fn callees_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
+		self.g.edges_directed(fid, Direction::Outgoing).map(|(_, dst, _)| dst)
 	}
 }
 

@@ -29,9 +29,13 @@ impl IIrCompiler for GBIrCompiler {
 		}
 	}
 
-	fn arg_regs     (&self) -> &'static [IrReg] { ARG_REGS }
-	fn return_regs  (&self) -> &'static [IrReg] { RETURN_REGS }
-	fn stack_ptr_reg(&self) -> IrReg            { REG_SP }
+	fn arch_regs(&self) -> &'static [IrReg] {
+		ARCH_REGS
+	}
+
+	fn stack_ptr_reg(&self) -> IrReg {
+		REG_SP
+	}
 
 	fn reg_name(&self, offset: u8) -> &'static str {
 		match offset {
@@ -100,11 +104,8 @@ const REG_DE: IrReg = IrReg::reg16(19); // 16-bit temporary
 const REG_HL: IrReg = IrReg::reg16(21); // 16-bit temporary
 const REG_WZ: IrReg = IrReg::reg16(23); // 16-bit temporary
 
-static ARG_REGS: &[IrReg] =
+static ARCH_REGS: &[IrReg] =
 	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF];
-
-static RETURN_REGS: &[IrReg] =
-	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF, REG_SP];
 
 impl From<Reg> for IrReg {
 	fn from(reg: Reg) -> IrReg {

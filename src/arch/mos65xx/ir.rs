@@ -23,12 +23,8 @@ impl IIrCompiler for Mos65xxIrCompiler {
 		lookup_desc(b.inst().bytes()[0]).build_ir(Some(term), b);
 	}
 
-	fn arg_regs(&self) -> &'static [IrReg] {
-		ARG_REGS
-	}
-
-	fn return_regs(&self) -> &'static [IrReg] {
-		RETURN_REGS
+	fn arch_regs(&self) -> &'static [IrReg] {
+		ARCH_REGS
 	}
 
 	fn stack_ptr_reg(&self) -> IrReg {
@@ -74,11 +70,8 @@ const REG_TMP2:  IrReg = IrReg::reg8(13);  // 8-bit temporary
 const REG_TMP16: IrReg = IrReg::reg16(15); // 16-bit temporary
 const REG_TMP16_2: IrReg = IrReg::reg16(17); // 16-bit temporary
 
-static ARG_REGS: &[IrReg] =
-	&[REG_A, REG_X, REG_Y,        REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
-
-static RETURN_REGS: &[IrReg] =
-	&[REG_A, REG_X, REG_Y, REG_S, REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
+static ARCH_REGS: &[IrReg] =
+	&[REG_A, REG_X, REG_Y, REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
 
 fn reg_to_ir_reg(reg: u8) -> IrReg {
 	match Reg::from(reg) {

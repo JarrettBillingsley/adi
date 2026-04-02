@@ -175,11 +175,10 @@ pub(crate) trait IIrCompiler: Sized + Sync + Send {
 	/// `term` is the basic block's terminator, used to encode control flow targets.
 	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm);
 
-	/// Give a set of registers which can be used to pass arguments.
-	fn arg_regs(&self) -> &'static [IrReg];
-
-	/// Give a set of registers which can be used as return values.
-	fn return_regs(&self) -> &'static [IrReg];
+	/// Give a set of all architectural registers (that is, those which are programmer-accessible,
+	/// not including registers internal to the IR). Do NOT include the stack pointer in this list;
+	/// return it from `stack_ptr_reg` instead.
+	fn arch_regs(&self) -> &'static [IrReg];
 
 	/// Give the register which represents the stack pointer.
 	fn stack_ptr_reg(&self) -> IrReg;

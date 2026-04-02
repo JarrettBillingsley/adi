@@ -38,6 +38,8 @@ pub use inst::*;
 pub use namemap::*;
 pub use refmap::*;
 
+pub(crate) use analysis::regset::*;
+
 // ------------------------------------------------------------------------------------------------
 // Program
 // ------------------------------------------------------------------------------------------------
@@ -90,6 +92,9 @@ impl Program {
 
 			/// Puts an EA on the queue that should be the jump instruction for a jump table.
 			pub fn enqueue_jump_table(&mut self, ea: EA);
+
+			/// Enqueue a whole-program register usage analysis.
+			pub fn enqueue_reg_usage(&mut self);
 		}
 	}
 

@@ -108,8 +108,20 @@ impl RegSet {
 					Some(self.idx - 1)
 				}
 			}
+
+			fn size_hint(&self) -> (usize, Option<usize>) {
+				let len = self.bits.count_ones() as usize;
+				(len, Some(len))
+			}
 		}
 
+		impl std::iter::ExactSizeIterator for RegSetIter {
+			fn len(&self) -> usize {
+				// eh why not, I'm sure the default impl of calling size_hint would optimize down
+				// to the same thing anyway but whatever
+				self.bits.count_ones() as usize
+			}
+		}
 		impl std::iter::FusedIterator for RegSetIter {}
 
 		RegSetIter { bits: self.bits, idx: 0 }

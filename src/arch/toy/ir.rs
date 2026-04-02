@@ -19,12 +19,8 @@ impl IIrCompiler for ToyIrCompiler {
 		lookup_desc(b.inst().bytes()[0]).expect("ono").build_ir(Some(term), b);
 	}
 
-	fn arg_regs(&self) -> &'static [IrReg] {
-		ARG_REGS
-	}
-
-	fn return_regs(&self) -> &'static [IrReg] {
-		RETURN_REGS
+	fn arch_regs(&self) -> &'static [IrReg] {
+		ARCH_REGS
 	}
 
 	fn stack_ptr_reg(&self) -> IrReg {
@@ -61,8 +57,7 @@ const REG_TMP:   IrReg = IrReg::reg8 (9);
 const REG_TMP16: IrReg = IrReg::reg16(10);
 const REG_TMPCF: IrReg = IrReg::reg8 (12);
 
-static ARG_REGS: &[IrReg]    = &[ REG_A, REG_B, REG_C, REG_D, REG_NF, REG_ZF, REG_CF ];
-static RETURN_REGS: &[IrReg] = &[ REG_A, REG_B, REG_C, REG_D, REG_SP, REG_NF, REG_ZF, REG_CF ];
+static ARCH_REGS: &[IrReg]    = &[ REG_A, REG_B, REG_C, REG_D, REG_NF, REG_ZF, REG_CF ];
 
 fn reg_to_ir_reg(reg: Reg) -> IrReg {
 	match reg {

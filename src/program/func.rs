@@ -58,10 +58,27 @@ pub(crate) struct FuncRegUseInfo {
 }
 
 impl FuncRegUseInfo {
-	// arg:     !changed &  aux
-	// ret:      changed &  aux
-	// clobber:  changed & !aux
-	// unaff:   !changed & !aux
+	/// A `RegSet` of argument registers to this function.
+	pub(crate) fn args(&self) -> RegSet {
+		self.aux - self.changed
+	}
+
+	/// A `RegSet` of return value registers from this function.
+	pub(crate) fn rets(&self) -> RegSet {
+		self.changed & self.aux
+	}
+
+	/// A `RegSet` of registers which are "clobbered" by this function (i.e. changed by this
+	/// function but not used as return values).
+	pub(crate) fn clobbers(&self) -> RegSet {
+		self.changed - self.aux
+	}
+
+	/// `true` if `reg` is completely unused by this function - not an argument, return value, or
+	/// clobber.
+	pub(crate) fn is_unused(&self, reg: u8) -> bool {
+		!self.changed.contains(reg) && !self.aux.contains(reg)
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

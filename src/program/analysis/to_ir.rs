@@ -1,7 +1,7 @@
 
 use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
-use crate::program::{ Program, BBTerm, FuncId };
+use crate::program::{ Program, BBTerm, FuncId, RegSet, Function };
 use crate::memory::{ EA } ;
 use crate::arch::{ IArchitecture, IIrCompiler };
 use crate::platform::{ IPlatform };
@@ -148,7 +148,7 @@ impl Program {
 		fixup_ir_targets(&mut bbs, &eas_to_bbids);
 
 		// 3. perform rewrites
-		IrRewriter::new(&compiler, &mut bbs).perform_rewrites(&exitpoints, callpoints);
+		IrRewriter::new(func, &mut bbs).perform_rewrites(self, &exitpoints, callpoints);
 
 		// 4. build the CFG from the IrBB terminators
 		let cfg = build_ir_cfg(&bbs, extra_edges);
@@ -302,41 +302,42 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 // IrRewriter
 // ------------------------------------------------------------------------------------------------
 
-struct IrRewriter<'a, C: IIrCompiler> {
-	compiler:     &'a C,
-	bbs:          &'a mut Vec<IrBasicBlock>,
-	new_bbs:      Vec<IrBasicBlock>,
-	new_bbid:     IrBBId,
+struct IrRewriter<'a> {
+	bbs:      &'a mut Vec<IrBasicBlock>,
+	new_bbs:  Vec<IrBasicBlock>,
+	new_bbid: IrBBId,
+	ret_regs: Option<RegSet>,
 }
 
-impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
-	fn new(compiler: &'a C, bbs: &'a mut Vec<IrBasicBlock>) -> Self {
+impl<'a> IrRewriter<'a> {
+	fn new(func: &Function, bbs: &'a mut Vec<IrBasicBlock>) -> Self {
 		Self {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
-			compiler,
 			bbs,
+			ret_regs: func.reg_use().map(|ru| ru.rets())
 		}
 	}
 
-	fn perform_rewrites(&mut self, exitpoints: &[IrBBId], callpoints: Vec<IrBBId>) {
-		let arg_regs = self.compiler.arg_regs();
-		let ret_regs = self.compiler.return_regs();
+	fn perform_rewrites(&mut self, prog: &Program, exitpoints: &[IrBBId], callpoints: Vec<IrBBId>) {
+		// the default ("pessimal") sets of argument and return value registers, to be used for
+		// functions which have not had their register usage determined yet.
+		let default_arch_regs = prog.plat().arch().new_ir_compiler().arch_regs();
 
 		// first pass: insert uses before function exits
 		for irbbid in exitpoints.iter() {
-			insert_dummy_uses(&mut self.bbs[*irbbid], arg_regs, ret_regs);
+			insert_dummy_uses(prog, &mut self.bbs[*irbbid], default_arch_regs);
 		}
 
 		// second pass: insert dummy BBs for return-uses after calls
 		for irbbid in callpoints.into_iter() {
-			self.rewrite_returns(irbbid, ret_regs);
+			self.rewrite_returns(prog, irbbid, default_arch_regs);
 		}
 
 		self.bbs.append(&mut self.new_bbs);
 	}
 
-	fn rewrite_returns(&mut self, irbbid: IrBBId, ret_regs: &[IrReg]) {
+	fn rewrite_returns(&mut self, _prog: &Program, irbbid: IrBBId, ret_regs: &[IrReg]) {
 		// log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
 		let old_cont = self.change_cont(irbbid, self.new_bbid);
@@ -377,17 +378,30 @@ impl<'a, C: IIrCompiler> IrRewriter<'a, C> {
 	}
 }
 
-fn insert_dummy_uses(irbb: &mut IrBasicBlock, arg_regs: &[IrReg], ret_regs: &[IrReg]) {
+fn insert_dummy_uses(_prog: &Program, irbb: &mut IrBasicBlock,
+default_arch_regs: &[IrReg]) {
 	// log::debug!("dummy uses on irbb{}", irbb.id);
 	// SAFETY: `func_to_ir` checks that every IR BB has at least 1 instruction.
 	let term_inst = *irbb.term_inst();
 
-	// the match is also valid because irbb_terminator_sanity_check ensured that any BB that
-	// ends in IrInstKind::Ret really did come from a BB with BBTerm::Ret.
+	// this is valid because exitpoints was built from BBs which were either
+	// `BBTerm::Return`, in which case irbb_terminator_sanity_check ensured it ended with
+	// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed
+	// to be a call/jump/branch.
 	let regs = match term_inst.kind() {
-		IrInstKind::Ret { .. } => ret_regs,
-		_                      => arg_regs,
+		IrInstKind::Ret { .. } => {
+			// if this function's return registers have been analyzed, use those; otherwise use
+			// the default ones.
+
+			default_arch_regs
+		}
+		_ => {
+			// if the *callee's* argument registers have been analyzed, use those; otherwise use
+			// the default ones.
+			default_arch_regs
+		}
 	};
+
 
 	if !regs.is_empty() {
 		let ea = term_inst.ea();
