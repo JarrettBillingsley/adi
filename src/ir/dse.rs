@@ -11,7 +11,7 @@ pub(crate) fn elim_dead_stores(bbs: &mut [IrBasicBlock]) {
 	let defs = find_defs_and_uses(bbs);
 
 	for (reg, def) in defs.iter() {
-		if !def.used() {
+		if def.how_used() == DefUseKind::None {
 			// TODO: uhhhhhhh actually eliminate the dead stores lmao
 			log::debug!("{:?} is dead", reg);
 		}

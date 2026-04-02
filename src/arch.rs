@@ -269,4 +269,9 @@ impl Architecture {
 		assert!(self.arch_regs.contains(offset));
 		IrReg::new(self.reg_sizes[offset as usize], offset)
 	}
+
+	/// Iterator over all architectural IR regs (excluding the stack pointer) as `IrReg`s.
+	pub(crate) fn arch_ir_regs(&self) -> impl Iterator<Item = IrReg> {
+		self.arch_regs.iter().map(|offs| self.arch_ir_reg(offs))
+	}
 }

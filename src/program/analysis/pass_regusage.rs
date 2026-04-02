@@ -1,6 +1,7 @@
 
 use crate::program::{ Program, FuncId };
 use crate::program::analysis::callgraph::*;
+use crate::ir::{ RegDbg, DefUseKind };
 
 // ------------------------------------------------------------------------------------------------
 // Whole-program register usage
@@ -45,7 +46,7 @@ impl<'a> RegUsagePass<'a> {
 				_                               => self.analyze_mutually_recursive(scc),
 			}
 
-			break;
+			// break;
 		}
 	}
 
@@ -64,8 +65,46 @@ impl<'a> RegUsagePass<'a> {
 	fn analyze_func(&mut self, fid: FuncId) {
 		let func = self.prog.get_func(fid);
 		log::trace!("- begin analyzing function at {}", func.ea());
+		let arch = self.prog.plat().arch();
+		let ir = self.prog.func_to_ir(fid);
 
-		// let ir = self.prog.func_to_ir(fid);
+		log::debug!("{:?}", crate::ir::IrFunctionWithNames(
+			&ir, &self.prog.plat.arch().new_ir_compiler()));
+
+		let defs = ir.find_defs_and_uses();
+
+		// 1. argument regs are zero-generation registers which are
+		let mut arg_set = arch.arch_reg_set();
+
+		for reg in arch.arch_ir_regs() {
+			let reg = reg.sub(0);
+			match defs.get(&reg) {
+				Some(usage) => match usage.how_used() {
+					DefUseKind::None => {
+						// I don't think this is reachable right now, but maybe in the future the
+						// find_defs_and_uses algo will change.
+						arg_set.remove(reg.offset());
+					}
+					DefUseKind::OnlyDummy => {
+						log::trace!("  {:?} is only used in dummy uses",
+							RegDbg(reg, Some(&self.prog.plat().arch().new_ir_compiler())));
+
+						arg_set.remove(reg.offset());
+					}
+					DefUseKind::Real => {
+						log::trace!("  {:?} is used as an argument!",
+							RegDbg(reg, Some(&self.prog.plat().arch().new_ir_compiler())));
+					}
+				}
+				None => {
+					arg_set.remove(reg.offset());
+				}
+			}
+		}
+
+		log::trace!("  arg_set = {:?}", arg_set);
+
+		// TODO: apply the reg sets to the actual function!
 	}
 
 	fn analyze_self_recursive(&mut self, fid: FuncId) {

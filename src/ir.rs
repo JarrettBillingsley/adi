@@ -34,7 +34,7 @@ pub(crate) use ssa::*;
 pub(crate) use constprop::*;
 pub(crate) use defuse::*;
 pub(crate) use dom::*;
-pub(crate) use dse::*;
+// pub(crate) use dse::*;
 
 // ------------------------------------------------------------------------------------------------
 // ValSize
@@ -165,9 +165,15 @@ impl IrReg {
 		self.gen_.is_some()
 	}
 
+	/// True if this register is an SSA register with generation 0.
+	fn is_gen0(&self) -> bool {
+		assert!(self.gen_.is_some(), ".is_gen0() called on non-SSA reg '{:?}'", self);
+		self.gen_ == Some(0)
+	}
+
 	/// If this is not an SSA register, returns a new `IrReg` subscripted with the given index.
 	/// Panics if this is already an SSA register.
-	fn sub(&self, i: u32) -> Self {
+	pub(crate) fn sub(&self, i: u32) -> Self {
 		assert!(self.gen_.is_none(), ".sub() called on '{:?}'", self);
 		Self {
 			gen_: Some(i),
@@ -598,11 +604,15 @@ impl IrFunction {
 		self.consts.borrow().unwrap()
 	}
 
-	/// Eliminate any dead stores from the IR.
-	pub(crate) fn elim_dead_stores(&mut self) {
-		// TODO: invalidate self.consts
-		elim_dead_stores(&mut self.bbs);
+	pub(crate) fn find_defs_and_uses(&self) -> DefMap {
+		find_defs_and_uses(&self.bbs)
 	}
+
+	// /// Eliminate any dead stores from the IR.
+	// pub(crate) fn elim_dead_stores(&mut self) {
+	// 	// TODO: invalidate self.consts
+	// 	elim_dead_stores(&mut self.bbs);
+	// }
 
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		writeln!(f, "-------------------------------------------------------")?;

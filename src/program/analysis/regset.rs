@@ -11,7 +11,7 @@ pub(crate) struct RegSet {
 
 impl Debug for RegSet {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "RegSet(0b{:64b})", self.bits)
+		write!(f, "RegSet(0b{:b})", self.bits)
 	}
 }
 
