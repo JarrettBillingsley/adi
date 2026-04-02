@@ -608,6 +608,13 @@ impl IrFunction {
 		find_defs_and_uses(&self.bbs)
 	}
 
+	/// A list of exitpoints (BBs where control flow leaves the function). Each exitpoint may have
+	/// dummy `use` instructions before the terminator which encode the registers in use at that
+	/// exit.
+	pub(crate) fn exitpoints(&self) -> &[IrBBId] {
+		&self.exitpoints
+	}
+
 	// /// Eliminate any dead stores from the IR.
 	// pub(crate) fn elim_dead_stores(&mut self) {
 	// 	// TODO: invalidate self.consts

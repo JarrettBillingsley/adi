@@ -73,7 +73,8 @@ impl<'a> RegUsagePass<'a> {
 
 		let defs = ir.find_defs_and_uses();
 
-		// 1. argument regs are zero-generation registers which are
+		// 1. argument regs are zero-generation registers which are used by real uses, not just
+		// dummy uses.
 		let mut arg_set = arch.arch_reg_set();
 
 		for reg in arch.arch_ir_regs() {
@@ -103,6 +104,12 @@ impl<'a> RegUsagePass<'a> {
 		}
 
 		log::trace!("  arg_set = {:?}", arg_set);
+
+		// 2. clobber regs are any reg with nonzero generation at any exit point.
+		let mut clobber_set = RegSet::new();
+
+
+		log::trace!("  clobber_set = {:?}", clobber_set);
 
 		// TODO: apply the reg sets to the actual function!
 	}
