@@ -61,16 +61,6 @@ pub enum Loader {
 	ToyLoader,
 }
 
-#[enum_dispatch(Loader)]
-pub trait ILoader: Sync + Send {
-	/// Returns whether this loader can parse the given image.
-	fn can_parse(&self, img: &Image) -> bool;
-
-	/// Loads the image, creates a [`Program`] to represent it, and returns a tuple of the `Program`
-	/// and the [`EA`] of where the program begins execution (typically a reset vector or similar).
-	fn program_from_image(&self, img: Image) -> PlatformResult<(Program, EA)>;
-}
-
 lazy_static! {
 	static ref ALL_LOADERS: Vec<Loader> = {
 		vec![
@@ -79,6 +69,16 @@ lazy_static! {
 			ToyLoader.into(),
 		]
 	};
+}
+
+#[enum_dispatch(Loader)]
+pub trait ILoader: Sync + Send {
+	/// Returns whether this loader can parse the given image.
+	fn can_parse(&self, img: &Image) -> bool;
+
+	/// Loads the image, creates a [`Program`] to represent it, and returns a tuple of the `Program`
+	/// and the [`EA`] of where the program begins execution (typically a reset vector or similar).
+	fn program_from_image(&self, img: Image) -> PlatformResult<(Program, EA)>;
 }
 
 pub fn program_from_image(img: Image) -> PlatformResult<(Program, EA)> {
