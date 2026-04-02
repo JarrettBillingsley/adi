@@ -218,7 +218,6 @@ pub(crate) trait IArchitecture: Sized + Sync + Send + Clone + Copy {
 	fn new_ir_compiler(&self) -> IrCompiler;
 }
 
-#[derive(Clone)]
 pub struct Architecture {
 	kind: ArchitectureKind,
 	arch_regs: RegSet,
@@ -234,8 +233,6 @@ impl Architecture {
 			arch_regs.insert(reg.offset());
 			reg_sizes[reg.offset() as usize] = reg.size();
 		}
-
-		// TODO
 
 		Self {
 			kind,
@@ -259,12 +256,17 @@ impl Architecture {
 		}
 	}
 
+	/// Returns the architectural registers (excluding the stack pointer) as a `RegSet`.
 	pub(crate) fn arch_reg_set(&self) -> RegSet {
 		self.arch_regs
 	}
 
-	pub(crate) fn arch_reg_size(&self, offset: u8) -> ValSize {
+	/// Given an architectural register's offset, returns it as an `IrReg`. This is useful to go
+	/// from register offsets (such as are given by `RegSet::iter()`) back to `IrReg`s.
+	///
+	/// Panics if `offset` is not the offset of one of the architectural registers.
+	pub(crate) fn arch_ir_reg(&self, offset: u8) -> IrReg {
 		assert!(self.arch_regs.contains(offset));
-		self.reg_sizes[offset as usize]
+		IrReg::new(self.reg_sizes[offset as usize], offset)
 	}
 }

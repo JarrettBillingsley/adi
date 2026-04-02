@@ -4,7 +4,7 @@ use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, Fx
 use crate::program::{ Program, BBTerm, FuncId, RegSet, Function };
 use crate::memory::{ EA } ;
 use crate::arch::{ IIrCompiler };
-use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrBBId, IrCfg, IrInst, IrReg, IrSrc,
+use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrBBId, IrCfg, IrInst, IrSrc,
 	IrInstKind, IrTarget };
 
 // ------------------------------------------------------------------------------------------------
@@ -143,11 +143,15 @@ impl Program {
 		assert_eq!(extra_irbbid, bbs.len() + extra_bbs.len());
 		bbs.append(&mut extra_bbs);
 
-		// 2. fix up control flow targets
+		// 2. fix up control flow targets. NOTE: this MUST be done before rewrites, or else that
+		// step will not have the right info to choose which registers to use.
 		fixup_ir_targets(&mut bbs, &eas_to_bbids);
 
 		// 3. perform rewrites
-		IrRewriter::new(func, &mut bbs).perform_rewrites(self, &exitpoints, callpoints);
+		// arch_reg_set is the default ("pessimal") sets of argument and return value registers, to
+		// be used for functions which have not had their register usage determined yet.
+		IrRewriter::new(func, &mut bbs, self.plat().arch().arch_reg_set())
+			.perform_rewrites(self, &exitpoints, callpoints);
 
 		// 4. build the CFG from the IrBB terminators
 		let cfg = build_ir_cfg(&bbs, extra_edges);
@@ -252,7 +256,7 @@ fn build_ir_cfg(bbs: &[IrBasicBlock], extra_edges: HashSet<(IrBBId, IrBBId)>) ->
 /// Panics if the above check for the appropriate terminating
 /// instruction fails.
 fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
-	// safe because code above asserts it's not empty
+	// safe because caller asserts it's not empty
 	let (inst, _) = insts.split_last().unwrap();
 
 	use BBTerm::*;
@@ -302,41 +306,81 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 // ------------------------------------------------------------------------------------------------
 
 struct IrRewriter<'a> {
-	bbs:      &'a mut Vec<IrBasicBlock>,
-	new_bbs:  Vec<IrBasicBlock>,
-	new_bbid: IrBBId,
-	ret_regs: Option<RegSet>,
+	bbs:          &'a mut Vec<IrBasicBlock>,
+	new_bbs:      Vec<IrBasicBlock>,
+	new_bbid:     IrBBId,
+	default_regs: RegSet,
+	arg_regs:     RegSet,
+	ret_regs:     RegSet,
 }
 
 impl<'a> IrRewriter<'a> {
-	fn new(func: &Function, bbs: &'a mut Vec<IrBasicBlock>) -> Self {
+	fn new(func: &Function, bbs: &'a mut Vec<IrBasicBlock>, default_regs: RegSet) -> Self {
 		Self {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
 			bbs,
-			ret_regs: func.reg_use().map(|ru| ru.rets())
+			arg_regs: func.reg_use().map(|ru| ru.args()).unwrap_or(default_regs),
+			ret_regs: func.reg_use().map(|ru| ru.rets()).unwrap_or(default_regs),
+			default_regs,
 		}
 	}
 
 	fn perform_rewrites(&mut self, prog: &Program, exitpoints: &[IrBBId], callpoints: Vec<IrBBId>) {
-		// the default ("pessimal") sets of argument and return value registers, to be used for
-		// functions which have not had their register usage determined yet.
-		let default_arch_regs = prog.plat().arch().new_ir_compiler().arch_regs();
-
-		// first pass: insert uses before function exits
 		for irbbid in exitpoints.iter() {
-			insert_dummy_uses(prog, &mut self.bbs[*irbbid], default_arch_regs);
+			self.insert_dummy_uses(prog, *irbbid);
 		}
 
-		// second pass: insert dummy BBs for return-uses after calls
 		for irbbid in callpoints.into_iter() {
-			self.rewrite_returns(prog, irbbid, default_arch_regs);
+			self.rewrite_returns(prog, irbbid);
 		}
 
 		self.bbs.append(&mut self.new_bbs);
 	}
 
-	fn rewrite_returns(&mut self, _prog: &Program, irbbid: IrBBId, ret_regs: &[IrReg]) {
+	fn insert_dummy_uses(&mut self, prog: &Program, irbbid: IrBBId) {
+		// log::debug!("dummy uses on irbb{}", irbb.id);
+		let irbb = &mut self.bbs[irbbid];
+		let term_inst = *irbb.term_inst();
+
+		// SAFETY: this match is valid because exitpoints was built from BBs which were either
+		// `BBTerm::Return`, in which case irbb_terminator_sanity_check ensured it ended with
+		// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed to
+		// be a call/jump/branch.
+		let regs = match term_inst.kind() {
+			IrInstKind::Ret { .. } => self.ret_regs,
+			// SAFETY: same reason as the match.
+			// (fixup_ir_targets is the step before this one, so this match is good.)
+			_ => match term_inst.target().unwrap() {
+				// recursive call! use our own arg regs.
+				IrTarget::Internal(_)  => self.arg_regs,
+				IrTarget::External(ea) => {
+					// if the callee exists, and *its* argument registers have been analyzed, use
+					// those; otherwise use the default ones.
+					prog.func_that_contains(ea)
+					.map(|func|
+						func.reg_use().map(|ru| ru.args()))
+					.flatten()
+					.unwrap_or(self.default_regs)
+				}
+			}
+		};
+
+		if !regs.is_empty() {
+			let ea = term_inst.ea();
+			let arch = prog.plat().arch();
+
+			irbb.insts.pop();
+
+			for reg_offs in regs.iter() {
+				irbb.insts.push(IrInst::use_(ea, arch.arch_ir_reg(reg_offs)));
+			}
+
+			irbb.insts.push(term_inst);
+		}
+	}
+
+	fn rewrite_returns(&mut self, prog: &Program, irbbid: IrBBId) {
 		// log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
 		let old_cont = self.change_cont(irbbid, self.new_bbid);
@@ -346,8 +390,10 @@ impl<'a> IrRewriter<'a> {
 		let bb = &self.bbs[irbbid];
 		let last_ea = bb.term_inst().ea();
 		b.set_ea(last_ea);
+		let arch = prog.plat().arch();
 
-		for &reg in ret_regs.iter() {
+		for reg_offs in self.ret_regs.iter() {
+			let reg = arch.arch_ir_reg(reg_offs);
 			b.mov(reg, IrSrc::Return(reg.size()));
 		}
 
@@ -374,43 +420,5 @@ impl<'a> IrRewriter<'a> {
 			_ => panic!("bb{} marked for return-insertion should have ended with `Call` or `ICall` \
 				but ended with {:?} instead", irbbid, bb.term_inst().kind()),
 		}
-	}
-}
-
-fn insert_dummy_uses(_prog: &Program, irbb: &mut IrBasicBlock,
-default_arch_regs: &[IrReg]) {
-	// log::debug!("dummy uses on irbb{}", irbb.id);
-	// SAFETY: `func_to_ir` checks that every IR BB has at least 1 instruction.
-	let term_inst = *irbb.term_inst();
-
-	// this is valid because exitpoints was built from BBs which were either
-	// `BBTerm::Return`, in which case irbb_terminator_sanity_check ensured it ended with
-	// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed
-	// to be a call/jump/branch.
-	let regs = match term_inst.kind() {
-		IrInstKind::Ret { .. } => {
-			// if this function's return registers have been analyzed, use those; otherwise use
-			// the default ones.
-
-			default_arch_regs
-		}
-		_ => {
-			// if the *callee's* argument registers have been analyzed, use those; otherwise use
-			// the default ones.
-			default_arch_regs
-		}
-	};
-
-
-	if !regs.is_empty() {
-		let ea = term_inst.ea();
-
-		irbb.insts.pop();
-
-		for &reg in regs.iter() {
-			irbb.insts.push(IrInst::use_(ea, reg));
-		}
-
-		irbb.insts.push(term_inst);
 	}
 }

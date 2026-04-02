@@ -1,9 +1,6 @@
 
 # Yak stack
 
-- make func_to_ir use functions' analyzed registers if available
-- ...to do register usage analysis.
-
 # Major tasks
 
 - Const prop provenance ASTs

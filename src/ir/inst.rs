@@ -258,6 +258,16 @@ impl IrInstKind {
 		}
 	}
 
+	pub(crate) fn target(&self) -> Option<IrTarget> {
+		use IrInstKind::*;
+		match self {
+			Branch  { dst, .. } |
+			CBranch { dst, .. } |
+			Call    { dst, .. } => Some(*dst),
+			_ => None,
+		}
+	}
+
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		use IrInstKind::*;
 
@@ -342,6 +352,10 @@ impl Debug for IrInst {
 
 #[allow(clippy::too_many_arguments)]
 impl IrInst {
+	pub(crate) fn target(&self) -> Option<IrTarget> {
+		self.kind.target()
+	}
+
 	pub(crate) fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		write!(f, "{:?} ", self.ea)?;
 		self.kind.debug_fmt(f, compiler)

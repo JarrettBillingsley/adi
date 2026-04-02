@@ -122,28 +122,30 @@ impl IrReg {
 		}
 	}
 
+	/// Constructs a register. Panics if `offset` > `IrReg::MAX`.
+	pub(crate) const fn new(size: ValSize, offset: u8) -> Self {
+		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
+		Self { size, offset, gen_: None }
+	}
+
 	/// Constructs an 8-bit register. Panics if `offset` > `IrReg::MAX`.
 	pub(crate) const fn reg8(offset: u8) -> Self {
-		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
-		Self { size: ValSize::_8, offset, gen_: None }
+		Self::new(ValSize::_8, offset)
 	}
 
 	/// Constructs a 16-bit register. Panics if `offset` > `IrReg::MAX`.
 	pub(crate) const fn reg16(offset: u8) -> Self {
-		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
-		Self { size: ValSize::_16, offset, gen_: None }
+		Self::new(ValSize::_16, offset)
 	}
 
 	/// Constructs a 32-bit register. Panics if `offset` > `IrReg::MAX`.
 	pub(crate) const fn reg32(offset: u8) -> Self {
-		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
-		Self { size: ValSize::_32, offset, gen_: None }
+		Self::new(ValSize::_32, offset)
 	}
 
 	/// Constructs a 64-bit register. Panics if `offset` > `IrReg::MAX`.
 	pub(crate) const fn reg64(offset: u8) -> Self {
-		assert!(offset <= Self::MAX, "cannot have an IR register with an offset > 63");
-		Self { size: ValSize::_64, offset, gen_: None }
+		Self::new(ValSize::_64, offset)
 	}
 
 	/// The size of this register.
