@@ -4,10 +4,10 @@ use std::marker::{ PhantomData };
 use petgraph::{
 	graphmap::{ DiGraphMap },
 	dot::{ Dot, Config as DotConfig },
-	// visit::{ DfsPostOrder },
+	algo::{ tarjan_scc },
 };
 
-use crate::program::{ Program, FuncId };
+use crate::program::{ Program, FuncId, EA };
 
 type CallGraph = DiGraphMap<FuncId, ()>;
 
@@ -23,6 +23,11 @@ impl<'a> ProgramCallGraph<'a> {
 			g,
 			_phantom: PhantomData::default(),
 		}
+	}
+
+	// TODO: make pub(crate)
+	pub fn sccs(&self) -> Vec<Vec<FuncId>> {
+		tarjan_scc(&self.g)
 	}
 }
 
@@ -44,41 +49,33 @@ impl Program {
 
 			// then add an edge to every outref in every BB which refers to a BB in another func
 			for bbid in func.all_bbs() {
-				let bb = self.bbidx.get(bbid);
+				let term = self.bbidx.get(bbid).term();
 
-				for dst in bb.term().successors() {
-					if let Some(dst_bbid) = self.span_at_ea(*dst).bb() {
+				let mut maybe_add = |dst: EA, is_call| {
+					if let Some(dst_bbid) = self.span_at_ea(dst).bb() {
 						let dst_fid = self.bbidx.get(dst_bbid).func();
-
 
 						// if different funcs, always add an edge.
 						if src_fid != dst_fid ||
-
 						// if it's the same func, we only want to add an edge when it's a legit
 						// recursive call, and not just a "jump to beginning".
-						bb.term().is_call() {
+						is_call {
 							g.add_edge(src_fid, dst_fid, ());
 						}
 					}
+				};
+
+				for dst in term.explicit_successors() {
+					maybe_add(*dst, term.is_call());
+				}
+
+				if let Some(dst) = term.continuation_successor() {
+					maybe_add(dst, false);
 				}
 			}
 		}
 
 		ProgramCallGraph::new(g)
-	}
-
-	fn should_add_edge(src_fid: FuncId, dst_fid: FuncId, dst: EA, is_explicit: bool, is_call: bool) -> bool {
-		// diff funcs? for sure
-		if src_fid != dst_fid {
-			return true;
-		}
-
-		// same function should only have an edge added to it if:
-		// - terminator is a call
-		// - it's an explicit successor
-		// - the dst is one of the function's entry points(?)
-
-		if is_call && is_explicit &&
 	}
 
 	// TODO: make pub(crate)
@@ -89,8 +86,7 @@ impl Program {
 		println!("{:?}", Dot::with_attr_getters(&cg.g,
 			&[DotConfig::EdgeNoLabel, DotConfig::NodeNoLabel],
 			&|_, _| "".into(),
-			&|_, (_, fid)| format!("label = \"{}\"",
-				self.name_of_ea(self.get_func(*fid).ea())),
+			&|_, (_, fid)| format!("label = \"{}\"", self.name_of_ea(self.get_func(*fid).ea())),
 		));
 	}
 }

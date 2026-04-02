@@ -16,10 +16,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 
-	// test_gb()
+	test_gb()
 	// test_nes()
-	test_toy()
+	// test_toy()
 }
+
+// ------------------------------------------------------------------------------------------------
 
 fn setup_logging(max_level: LevelFilter) -> Result<(), SetLoggerError> {
 	let log_config = ConfigBuilder::new()
@@ -45,6 +47,178 @@ fn setup_panic() {
 }
 
 // ------------------------------------------------------------------------------------------------
+
+fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
+	prog.analyze_queue();
+
+	println!("found {} functions.", prog.all_funcs().count());
+
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
+
+	let cg = prog.build_call_graph();
+	prog.dump_call_graph(&cg);
+
+	let sccs = cg.sccs();
+
+	println!("SCCs: ");
+
+	for scc in sccs.into_iter() {
+		println!("  {:?}", scc);
+	}
+
+	// for (ea, name) in prog.all_names_by_ea() {
+	// 	println!("{} {:25} {:?}", ea, name.name, name.kind);
+	// }
+
+	Ok(())
+}
+
+// ------------------------------------------------------------------------------------------------
+
+fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
+	let img_name =
+		"tests/data/tetris.gb"; // no MBC
+		// "tests/data/sml.gb";    // MBC1  (ROM only)
+		// "tests/data/sml2.gb";   // MBC1B (ROM + RAM)
+		// "tests/data/pkblue.gb"; // MBC3
+
+	let img = Image::new_from_file(img_name)?;
+	let (mut prog, start_ea) = program_from_image(img)?;
+	println!("{}", prog);
+	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
+
+	let state = prog.initial_mmu_state();
+	prog.enqueue_new_func(state, prog.ea_from_name("RESET"));
+
+	// TETRIS
+	if img_name.contains("tetris") {
+		// from rst 0x28 at ROM0:02FA
+		for va in [
+			0x1BCE, 0x1CE2, 0x1244, 0x127B, 0x1D06, 0x1D26, 0x03AE, 0x0479, 0x1444, 0x148C,
+			0x1A07, 0x1DC0, 0x1F16, 0x1F1F, 0x1525, 0x14B0, 0x157B, 0x15BF, 0x1629, 0x167A,
+			0x16EB, 0x1913, 0x0677, 0x072C, 0x0825, 0x08E4, 0x0B31, 0x0CEB, 0x0AD2, 0x0D32,
+			0x0E23, 0x1112, 0x0D99, 0x0E8A, 0x1DCE, 0x1E41, 0x0369, 0x0393, 0x1167, 0x11E6,
+			0x11FC, 0x121C, 0x05C7, 0x05F7, 0x12B3, 0x1305, 0x1324, 0x1351, 0x1367, 0x137E,
+			0x13B5, 0x13E5, 0x131B, 0x03A0, 0x27EA
+		] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+
+		let ty = prog.type_array(&Type::U16, 41);
+		prog.new_data(None, prog.ea_from_va(state, VA(0x6480)), &ty, prog.type_sizeof(&ty).fixed());
+
+		// from jump table at ROM1:6480
+		for va in [
+			0x65AA, 0x65C6, 0x66FC, 0x6628, 0x6734, 0x66AF, 0x65F1, 0x6654,
+			0x65B2, 0x65CE, 0x6714, 0x65CE, 0x65CE, 0x66C3, 0x65F7, 0x6660,
+			0x67D4, 0x67DC, 0x679D, 0x67A5, 0x67E4, 0x67E4, 0x67E4, 0x67AD,
+		] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+
+	}
+
+	test_common(prog)
+}
+
+// ------------------------------------------------------------------------------------------------
+
+fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
+	let img_name =
+		// listed in order of decreasing mapper popularity
+		// "tests/data/dragonwarrior.nes"; // 1   (mmc1/sxrom)              *UNIMPLEMENTED*
+		// "tests/data/gauntlet.nes";      // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
+		// "tests/data/smb3.nes";          // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
+		// "tests/data/megaman.nes";       // 2   (uxrom)
+		"tests/data/10yf.nes";          // 0   (nrom)
+		// "tests/data/duckhunt.nes";      // 0   (nrom)
+		// "tests/data/smb.nes";           // 0   (nrom)
+		// "tests/data/arkanoid.nes";      // 3   (cnrom)
+		// "tests/data/battletoads.nes";   // 7   (axrom)
+		// NO ROM: e.g. gauntlet // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
+		// "tests/data/exodus.nes"; // 11  (color dreams)
+		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
+		// NO ROM: e.g. star wars, rolling thunder // 19 (namco N129/N163)          *UNIMPLEMENTED*
+	let img = Image::new_from_file(img_name)?;
+
+	let (mut prog, start_ea) = program_from_image(img)?;
+
+	println!("{}", prog);
+	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
+
+	// find_identical_image_pieces(&prog);
+
+	let state = prog.initial_mmu_state();
+	prog.enqueue_new_func(state, prog.ea_from_name("VEC_RESET"));
+	prog.enqueue_new_func(state, prog.ea_from_name("VEC_NMI"));
+
+	if let Some(ea) = prog.ea_for_name("VEC_IRQ") {
+		prog.enqueue_new_func(state, ea);
+	}
+
+	if img_name.contains("battletoads") {
+		for va in [
+			0x8003, 0x8006, 0x8009, 0x800C, 0x800F, 0x8012, 0x8015, 0x8018,
+			0x801B, 0x801E, 0x8021, 0x8024, 0x8027, 0x802A, 0x802D, 0x8030,
+			0x8085, 0x80F7, 0x831F, 0x84E8, 0x857A, 0x86DE, 0x87A3, 0x87C2,
+			0x884B, 0x88EF, 0x8DC1, 0x9150, 0x9200, 0x923E, 0x9252, 0x930A,
+			0x93C8, 0x944E, 0x95E8, 0x95EB, 0x9643, 0x9E4E, 0x9ED2, 0xA51E,
+			0xA521, 0xA560, 0xB06B
+		] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+		let ea   = prog.ea_from_va(state, VA(0xFFB3));
+		let ty   = prog.type_array(&Type::U8, 24);
+		let size = prog.type_sizeof(&ty).fixed();
+		prog.new_data(Some("BANK_CHANGE"), ea, &ty, size);
+	} else if img_name.contains("smb.nes") {
+		for va in [0x8231, 0x838B, 0x9218, 0xAEDC] {
+			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
+		}
+		let ea   = prog.ea_from_va(state, VA(0x821A));
+		let ty   = prog.type_array(&prog.type_ptr(&Type::Code, &Type::U16), 3);
+		let size = prog.type_sizeof(&ty).fixed();
+		prog.new_data(Some("array"), ea, &ty, size);
+	}
+
+	test_common(prog)
+}
+
+// ------------------------------------------------------------------------------------------------
+
+fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
+	// let test = toy_test_all_instructions();
+	// let test = toy_test_ssa();
+	// let test = toy_test_const_prop();
+	let test = toy_test_calls();
+	// let test = toy_test_loop()
+	// let test = toy_test_state_change();
+	// let test = toy_test_ccall_cret();
+	// let test = toy_test_data();
+
+	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
+	prog.add_name("main", start_ea, false);
+	let state = prog.initial_mmu_state();
+
+	for (name, va) in test.labels {
+		prog.add_name_va(&name, state, va, false);
+	}
+
+	for (name, va, ty, size) in test.data {
+		let ea = prog.ea_from_va(state, va);
+		let id = prog.new_data(Some(&name), ea, &ty, size);
+		prog.get_data_mut(id).set_radix(Radix::Dec);
+	}
+
+	println!("{}", prog);
+	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
+
+	prog.enqueue_new_func(state, start_ea);
+
+	test_common(prog)
+}
 
 struct ToyTest {
 	image:  Vec<u8>,
@@ -466,182 +640,7 @@ fn toy_test_data() -> ToyTest {
 	}
 }
 
-fn test_toy() -> Result<(), Box<dyn std::error::Error>> {
-	// let test = toy_test_all_instructions();
-	// let test = toy_test_ssa();
-	// let test = toy_test_const_prop();
-	let test = toy_test_calls();
-	// let test = toy_test_loop()
-	// let test = toy_test_state_change();
-	// let test = toy_test_ccall_cret();
-	// let test = toy_test_data();
-
-	let (mut prog, start_ea) = program_from_image(Image::new(test.name, &test.image))?;
-	prog.add_name("main", start_ea, false);
-	let state = prog.initial_mmu_state();
-
-	for (name, va) in test.labels {
-		prog.add_name_va(&name, state, va, false);
-	}
-
-	for (name, va, ty, size) in test.data {
-		let ea = prog.ea_from_va(state, va);
-		let id = prog.new_data(Some(&name), ea, &ty, size);
-		prog.get_data_mut(id).set_radix(Radix::Dec);
-	}
-
-	println!("{}", prog);
-	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
-
-	prog.enqueue_new_func(state, start_ea);
-	prog.analyze_queue();
-
-	println!("found {} functions.", prog.all_funcs().count());
-
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
-
-	let cg = prog.build_call_graph();
-	prog.dump_call_graph(&cg);
-
-	Ok(())
-}
-
 // ------------------------------------------------------------------------------------------------
-
-fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
-	let img_name =
-		"tests/data/tetris.gb"; // no MBC
-		// "tests/data/sml.gb";    // MBC1  (ROM only)
-		// "tests/data/sml2.gb";   // MBC1B (ROM + RAM)
-		// "tests/data/pkblue.gb"; // MBC3
-
-	let img = Image::new_from_file(img_name)?;
-	let (mut prog, start_ea) = program_from_image(img)?;
-	println!("{}", prog);
-	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
-
-	let state = prog.initial_mmu_state();
-	prog.enqueue_new_func(state, prog.ea_from_name("RESET"));
-
-	// TETRIS
-	if img_name.contains("tetris") {
-		// from rst 0x28 at ROM0:02FA
-		for va in [
-			0x1BCE, 0x1CE2, 0x1244, 0x127B, 0x1D06, 0x1D26, 0x03AE, 0x0479, 0x1444, 0x148C,
-			0x1A07, 0x1DC0, 0x1F16, 0x1F1F, 0x1525, 0x14B0, 0x157B, 0x15BF, 0x1629, 0x167A,
-			0x16EB, 0x1913, 0x0677, 0x072C, 0x0825, 0x08E4, 0x0B31, 0x0CEB, 0x0AD2, 0x0D32,
-			0x0E23, 0x1112, 0x0D99, 0x0E8A, 0x1DCE, 0x1E41, 0x0369, 0x0393, 0x1167, 0x11E6,
-			0x11FC, 0x121C, 0x05C7, 0x05F7, 0x12B3, 0x1305, 0x1324, 0x1351, 0x1367, 0x137E,
-			0x13B5, 0x13E5, 0x131B, 0x03A0, 0x27EA
-		] {
-			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
-		}
-
-		let ty = prog.type_array(&Type::U16, 41);
-		prog.new_data(None, prog.ea_from_va(state, VA(0x6480)), &ty, prog.type_sizeof(&ty).fixed());
-
-		// from jump table at ROM1:6480
-		for va in [
-			0x65AA, 0x65C6, 0x66FC, 0x6628, 0x6734, 0x66AF, 0x65F1, 0x6654,
-			0x65B2, 0x65CE, 0x6714, 0x65CE, 0x65CE, 0x66C3, 0x65F7, 0x6660,
-			0x67D4, 0x67DC, 0x679D, 0x67A5, 0x67E4, 0x67E4, 0x67E4, 0x67AD,
-		] {
-			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
-		}
-
-	}
-
-	prog.analyze_queue();
-
-	println!("found {} functions.", prog.all_funcs().count());
-
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
-
-	let cg = prog.build_call_graph();
-	prog.dump_call_graph(&cg);
-
-	Ok(())
-}
-
-// ------------------------------------------------------------------------------------------------
-
-fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
-	let img_name =
-		// listed in order of decreasing mapper popularity
-		// "tests/data/dragonwarrior.nes"; // 1   (mmc1/sxrom)              *UNIMPLEMENTED*
-		// "tests/data/gauntlet.nes";      // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
-		// "tests/data/smb3.nes";          // 4   (mmc3/txrom, mmc6/hkrom)  *UNIMPLEMENTED*
-		// "tests/data/megaman.nes";       // 2   (uxrom)
-		"tests/data/10yf.nes";          // 0   (nrom)
-		// "tests/data/duckhunt.nes";      // 0   (nrom)
-		// "tests/data/smb.nes";           // 0   (nrom)
-		// "tests/data/arkanoid.nes";      // 3   (cnrom)
-		// "tests/data/battletoads.nes";   // 7   (axrom)
-		// NO ROM: e.g. gauntlet // 206 (mimic-1, namcot 118)     *UNIMPLEMENTED*
-		// "tests/data/exodus.nes"; // 11  (color dreams)
-		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
-		// NO ROM: e.g. star wars, rolling thunder // 19 (namco N129/N163)          *UNIMPLEMENTED*
-	let img = Image::new_from_file(img_name)?;
-
-	let (mut prog, start_ea) = program_from_image(img)?;
-
-	println!("{}", prog);
-	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
-
-	// find_identical_image_pieces(&prog);
-
-	let state = prog.initial_mmu_state();
-	prog.enqueue_new_func(state, prog.ea_from_name("VEC_RESET"));
-	prog.enqueue_new_func(state, prog.ea_from_name("VEC_NMI"));
-
-	if let Some(ea) = prog.ea_for_name("VEC_IRQ") {
-		prog.enqueue_new_func(state, ea);
-	}
-
-	if img_name.contains("battletoads") {
-		for va in [
-			0x8003, 0x8006, 0x8009, 0x800C, 0x800F, 0x8012, 0x8015, 0x8018,
-			0x801B, 0x801E, 0x8021, 0x8024, 0x8027, 0x802A, 0x802D, 0x8030,
-			0x8085, 0x80F7, 0x831F, 0x84E8, 0x857A, 0x86DE, 0x87A3, 0x87C2,
-			0x884B, 0x88EF, 0x8DC1, 0x9150, 0x9200, 0x923E, 0x9252, 0x930A,
-			0x93C8, 0x944E, 0x95E8, 0x95EB, 0x9643, 0x9E4E, 0x9ED2, 0xA51E,
-			0xA521, 0xA560, 0xB06B
-		] {
-			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
-		}
-		let ea   = prog.ea_from_va(state, VA(0xFFB3));
-		let ty   = prog.type_array(&Type::U8, 24);
-		let size = prog.type_sizeof(&ty).fixed();
-		prog.new_data(Some("BANK_CHANGE"), ea, &ty, size);
-	} else if img_name.contains("smb.nes") {
-		for va in [0x8231, 0x838B, 0x9218, 0xAEDC] {
-			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
-		}
-		let ea   = prog.ea_from_va(state, VA(0x821A));
-		let ty   = prog.type_array(&prog.type_ptr(&Type::Code, &Type::U16), 3);
-		let size = prog.type_sizeof(&ty).fixed();
-		prog.new_data(Some("array"), ea, &ty, size);
-	}
-
-	prog.analyze_queue();
-	println!("found {} functions.", prog.all_funcs().count());
-
-	for segid in prog.all_image_segs() {
-		show_segment(&prog, segid);
-	}
-
-	// show_prg0(&prog);
-
-	// for (ea, name) in prog.all_names_by_ea() {
-	// 	println!("{} {:25} {:?}", ea, name.name, name.kind);
-	// }
-
-	Ok(())
-}
 
 fn find_identical_image_pieces(prog: &Program) {
 	let seg_datas = prog.all_image_segs()
@@ -677,10 +676,6 @@ fn find_identical_image_pieces(prog: &Program) {
 		println!("run of identical bytes from {:04X} to {:04X}",
 			run_start + 0x8000, seg_datas[0].len() + 0x8000);
 	}
-}
-
-fn show_prg0(prog: &Program) {
-	show_segment(prog, prog.segment_for_name("PRG0").unwrap().id());
 }
 
 fn show_segment(prog: &Program, segid: SegId) {
@@ -1012,7 +1007,7 @@ fn show_bb(prog: &Program, bb: &BasicBlock) {
 	println!();
 }
 
-fn print_divider_if_diff_funcs(prog: &Program, from: EA, to: EA, msg: &str, color: Color){
+fn print_divider_if_diff_funcs(prog: &Program, from: EA, to: EA, msg: &str, color: Color) {
 	if diff_funcs(prog, from, to) {
 		let dest = prog.name_of_ea(to);
 		let msg = format!("---------- {} to {} ----------", msg, dest);
