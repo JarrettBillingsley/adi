@@ -1,7 +1,7 @@
 
 use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
-use crate::program::{ Program, BBTerm, FuncId, RegSet, Function };
+use crate::program::{ Program, BBTerm, FuncId, RegSet, Function, FuncRegUsage };
 use crate::memory::{ EA } ;
 use crate::arch::{ IIrCompiler };
 use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrBBId, IrCfg, IrInst, IrSrc,
@@ -312,16 +312,20 @@ struct IrRewriter<'a> {
 	default_regs: RegSet,
 	arg_regs:     RegSet,
 	ret_regs:     RegSet,
+	changed_regs: RegSet,
 }
 
 impl<'a> IrRewriter<'a> {
 	fn new(func: &Function, bbs: &'a mut Vec<IrBasicBlock>, default_regs: RegSet) -> Self {
+		let reg_usage = func.reg_usage().unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
+
 		Self {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
 			bbs,
-			arg_regs: func.reg_usage().map(|ru| ru.args()).unwrap_or(default_regs),
-			ret_regs: func.reg_usage().map(|ru| ru.rets()).unwrap_or(default_regs),
+			arg_regs:     reg_usage.args(),
+			ret_regs:     reg_usage.rets(),
+			changed_regs: reg_usage.changes(),
 			default_regs,
 		}
 	}
@@ -348,7 +352,9 @@ impl<'a> IrRewriter<'a> {
 		// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed to
 		// be a call/jump/branch.
 		let regs = match term_inst.kind() {
-			IrInstKind::Ret { .. } => self.ret_regs,
+			// because *all* modified registers (returns *and* clobbers) need to be marked as used
+			// or else they'll be marked dead by DSE.
+			IrInstKind::Ret { .. } => self.changed_regs,
 			// SAFETY: same reason as the match.
 			// (fixup_ir_targets is the step before this one, so this match is good.)
 			_ => match term_inst.target().unwrap() {
@@ -383,7 +389,7 @@ impl<'a> IrRewriter<'a> {
 	fn rewrite_returns(&mut self, prog: &Program, irbbid: IrBBId) {
 		// log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
-		let old_cont = self.change_cont(irbbid, self.new_bbid);
+		let (old_cont, callee_changed_regs) = self.change_cont(prog, irbbid, self.new_bbid);
 
 		// then build the new interstitial BB.
 		let mut b = IrBuilder::new(0); // never using cbranch_and_split, so whatev
@@ -392,7 +398,7 @@ impl<'a> IrRewriter<'a> {
 		b.set_ea(last_ea);
 		let arch = prog.plat().arch();
 
-		for reg_offs in self.ret_regs.iter() {
+		for reg_offs in callee_changed_regs.iter() {
 			let reg = arch.arch_ir_reg(reg_offs);
 			b.mov(reg, IrSrc::Return(reg.size()));
 		}
@@ -407,15 +413,36 @@ impl<'a> IrRewriter<'a> {
 		self.new_bbs.push(new_bb);
 	}
 
-	fn change_cont(&mut self, irbbid: IrBBId, new_cont: IrBBId) -> IrTarget {
+	/// change the continuation target of the terminating call instruction of `irbbid` to
+	/// `new_cont`. returns the old continuation target and the return `RegSet` of the call target,
+	/// or the default reg set if the target is not yet analyzed/is indirect.
+	fn change_cont(&mut self, prog: &Program, irbbid: IrBBId, new_cont: IrBBId)
+	-> (IrTarget, RegSet) {
 		let bb = &mut self.bbs[irbbid];
 
 		match bb.term_inst_mut().kind_mut() {
-			IrInstKind::Call { cont, .. } |
+			IrInstKind::Call { dst, cont, .. } => {
+				let regs = match dst {
+					// recursive call! use our own ret regs.
+					IrTarget::Internal(_)  => self.ret_regs,
+					IrTarget::External(ea) => {
+						prog.func_that_contains(*ea)
+						.map(|func|
+							func.reg_usage().map(|ru| ru.changes()))
+						.flatten()
+						.unwrap_or(self.default_regs)
+					}
+				};
+
+				let old_cont = *cont;
+				*cont = IrTarget::Internal(new_cont);
+				(old_cont, regs)
+			}
 			IrInstKind::ICall { cont, .. } => {
 				let old_cont = *cont;
 				*cont = IrTarget::Internal(new_cont);
-				old_cont
+				// can't know target, so have to return default regset
+				(old_cont, self.default_regs)
 			}
 			_ => panic!("bb{} marked for return-insertion should have ended with `Call` or `ICall` \
 				but ended with {:?} instead", irbbid, bb.term_inst().kind()),
