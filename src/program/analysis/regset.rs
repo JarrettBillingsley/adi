@@ -16,6 +16,8 @@ impl Debug for RegSet {
 }
 
 impl RegSet {
+	pub(crate) const EMPTY: RegSet = RegSet { bits: 0 };
+
 	/// New empty set.
 	pub(crate) fn new() -> Self {
 		Self { bits: 0 }
@@ -137,12 +139,26 @@ impl std::ops::BitAnd<RegSet> for RegSet {
 	}
 }
 
+impl std::ops::BitAndAssign<RegSet> for RegSet {
+	/// Shorthand for `self = self.intersection(rhs)`.
+	fn bitand_assign(&mut self, rhs: RegSet) {
+		*self = self.intersection(rhs);
+	}
+}
+
 impl std::ops::BitOr<RegSet> for RegSet {
 	type Output = RegSet;
 
 	/// Shorthand for `self.union(rhs)`.
 	fn bitor(self, rhs: RegSet) -> RegSet {
 		self.union(rhs)
+	}
+}
+
+impl std::ops::BitOrAssign<RegSet> for RegSet {
+	/// Shorthand for `self = self.union(rhs)`.
+	fn bitor_assign(&mut self, rhs: RegSet) {
+		*self = self.union(rhs);
 	}
 }
 
@@ -161,6 +177,13 @@ impl std::ops::Sub<RegSet> for RegSet {
 	/// Shorthand for `self.difference(rhs)`.
 	fn sub(self, rhs: RegSet) -> RegSet {
 		self.difference(rhs)
+	}
+}
+
+impl std::ops::SubAssign<RegSet> for RegSet {
+	/// Shorthand for `self = self.difference(rhs)`.
+	fn sub_assign(&mut self, rhs: RegSet) {
+		*self = self.difference(rhs);
 	}
 }
 
