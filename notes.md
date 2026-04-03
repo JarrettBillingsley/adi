@@ -25,6 +25,7 @@
 
 # Imminent tasks!
 
+- **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
 - **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 - **Move some `IIrCompiler` methods into `IArchitecture`**
 	- `arch_regs`, `stack_ptr_reg`, and `reg_name` are really just there because they "use `IrReg`" but they're static, unchanging properties of the architecture, not associated with compilation
