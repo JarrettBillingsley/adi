@@ -45,39 +45,62 @@ bitflags! {
 /// How a function uses or affects registers.
 #[derive(Debug)]
 pub(crate) struct FuncRegUsageInfo {
-	/// Which registers this function changes. Whether that register is a return value or just a
-	/// clobber is determined by `aux`.
-	changed: RegSet,
-	/// - If a register is in `changed`:
-	///     - If it's in `aux`, it's a return value.
-	///     - Else, it's a clobber (changed by the function but not used as a return value).
-	/// - If a register is *not* in `changed:
-	///     - If it's in `aux`, it's an argument.
-	///     - Else, it's unused by/unaffected by this function.
-	aux:     RegSet,
+	args:     RegSet,
+	// INVARIANT: these two sets never overlap (i.e. their intersection is always empty).
+	rets:     RegSet,
+	clobbers: RegSet,
+	// it is, however, possible for an arg register to be a return or clobber register.
 }
 
 impl FuncRegUsageInfo {
+	/// Constructor. Return values are specified by using `mark_returns`.
+	pub(crate) fn new(args: RegSet, clobbers: RegSet) -> Self {
+		Self {
+			args,
+			clobbers,
+			rets: RegSet::new(),
+		}
+	}
+
 	/// A `RegSet` of argument registers to this function.
 	pub(crate) fn args(&self) -> RegSet {
-		self.aux - self.changed
+		self.args
 	}
 
 	/// A `RegSet` of return value registers from this function.
 	pub(crate) fn rets(&self) -> RegSet {
-		self.changed & self.aux
+		self.rets
 	}
 
 	/// A `RegSet` of registers which are "clobbered" by this function (i.e. changed by this
 	/// function but not used as return values).
 	pub(crate) fn clobbers(&self) -> RegSet {
-		self.changed - self.aux
+		self.clobbers
+	}
+
+	/// A `RegSet` of registers which are changed by this function. The union of `rets` and
+	/// `clobbers`.
+	pub(crate) fn changes(&self) -> RegSet {
+		self.rets | self.clobbers
 	}
 
 	/// `true` if `reg` is completely unused by this function - not an argument, return value, or
 	/// clobber.
 	pub(crate) fn is_unused(&self, reg: u8) -> bool {
-		!self.changed.contains(reg) && !self.aux.contains(reg)
+		!self.args.contains(reg) && !self.rets.contains(reg) && !self.clobbers.contains(reg)
+	}
+
+	/// Mark `rets` as return registers, moving them out of the `clobbers` set. If one or more
+	/// registers are already marked as returns, has no effect on them.
+	///
+	/// Panics if any register in `rets` is not in either the clobber or return sets already.
+	pub(crate) fn mark_returns(&mut self, rets: RegSet) {
+		// if symmetric difference of `rets` and `changed` is not empty, that's a problem.
+		assert!((rets ^ (self.rets | self.clobbers)) == RegSet::EMPTY,
+			"trying to mark register(s) as returns which are not already in rets or clobbers");
+
+		self.clobbers -= rets;
+		self.rets |= rets;
 	}
 }
 
