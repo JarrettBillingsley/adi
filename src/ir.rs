@@ -166,7 +166,7 @@ impl IrReg {
 	}
 
 	/// True if this register is an SSA register with generation 0.
-	fn is_gen0(&self) -> bool {
+	pub(crate) fn is_gen0(&self) -> bool {
 		assert!(self.gen_.is_some(), ".is_gen0() called on non-SSA reg '{:?}'", self);
 		self.gen_ == Some(0)
 	}
@@ -495,12 +495,25 @@ impl IrBasicBlock {
 		self.insts.iter_mut()
 	}
 
+	/// The terminating instruction.
 	pub(crate) fn term_inst(&self) -> &IrInst {
 		self.insts.last().unwrap()
 	}
 
+	/// Same as above but mutable.
 	pub(crate) fn term_inst_mut(&mut self) -> &mut IrInst {
 		self.insts.last_mut().unwrap()
+	}
+
+	/// Iterator over all registers used by dummy uses (`IrInstKind::Use`) in this BB.
+	pub(crate) fn dummy_use_regs(&self) -> impl Iterator<Item = IrReg> {
+		self.insts.iter().filter_map(|inst| {
+			if let IrInstKind::Use { reg } = inst.kind() {
+				Some(reg)
+			} else {
+				None
+			}
+		})
 	}
 
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
@@ -613,6 +626,11 @@ impl IrFunction {
 	/// exit.
 	pub(crate) fn exitpoints(&self) -> &[IrBBId] {
 		&self.exitpoints
+	}
+
+	/// Get the basic block with the given id.
+	pub(crate) fn get_bb(&self, id: IrBBId) -> &IrBasicBlock {
+		&self.bbs[id]
 	}
 
 	// /// Eliminate any dead stores from the IR.

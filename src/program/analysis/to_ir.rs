@@ -320,8 +320,8 @@ impl<'a> IrRewriter<'a> {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
 			bbs,
-			arg_regs: func.reg_use().map(|ru| ru.args()).unwrap_or(default_regs),
-			ret_regs: func.reg_use().map(|ru| ru.rets()).unwrap_or(default_regs),
+			arg_regs: func.reg_usage().map(|ru| ru.args()).unwrap_or(default_regs),
+			ret_regs: func.reg_usage().map(|ru| ru.rets()).unwrap_or(default_regs),
 			default_regs,
 		}
 	}
@@ -359,7 +359,7 @@ impl<'a> IrRewriter<'a> {
 					// those; otherwise use the default ones.
 					prog.func_that_contains(ea)
 					.map(|func|
-						func.reg_use().map(|ru| ru.args()))
+						func.reg_usage().map(|ru| ru.args()))
 					.flatten()
 					.unwrap_or(self.default_regs)
 				}

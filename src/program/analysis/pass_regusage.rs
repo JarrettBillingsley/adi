@@ -1,5 +1,5 @@
 
-use crate::program::{ Program, FuncId };
+use crate::program::{ Program, FuncId, RegSet };
 use crate::program::analysis::callgraph::*;
 use crate::ir::{ RegDbg, DefUseKind };
 
@@ -103,13 +103,31 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::trace!("  arg_set = {:?}", arg_set);
+		log::trace!("    arg_set = {:?}", arg_set);
 
 		// 2. clobber regs are any reg with nonzero generation at any exit point.
 		let mut clobber_set = RegSet::new();
 
+		for irbbid in ir.exitpoints().iter().copied() {
+			for reg in ir.get_bb(irbbid).dummy_use_regs() {
+				if !reg.is_gen0() {
+					if clobber_set.insert(reg.offset()) {
+						log::trace!("  {:?} is clobbered",
+							RegDbg(reg, Some(&self.prog.plat().arch().new_ir_compiler())));
+					}
+				}
+			}
+		}
 
-		log::trace!("  clobber_set = {:?}", clobber_set);
+		log::trace!("    clobber_set = {:?}", clobber_set);
+
+		// 3. return regs. for each caller, generate its IR *but when it calls this function,*
+		// have it use arg_set and clobber_set around the call. (so, apply the arg and clobber sets
+		// to this function? do we need the IR anymore? actually I don't think so...)
+		// then do DSE on the caller, and any remaining use of a `<return>` after a call to this
+		// function is a "true" return value.
+		//   in that case, move the reg from the clobber set to the return set; early out if the
+		//   clobber set becomes empty
 
 		// TODO: apply the reg sets to the actual function!
 	}

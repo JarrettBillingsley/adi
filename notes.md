@@ -320,30 +320,28 @@ The *meaning* of "is unaffected" is ambiguous, however. It could be:
 			- heyyyyy petgraph's tarjan's algo also returns the SCCs in postorder, meaning we already have the order in which to visit things!
 	- there may even be isolated functions (either unused code or, through analysis, got stranded)
 		- but I don't think we need to treat those differently...?
-2. starting from the leaves, for each function:
+2. starting from the leaves, bottom-up, for each function:
 	- determining arguments is easy - if `_0` is used anywhere in the function, that's an argument.
 	- determining clobbers is easy - any reg with nonzero generation at any exitpoint is clobbered.
-	- determining return vals: **for each caller,**
-		- generate its IR *using the determined argument regs for the callee, and clobbered regs as its return values,*
-		- do DSE on the caller's IR
-		- any remaining `r = <return>` after a call to the callee is a *true* return value and not just a clobber.
-		- the return values are the **union of all of these sets.**
-			- since return vals are a subset of clobbers, we can implement this as moving a reg from the clobber set to the retval set
-				- can early-out if clobber set becomes empty!
-	- then each `Function` needs to remember those three sets - args, rets, clobbers
-	- **how does dead store elimination tie into it?**
-		- well, the `r = <return>`s can be pruned **only if the callee's rets set has been determined.** only insert them for things in that set.
-		- also, the `use reg`s should only be inserted for those regs which are *actually* arguments to the function.
-		- `to_ir` needs to take this into account instead of only using `IIrCompiler::arg/ret_regs`
-		- *however* it's possible for buggy code to use "unaffected" registers...
-			- e.g. a function expects a return value in `a` but the callee never put anything in `a`
-			- in that case pruning the `a = <return>` would lead to a mis-analysis of the caller.... or would it
-				- cause it would say "you're using some value of `a` computed in this function, not the callee" which *is technically right!* hmmmmmm
-	- **what about recursive functions?**
-		- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
-		- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
-	- eventually this will lead to the entire call graph being analyzed
-		- and all functions' register usages being determined
+	- **apply those reg sets to the function** so the next pass works properly.
+3. starting from the roots, top-down, for each function:
+	- find calls with `IrTarget::External` destinations and `IrTarget::Internal` continuations
+		- the continuations are the inserted `r = <return>` BBs
+	- do DSE
+	- in those continuations, any remaining `r = <return>` is a *true* return value from a callee and not just a clobber.
+		- the callee's return values are a subset of clobbers, so we can implement this as moving a reg from its clobber set to its returns set
+	- **apply return sets to the callees**
+
+**What about recursive functions?**
+	
+- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
+- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
+
+It's possible for buggy code to use "unaffected" registers...
+
+- e.g. a function expects a return value in `a` but the callee never put anything in `a`
+- in that case pruning the `a = <return>` would lead to a mis-analysis of the caller.... or would it
+	- cause it would say "you're using some value of `a` computed in this function, not the callee" which *is technically right!* hmmmmmm
 
 ---
 

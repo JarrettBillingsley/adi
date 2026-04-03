@@ -39,12 +39,12 @@ bitflags! {
 }
 
 // ------------------------------------------------------------------------------------------------
-// FuncRegUseInfo
+// FuncRegUsageInfo
 // ------------------------------------------------------------------------------------------------
 
 /// How a function uses or affects registers.
 #[derive(Debug)]
-pub(crate) struct FuncRegUseInfo {
+pub(crate) struct FuncRegUsageInfo {
 	/// Which registers this function changes. Whether that register is a return value or just a
 	/// clobber is determined by `aux`.
 	changed: RegSet,
@@ -57,7 +57,7 @@ pub(crate) struct FuncRegUseInfo {
 	aux:     RegSet,
 }
 
-impl FuncRegUseInfo {
+impl FuncRegUsageInfo {
 	/// A `RegSet` of argument registers to this function.
 	pub(crate) fn args(&self) -> RegSet {
 		self.aux - self.changed
@@ -99,8 +99,8 @@ pub struct Function {
 	pub(crate) bbs: Vec<BBId>,
 	/// The IDs of the `BasicBlock`s which are entry points into this function.
 	pub(crate) entrypoints: SmallVec<[BBId; 2]>,
-	/// Register use info, or `None` if register usage hasn't yet been analyzed.
-	reg_use: Option<FuncRegUseInfo>,
+	/// Register usage info, or `None` if register usage hasn't yet been analyzed.
+	reg_usage: Option<FuncRegUsageInfo>,
 }
 
 impl Function {
@@ -174,7 +174,7 @@ impl Function {
 			attrs: FuncAttrs::NONE,
 			bbs,
 			entrypoints,
-			reg_use: None,
+			reg_usage: None,
 		}
 	}
 
@@ -196,12 +196,12 @@ impl Function {
 		}
 	}
 
-	pub(crate) fn reg_use(&self) -> Option<&FuncRegUseInfo> {
-		self.reg_use.as_ref()
+	pub(crate) fn reg_usage(&self) -> Option<&FuncRegUsageInfo> {
+		self.reg_usage.as_ref()
 	}
 
-	pub(crate) fn reg_use_mut(&mut self) -> &mut Option<FuncRegUseInfo> {
-		&mut self.reg_use
+	pub(crate) fn reg_use_mut(&mut self) -> &mut Option<FuncRegUsageInfo> {
+		&mut self.reg_usage
 	}
 }
 
