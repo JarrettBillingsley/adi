@@ -52,11 +52,11 @@ fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
 	prog.enqueue_reg_usage();
 	prog.analyze_queue();
 
-	// println!("found {} functions.", prog.all_funcs().count());
+	println!("found {} functions.", prog.all_funcs().count());
 
-	// for segid in prog.all_image_segs() {
-	// 	show_segment(&prog, segid);
-	// }
+	for segid in prog.all_image_segs() {
+		show_segment(&prog, segid);
+	}
 
 	// for (ea, name) in prog.all_names_by_ea() {
 	// 	println!("{} {:25} {:?}", ea, name.name, name.kind);
@@ -391,8 +391,10 @@ fn toy_test_calls() -> ToyTest {
 	let mut b = ToyBuilder::new();
 	b.movi(A, 0x30);
 	b.call_to(FUNC_FIRST_HALF);
+	b.sti(A, 0x9000);
 	b.ldi(A, 0x8000);
 	let call_second = b.call();
+	b.sti(A, 0x9000);
 	b.sti(A, 0x8000);
 	b.ret();
 
@@ -873,6 +875,13 @@ fn show_func_header(prog: &Program, func: &Function) {
 
 	let name = prog.name_of_ea(func.ea());
 	println!("{}{}", "; Function ".green(), name.name.green());
+
+	// TODO: rewrite this using some new API
+	// if let Some(usage) = func.reg_usage() {
+	// 	println!("{}{}", "; Argument registers: ".green(), format!("{:?}", usage.args()).green());
+	// 	println!("{}{}", "; Return registers: ".green(), format!("{:?}", usage.rets()).green());
+	// 	println!("{}{}", "; Clobbered registers: ".green(), format!("{:?}", usage.clobbers()).green());
+	// }
 
 	if !func.attrs().is_empty() {
 		let attrs = format!("{:?}", func.attrs());

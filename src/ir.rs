@@ -12,7 +12,7 @@ use petgraph::{
 use crate::arch::{ IrCompiler, IIrCompiler };
 use crate::dataflow::{ DataflowCfg };
 use crate::memory::{ EA };
-use crate::program::{ BBId, FuncId };
+use crate::program::{ BBId, FuncId, FuncRegUsage };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -34,7 +34,7 @@ pub(crate) use ssa::*;
 pub(crate) use constprop::*;
 pub(crate) use defuse::*;
 pub(crate) use dom::*;
-// pub(crate) use dse::*;
+use dse::*;
 
 // ------------------------------------------------------------------------------------------------
 // ValSize
@@ -516,6 +516,17 @@ impl IrBasicBlock {
 		})
 	}
 
+	/// Iterator over all registers def'd by `mov _, <return>` in this BB.
+	pub(crate) fn dummy_return_use_regs(&self) -> impl Iterator<Item = IrReg> {
+		self.insts.iter().filter_map(|inst| {
+			if let IrInstKind::Mov { dst, src: IrSrc::Return(..), .. } = inst.kind() {
+				Some(dst)
+			} else {
+				None
+			}
+		})
+	}
+
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		writeln!(f, "bb{}: (real BB: {:?})", self.id, self.real_bbid)?;
 
@@ -617,6 +628,7 @@ impl IrFunction {
 		self.consts.borrow().unwrap()
 	}
 
+	/// Perform def-use analysis on this function.
 	pub(crate) fn find_defs_and_uses(&self) -> DefMap {
 		find_defs_and_uses(&self.bbs)
 	}
@@ -628,16 +640,21 @@ impl IrFunction {
 		&self.exitpoints
 	}
 
+	/// Get the number of basic blocks.
+	pub(crate) fn num_bbs(&self) -> usize {
+		self.bbs.len()
+	}
+
 	/// Get the basic block with the given id.
 	pub(crate) fn get_bb(&self, id: IrBBId) -> &IrBasicBlock {
 		&self.bbs[id]
 	}
 
-	// /// Eliminate any dead stores from the IR.
-	// pub(crate) fn elim_dead_stores(&mut self) {
-	// 	// TODO: invalidate self.consts
-	// 	elim_dead_stores(&mut self.bbs);
-	// }
+	/// Eliminate any dead stores from the IR.
+	pub(crate) fn elim_dead_stores(&mut self, reg_usage: FuncRegUsage) {
+		// TODO: invalidate self.consts
+		elim_dead_stores(&mut self.bbs, reg_usage);
+	}
 
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
 		writeln!(f, "-------------------------------------------------------")?;

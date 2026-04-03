@@ -56,14 +56,14 @@ impl Program {
 
 		let irfunc = self.func_to_ir(fid);
 		// debug!("------------------------------------------------------------------");
-		let compiler = self.plat.arch().new_ir_compiler();
+		// let compiler = self.plat.arch().new_ir_compiler();
 		// let consts = irfunc.constants();
 		// debug!("Constants:");
 		// for (reg, result) in consts.regs() {
 		// 	debug!("{:?} = {:?}", crate::ir::RegDbg(*reg, Some(&compiler)), result);
 		// }
-		debug!("{:?}", crate::ir::IrFunctionWithNames(
-			&irfunc, &compiler));
+		// debug!("{:?}", crate::ir::IrFunctionWithNames(
+		// 	&irfunc, &compiler));
 
 		let addr_bits = self.plat.arch().addr_bits();
 

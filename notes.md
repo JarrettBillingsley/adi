@@ -1,10 +1,18 @@
 
 # Yak stack
 
+- Register usage analysis
+	- determine arg/clobber regs for recursive funcs
+	- determine return values
+	- determine return values for recursive funcs
+	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
+		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
+	- code cleanup when done
+	- *when* (if ever) should reguse pass be automatically scheduled?
+
 # Major tasks
 
 - Const prop provenance ASTs
-- Register usage analysis
 - Type propagation (**depends on const prop ASTs** and **register usage analysis**)
 - Data analysis (***good* analysis depends on type propagation**)
 - Jump table analysis, indirect jumps and calls (**depends on data analysis**)
@@ -17,6 +25,10 @@
 
 # Imminent tasks!
 
+- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
+- **Move some `IIrCompiler` methods into `IArchitecture`**
+	- `arch_regs`, `stack_ptr_reg`, and `reg_name` are really just there because they "use `IrReg`" but they're static, unchanging properties of the architecture, not associated with compilation
+- **Inventory `TODO`s throughout the codebase**
 - **Const prop provenance ASTs**
 	- come up with OpInfo::Ref for halves of addresses
 - **Type propagation**

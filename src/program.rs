@@ -266,7 +266,7 @@ impl Program {
 		}
 	}
 
-	/// Gets the ID of the function that contains the given EA, or None if none does.
+	/// Gets the function that contains the given EA, or None if none does.
 	pub fn func_that_contains(&self, ea: EA) -> Option<&Function> {
 		let bbid = self.span_at_ea(ea).bb()?;
 		let func_id = self.bbidx.get(bbid).func();

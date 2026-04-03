@@ -54,8 +54,16 @@ impl DefInfo {
 		self.loc
 	}
 
+	pub(crate) fn is_unused(&self) -> bool {
+		matches!(self.use_kind, DefUseKind::None)
+	}
+
+	pub(crate) fn is_really_used(&self) -> bool {
+		matches!(self.use_kind, DefUseKind::Real)
+	}
+
 	fn mark_dummy_used(&mut self) {
-		if matches!(self.use_kind, DefUseKind::None) {
+		if self.is_unused() {
 			self.use_kind = DefUseKind::OnlyDummy;
 		}
 		// otherwise, leave it as is

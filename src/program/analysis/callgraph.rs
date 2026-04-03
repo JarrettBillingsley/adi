@@ -1,6 +1,4 @@
 
-use std::marker::{ PhantomData };
-
 use petgraph::{
 	Direction,
 	graphmap::{ DiGraphMap },
@@ -13,16 +11,14 @@ use crate::program::{ Program, FuncId, EA };
 type CallGraph = DiGraphMap<FuncId, ()>;
 
 // TODO: make pub(crate)
-pub struct ProgramCallGraph<'a> {
+pub struct ProgramCallGraph {
 	g: CallGraph,
-	_phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> ProgramCallGraph<'a> {
+impl ProgramCallGraph {
 	fn new(g: CallGraph) -> Self {
 		Self {
 			g,
-			_phantom: PhantomData::default(),
 		}
 	}
 
@@ -47,10 +43,9 @@ impl<'a> ProgramCallGraph<'a> {
 // ------------------------------------------------------------------------------------------------
 
 impl Program {
-	/// Build the call graph for the whole program. The returned call graph has a lifetime tied to
-	/// this `Program`, so the `Program` cannot be modified until the call graph is dropped.
+	/// Build the call graph for the whole program.
 	// TODO: make pub(crate)
-	pub fn build_call_graph(&self) -> ProgramCallGraph<'_> {
+	pub fn build_call_graph(&self) -> ProgramCallGraph {
 		let mut g = CallGraph::new();
 
 		for (_, func) in self.funcs.all_funcs() {

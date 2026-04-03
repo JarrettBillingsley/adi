@@ -39,12 +39,12 @@ bitflags! {
 }
 
 // ------------------------------------------------------------------------------------------------
-// FuncRegUsageInfo
+// FuncRegUsage
 // ------------------------------------------------------------------------------------------------
 
 /// How a function uses or affects registers.
-#[derive(Debug)]
-pub(crate) struct FuncRegUsageInfo {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) struct FuncRegUsage {
 	args:     RegSet,
 	// INVARIANT: these two sets never overlap (i.e. their intersection is always empty).
 	rets:     RegSet,
@@ -52,7 +52,7 @@ pub(crate) struct FuncRegUsageInfo {
 	// it is, however, possible for an arg register to be a return or clobber register.
 }
 
-impl FuncRegUsageInfo {
+impl FuncRegUsage {
 	/// Constructor. Return values are specified by using `mark_returns`.
 	pub(crate) fn new(args: RegSet, clobbers: RegSet) -> Self {
 		Self {
@@ -93,14 +93,28 @@ impl FuncRegUsageInfo {
 	/// Mark `rets` as return registers, moving them out of the `clobbers` set. If one or more
 	/// registers are already marked as returns, has no effect on them.
 	///
+	/// Returns true if the sets changed.
+	///
 	/// Panics if any register in `rets` is not in either the clobber or return sets already.
-	pub(crate) fn mark_returns(&mut self, rets: RegSet) {
-		// if symmetric difference of `rets` and `changed` is not empty, that's a problem.
-		assert!((rets ^ (self.rets | self.clobbers)) == RegSet::EMPTY,
-			"trying to mark register(s) as returns which are not already in rets or clobbers");
+	pub(crate) fn mark_returns(&mut self, rets: RegSet) -> bool {
+		// bail if `rets` is empty, or else the assert will fail
+		if rets.is_empty() {
+			return false;
+		}
+
+		// if intersection of `rets` and `changed` is empty, that's a problem.
+		assert!(!(rets & (self.rets | self.clobbers)).is_empty(),
+			"trying to mark register(s) as returns which are not already in rets or clobbers.\n\
+			rets     = {:?}\n\
+			clobbers = {:?}\n\
+			new      = {:?}", self.rets, self.clobbers, rets);
+
+		let (old_clobbers, old_rets) = (self.clobbers, self.rets);
 
 		self.clobbers -= rets;
 		self.rets |= rets;
+
+		old_clobbers != self.clobbers || old_rets != self.rets
 	}
 }
 
@@ -123,7 +137,7 @@ pub struct Function {
 	/// The IDs of the `BasicBlock`s which are entry points into this function.
 	pub(crate) entrypoints: SmallVec<[BBId; 2]>,
 	/// Register usage info, or `None` if register usage hasn't yet been analyzed.
-	reg_usage: Option<FuncRegUsageInfo>,
+	reg_usage: Option<FuncRegUsage>,
 }
 
 impl Function {
@@ -219,11 +233,11 @@ impl Function {
 		}
 	}
 
-	pub(crate) fn reg_usage(&self) -> Option<&FuncRegUsageInfo> {
-		self.reg_usage.as_ref()
+	pub(crate) fn reg_usage(&self) -> Option<FuncRegUsage> {
+		self.reg_usage
 	}
 
-	pub(crate) fn reg_use_mut(&mut self) -> &mut Option<FuncRegUsageInfo> {
+	pub(crate) fn reg_usage_mut(&mut self) -> &mut Option<FuncRegUsage> {
 		&mut self.reg_usage
 	}
 }
