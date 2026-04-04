@@ -838,7 +838,7 @@ impl IrInst {
 	}
 
 	/// Callback iterator over all regs used by this instruction.
-	pub(crate) fn regs(&self, mut f: impl FnMut(&IrReg)) {
+	pub(crate) fn regs(&self, mut f: impl FnMut(IrReg)) {
 		use IrInstKind::*;
 
 		match &self.kind {
@@ -848,22 +848,22 @@ impl IrInst {
 			| Call { .. }
 			| Halt => {}
 
-			Use { reg }              => { f(reg); }
-			Mov { dst, src, .. }  => { f(dst); src.regs(&mut f); }
-			Load { dst, addr, .. }   => { f(dst); addr.regs(&mut f); }
+			Use { reg }              => { f(*reg); }
+			Mov { dst, src, .. }     => { f(*dst); src.regs(&mut f); }
+			Load { dst, addr, .. }   => { f(*dst); addr.regs(&mut f); }
 			Store { addr,  src, .. } => { addr.regs(&mut f); src.regs(&mut f); }
 			CBranch { cond, .. }     => { cond.regs(&mut f); }
-			ICall { dst, .. }     => { dst.regs(&mut f); }
-			Ret { dst, .. }       => { dst.regs(&mut f); }
-			Unary { dst, src, .. }   => { f(dst); src.regs(&mut f); }
+			ICall { dst, .. }        => { dst.regs(&mut f); }
+			Ret { dst, .. }          => { dst.regs(&mut f); }
+			Unary { dst, src, .. }   => { f(*dst); src.regs(&mut f); }
 
 			Binary { dst, src1, src2, .. } => {
-				f(dst);
+				f(*dst);
 				src1.regs(&mut f);
 				src2.regs(&mut f);
 			}
 			Ternary { dst, src1, src2, src3, .. } => {
-				f(dst);
+				f(*dst);
 				src1.regs(&mut f);
 				src2.regs(&mut f);
 				src3.regs(&mut f);

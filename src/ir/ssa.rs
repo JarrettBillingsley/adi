@@ -33,7 +33,7 @@ pub(crate) fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
 	for bb in bbs.iter() {
 		// this function can be used before or after phi-insertion.
 		for phi in bb.phis() {
-			ret.insert(*phi.dst_reg());
+			ret.insert(phi.dst_reg());
 
 			for &arg in phi.args() {
 				ret.insert(arg);
@@ -41,7 +41,7 @@ pub(crate) fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
 		}
 
 		for inst in bb.insts() {
-			inst.regs(|&r| {
+			inst.regs(|r| {
 				ret.insert(r);
 			});
 		}
@@ -254,7 +254,7 @@ impl PhiPruner {
 
 		// 2. propagate used info backwards using stack
 		while let Some(v) = self.stack.pop() {
-			let phi = self.find_phi(&v, bbs);
+			let phi = self.find_phi(v, bbs);
 
 			for arg in phi.args().iter() {
 				// if arg is marked as useless, mark it as useful and push it to the stack.
@@ -272,15 +272,15 @@ impl PhiPruner {
 			bb.retain_phis(|reg| {
 				// unwrap is ok here because every phi in the function was added to the map
 				// by visit_mark
-				self.use_map.get(reg).unwrap().used()
+				self.use_map.get(&reg).unwrap().used()
 			})
 		}
 	}
 
-	fn find_phi<'b>(&self, reg: &IrReg, bbs: &'b [IrBasicBlock]) -> &'b IrPhi {
+	fn find_phi<'b>(&self, reg: IrReg, bbs: &'b [IrBasicBlock]) -> &'b IrPhi {
 		// unwrap is ok here because this method is only called on registers popped from the stack,
 		// which only got there by also being put into the use map
-		let bbid = self.use_map.get(reg).unwrap().bb();
+		let bbid = self.use_map.get(&reg).unwrap().bb();
 
 		// unwrap is ok here for the same reason
 		bbs[bbid].phi_for_reg(reg).unwrap()
@@ -290,7 +290,7 @@ impl PhiPruner {
 		// mark all registers declared by phi functions as unused
 		for phi in bbs[bbid].phis() {
 			// log::trace!("marking reg {} as unused in bb {}", phi.dst_reg(), bbid);
-			self.use_map.insert(*phi.dst_reg(), UseInfo::new(bbid));
+			self.use_map.insert(phi.dst_reg(), UseInfo::new(bbid));
 		}
 
 		// mark all registers used by instructions as used

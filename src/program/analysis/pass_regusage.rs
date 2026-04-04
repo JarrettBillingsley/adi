@@ -142,13 +142,13 @@ impl<'a> RegUsagePass<'a> {
 	}
 
 	fn arg_clobber_self_recursive(&mut self, fid: FuncId, reg_usage: &mut RegUsageMap) {
-		log::trace!("- TODO: self-recursive function arg/clobber not yet implemented. {}",
+		log::warn!("- TODO: self-recursive function arg/clobber not yet implemented. {}",
 			self.prog.get_func(fid).ea());
 		let _ = reg_usage;
 	}
 
 	fn arg_clobber_mutually_recursive(&mut self, fids: &[FuncId], reg_usage: &mut RegUsageMap) {
-		log::trace!("- TODO: mutually-recursive function arg/clobber not yet implemented. SCC:");
+		log::warn!("- TODO: mutually-recursive function arg/clobber not yet implemented. SCC:");
 
 		for fid in fids {
 			let ea = self.prog.get_func(*fid).ea();
@@ -243,12 +243,12 @@ impl<'a> RegUsagePass<'a> {
 	}
 
 	fn returns_self_recursive(&mut self, fid: FuncId) {
-		log::trace!("- TODO: self-recursive function returns not yet implemented. {}",
+		log::warn!("- TODO: self-recursive function returns not yet implemented. {}",
 			self.prog.get_func(fid).ea());
 	}
 
 	fn returns_mutually_recursive(&mut self, fids: &[FuncId]) {
-		log::trace!("- TODO: mutually-recursive function returns not yet implemented. SCC:");
+		log::warn!("- TODO: mutually-recursive function returns not yet implemented. SCC:");
 
 		for fid in fids {
 			let ea = self.prog.get_func(*fid).ea();

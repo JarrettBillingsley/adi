@@ -89,7 +89,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 				IrInstKind::Store { src, .. } => {
 					match src {
 						IrSrc::Const(IrConst { val, .. }) => Some(val),
-						IrSrc::Reg(r) => self.consts.get(&r).map(|result| result.val),
+						IrSrc::Reg(r) => self.consts.get(r).map(|result| result.val),
 						_ => None,
 					}
 				},
@@ -120,7 +120,7 @@ impl<'func> std::iter::Iterator for ConstAddrsIter<'func> {
 				IrInstKind::ICall   { dst: addr, dstn: opn, .. }  if opn >= 0 => {
 					let addr = match addr {
 						IrSrc::Const(IrConst { val, .. }) => Some((val, None, false)),
-						IrSrc::Reg(r)                     => self.consts.get(&r).copied()
+						IrSrc::Reg(r)                     => self.consts.get(r).copied()
 							.map(|result| (result.val, Some(result.node), result.is_multi)),
 						_                                 => None,
 					};

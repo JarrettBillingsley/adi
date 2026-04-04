@@ -4,7 +4,7 @@ use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 use super::*;
 
 // ------------------------------------------------------------------------------------------------
-// DefInfo, DefMap
+// DefUseKind, DefLocation, DefInfo, DefMap
 // ------------------------------------------------------------------------------------------------
 
 /// Ways in which a register is used.
@@ -20,25 +20,42 @@ pub(crate) enum DefUseKind {
 	Real,
 }
 
+/// Where a register was defined.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum DefLocation {
+	/// It's an argument, so it has no definition location.
+	Arg,
+	/// Defined by the `phin`th phi function at the start of `bbid`.
+	Phi  { bbid: IrBBId, phin:  usize },
+	/// Defined by the `instn`th instruction of `bbid`.
+	Inst { bbid: IrBBId, instn: usize },
+}
+
 /// Information about a single IR register def.
 pub(crate) struct DefInfo {
 	use_kind: DefUseKind,
-	// None for _0 regs, and Some for all others. `(bbid, instruction index)`
-	loc: Option<(IrBBId, usize)>,
+	loc:      DefLocation,
 }
 
 impl DefInfo {
-	fn new_gen0() -> Self {
+	fn new_inst(bbid: IrBBId, instn: usize) -> Self {
 		Self {
 			use_kind: DefUseKind::None,
-			loc:      None
+			loc:      DefLocation::Inst { bbid, instn },
 		}
 	}
 
-	fn new(bbid: IrBBId, inst: usize) -> Self {
+	fn new_arg() -> Self {
 		Self {
 			use_kind: DefUseKind::None,
-			loc:      Some((bbid, inst)),
+			loc:      DefLocation::Arg,
+		}
+	}
+
+	fn new_phi(bbid: IrBBId, phin: usize) -> Self {
+		Self {
+			use_kind: DefUseKind::None,
+			loc:      DefLocation::Phi { bbid, phin },
 		}
 	}
 
@@ -48,9 +65,8 @@ impl DefInfo {
 		self.use_kind
 	}
 
-	/// the location where it was defined as a tuple `(BB ID, instruction index)`, or `None` if it's
-	/// a zero-generation reg.
-	pub(crate) fn loc(&self) -> Option<(IrBBId, usize)> {
+	/// the location where it was defined.
+	pub(crate) fn loc(&self) -> DefLocation {
 		self.loc
 	}
 
@@ -91,9 +107,14 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 
 	// first find all defs
 	for bb in bbs.iter() {
+		for (i, phi) in bb.phis().enumerate() {
+			defs.insert(phi.dst_reg(), DefInfo::new_phi(bb.id, i));
+		}
+
+
 		for (i, inst) in bb.insts().enumerate() {
 			if let Some(reg) = inst.dst_reg() {
-				defs.insert(reg, DefInfo::new(bb.id, i));
+				defs.insert(reg, DefInfo::new_inst(bb.id, i));
 			}
 		}
 	}
@@ -114,7 +135,7 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 			inst.visit_uses(|reg| {
 				if !defs.contains_key(&reg) {
 					assert!(reg.is_gen0());
-					defs.insert(reg, DefInfo::new_gen0());
+					defs.insert(reg, DefInfo::new_arg());
 				}
 
 				// SAFETY: see above

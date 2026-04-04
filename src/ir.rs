@@ -301,9 +301,9 @@ impl IrSrc {
 	}
 
 	/// Callback iterator over regs (well, reg) represented by this source.
-	pub(crate) fn regs(&self, f: &mut impl FnMut(&IrReg)) {
+	pub(crate) fn regs(&self, f: &mut impl FnMut(IrReg)) {
 		if let IrSrc::Reg(r) = self {
-			f(r);
+			f(*r);
 		}
 	}
 
@@ -356,8 +356,8 @@ impl IrPhi {
 		self.dst == reg
 	}
 
-	fn dst_reg(&self) -> &IrReg {
-		&self.dst
+	fn dst_reg(&self) -> IrReg {
+		self.dst
 	}
 
 	fn dst_reg_mut(&mut self) -> &mut IrReg {
@@ -475,7 +475,7 @@ impl IrBasicBlock {
 		self.phis.push(IrPhi::new(reg, num_preds));
 	}
 
-	fn phi_for_reg(&self, reg: &IrReg) -> Option<&IrPhi> {
+	fn phi_for_reg(&self, reg: IrReg) -> Option<&IrPhi> {
 		// TODO: this is linear time. is that a problem? (how many phi funcs are there likely
 		// to be at the start of a BB?)
 		// since phis execute conceptually in parallel, and since we need to look them up by
@@ -483,7 +483,7 @@ impl IrBasicBlock {
 		self.phis().find(|&phi| phi.dst_reg() == reg)
 	}
 
-	fn retain_phis(&mut self, p: impl Fn(&IrReg) -> bool) {
+	fn retain_phis(&mut self, p: impl Fn(IrReg) -> bool) {
 		self.phis.retain(|phi| p(phi.dst_reg()))
 	}
 

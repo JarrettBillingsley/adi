@@ -53,12 +53,12 @@ impl Debug for ConstPropResult {
 }
 
 impl ConstPropResults {
-	pub(crate) fn get(&self, r: &IrReg) -> Option<&ConstPropResult> {
-		self.regs.get(r)
+	pub(crate) fn get(&self, r: IrReg) -> Option<&ConstPropResult> {
+		self.regs.get(&r)
 	}
 
-	pub(crate) fn regs(&self) -> impl Iterator<Item = (&IrReg, &ConstPropResult)> {
-		self.regs.iter()
+	pub(crate) fn regs(&self) -> impl Iterator<Item = (IrReg, &ConstPropResult)> {
+		self.regs.iter().map(|(reg, res)| (*reg, res))
 	}
 
 	pub(crate) fn dump_node(&self, node: NodeId) {
@@ -301,7 +301,7 @@ impl<'bb> DataflowAlgorithm for ConstProp<'bb> {
 // ------------------------------------------------------------------------------------------------
 
 fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
-	let mut reg_state = state.regs[phi.dst_reg()];
+	let mut reg_state = state.regs[&phi.dst_reg()];
 	let mut changed = false;
 
 	// log::trace!("  const phi join {:?}", phi.dst_reg());
@@ -310,6 +310,6 @@ fn phi_join(phi: &IrPhi, state: &mut ConstPropState) -> bool {
 		changed |= reg_state.join(&state.regs[arg]);
 	}
 
-	state.regs.insert(*phi.dst_reg(), reg_state);
+	state.regs.insert(phi.dst_reg(), reg_state);
 	changed
 }
