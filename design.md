@@ -447,3 +447,65 @@ The second possibility is not fully handled yet but yeahhhhhhhhh that's it
 ---
 
 ## Register Usage Analysis
+
+Each function can use and change registers in a few ways. They are:
+
+- **Arguments:** values placed in registers by the callee which the callee uses without initializing
+- **Clobbers:** registers the callee changes
+- **Returns:** subset of clobbers, registers whose values the caller uses after calling the callee
+
+The IR being in SSA makes these sets very easy to determine.
+
+There's also a fourth "non-set" of "registers that are not used or changed by a function," the *unaffected* registers. The *meaning* of "is unaffected" is ambiguous, however. It could be:
+
+- A caller-saved register that was never used
+	- e.g. `t` registers in MIPS, most go unused in most functions
+- A callee-saved register that was not needed
+	- e.g. `s` registers in MIPS; not using one maintains the agreement that they will have the same value on exit as on entry
+- Something that really *was* an argument, but the code was rewritten and it went unused, so even though the caller sets it before each call, it never gets read
+- I'm sure there are other cases I'm not thinking of...
+
+It's also possible for buggy code to use "unaffected" registers, e.g. a function expects a return value in `a` but the callee never put anything in `a`. The analysis would figure this out, though - it would say "`a` is some value computed in *this* function, not the callee" which is accurate!
+
+### Theory and definitions
+
+I will define **exit point** as anywhere where control flow leaves the function permanently. A return *is just one example;* there are also tailcalls, tailbranches, fallthroughs, etc. A function can have multiple exit points.
+
+A **return point** is special kind of exit point: where the function returns. A function can have multiple return points.
+
+A **call point** is when a function calls another function, and then control returns to the caller (rather than e.g. falling through into a third, unrelated function).
+
+At any exit point, any currently-live value *might* be a return value. We don't know, because there are no calling conventions. Similarly before a call or tailcall, any value *might* be an argument.
+
+In order to encode these constraints, the IR has two special instruction form:
+
+- `use reg` is a "dummy use" of `reg`, which encodes **the most-recent generation of each register available at that point.** (The SSA register numbering algorithm will change these `use` instructions to use that most-recent generation.)
+- `mov reg, <return>` is a "dummy return use", which encodes the possibility that the function call from which we just returned may have changed `reg` (may be a return value from that function).
+
+Then, when generating the IR:
+
+- `use`s are inserted for every register before every **call point** and every **non-return exit point**
+	- **why:** everywhere control flow enters another function, either temporarily or permanently, any register *could* be an argument to that other function.
+- `use`s are inserted for every register before every **return point**
+	- **why:** this encodes the set of values which *could* be returned from this function
+- `mov reg, <return>`s are inserted for every register *after* every **call point**
+	- **why:** any register *could* have been changed by the function call
+
+SSA assigns a "generation number" to each register, which kind of counts how many times it has been assigned to. Generation 0 is special - it is the *initial* values of the registers upon entry to the function... which may be arguments!
+
+### The Register Usage Analysis Pass
+
+This is a pass run on the **entire program's call graph** once nothing else is left to do. It proceeds in a few phases:
+
+1. First, the whole-program call graph is extracted from the basic block terminators of every function in the program.
+	- The call graph is then topologically sorted using Tarjan's algorithm to determine **strongly-connected components (SCCs)** - that is, groups of *mutually-recursive* functions, which need some special consideration in the subsequent phases.
+	- The toposorting also puts the functions in order of their "height" in the call graph - leaf functions first, root functions last, and callers are always after all their callees.
+2. Then argument and clobber analysis is performed **from leaves to roots.**
+	- The IR is generated, and def-use information is calculated for it. This determines where each register was defined, and how it was used.
+	- Arguments are any zero-generation registers used by **any non-dummy-`use` instruction.**
+	- Clobbers are any *non*-zero-generation registers in a `use` instruction at **any exit point.**
+3. Then return value analysis is performed **from roots to leaves** (reverse topological order).
+	- The IR is generated again, but because of the clobber sets determined by the previous phase, the only dummy-return-uses inserted will be for the registers the callee *actually* changed!
+	- Do DSE (dead store elimination) on the IR, which turns `mov`s into `nop`s if their destination is never used.
+	- For all calls with targets *outside* this function and which *return to* this function:
+		- The remaining `mov reg, <return>`s are return values from the callee. This is because DSE stripped out all the `mov`s whose registers weren't used.
