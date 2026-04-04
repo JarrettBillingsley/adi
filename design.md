@@ -443,3 +443,7 @@ A second dataflow algorithm! This time, it's run on **the real function's CFG.**
 - The state could be one of a set of possible states
 
 The second possibility is not fully handled yet but yeahhhhhhhhh that's it 
+
+---
+
+## Register Usage Analysis

@@ -426,11 +426,24 @@ impl<'a> IrRewriter<'a> {
 					// recursive call! use our own ret regs.
 					IrTarget::Internal(_)  => self.ret_regs,
 					IrTarget::External(ea) => {
-						prog.func_that_contains(*ea)
-						.map(|func|
-							func.reg_usage().map(|ru| ru.changes()))
-						.flatten()
-						.unwrap_or(self.default_regs)
+						if let Some(func) = prog.func_that_contains(*ea) {
+							if let Some(ru) = func.reg_usage() {
+								log::trace!("  callee {:?} usage = {:?}", ea, ru.changes());
+								ru.changes()
+							} else {
+								log::trace!("  callee {:?} has no usage", ea);
+								self.default_regs
+							}
+						} else {
+							log::trace!("  callee {:?} is not a func", ea);
+							self.default_regs
+						}
+
+						// prog.func_that_contains(*ea)
+						// .map(|func|
+						// 	func.reg_usage().map(|ru| ru.changes()))
+						// .flatten()
+						// .unwrap_or(self.default_regs)
 					}
 				};
 

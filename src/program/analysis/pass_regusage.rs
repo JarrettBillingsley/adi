@@ -144,7 +144,9 @@ impl<'a> RegUsagePass<'a> {
 	fn arg_clobber_self_recursive(&mut self, fid: FuncId, reg_usage: &mut RegUsageMap) {
 		log::warn!("- TODO: self-recursive function arg/clobber not yet implemented. {}",
 			self.prog.get_func(fid).ea());
-		let _ = reg_usage;
+
+		let default_regs = self.prog.plat().arch().arch_reg_set();
+		change_usage(reg_usage, fid, FuncRegUsage::new(default_regs, RegSet::EMPTY));
 	}
 
 	fn arg_clobber_mutually_recursive(&mut self, fids: &[FuncId], reg_usage: &mut RegUsageMap) {

@@ -16,9 +16,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Trace)?;
 	setup_panic();
 
-	test_gb()
+	// test_gb()
 	// test_nes()
-	// test_toy()
+	test_toy()
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -387,29 +387,48 @@ fn toy_test_calls() -> ToyTest {
 	use Reg::*;
 
 	const FUNC_FIRST_HALF: Offs = 0x20;
+	const SELF_RECURSIVE: Offs = 0x30;
 
-	let mut b = ToyBuilder::new();
-	b.movi(A, 0x30);
-	b.call_to(FUNC_FIRST_HALF);
-	b.sti(A, 0x9000);
-	b.ldi(A, 0x8000);
-	let call_second = b.call();
-	b.sti(A, 0x9000);
-	b.sti(A, 0x8000);
-	b.ret();
+	let mut b = ToyBuilder::new();  // main:
+	b.movi(A, 0x30);                //     mov  a, 0x30
+	b.call_to(FUNC_FIRST_HALF);     //     call func_first_half
+	b.sti(A, 0x9000);               //     st   a, [var_9000]
+	b.ldi(A, 0x8000);               //     ld   a, [var_8000]
+	let call_second = b.call();     //     call func_second_half
+	b.sti(A, 0x9000);               //     st   a, [var_9000]
+	b.sti(A, 0x8000);               //     st   a, [var_8000]
+	b.movi(A, 5);                   //     mov  a, 5
+	b.movi(B, 0);                   //     mov  b, 0
+	// b.call_to(SELF_RECURSIVE);      //     call self_recursive
+	// b.sti(A, 0x8002);               //     st   b, [var_8002]
+	b.ret();                        //     ret
 
-	b.org(FUNC_FIRST_HALF);
-	b.addi(A, 3);
-	let func_second_half = b.jump_here(call_second);
-	b.addi(A, 5);
-	b.ret();
+	b.org(FUNC_FIRST_HALF);         // func_first_half:
+	b.addi(A, 3);                   //     add  a, 3
+
+	let func_second_half =
+	b.jump_here(call_second);       // func_second_half:
+	b.addi(A, 5);                   //     add  a, 5
+	b.ret();                        //     ret
+
+	b.org(SELF_RECURSIVE);          // self_recursive:
+	b.cmpi(A, 0);                   //     cmp  a, 0
+	let rec_branch = b.beq();       //     beq  _base_case
+	b.add(B, A);                    //     add  b, a
+	b.subi(A, 1);                   //     sub  a, 1
+	b.call_to(SELF_RECURSIVE);      //     call self_recursive
+	let base_case =                 //
+	b.branch_here(rec_branch);      // _base_case:
+	b.ret();                        //     ret
 
 	ToyTest {
 		image: b.finish(),
 		name:  "<toy_test_calls>",
 		labels: vec![
-			("func_first_half".to_string(), VA(FUNC_FIRST_HALF)),
+			("func_first_half".to_string(),  VA(FUNC_FIRST_HALF)),
 			("func_second_half".to_string(), VA(func_second_half)),
+			("self_recursive".to_string(),   VA(SELF_RECURSIVE)),
+			("_base_case".to_string(),       VA(base_case)),
 		],
 		data: vec![],
 	}
@@ -875,6 +894,8 @@ fn show_func_header(prog: &Program, func: &Function) {
 
 	let name = prog.name_of_ea(func.ea());
 	println!("{}{}", "; Function ".green(), name.name.green());
+
+	println!("{}{}", "; ".green(), format!("{:?}", func).green());
 
 	// TODO: rewrite this using some new API
 	// if let Some(usage) = func.reg_usage() {
