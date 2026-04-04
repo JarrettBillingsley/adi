@@ -787,6 +787,28 @@ impl IrInst {
 		&mut self.kind
 	}
 
+	/// True if this is an `IrInstKind::Use`.
+	pub(crate) fn is_dummy_use(&self) -> bool {
+		matches!(self.kind, IrInstKind::Use { .. })
+	}
+
+	/// If this is an `IrInstKind::Use`, the register it uses, or `None` if not.
+	pub(crate) fn dummy_use_reg(&self) -> Option<IrReg> {
+		match self.kind {
+			IrInstKind::Use { reg } => Some(reg),
+			_                       => None,
+		}
+	}
+
+	/// If this is an `IrInstKind::Mov` with an `IrSrc::Return` as its source, returns the
+	/// destination reg, or `None` if not.
+	pub(crate) fn dummy_return_use_reg(&self) -> Option<IrReg> {
+		match self.kind {
+			IrInstKind::Mov { dst, src: IrSrc::Return(..), .. } => Some(dst),
+			_                                                   => None,
+		}
+	}
+
 	/// Gets ths size of the source value(s).
 	/// Panics if called on an instruction that has no source.
 	pub(crate) fn src_size(&self) -> ValSize {

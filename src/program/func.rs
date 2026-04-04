@@ -87,7 +87,7 @@ impl FuncRegUsage {
 	/// `true` if `reg` is completely unused by this function - not an argument, return value, or
 	/// clobber.
 	pub(crate) fn is_unused(&self, reg: u8) -> bool {
-		!self.args.contains(reg) && !self.rets.contains(reg) && !self.clobbers.contains(reg)
+		!(self.args | self.rets | self.clobbers).contains(reg)
 	}
 
 	/// Mark `rets` as return registers, moving them out of the `clobbers` set. If one or more

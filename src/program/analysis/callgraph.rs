@@ -36,6 +36,19 @@ impl ProgramCallGraph {
 	pub fn callees_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
 		self.g.edges_directed(fid, Direction::Outgoing).map(|(_, dst, _)| dst)
 	}
+
+	// TODO: make pub(crate)
+	pub fn is_recursive(&self, fid: FuncId) -> bool {
+		self.callees_of(fid).any(|dst| dst == fid)
+	}
+
+	// fn is_leaf(&self, fid: FuncId) -> bool {
+	// 	self.cg.callees_of(fid).next().is_none()
+	// }
+
+	// fn is_root(&self, fid: FuncId) -> bool {
+	// 	self.cg.callers_of(fid).next().is_none()
+	// }
 }
 
 // ------------------------------------------------------------------------------------------------

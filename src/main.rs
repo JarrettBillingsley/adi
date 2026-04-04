@@ -399,8 +399,8 @@ fn toy_test_calls() -> ToyTest {
 	b.sti(A, 0x8000);               //     st   a, [var_8000]
 	b.movi(A, 5);                   //     mov  a, 5
 	b.movi(B, 0);                   //     mov  b, 0
-	// b.call_to(SELF_RECURSIVE);      //     call self_recursive
-	// b.sti(A, 0x8002);               //     st   b, [var_8002]
+	b.call_to(SELF_RECURSIVE);      //     call self_recursive
+	b.sti(A, 0x8002);               //     st   b, [var_8002]
 	b.ret();                        //     ret
 
 	b.org(FUNC_FIRST_HALF);         // func_first_half:
@@ -409,6 +409,7 @@ fn toy_test_calls() -> ToyTest {
 	let func_second_half =
 	b.jump_here(call_second);       // func_second_half:
 	b.addi(A, 5);                   //     add  a, 5
+	b.movi(C, 0xFF);                //     mov  c, -1
 	b.ret();                        //     ret
 
 	b.org(SELF_RECURSIVE);          // self_recursive:

@@ -503,7 +503,7 @@ This is a pass run on the **entire program's call graph** once nothing else is l
 2. Then argument and clobber analysis is performed **from leaves to roots.**
 	- The IR is generated, and def-use information is calculated for it. This determines where each register was defined, and how it was used.
 	- Arguments are any zero-generation registers used by **any non-dummy-`use` instruction.**
-	- Clobbers are any *non*-zero-generation registers in a `use` instruction at **any exit point.**
+	- Clobbers are the union of the clobber sets of all callees, plus any *non*-zero-generation registers in a `use` instruction at **any exit point.**
 3. Then return value analysis is performed **from roots to leaves** (reverse topological order).
 	- The IR is generated again, but because of the clobber sets determined by the previous phase, the only dummy-return-uses inserted will be for the registers the callee *actually* changed!
 	- Do DSE (dead store elimination) on the IR, which turns `mov`s into `nop`s if their destination is never used.

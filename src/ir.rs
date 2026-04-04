@@ -472,6 +472,7 @@ impl IrBasicBlock {
 	}
 
 	fn add_phi(&mut self, reg: IrReg, num_preds: usize) {
+		assert!(num_preds > 1);
 		self.phis.push(IrPhi::new(reg, num_preds));
 	}
 
@@ -507,24 +508,12 @@ impl IrBasicBlock {
 
 	/// Iterator over all registers used by dummy uses (`IrInstKind::Use`) in this BB.
 	pub(crate) fn dummy_use_regs(&self) -> impl Iterator<Item = IrReg> {
-		self.insts.iter().filter_map(|inst| {
-			if let IrInstKind::Use { reg } = inst.kind() {
-				Some(reg)
-			} else {
-				None
-			}
-		})
+		self.insts.iter().filter_map(IrInst::dummy_use_reg)
 	}
 
 	/// Iterator over all registers def'd by `mov _, <return>` in this BB.
 	pub(crate) fn dummy_return_use_regs(&self) -> impl Iterator<Item = IrReg> {
-		self.insts.iter().filter_map(|inst| {
-			if let IrInstKind::Mov { dst, src: IrSrc::Return(..), .. } = inst.kind() {
-				Some(dst)
-			} else {
-				None
-			}
-		})
+		self.insts.iter().filter_map(IrInst::dummy_return_use_reg)
 	}
 
 	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {

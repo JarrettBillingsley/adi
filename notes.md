@@ -1,10 +1,14 @@
 
 # Yak stack
 
+- Oh shit! phi-insertion on self-recursive calls is broken
+	- On bb0, the inserted phi functions have only one argument, when they should have at least 2 (the `_0` generation being the first argument).
+	- More generally, on any entrypoint (even in multi-entry functions), the phi-functions should include the `_0` regs as phi args.
 - Register usage analysis
 	- ah shit: new arg/clobber info needs to be used *during* the first phase
 		- either `to_ir` needs to support some "override" info that we pass in
 		- or we need to apply that info to the function as soon as it's determined, which will require some algorithm rekajiggering
+			- would have to move the loop up into
 	- determine arg/clobber regs for recursive funcs
 		- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
 		- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
@@ -30,7 +34,14 @@
 
 # Imminent tasks!
 
+- **Look into the `tracing` crate to replace `simplelog`**
+	- apparently OpenTracing/OpenTelemetry has some way of running a local webserver to view output in your browser, which would be *really fucking useful* especially because doing a search in the terminal is getting to be really painful
+- **Look into `typed-generational-arena` crate**
+	- I really don't think 64b generation numbers are really needed, or hell, even 64b indexes
+		- 32/32 is almost certainly more than enough
+	- also I think it'd be possible to renumber generations when e.g. saving/loading so that they never get out of hand
 - **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
+	- more generally, a bunch of the printing/output stuff in `main.rs` needs to be moved into the library itself so it doesn't e.g. have to be duplicated in GUI frontends
 - **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 - **Move some `IIrCompiler` methods into `IArchitecture`**
 	- `arch_regs`, `stack_ptr_reg`, and `reg_name` are really just there because they "use `IrReg`" but they're static, unchanging properties of the architecture, not associated with compilation

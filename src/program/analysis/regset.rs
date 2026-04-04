@@ -11,7 +11,17 @@ pub(crate) struct RegSet {
 
 impl Debug for RegSet {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		write!(f, "RegSet(0b{:b})", self.bits)
+		write!(f, "{{")?;
+
+		for (i, reg) in self.iter().enumerate() {
+			if i != 0 {
+				write!(f, " ")?;
+			}
+
+			write!(f, "r{}", reg)?;
+		}
+
+		write!(f, "}}")
 	}
 }
 

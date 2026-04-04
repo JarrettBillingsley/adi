@@ -22,14 +22,116 @@ impl Program {
 		let mut reg_usage: RegUsageMap =
 			self.all_funcs().map(|func| (func.id(), func.reg_usage())).collect();
 
-		RegUsagePass::new(self, &cg).analyze_arg_clobber(&sccs, &mut reg_usage);
+		for scc in sccs.iter() {
+			match scc[..] {
+				[] =>
+					unreachable!(),
+				// [fid] if cg.is_recursive(fid) => {
+				// 	log::warn!("- TODO: self-recursive function arg/clobber not yet implemented. {}",
+				// 		self.get_func(fid).ea());
 
-		// apply results of first phase to actual functions
+				// 	let default_regs = self.plat().arch().arch_reg_set();
+				// 	let usage = FuncRegUsage::new(default_regs, default_regs);
+				// 	change_usage(&mut reg_usage, fid, usage);
+				// 	log::trace!(" setting {:?} usage to {:?}", fid, usage);
+				// 	*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
+				// }
+				[fid] => {
+					log::trace!("- begin analyzing function arguments/clobbers at {}",
+						self.get_func(fid).ea());
+					let arch = self.plat().arch();
+					let all_regs = arch.arch_reg_set();
+					let ir = self.func_to_ir(fid);
 
-		for (&fid, &usage) in reg_usage.iter() {
-			log::trace!(" setting {:?} usage to {:?}", fid, usage);
-			*self.funcs.get_mut(fid).reg_usage_mut() = usage;
+					log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch.new_ir_compiler()));
+
+					let defs = ir.find_defs_and_uses();
+
+					// 1. argument regs are zero-generation registers which are used by real uses, not just
+					// dummy uses.
+					let mut arg_set = all_regs;
+
+					for reg in arch.arch_ir_regs() {
+						let reg = reg.sub(0);
+						match defs.get(&reg) {
+							Some(usage) if usage.is_really_used() => {
+								log::trace!("  {:?} is used as an argument!",
+									RegDbg(reg, Some(&arch.new_ir_compiler())));
+							}
+							Some(_) | None => {
+								arg_set.remove(reg.offset());
+
+								// early-out if we've eliminated all potential registers
+								if arg_set.is_empty() {
+									break;
+								}
+							}
+						}
+					}
+
+					log::trace!("    arg_set = {:?}", arg_set);
+
+					// 2. clobber regs are the union of all callee clobbers, plus any reg with
+					// nonzero generation at any exit point.
+					let mut clobber_set = RegSet::new();
+
+					for callee in cg.callees_of(fid) {
+						if callee == fid {
+							// self-recursion
+						} else {
+							clobber_set |= reg_usage[&callee].map(|ru| ru.clobbers())
+								// TODO: make this unwrap() once recursive funcs are implemented
+								.unwrap_or(all_regs);
+						}
+
+						// early out if all regs are clobbered
+						if clobber_set == all_regs {
+							break;
+						}
+					}
+
+					if clobber_set != all_regs {
+						for irbbid in ir.exitpoints().iter().copied() {
+							for reg in ir.get_bb(irbbid).dummy_use_regs() {
+								if !reg.is_gen0() &&
+								clobber_set.insert(reg.offset()) &&
+								clobber_set == all_regs {
+									// early out if all regs are clobbered
+									break;
+								}
+							}
+						}
+					}
+
+					log::trace!("    clobber_set = {:?}", clobber_set);
+
+					// don't care if usage changed in this phase. If it's been analyzed before, its
+					// arguments/clobbers can't have changed anyway.
+					let usage = FuncRegUsage::new(arg_set, clobber_set);
+					change_usage(&mut reg_usage, fid, usage);
+					log::trace!(" setting {:?} usage to {:?}", fid, usage);
+					*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
+				}
+				_ => {
+					log::warn!("- TODO: mutually-recursive function arg/clobber not yet implemented. SCC:");
+
+					for fid in scc {
+						let ea = self.get_func(*fid).ea();
+						let name = self.name_of_ea(ea);
+						log::trace!("    {} @ {:?} ({:?})", name, ea, fid);
+					}
+
+					let _ = reg_usage;
+				}
+			}
 		}
+
+		// RegUsagePass::new(self, &cg).analyze_arg_clobber(&sccs, &mut reg_usage);
+
+		// for (&fid, &usage) in reg_usage.iter() {
+		// 	log::trace!(" setting {:?} usage to {:?}", fid, usage);
+		// 	*self.funcs.get_mut(fid).reg_usage_mut() = usage;
+		// }
 
 		RegUsagePass::new(self, &cg).analyze_returns(&sccs, &mut reg_usage);
 
@@ -57,18 +159,6 @@ impl<'a> RegUsagePass<'a> {
 		}
 	}
 
-	fn is_recursive(&self, fid: FuncId) -> bool {
-		self.cg.callees_of(fid).any(|dst| dst == fid)
-	}
-
-	// fn is_leaf(&self, fid: FuncId) -> bool {
-	// 	self.cg.callees_of(fid).next().is_none()
-	// }
-
-	// fn is_root(&self, fid: FuncId) -> bool {
-	// 	self.cg.callers_of(fid).next().is_none()
-	// }
-
 	// --------------------------------------------------------------------------------------------
 	// pass 1: bottom-up, determine argument and clobber sets for each function
 	fn analyze_arg_clobber(&mut self, sccs: &[Vec<FuncId>], reg_usage: &mut RegUsageMap) {
@@ -76,7 +166,7 @@ impl<'a> RegUsagePass<'a> {
 			match scc[..] {
 				[] =>
 					unreachable!(),
-				[fid] if self.is_recursive(fid) =>
+				[fid] if self.cg.is_recursive(fid) =>
 					self.arg_clobber_self_recursive(fid, reg_usage),
 				[fid] =>
 					self.arg_clobber_func(fid, reg_usage),
@@ -111,7 +201,7 @@ impl<'a> RegUsagePass<'a> {
 					arg_set.remove(reg.offset());
 
 					// early-out if we've eliminated all potential registers
-					if arg_set == RegSet::EMPTY {
+					if arg_set.is_empty() {
 						break;
 					}
 				}
@@ -146,7 +236,7 @@ impl<'a> RegUsagePass<'a> {
 			self.prog.get_func(fid).ea());
 
 		let default_regs = self.prog.plat().arch().arch_reg_set();
-		change_usage(reg_usage, fid, FuncRegUsage::new(default_regs, RegSet::EMPTY));
+		change_usage(reg_usage, fid, FuncRegUsage::new(default_regs, default_regs));
 	}
 
 	fn arg_clobber_mutually_recursive(&mut self, fids: &[FuncId], reg_usage: &mut RegUsageMap) {
@@ -166,10 +256,10 @@ impl<'a> RegUsagePass<'a> {
 	fn analyze_returns(&mut self, sccs: &[Vec<FuncId>], reg_usage: &mut RegUsageMap) {
 		for scc in sccs.iter().rev() {
 			match scc[..] {
-				[]                              => unreachable!(),
-				[fid] if self.is_recursive(fid) => self.returns_self_recursive(fid),
-				[fid]                           => self.returns_func(fid, reg_usage),
-				_                               => self.returns_mutually_recursive(scc),
+				[]                                 => unreachable!(),
+				[fid] if self.cg.is_recursive(fid) => self.returns_self_recursive(fid),
+				[fid]                              => self.returns_func(fid, reg_usage),
+				_                                  => self.returns_mutually_recursive(scc),
 			}
 		}
 	}

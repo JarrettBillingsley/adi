@@ -70,23 +70,19 @@ impl DefInfo {
 		self.loc
 	}
 
-	pub(crate) fn is_unused(&self) -> bool {
-		matches!(self.use_kind, DefUseKind::None)
-	}
-
 	pub(crate) fn is_really_used(&self) -> bool {
 		matches!(self.use_kind, DefUseKind::Real)
 	}
 
-	fn mark_dummy_used(&mut self) {
-		if self.is_unused() {
-			self.use_kind = DefUseKind::OnlyDummy;
+	fn mark_used(&mut self, is_dummy: bool) {
+		if is_dummy {
+			if matches!(self.use_kind, DefUseKind::None) {
+				self.use_kind = DefUseKind::OnlyDummy;
+			}
+			// otherwise, leave it as is
+		} else {
+			self.use_kind = DefUseKind::Real;
 		}
-		// otherwise, leave it as is
-	}
-
-	fn mark_really_used(&mut self) {
-		self.use_kind = DefUseKind::Real;
 	}
 }
 
@@ -124,14 +120,12 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 		for phi in bb.phis() {
 			for arg in phi.args() {
 				if let Some(arg) = defs.get_mut(&arg) {
-					arg.mark_really_used();
+					arg.mark_used(false);
 				}
 			}
 		}
 
 		for inst in bb.insts() {
-			let is_dummy = matches!(inst.kind(), IrInstKind::Use { .. });
-
 			inst.visit_uses(|reg| {
 				if !defs.contains_key(&reg) {
 					assert!(reg.is_gen0());
@@ -139,13 +133,7 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 				}
 
 				// SAFETY: see above
-				let u = defs.get_mut(&reg).unwrap();
-
-				if is_dummy {
-					u.mark_dummy_used();
-				} else {
-					u.mark_really_used();
-				}
+				defs.get_mut(&reg).unwrap().mark_used(inst.is_dummy_use());
 			});
 		}
 	}
