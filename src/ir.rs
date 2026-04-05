@@ -343,12 +343,22 @@ struct IrPhi {
 }
 
 impl IrPhi {
-	fn new(reg: IrReg, num_args: usize) -> Self {
+	fn new(reg: IrReg, num_args: usize, is_entrypoint: bool) -> Self {
 		assert!(!reg.is_ssa());
+
+		let args = if is_entrypoint {
+			assert!(num_args > 0);
+			let mut args = vec![reg; num_args + 1];
+			args[num_args] = reg.sub(0);
+			args
+		} else {
+			assert!(num_args > 1);
+			vec![reg; num_args]
+		};
 
 		Self {
 			dst:  reg,
-			args: vec![reg; num_args],
+			args,
 		}
 	}
 
@@ -471,9 +481,8 @@ impl IrBasicBlock {
 		self.phis.iter_mut()
 	}
 
-	fn add_phi(&mut self, reg: IrReg, num_preds: usize) {
-		assert!(num_preds > 1);
-		self.phis.push(IrPhi::new(reg, num_preds));
+	fn add_phi(&mut self, reg: IrReg, num_preds: usize, is_entrypoint: bool) {
+		self.phis.push(IrPhi::new(reg, num_preds, is_entrypoint));
 	}
 
 	fn phi_for_reg(&self, reg: IrReg) -> Option<&IrPhi> {
@@ -594,7 +603,7 @@ impl IrFunction {
 		entrypoints: Vec<IrBBId>,
 		exitpoints: Vec<IrBBId>,
 	) -> Self {
-		ssa::to_ssa(&mut bbs, &cfg);
+		ssa::to_ssa(&mut bbs, &cfg, &entrypoints);
 		Self {
 			real_fid,
 			bbs,

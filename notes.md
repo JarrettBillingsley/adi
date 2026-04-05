@@ -1,9 +1,6 @@
 
 # Yak stack
 
-- Oh shit! phi-insertion on self-recursive calls is broken
-	- On bb0, the inserted phi functions have only one argument, when they should have at least 2 (the `_0` generation being the first argument).
-	- More generally, on any entrypoint (even in multi-entry functions), the phi-functions should include the `_0` regs as phi args.
 - Register usage analysis
 	- ah shit: new arg/clobber info needs to be used *during* the first phase
 		- either `to_ir` needs to support some "override" info that we pass in

@@ -428,7 +428,7 @@ impl<'a> IrRewriter<'a> {
 					IrTarget::External(ea) => {
 						if let Some(func) = prog.func_that_contains(*ea) {
 							if let Some(ru) = func.reg_usage() {
-								log::trace!("  callee {:?} usage = {:?}", ea, ru.changes());
+								log::trace!("  callee {:?} changes = {:?}", ea, ru.changes());
 								ru.changes()
 							} else {
 								log::trace!("  callee {:?} has no usage", ea);

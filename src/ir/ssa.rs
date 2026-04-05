@@ -14,11 +14,11 @@ use super::*;
 /// Given a list of `IrBasicBlock` and an `IrCfg` which describes their connection, convert
 /// the IR instructions inside to SSA form. This inserts phi functions where needed and
 /// renames registers to have generation numbers.
-pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg) {
+pub(super) fn to_ssa(bbs: &mut [IrBasicBlock], cfg: &IrCfg, entrypoints: &[IrBBId]) {
 	let dom_tree = DomTree::new(cfg);
 	let df = compute_dominance_frontiers(cfg, &dom_tree);
 	let all_regs = find_all_regs(bbs);
-	insert_phis(bbs, cfg, &df, all_regs.iter().copied());
+	insert_phis(bbs, cfg, &df, entrypoints, all_regs.iter().copied());
 	rename_regs(bbs, cfg, &dom_tree, all_regs.iter().copied());
 	prune_phis(bbs, &dom_tree);
 }
@@ -55,17 +55,19 @@ pub(crate) fn find_all_regs(bbs: &[IrBasicBlock]) -> BTreeSet<IrReg> {
 // ------------------------------------------------------------------------------------------------
 
 fn insert_phis(
-	bbs:  &mut [IrBasicBlock],
-	cfg:  &IrCfg,
-	df:   &DomFrontiers,
-	regs: impl Iterator<Item = IrReg>
+	bbs:         &mut [IrBasicBlock],
+	cfg:         &IrCfg,
+	df:          &DomFrontiers,
+	entrypoints: &[IrBBId],
+	regs:        impl Iterator<Item = IrReg>
 ) {
 	for reg in regs {
-		insert_phis_impl(bbs, cfg, df, reg);
+		insert_phis_impl(bbs, cfg, df, entrypoints, reg);
 	}
 }
 
-fn insert_phis_impl(bbs: &mut [IrBasicBlock], cfg: &IrCfg, df: &DomFrontiers, reg: IrReg) {
+fn insert_phis_impl(bbs: &mut [IrBasicBlock], cfg: &IrCfg, df: &DomFrontiers,
+entrypoints: &[IrBBId], reg: IrReg) {
 	assert!(bbs.len() == cfg.node_count());
 
 	// defs is set of all BBs which contain an assignment to reg
@@ -93,7 +95,9 @@ fn insert_phis_impl(bbs: &mut [IrBasicBlock], cfg: &IrCfg, df: &DomFrontiers, re
 			// insert a phi function for reg at the start of other,
 			// with as many inputs as other has predecessors.
 			let num_preds = cfg.neighbors_directed(other, Direction::Incoming).count();
-			bbs[other].add_phi(reg, num_preds);
+			// entrypoints.contains is O(n) but n is likely to be 1 99% of the time and maybe 2 or 3
+			// the rest of the time.
+			bbs[other].add_phi(reg, num_preds, entrypoints.contains(&other));
 
 			inserted[other] = true;
 

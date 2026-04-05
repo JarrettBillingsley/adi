@@ -118,10 +118,15 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 	// then find all uses of those defs
 	for bb in bbs.iter() {
 		for phi in bb.phis() {
-			for arg in phi.args() {
-				if let Some(arg) = defs.get_mut(&arg) {
-					arg.mark_used(false);
+			for reg in phi.args() {
+				if !defs.contains_key(&reg) {
+					assert!(reg.is_gen0());
+					defs.insert(*reg, DefInfo::new_arg());
 				}
+
+				log::trace!(" marking bb{} phi arg {:?} as used", bb.id, reg);
+				// SAFETY: see above
+				defs.get_mut(&reg).unwrap().mark_used(false);
 			}
 		}
 
