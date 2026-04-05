@@ -317,7 +317,11 @@ struct IrRewriter<'a> {
 
 impl<'a> IrRewriter<'a> {
 	fn new(func: &Function, bbs: &'a mut Vec<IrBasicBlock>, default_regs: RegSet) -> Self {
-		let reg_usage = func.reg_usage().unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
+		let reg_usage = func.reg_usage()
+			.unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
+
+		log::trace!("IrRewriter::new arg_regs = {:?}, ret_regs = {:?}, changed_regs = {:?}",
+			reg_usage.args(), reg_usage.rets(), reg_usage.changes());
 
 		Self {
 			new_bbs:  vec![],
@@ -387,7 +391,7 @@ impl<'a> IrRewriter<'a> {
 	}
 
 	fn rewrite_returns(&mut self, prog: &Program, irbbid: IrBBId) {
-		// log::debug!("returns on irbb{}", irbbid);
+		log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
 		let (old_cont, callee_changed_regs) = self.change_cont(prog, irbbid, self.new_bbid);
 
@@ -424,7 +428,16 @@ impl<'a> IrRewriter<'a> {
 			IrInstKind::Call { dst, cont, .. } => {
 				let regs = match dst {
 					// recursive call! use our own ret regs.
-					IrTarget::Internal(_)  => self.ret_regs,
+					// this *is* different compared to non-recursive calls, because if we used
+					// the changed regs which haven't been computed yet, it would be misanalyzed
+					// as changing *all* regs.
+					//
+					// but on subsequent reg usage passes, this will correctly insert return-uses
+					// for the return registers.
+					IrTarget::Internal(_)  => {
+						log::trace!("  callee is self, using {:?}", self.ret_regs);
+						self.ret_regs
+					}
 					IrTarget::External(ea) => {
 						if let Some(func) = prog.func_that_contains(*ea) {
 							if let Some(ru) = func.reg_usage() {
