@@ -1,72 +1,14 @@
 
-use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
-use crate::arch::{ Architecture };
 use crate::program::{ EA, Program, FuncId, RegSet, FuncRegUsage };
 use crate::program::analysis::callgraph::*;
 use crate::program::analysis::to_ir::{ IRewriteCtx };
-use crate::ir::{ RegDbg, IrInstKind, IrTarget, IrBBId, IrReg };
+use crate::ir::{ RegDbg, IrInstKind, IrTarget, IrBBId, IrReg, IrFunctionWithNames };
 
 // ------------------------------------------------------------------------------------------------
 // Whole-program register usage analysis
 // ------------------------------------------------------------------------------------------------
-
-struct RegUsageCtx<'a> {
-	arch:          &'a Architecture,
-	eas_to_fids:   HashMap<EA, FuncId>,
-	fids_to_usage: HashMap<FuncId, Option<FuncRegUsage>>,
-}
-
-impl<'a> RegUsageCtx<'a> {
-	fn new(prog: &'a Program) -> Self {
-		let arch = prog.plat().arch();
-
-		let mut eas_to_fids = HashMap::new();
-
-		for func in prog.all_funcs() {
-			for bbid in func.entrypoints() {
-				eas_to_fids.insert(prog.bbidx.get(*bbid).ea(), func.id());
-			}
-		}
-
-		Self {
-			arch,
-			eas_to_fids,
-			fids_to_usage: prog.all_funcs().map(|func| (func.id(), func.reg_usage())).collect(),
-		}
-	}
-
-	fn of_fid(&self, fid: FuncId) -> Option<FuncRegUsage> {
-		*self.fids_to_usage.get(&fid).unwrap()
-	}
-
-	fn change(&mut self, fid: FuncId, usage: FuncRegUsage) -> bool {
-		let new_usage = Some(usage);
-
-		if self.fids_to_usage[&fid] != new_usage {
-			log::trace!(" temporarily setting {:?} usage to {:?}", fid, usage);
-			self.fids_to_usage.insert(fid, new_usage);
-			true
-		} else {
-			false
-		}
-	}
-}
-
-impl<'a> IRewriteCtx for RegUsageCtx<'a> {
-	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
-		let fid = self.eas_to_fids.get(&ea)?;
-		self.fids_to_usage.get(fid).copied()?
-	}
-
-	fn arch_ir_reg(&self, offset: u8) -> IrReg {
-		self.arch.arch_ir_reg(offset)
-	}
-
-	fn default_regs(&self) -> RegSet {
-		self.arch.arch_reg_set()
-	}
-}
 
 impl Program {
 	pub(super) fn reg_usage_pass(&mut self) {
@@ -76,132 +18,48 @@ impl Program {
 		let cg = self.build_call_graph();
 		let sccs = cg.sccs();
 
-		// --------------------------------------------------------------------------------------------
-		// pass 1: bottom-up, determine argument and clobber sets for each function
+		// do the analysis
+		let mut reg_usage = RegUsagePass::new(self, &cg);
+		reg_usage.analyze_clobbers_args(&sccs);
+		reg_usage.analyze_returns(&sccs);
 
-		let mut reg_usage = RegUsageCtx::new(self);
+		// then apply results
+		let RegUsagePass { fids_to_usage, changed_fids, .. } = reg_usage;
 
-		for scc in sccs.iter() {
-			match scc[..] {
-				[] => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
-				[fid] => {
-					log::trace!("- begin analyzing function arguments/clobbers at {}",
-						self.get_func(fid).ea());
-					let arch = self.plat().arch();
-					let all_regs = arch.arch_reg_set();
-					let ir = self.func_to_ir(fid);
-
-					log::debug!("before determining clobbers: {:?}",
-						crate::ir::IrFunctionWithNames(&ir, &arch));
-
-					// 1. clobber regs are the union of all callee clobbers *except for itself
-					// (for recursive funcs)*, plus any reg with nonzero generation at any exit
-					// point.
-					let mut clobber_set = RegSet::new();
-
-					for callee in cg.callees_of(fid) {
-						if callee != fid {
-							clobber_set |= reg_usage.of_fid(callee)
-								.map(|ru| ru.clobbers())
-								.unwrap();
-						}
-
-						// early out if all regs are clobbered
-						if clobber_set == all_regs {
-							break;
-						}
-					}
-
-					if clobber_set != all_regs {
-						for irbbid in ir.exitpoints().iter().copied() {
-							for reg in ir.get_bb(irbbid).dummy_use_regs() {
-								if !reg.is_gen0() &&
-								clobber_set.insert(reg.offset()) &&
-								clobber_set == all_regs {
-									// early out if all regs are clobbered
-									break;
-								}
-							}
-						}
-					}
-
-					log::trace!("    clobber_set = {:?}", clobber_set);
-					// don't care if usage changed in this phase. If it's been analyzed before, its
-					// arguments/clobbers can't have changed anyway.
-					let usage = FuncRegUsage::new(all_regs, clobber_set);
-					reg_usage.change(fid, usage);
-
-					// doing this breaks the lifetime so we can reborrow below
-					let arch = self.plat().arch();
-
-					// regenerate the IR using the newly-determined clobbers
-					let ir = self.func_to_ir(fid);
-
-					log::debug!("after determining clobbers: {:?}",
-						crate::ir::IrFunctionWithNames(&ir, &arch));
-
-					let defs = ir.find_defs_and_uses();
-
-					// 2. argument regs are zero-generation registers which are used by real uses,
-					// not just dummy uses.
-					let mut arg_set = all_regs;
-
-					for reg in arch.arch_ir_regs() {
-						let reg = reg.sub(0);
-						match defs.get(&reg) {
-							Some(usage) if usage.is_really_used() => {
-								log::trace!("  {:?} is used as an argument!",
-									RegDbg(reg, Some(&arch)));
-							}
-							Some(_) | None => {
-								arg_set.remove(reg.offset());
-
-								// early-out if we've eliminated all potential registers
-								if arg_set.is_empty() {
-									break;
-								}
-							}
-						}
-					}
-
-					log::trace!("    arg_set = {:?}", arg_set);
-
-					// don't care if usage changed in this phase. If it's been analyzed before, its
-					// arguments/clobbers can't have changed anyway.
-					let usage = FuncRegUsage::new(arg_set, clobber_set);
-					reg_usage.change(fid, usage);
-				}
-				_ => {
-					log::warn!("- TODO: mutually-recursive function arg/clobber not yet \
-						implemented. SCC:");
-
-					for fid in scc {
-						let ea = self.get_func(*fid).ea();
-						let name = self.name_of_ea(ea);
-						log::trace!("    {} @ {:?} ({:?})", name, ea, fid);
-					}
-
-					let _ = reg_usage;
-				}
-			}
-		}
-
-		RegUsagePass::new(self, &cg).analyze_returns(&sccs, &mut reg_usage);
-
-		for (fid, usage) in reg_usage.fids_to_usage.into_iter() {
+		for (fid, usage) in fids_to_usage.into_iter() {
 			log::trace!(" setting {:?} usage to {:?}", fid, usage);
 			*self.funcs.get_mut(fid).reg_usage_mut() = usage;
 		}
 
-		// then apply results of analysis
-
 		// TODO: enqueue state change analysis on every function which changed???
+		log::trace!(" these functions' reg usage changed:");
+		for fid in changed_fids.into_iter() {
+			log::trace!("  {:?}", fid);
+		}
+	}
+}
+
+impl<'a> IRewriteCtx for RegUsagePass<'a> {
+	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
+		let fid = self.eas_to_fids.get(&ea)?;
+		self.fids_to_usage.get(fid).copied()?
+	}
+
+	fn arch_ir_reg(&self, offset: u8) -> IrReg {
+		self.prog.arch().arch_ir_reg(offset)
+	}
+
+	fn default_regs(&self) -> RegSet {
+		self.prog.arch().arch_reg_set()
 	}
 }
 
 struct RegUsagePass<'a> {
-	prog: &'a Program,
-	cg:   &'a ProgramCallGraph,
+	prog:          &'a Program,
+	cg:            &'a ProgramCallGraph,
+	eas_to_fids:   HashMap<EA, FuncId>,
+	fids_to_usage: HashMap<FuncId, Option<FuncRegUsage>>,
+	changed_fids:  HashSet<FuncId>,
 }
 
 impl<'a> RegUsagePass<'a> {
@@ -209,25 +67,155 @@ impl<'a> RegUsagePass<'a> {
 		Self {
 			prog,
 			cg,
+			eas_to_fids: prog.all_funcs()
+				.map(|func| func.entrypoints().iter()
+					.map(|bbid| (prog.bbidx.get(*bbid).ea(), func.id()))
+				).flatten().collect(),
+			fids_to_usage: prog.all_funcs()
+				.map(|func| (func.id(), func.reg_usage())).collect(),
+			changed_fids:  HashSet::new(),
+		}
+	}
+
+	fn usage_of_fid(&self, fid: FuncId) -> Option<FuncRegUsage> {
+		*self.fids_to_usage.get(&fid).unwrap()
+	}
+
+	fn change_usage(&mut self, fid: FuncId, usage: FuncRegUsage) {
+		let new_usage = Some(usage);
+
+		if self.fids_to_usage[&fid] != new_usage {
+			log::trace!(" temporarily setting {:?} usage to {:?}", fid, usage);
+			self.fids_to_usage.insert(fid, new_usage);
+			self.changed_fids.insert(fid);
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------
-	// pass 2: top-down, determine return sets for each function
-	fn analyze_returns(&mut self, sccs: &[Vec<FuncId>], reg_usage: &mut RegUsageCtx) {
-		for scc in sccs.iter().rev() {
+	// pass 1: bottom-up, determine clobber and argument sets for each function
+	fn analyze_clobbers_args(&mut self, sccs: &[Vec<FuncId>]) {
+		for scc in sccs.iter() {
 			match scc[..] {
-				[]    => unreachable!(),
-				[fid] => self.returns_func(fid, reg_usage),
-				_     => self.returns_mutually_recursive(scc),
+				[]    => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
+				[fid] => {
+					let clobbers_set = self.analyze_clobbers(fid);
+					self.analyze_args(fid, clobbers_set);
+				}
+				_ => {
+					log::warn!("- TODO: mutually-recursive function arg/clobber not yet \
+						implemented. SCC:");
+
+					for fid in scc {
+						let ea = self.prog.get_func(*fid).ea();
+						let name = self.prog.name_of_ea(ea);
+						log::trace!("    {} @ {:?} ({:?})", name, ea, fid);
+					}
+
+					let _ = self;
+				}
 			}
 		}
 	}
 
-	fn returns_func(&mut self, fid: FuncId, reg_usage: &mut RegUsageCtx) {
+	fn analyze_clobbers(&mut self, fid: FuncId) -> RegSet {
+		log::trace!("- begin analyzing function arguments/clobbers at {}",
+			self.prog.get_func(fid).ea());
+		let arch = self.prog.arch();
+		let all_regs = arch.arch_reg_set();
+		let ir = self.prog.func_to_ir_ctx(fid, self);
+
+		log::debug!("before determining clobbers: {:?}", IrFunctionWithNames(&ir, &arch));
+
+		// 1. clobber regs are the union of all callee clobbers *except for itself
+		// (for recursive funcs)*, plus any reg with nonzero generation at any exit
+		// point.
+		let mut clobber_set = RegSet::new();
+
+		for callee in self.cg.callees_of(fid) {
+			if callee != fid {
+				clobber_set |= self.usage_of_fid(callee)
+					.map(|ru| ru.clobbers())
+					.unwrap();
+			}
+
+			// early out if all regs are clobbered
+			if clobber_set == all_regs {
+				break;
+			}
+		}
+
+		if clobber_set != all_regs {
+			for irbbid in ir.exitpoints().iter().copied() {
+				for reg in ir.get_bb(irbbid).dummy_use_regs() {
+					if !reg.is_gen0() &&
+					clobber_set.insert(reg.offset()) &&
+					clobber_set == all_regs {
+						// early out if all regs are clobbered
+						break;
+					}
+				}
+			}
+		}
+
+		log::trace!("    clobber_set = {:?}", clobber_set);
+		self.change_usage(fid, FuncRegUsage::new(all_regs, clobber_set));
+		clobber_set
+	}
+
+	fn analyze_args(&mut self, fid: FuncId, clobber_set: RegSet) {
+		let arch = self.prog.arch();
+		let all_regs = arch.arch_reg_set();
+		// regenerate the IR using the newly-determined clobbers
+		let ir = self.prog.func_to_ir_ctx(fid, self);
+		log::debug!("after determining clobbers: {:?}", IrFunctionWithNames(&ir, &arch));
+
+		let defs = ir.find_defs_and_uses();
+
+		// 2. argument regs are zero-generation registers which are used by real uses,
+		// not just dummy uses.
+		let mut arg_set = all_regs;
+
+		for reg in arch.arch_ir_regs() {
+			let reg = reg.sub(0);
+			match defs.get(&reg) {
+				Some(usage) if usage.is_really_used() => {
+					log::trace!("  {:?} is used as an argument!", RegDbg(reg, Some(&arch)));
+				}
+				Some(_) | None => {
+					arg_set.remove(reg.offset());
+
+					// early-out if we've eliminated all potential registers
+					if arg_set.is_empty() {
+						break;
+					}
+				}
+			}
+		}
+
+		log::trace!("    arg_set = {:?}", arg_set);
+
+		// don't care if usage changed in this phase. If it's been analyzed before, its
+		// arguments/clobbers can't have changed anyway.
+		let usage = FuncRegUsage::new(arg_set, clobber_set);
+		self.change_usage(fid, usage);
+	}
+
+	// --------------------------------------------------------------------------------------------
+	// pass 2: top-down, determine return sets for each function
+	fn analyze_returns(&mut self, sccs: &[Vec<FuncId>]) {
+		for scc in sccs.iter().rev() {
+			match scc[..] {
+				[] => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
+				[fid] => self.analyze_returns_func(fid),
+				_     => self.analyze_returns_mutrec(scc),
+			}
+		}
+	}
+
+	fn analyze_returns_func(&mut self, fid: FuncId) {
 		log::trace!("- begin analyzing function returns at {}", self.prog.get_func(fid).ea());
-		let arch = self.prog.plat().arch();
-		let mut ir = self.prog.func_to_ir(fid);
+		let arch = self.prog.arch();
+		let mut ir = self.prog.func_to_ir_ctx(fid, self);
 
 		// 1. find calls with external destinations and internal continuations.
 
@@ -245,8 +233,8 @@ impl<'a> RegUsagePass<'a> {
 					..
 				} => {
 					// self-calls will not be matched by this, since their dst will be Internal.
-					if let Some(callee) = self.prog.func_that_contains(ea) {
-						callees_to_bbs.insert(callee.id(), cont_bb);
+					if let Some(callee) = self.eas_to_fids.get(&ea) {
+						callees_to_bbs.insert(*callee, cont_bb);
 					} else {
 						log::warn!("  callee {:?} is not a function. (is this a problem?)", ea);
 					}
@@ -263,14 +251,13 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch));
-
+		log::debug!("{:?}", IrFunctionWithNames(&ir, &arch));
 		log::debug!("  callees to BBs = {:?}", callees_to_bbs);
 
 		// SAFETY: phase 1 put reg usage on every function.
-		ir.elim_dead_stores(reg_usage.of_fid(fid).unwrap());
+		ir.elim_dead_stores(self.usage_of_fid(fid).unwrap());
 
-		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch));
+		log::debug!("{:?}", IrFunctionWithNames(&ir, &arch));
 
 		// any remaining return-use is a *true* return value from a callee and not just a clobber.
 		for (callee_fid, irbbid) in callees_to_bbs.into_iter() {
@@ -288,14 +275,14 @@ impl<'a> RegUsagePass<'a> {
 			}
 
 			// SAFETY: phase 1 put reg usage on every function.
-			let mut usage = reg_usage.of_fid(callee_fid).unwrap();
+			let mut usage = self.usage_of_fid(callee_fid).unwrap();
 			if usage.mark_returns(ret_set) {
-				reg_usage.change(callee_fid, usage);
+				self.change_usage(callee_fid, usage);
 			}
 		}
 	}
 
-	fn returns_mutually_recursive(&mut self, fids: &[FuncId]) {
+	fn analyze_returns_mutrec(&mut self, fids: &[FuncId]) {
 		log::warn!("- TODO: mutually-recursive function returns not yet implemented. SCC:");
 
 		for fid in fids {

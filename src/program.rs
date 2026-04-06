@@ -10,7 +10,8 @@ use std::fmt::{ Display, Formatter, Result as FmtResult };
 use delegate::delegate;
 
 use crate::{ Size, Offs };
-use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintOutput, FmtWritePrintOutput };
+use crate::arch::{ INameLookup, IPrinter, Printer, PrinterCtx, IPrintOutput, FmtWritePrintOutput,
+	Architecture };
 use crate::memory::{ Memory, MmuState, StateChange, EA, VA, SegId, Span, SpanKind, Segment,
 	Endian };
 use crate::platform::{ Platform };
@@ -80,6 +81,10 @@ impl Program {
 
 	pub fn plat(&self) -> &Platform {
 		&self.plat
+	}
+
+	pub fn arch(&self) -> &Architecture {
+		self.plat.arch()
 	}
 
 	// ---------------------------------------------------------------------------------------------

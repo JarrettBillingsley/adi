@@ -340,11 +340,11 @@ impl IRewriteCtx for Program {
 	}
 
 	fn arch_ir_reg(&self, offset: u8) -> IrReg {
-		self.plat().arch().arch_ir_reg(offset)
+		self.arch().arch_ir_reg(offset)
 	}
 
 	fn default_regs(&self) -> RegSet {
-		self.plat().arch().arch_reg_set()
+		self.arch().arch_reg_set()
 	}
 }
 

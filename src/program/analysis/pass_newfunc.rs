@@ -54,7 +54,7 @@ impl Program {
 			let va           = self.va_from_ea(state, start);
 
 			// let's start disassembling instructions
-			let dis          = self.plat().arch().new_disassembler();
+			let dis          = self.arch().new_disassembler();
 			let mut end_ea   = start;
 			let mut term     = None;
 			let mut insts    = Vec::new();
