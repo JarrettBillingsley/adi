@@ -12,7 +12,7 @@ use petgraph::{
 use crate::arch::{ Architecture };
 use crate::dataflow::{ DataflowCfg };
 use crate::memory::{ EA };
-use crate::program::{ BBId, FuncId, FuncRegUsage };
+use crate::program::{ BBId, FuncId };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -649,9 +649,9 @@ impl IrFunction {
 	}
 
 	/// Eliminate any dead stores from the IR.
-	pub(crate) fn elim_dead_stores(&mut self, reg_usage: FuncRegUsage) {
+	pub(crate) fn elim_dead_stores(&mut self) {
 		// TODO: invalidate self.consts
-		elim_dead_stores(&mut self.bbs, reg_usage);
+		elim_dead_stores(&mut self.bbs);
 	}
 
 	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {

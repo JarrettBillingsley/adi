@@ -62,6 +62,17 @@ fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
 	// 	println!("{} {:25} {:?}", ea, name.name, name.kind);
 	// }
 
+	// let cg = prog.build_call_graph();
+	// prog.dump_call_graph(&cg);
+
+	// let sccs = cg.sccs();
+
+	// println!("SCCs: ");
+
+	// for scc in sccs.into_iter() {
+	// 	println!("  {:?}", scc);
+	// }
+
 	Ok(())
 }
 
@@ -386,8 +397,10 @@ fn toy_test_calls() -> ToyTest {
 	use adi::arch::toy::{ Reg, ToyBuilder };
 	use Reg::*;
 
-	const FUNC_FIRST_HALF: Offs = 0x20;
-	const SELF_RECURSIVE: Offs = 0x30;
+	const FUNC_FIRST_HALF: Offs = 0x30;
+	const SELF_RECURSIVE: Offs = 0x50;
+	const MUT_REC_1: Offs = 0x70;
+	const MUT_REC_2: Offs = 0x90;
 
 	let mut b = ToyBuilder::new();  // main:
 	b.movi(A, 0x30);                //     mov  a, 0x30
@@ -401,11 +414,15 @@ fn toy_test_calls() -> ToyTest {
 	b.movi(B, 0);                   //     mov  b, 0
 	b.call_to(SELF_RECURSIVE);      //     call self_recursive
 	b.sti(A, 0x8002);               //     st   b, [var_8002]
+	b.movi(A, 15);                  //     mov  a, 15
+	b.movi(B, 0);                   //     mov  b, 0
+	b.call_to(MUT_REC_1);           //     call mut_rec_1
+	b.ldi(A, 0x8003);               //     ld   a, [var_8003]
+	b.st(A, DC);                    //     st   a, [dc]
 	b.ret();                        //     ret
 
 	b.org(FUNC_FIRST_HALF);         // func_first_half:
 	b.addi(A, 3);                   //     add  a, 3
-
 	let func_second_half =
 	b.jump_here(call_second);       // func_second_half:
 	b.addi(A, 5);                   //     add  a, 5
@@ -422,6 +439,28 @@ fn toy_test_calls() -> ToyTest {
 	b.branch_here(rec_branch);      // _base_case:
 	b.ret();                        //     ret
 
+	b.org(MUT_REC_1);               // mut_rec_1:
+	b.cmpi(A, 0);                   //     cmp  a, 0
+	let rec_branch_m1 = b.beq();    //     beq _base_case_m1
+	b.add(B, A);                    //     add  b, a
+	b.subi(A, 1);                   //     sub  a, 1
+	b.call_to(MUT_REC_2);           //     call mut_rec_2
+	let base_case_m1 =
+	b.branch_here(rec_branch_m1);   // _base_case_m1:
+	b.ldi(D, 0xA0);                 //     mov  d, 0xA0
+	b.mov(C, B);                    //     mov  c, b
+	b.ret();                        //     ret
+
+	b.org(MUT_REC_2);               // mut_rec_2:
+	b.cmpi(A, 0);                   //     cmp  a, 0
+	let rec_branch_m2 = b.beq();    //     beq _base_case_m2
+	b.add(B, A);                    //     add  b, a
+	b.subi(A, 1);                   //     sub  a, 1
+	b.call_to(MUT_REC_1);           //     call mut_rec_1
+	let base_case_m2 =
+	b.branch_here(rec_branch_m2);   // _base_case_m2:
+	b.ret();                        //     ret
+
 	ToyTest {
 		image: b.finish(),
 		name:  "<toy_test_calls>",
@@ -430,6 +469,10 @@ fn toy_test_calls() -> ToyTest {
 			("func_second_half".to_string(), VA(func_second_half)),
 			("self_recursive".to_string(),   VA(SELF_RECURSIVE)),
 			("_base_case".to_string(),       VA(base_case)),
+			("mut_rec_1".to_string(),        VA(MUT_REC_1)),
+			("_base_case_m1".to_string(),    VA(base_case_m1)),
+			("mut_rec_2".to_string(),        VA(MUT_REC_2)),
+			("_base_case_m2".to_string(),    VA(base_case_m2)),
 		],
 		data: vec![],
 	}

@@ -107,7 +107,6 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 			defs.insert(phi.dst_reg(), DefInfo::new_phi(bb.id, i));
 		}
 
-
 		for (i, inst) in bb.insts().enumerate() {
 			if let Some(reg) = inst.dst_reg() {
 				defs.insert(reg, DefInfo::new_inst(bb.id, i));

@@ -116,6 +116,15 @@ impl FuncRegUsage {
 
 		old_clobbers != self.clobbers || old_rets != self.rets
 	}
+
+	pub(crate) fn change_clobbers(&mut self, new_clobbers: RegSet) -> bool {
+		if self.clobbers != new_clobbers {
+			self.clobbers = new_clobbers;
+			true
+		} else {
+			false
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

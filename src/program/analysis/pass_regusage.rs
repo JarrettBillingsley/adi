@@ -81,13 +81,31 @@ impl<'a> RegUsagePass<'a> {
 		*self.fids_to_usage.get(&fid).unwrap()
 	}
 
-	fn change_usage(&mut self, fid: FuncId, usage: FuncRegUsage) {
+	fn change_usage(&mut self, fid: FuncId, usage: FuncRegUsage) -> bool {
 		let new_usage = Some(usage);
 
 		if self.fids_to_usage[&fid] != new_usage {
-			log::trace!(" temporarily setting {:?} usage to {:?}", fid, usage);
+			log::trace!(" temporarily setting {:?} usage to \n  {:?} (old usage: \n  {:?})",
+				fid, Some(usage), self.fids_to_usage[&fid]);
 			self.fids_to_usage.insert(fid, new_usage);
 			self.changed_fids.insert(fid);
+			true
+		} else {
+			false
+		}
+	}
+
+	fn change_clobbers(&mut self, fid: FuncId, clobber_set: RegSet) -> bool {
+		if let Some(Some(mut usage)) = self.fids_to_usage.get(&fid).copied() {
+			if usage.change_clobbers(clobber_set) {
+				self.change_usage(fid, usage);
+				true
+			} else {
+				false
+			}
+		} else {
+			let all_regs = self.prog.arch().arch_reg_set();
+			self.change_usage(fid, FuncRegUsage::new(all_regs, clobber_set))
 		}
 	}
 
@@ -98,26 +116,51 @@ impl<'a> RegUsagePass<'a> {
 			match scc[..] {
 				[]    => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
 				[fid] => {
-					let clobbers_set = self.analyze_clobbers(fid);
+					let (_, clobbers_set) = self.analyze_clobbers(fid, None);
 					self.analyze_args(fid, clobbers_set);
 				}
 				_ => {
-					log::warn!("- TODO: mutually-recursive function arg/clobber not yet \
-						implemented. SCC:");
+					// 2 or more mutually-recursive functions.
+					log::trace!("  mutually-recursive SCC: {:?}", scc);
 
-					for fid in scc {
-						let ea = self.prog.get_func(*fid).ea();
-						let name = self.prog.name_of_ea(ea);
-						log::trace!("    {} @ {:?} ({:?})", name, ea, fid);
+					// start them off as all taking every reg as an arugment and clobbering nothing.
+					for &fid in scc {
+						if !self.fids_to_usage.contains_key(&fid) {
+							self.change_clobbers(fid, RegSet::EMPTY);
+						}
 					}
 
-					let _ = self;
+					let mut clobbers_sets = vec![RegSet::EMPTY; scc.len()];
+
+					for i in 0 .. {
+						log::trace!("    --------------------------------------- loop start {}", i);
+						let mut any_changed = false;
+
+						for (i, fid) in scc.iter().enumerate() {
+							let (changed, clobbers_set) = self.analyze_clobbers(*fid, Some(scc));
+							clobbers_sets[i] = clobbers_set;
+							any_changed |= changed;
+						}
+
+						for (i, fid) in scc.iter().enumerate() {
+							any_changed |= self.analyze_args(*fid, clobbers_sets[i]);
+						}
+
+						log::trace!("    loop end, any_changed = {}", any_changed);
+						if !any_changed {
+							break;
+						}
+
+						if i > scc.len() {
+							panic!("hmmmmmm should have converged by now...");
+						}
+					}
 				}
 			}
 		}
 	}
 
-	fn analyze_clobbers(&mut self, fid: FuncId) -> RegSet {
+	fn analyze_clobbers(&mut self, fid: FuncId, scc: Option<&[FuncId]>) -> (bool, RegSet) {
 		log::trace!("- begin analyzing function arguments/clobbers at {}",
 			self.prog.get_func(fid).ea());
 		let arch = self.prog.arch();
@@ -126,13 +169,22 @@ impl<'a> RegUsagePass<'a> {
 
 		log::debug!("before determining clobbers: {:?}", IrFunctionWithNames(&ir, &arch));
 
-		// 1. clobber regs are the union of all callee clobbers *except for itself
-		// (for recursive funcs)*, plus any reg with nonzero generation at any exit
-		// point.
+		// 1. clobber regs are the union of all callee clobbers plus any reg with nonzero generation
+		// at any exit point.
+		//
+		// For recursive and mutually-recursive funcs, the func itself or all funcs in the mutually-
+		// recursive set are excluded.
 		let mut clobber_set = RegSet::new();
 
+		let in_scc = |id: FuncId| -> bool {
+			match scc {
+				Some(scc) => scc.contains(&id),
+				None      => id == fid,
+			}
+		};
+
 		for callee in self.cg.callees_of(fid) {
-			if callee != fid {
+			if !in_scc(callee) {
 				// TODO: replace this with unwrap() once mutually-recursive functions are done
 				match self.usage_of_fid(callee) {
 					Some(usage) => {
@@ -166,11 +218,10 @@ impl<'a> RegUsagePass<'a> {
 		}
 
 		log::trace!("    clobber_set = {:?}", clobber_set);
-		self.change_usage(fid, FuncRegUsage::new(all_regs, clobber_set));
-		clobber_set
+		(self.change_clobbers(fid, clobber_set), clobber_set)
 	}
 
-	fn analyze_args(&mut self, fid: FuncId, clobber_set: RegSet) {
+	fn analyze_args(&mut self, fid: FuncId, clobber_set: RegSet) -> bool {
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
 		// regenerate the IR using the newly-determined clobbers
@@ -201,11 +252,7 @@ impl<'a> RegUsagePass<'a> {
 		}
 
 		log::trace!("    arg_set = {:?}", arg_set);
-
-		// don't care if usage changed in this phase. If it's been analyzed before, its
-		// arguments/clobbers can't have changed anyway.
-		let usage = FuncRegUsage::new(arg_set, clobber_set);
-		self.change_usage(fid, usage);
+		self.change_usage(fid, FuncRegUsage::new(arg_set, clobber_set))
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -214,13 +261,13 @@ impl<'a> RegUsagePass<'a> {
 		for scc in sccs.iter().rev() {
 			match scc[..] {
 				[] => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
-				[fid] => self.analyze_returns_func(fid),
+				[fid] => { self.analyze_returns_func(fid); }
 				_     => self.analyze_returns_mutrec(scc),
 			}
 		}
 	}
 
-	fn analyze_returns_func(&mut self, fid: FuncId) {
+	fn analyze_returns_func(&mut self, fid: FuncId) -> bool {
 		log::trace!("- begin analyzing function returns at {}", self.prog.get_func(fid).ea());
 		let arch = self.prog.arch();
 		let mut ir = self.prog.func_to_ir_ctx(fid, self);
@@ -262,10 +309,11 @@ impl<'a> RegUsagePass<'a> {
 		log::debug!("{:?}", IrFunctionWithNames(&ir, &arch));
 		log::debug!("  callees to BBs = {:?}", callees_to_bbs);
 
-		// SAFETY: phase 1 put reg usage on every function.
-		ir.elim_dead_stores(self.usage_of_fid(fid).unwrap());
+		ir.elim_dead_stores();
 
 		log::debug!("{:?}", IrFunctionWithNames(&ir, &arch));
+
+		let mut any_changed = false;
 
 		// any remaining return-use is a *true* return value from a callee and not just a clobber.
 		for (callee_fid, irbbid) in callees_to_bbs.into_iter() {
@@ -286,7 +334,7 @@ impl<'a> RegUsagePass<'a> {
 			match self.usage_of_fid(callee_fid) {
 				Some(mut usage) => {
 					if usage.mark_returns(ret_set) {
-						self.change_usage(callee_fid, usage);
+						any_changed |= self.change_usage(callee_fid, usage);
 					}
 				}
 				None => {
@@ -295,6 +343,8 @@ impl<'a> RegUsagePass<'a> {
 				}
 			}
 		}
+
+		any_changed
 	}
 
 	fn analyze_returns_mutrec(&mut self, fids: &[FuncId]) {

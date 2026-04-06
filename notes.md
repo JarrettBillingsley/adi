@@ -2,13 +2,13 @@
 # Yak stack
 
 - Register usage analysis
+	- oh dang, DSE isn't eliminating dead stores that come from phis. it really should.
+	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 	- determine arg/clobber regs for recursive funcs
-		- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
-		- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
+		- I think DSE needs to be done after each phase...
 	- determine return values for recursive funcs
 	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
 		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
-	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 	- code cleanup when done
 	- *when* (if ever) should reguse pass be automatically scheduled?
 
@@ -28,7 +28,7 @@
 # Imminent tasks!
 
 - **Look into the `tracing` crate to replace `simplelog`**
-	- apparently OpenTracing/OpenTelemetry has some way of running a local webserver to view output in your browser, which would be *really fucking useful* especially because doing a search in the terminal is getting to be really painful
+	- apparently OpenTelemetry has some way of running a local webserver to view output in your browser, which would be *really fucking useful* especially because doing a search in the terminal is getting to be really painful
 - **Look into `typed-generational-arena` crate**
 	- I really don't think 64b generation numbers are really needed, or hell, even 64b indexes
 		- 32/32 is almost certainly more than enough
