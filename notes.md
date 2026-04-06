@@ -1,20 +1,10 @@
 
 # Yak stack
 
-- what IrRewriter uses Program for:
-	- `prog.func_that_contains(ea).?reg_usage()`
-		- then uses both `.changes()` and `.args()` on it
-		- replace with map from `EA` (all entry points of all functions) to `Option<FuncRegUsage>`
-	- `prog.plat.arch().arch_ir_reg()`
-		-
 - Register usage analysis
-	- ah shit: new arg/clobber info needs to be used *during* the first phase
-		- either `to_ir` needs to support some "override" info that we pass in
-		- or we need to apply that info to the function as soon as it's determined, which will require some algorithm rekajiggering
 	- determine arg/clobber regs for recursive funcs
 		- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
 		- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
-	- determine return values
 	- determine return values for recursive funcs
 	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
 		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function

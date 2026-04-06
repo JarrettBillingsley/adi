@@ -1,11 +1,11 @@
 
 use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
-use crate::program::{ Program, BBTerm, FuncId, RegSet, Function, FuncRegUsage };
+use crate::program::{ Program, BBTerm, FuncId, RegSet, FuncRegUsage };
 use crate::memory::{ EA } ;
 use crate::arch::{ IIrCompiler };
 use crate::ir::{ IrFunction, IrBuilder, IrBasicBlock, IrBBId, IrCfg, IrInst, IrSrc,
-	IrInstKind, IrTarget };
+	IrInstKind, IrTarget, IrReg };
 
 // ------------------------------------------------------------------------------------------------
 // Conversion of a function to IR
@@ -19,6 +19,11 @@ impl Program {
 	/// change in the future (e.g. by having `IrFunction` hold a reference to the original
 	/// function.)
 	pub(super) fn func_to_ir(&self, fid: FuncId) -> IrFunction {
+		self.func_to_ir_ctx(fid, self)
+	}
+
+	/// Same as above but uses a given context for looking up register usage.
+	pub(super) fn func_to_ir_ctx(&self, fid: FuncId, ctx: &impl IRewriteCtx) -> IrFunction {
 		// 1. compile BBs (and build a map from BBIds to IrBBIds)
 		let compiler = self.plat.arch().new_ir_compiler();
 		let func = self.funcs.get(fid);
@@ -150,8 +155,8 @@ impl Program {
 		// 3. perform rewrites
 		// arch_reg_set is the default ("pessimal") sets of argument and return value registers, to
 		// be used for functions which have not had their register usage determined yet.
-		IrRewriter::new(func, &mut bbs, self.plat().arch().arch_reg_set())
-			.perform_rewrites(self, &exitpoints, callpoints);
+		IrRewriter::new(ctx, func.ea(), &mut bbs)
+			.perform_rewrites(ctx, &exitpoints, callpoints);
 
 		// 4. build the CFG from the IrBB terminators
 		let cfg = build_ir_cfg(&bbs, extra_edges);
@@ -302,6 +307,48 @@ fn irbb_terminator_sanity_check(term: &BBTerm, insts: &[IrInst]) {
 }
 
 // ------------------------------------------------------------------------------------------------
+// Trait for stuff IrRewriter needs
+// ------------------------------------------------------------------------------------------------
+
+pub(crate) trait IRewriteCtx {
+	/// Returns
+	/// - `None` if `ea` doesn't correspond to a function entrypoint or hasn't been analyzed
+	/// - `Some(usage)` if it has
+	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage>;
+
+	/// Map from IR register offset to `IrReg`
+	fn arch_ir_reg(&self, offset: u8) -> IrReg;
+
+	/// The default set of regs for this arch
+	fn default_regs(&self) -> RegSet;
+}
+
+impl IRewriteCtx for Program {
+	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
+		if let Some(func) = self.func_that_contains(ea) {
+			if let Some(ru) = func.reg_usage() {
+				log::trace!("  callee {:?} usage = {:?}", ea, ru);
+				Some(ru)
+			} else {
+				log::trace!("  callee {:?} has no usage", ea);
+				None
+			}
+		} else {
+			log::trace!("  callee {:?} is not a func", ea);
+			None
+		}
+	}
+
+	fn arch_ir_reg(&self, offset: u8) -> IrReg {
+		self.plat().arch().arch_ir_reg(offset)
+	}
+
+	fn default_regs(&self) -> RegSet {
+		self.plat().arch().arch_reg_set()
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
 // IrRewriter
 // ------------------------------------------------------------------------------------------------
 
@@ -316,8 +363,10 @@ struct IrRewriter<'a> {
 }
 
 impl<'a> IrRewriter<'a> {
-	fn new(func: &Function, bbs: &'a mut Vec<IrBasicBlock>, default_regs: RegSet) -> Self {
-		let reg_usage = func.reg_usage()
+	fn new(ctx: &impl IRewriteCtx, ea: EA, bbs: &'a mut Vec<IrBasicBlock>) -> Self {
+		let default_regs = ctx.default_regs();
+		let reg_usage =
+			ctx.reg_usage_of(ea)
 			.unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
 
 		log::trace!("IrRewriter::new arg_regs = {:?}, ret_regs = {:?}, changed_regs = {:?}",
@@ -334,19 +383,20 @@ impl<'a> IrRewriter<'a> {
 		}
 	}
 
-	fn perform_rewrites(&mut self, prog: &Program, exitpoints: &[IrBBId], callpoints: Vec<IrBBId>) {
+	fn perform_rewrites(&mut self, ctx: &impl IRewriteCtx, exitpoints: &[IrBBId],
+	callpoints: Vec<IrBBId>) {
 		for irbbid in exitpoints.iter() {
-			self.insert_dummy_uses(prog, *irbbid);
+			self.insert_dummy_uses(ctx, *irbbid);
 		}
 
 		for irbbid in callpoints.into_iter() {
-			self.insert_dummy_return_uses(prog, irbbid);
+			self.insert_dummy_return_uses(ctx, irbbid);
 		}
 
 		self.bbs.append(&mut self.new_bbs);
 	}
 
-	fn insert_dummy_uses(&mut self, prog: &Program, irbbid: IrBBId) {
+	fn insert_dummy_uses(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
 		// log::debug!("dummy uses on irbb{}", irbb.id);
 		let irbb = &mut self.bbs[irbbid];
 		let term_inst = *irbb.term_inst();
@@ -367,10 +417,8 @@ impl<'a> IrRewriter<'a> {
 				IrTarget::External(ea) => {
 					// if the callee exists, and *its* argument registers have been analyzed, use
 					// those; otherwise use the default ones.
-					prog.func_that_contains(ea)
-					.map(|func|
-						func.reg_usage().map(|ru| ru.args()))
-					.flatten()
+					ctx.reg_usage_of(ea)
+					.map(|ru| ru.args())
 					.unwrap_or(self.default_regs)
 				}
 			}
@@ -378,32 +426,29 @@ impl<'a> IrRewriter<'a> {
 
 		if !regs.is_empty() {
 			let ea = term_inst.ea();
-			let arch = prog.plat().arch();
-
 			irbb.insts.pop();
 
 			for reg_offs in regs.iter() {
-				irbb.insts.push(IrInst::use_(ea, arch.arch_ir_reg(reg_offs)));
+				irbb.insts.push(IrInst::use_(ea, ctx.arch_ir_reg(reg_offs)));
 			}
 
 			irbb.insts.push(term_inst);
 		}
 	}
 
-	fn insert_dummy_return_uses(&mut self, prog: &Program, irbbid: IrBBId) {
+	fn insert_dummy_return_uses(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
 		// log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
-		let (old_cont, callee_changed_regs) = self.change_cont(prog, irbbid, self.new_bbid);
+		let (old_cont, callee_changed_regs) = self.change_cont(ctx, irbbid, self.new_bbid);
 
 		// then build the new interstitial BB.
 		let mut b = IrBuilder::new(0); // never using cbranch_and_split, so whatev
 		let bb = &self.bbs[irbbid];
 		let last_ea = bb.term_inst().ea();
 		b.set_ea(last_ea);
-		let arch = prog.plat().arch();
 
 		for reg_offs in callee_changed_regs.iter() {
-			let reg = arch.arch_ir_reg(reg_offs);
+			let reg = ctx.arch_ir_reg(reg_offs);
 			b.mov(reg, IrSrc::Return(reg.size()));
 		}
 
@@ -420,7 +465,7 @@ impl<'a> IrRewriter<'a> {
 	/// change the continuation target of the terminating call instruction of `irbbid` to
 	/// `new_cont`. returns the old continuation target and the return `RegSet` of the call target,
 	/// or the default reg set if the target is not yet analyzed/is indirect.
-	fn change_cont(&mut self, prog: &Program, irbbid: IrBBId, new_cont: IrBBId)
+	fn change_cont(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId, new_cont: IrBBId)
 	-> (IrTarget, RegSet) {
 		let bb = &mut self.bbs[irbbid];
 
@@ -439,24 +484,9 @@ impl<'a> IrRewriter<'a> {
 						self.ret_regs
 					}
 					IrTarget::External(ea) => {
-						if let Some(func) = prog.func_that_contains(*ea) {
-							if let Some(ru) = func.reg_usage() {
-								log::trace!("  callee {:?} changes = {:?}", ea, ru.changes());
-								ru.changes()
-							} else {
-								log::trace!("  callee {:?} has no usage", ea);
-								self.default_regs
-							}
-						} else {
-							log::trace!("  callee {:?} is not a func", ea);
-							self.default_regs
-						}
-
-						// prog.func_that_contains(*ea)
-						// .map(|func|
-						// 	func.reg_usage().map(|ru| ru.changes()))
-						// .flatten()
-						// .unwrap_or(self.default_regs)
+						ctx.reg_usage_of(*ea)
+						.map(|ru| ru.changes())
+						.unwrap_or(self.default_regs)
 					}
 				};
 

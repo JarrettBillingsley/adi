@@ -1,15 +1,72 @@
 
 use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 
-use crate::program::{ Program, FuncId, RegSet, FuncRegUsage };
+use crate::arch::{ Architecture };
+use crate::program::{ EA, Program, FuncId, RegSet, FuncRegUsage };
 use crate::program::analysis::callgraph::*;
-use crate::ir::{ RegDbg, IrInstKind, IrTarget, IrBBId };
+use crate::program::analysis::to_ir::{ IRewriteCtx };
+use crate::ir::{ RegDbg, IrInstKind, IrTarget, IrBBId, IrReg };
 
 // ------------------------------------------------------------------------------------------------
 // Whole-program register usage analysis
 // ------------------------------------------------------------------------------------------------
 
-type RegUsageMap = HashMap<FuncId, Option<FuncRegUsage>>;
+struct RegUsageCtx<'a> {
+	arch:          &'a Architecture,
+	eas_to_fids:   HashMap<EA, FuncId>,
+	fids_to_usage: HashMap<FuncId, Option<FuncRegUsage>>,
+}
+
+impl<'a> RegUsageCtx<'a> {
+	fn new(prog: &'a Program) -> Self {
+		let arch = prog.plat().arch();
+
+		let mut eas_to_fids = HashMap::new();
+
+		for func in prog.all_funcs() {
+			for bbid in func.entrypoints() {
+				eas_to_fids.insert(prog.bbidx.get(*bbid).ea(), func.id());
+			}
+		}
+
+		Self {
+			arch,
+			eas_to_fids,
+			fids_to_usage: prog.all_funcs().map(|func| (func.id(), func.reg_usage())).collect(),
+		}
+	}
+
+	fn of_fid(&self, fid: FuncId) -> Option<FuncRegUsage> {
+		*self.fids_to_usage.get(&fid).unwrap()
+	}
+
+	fn change(&mut self, fid: FuncId, usage: FuncRegUsage) -> bool {
+		let new_usage = Some(usage);
+
+		if self.fids_to_usage[&fid] != new_usage {
+			log::trace!(" temporarily setting {:?} usage to {:?}", fid, usage);
+			self.fids_to_usage.insert(fid, new_usage);
+			true
+		} else {
+			false
+		}
+	}
+}
+
+impl<'a> IRewriteCtx for RegUsageCtx<'a> {
+	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
+		let fid = self.eas_to_fids.get(&ea)?;
+		self.fids_to_usage.get(fid).copied()?
+	}
+
+	fn arch_ir_reg(&self, offset: u8) -> IrReg {
+		self.arch.arch_ir_reg(offset)
+	}
+
+	fn default_regs(&self) -> RegSet {
+		self.arch.arch_reg_set()
+	}
+}
 
 impl Program {
 	pub(super) fn reg_usage_pass(&mut self) {
@@ -22,8 +79,7 @@ impl Program {
 		// --------------------------------------------------------------------------------------------
 		// pass 1: bottom-up, determine argument and clobber sets for each function
 
-		let mut reg_usage: RegUsageMap =
-			self.all_funcs().map(|func| (func.id(), func.reg_usage())).collect();
+		let mut reg_usage = RegUsageCtx::new(self);
 
 		for scc in sccs.iter() {
 			match scc[..] {
@@ -45,7 +101,8 @@ impl Program {
 
 					for callee in cg.callees_of(fid) {
 						if callee != fid {
-							clobber_set |= reg_usage[&callee].map(|ru| ru.clobbers())
+							clobber_set |= reg_usage.of_fid(callee)
+								.map(|ru| ru.clobbers())
 								.unwrap();
 						}
 
@@ -72,9 +129,7 @@ impl Program {
 					// don't care if usage changed in this phase. If it's been analyzed before, its
 					// arguments/clobbers can't have changed anyway.
 					let usage = FuncRegUsage::new(all_regs, clobber_set);
-					change_usage(&mut reg_usage, fid, usage);
-					log::trace!(" temporarily setting {:?} usage to {:?}", fid, usage);
-					*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
+					reg_usage.change(fid, usage);
 
 					// doing this breaks the lifetime so we can reborrow below
 					let arch = self.plat().arch();
@@ -114,9 +169,7 @@ impl Program {
 					// don't care if usage changed in this phase. If it's been analyzed before, its
 					// arguments/clobbers can't have changed anyway.
 					let usage = FuncRegUsage::new(arg_set, clobber_set);
-					change_usage(&mut reg_usage, fid, usage);
-					log::trace!(" setting {:?} usage to {:?}", fid, usage);
-					*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
+					reg_usage.change(fid, usage);
 				}
 				_ => {
 					log::warn!("- TODO: mutually-recursive function arg/clobber not yet \
@@ -135,7 +188,7 @@ impl Program {
 
 		RegUsagePass::new(self, &cg).analyze_returns(&sccs, &mut reg_usage);
 
-		for (&fid, &usage) in reg_usage.iter() {
+		for (fid, usage) in reg_usage.fids_to_usage.into_iter() {
 			log::trace!(" setting {:?} usage to {:?}", fid, usage);
 			*self.funcs.get_mut(fid).reg_usage_mut() = usage;
 		}
@@ -161,7 +214,7 @@ impl<'a> RegUsagePass<'a> {
 
 	// --------------------------------------------------------------------------------------------
 	// pass 2: top-down, determine return sets for each function
-	fn analyze_returns(&mut self, sccs: &[Vec<FuncId>], reg_usage: &mut RegUsageMap) {
+	fn analyze_returns(&mut self, sccs: &[Vec<FuncId>], reg_usage: &mut RegUsageCtx) {
 		for scc in sccs.iter().rev() {
 			match scc[..] {
 				[]    => unreachable!(),
@@ -171,7 +224,7 @@ impl<'a> RegUsagePass<'a> {
 		}
 	}
 
-	fn returns_func(&mut self, fid: FuncId, reg_usage: &mut RegUsageMap) {
+	fn returns_func(&mut self, fid: FuncId, reg_usage: &mut RegUsageCtx) {
 		log::trace!("- begin analyzing function returns at {}", self.prog.get_func(fid).ea());
 		let arch = self.prog.plat().arch();
 		let mut ir = self.prog.func_to_ir(fid);
@@ -215,7 +268,7 @@ impl<'a> RegUsagePass<'a> {
 		log::debug!("  callees to BBs = {:?}", callees_to_bbs);
 
 		// SAFETY: phase 1 put reg usage on every function.
-		ir.elim_dead_stores(reg_usage[&fid].unwrap());
+		ir.elim_dead_stores(reg_usage.of_fid(fid).unwrap());
 
 		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch));
 
@@ -235,9 +288,9 @@ impl<'a> RegUsagePass<'a> {
 			}
 
 			// SAFETY: phase 1 put reg usage on every function.
-			let mut usage = reg_usage[&callee_fid].unwrap();
+			let mut usage = reg_usage.of_fid(callee_fid).unwrap();
 			if usage.mark_returns(ret_set) {
-				change_usage(reg_usage, callee_fid, usage);
+				reg_usage.change(callee_fid, usage);
 			}
 		}
 	}
@@ -250,16 +303,5 @@ impl<'a> RegUsagePass<'a> {
 			let name = self.prog.name_of_ea(ea);
 			log::trace!("    {} @ {:?} ({:?})", name, ea, fid);
 		}
-	}
-}
-
-fn change_usage(reg_usage: &mut RegUsageMap, fid: FuncId, usage: FuncRegUsage) -> bool {
-	let new_usage = Some(usage);
-
-	if reg_usage[&fid] != new_usage {
-		reg_usage.insert(fid, new_usage);
-		true
-	} else {
-		false
 	}
 }
