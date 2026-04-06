@@ -175,17 +175,6 @@ pub(crate) trait IIrCompiler: Sized + Sync + Send {
 	/// Convert the terminating instruction of a basic block into a sequence of IR instructions.
 	/// `term` is the basic block's terminator, used to encode control flow targets.
 	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm);
-
-	/// Give a set of all architectural registers (that is, those which are programmer-accessible,
-	/// not including registers internal to the IR). Do NOT include the stack pointer in this list;
-	/// return it from `stack_ptr_reg` instead.
-	fn arch_regs(&self) -> &'static [IrReg];
-
-	/// Give the register which represents the stack pointer.
-	fn stack_ptr_reg(&self) -> IrReg;
-
-	/// Give the name of a register from its offset, or panic if the offset is invalid.
-	fn reg_name(&self, offset: u8) -> &'static str;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -216,6 +205,15 @@ pub(crate) trait IArchitecture: Sized + Sync + Send + Clone + Copy {
 	fn new_printer(&self) -> Printer;
 	/// Construct a new IR compiler.
 	fn new_ir_compiler(&self) -> IrCompiler;
+
+	/// Give a set of all architectural registers (that is, those which are programmer-accessible,
+	/// not including registers internal to the IR). Do NOT include the stack pointer in this list;
+	/// return it from `stack_ptr_reg` instead.
+	fn arch_regs(&self) -> &'static [IrReg];
+	/// Give the register which represents the stack pointer.
+	fn stack_ptr_reg(&self) -> IrReg;
+	/// Give the name of a register from its offset, or panic if the offset is invalid.
+	fn reg_name(&self, offset: u8) -> &'static str;
 }
 
 pub struct Architecture {
@@ -229,7 +227,7 @@ impl Architecture {
 		let mut arch_regs = RegSet::new();
 		let mut reg_sizes = [ValSize::_8; IrReg::MAX_NUM];
 
-		for reg in kind.new_ir_compiler().arch_regs() {
+		for reg in kind.arch_regs() {
 			arch_regs.insert(reg.offset());
 			reg_sizes[reg.offset() as usize] = reg.size();
 		}
@@ -253,6 +251,15 @@ impl Architecture {
 			pub(crate) fn new_printer(&self) -> Printer;
 			/// Construct a new IR compiler.
 			pub(crate) fn new_ir_compiler(&self) -> IrCompiler;
+
+			/// Give a set of all architectural registers (that is, those which are
+			/// programmer-accessible, not including registers internal to the IR). Do NOT include
+			/// the stack pointer in this list; return it from `stack_ptr_reg` instead.
+			pub(crate) fn arch_regs(&self) -> &'static [IrReg];
+			/// Give the register which represents the stack pointer.
+			pub(crate) fn stack_ptr_reg(&self) -> IrReg;
+			/// Give the name of a register from its offset, or panic if the offset is invalid.
+			pub(crate) fn reg_name(&self, offset: u8) -> &'static str;
 		}
 	}
 

@@ -22,40 +22,12 @@ impl IIrCompiler for Mos65xxIrCompiler {
 	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm) {
 		lookup_desc(b.inst().bytes()[0]).build_ir(Some(term), b);
 	}
-
-	fn arch_regs(&self) -> &'static [IrReg] {
-		ARCH_REGS
-	}
-
-	fn stack_ptr_reg(&self) -> IrReg {
-		REG_S
-	}
-
-	fn reg_name(&self, offset: u8) -> &'static str {
-		match offset {
-			x if x == REG_A.offset()       => "a",
-			x if x == REG_X.offset()       => "x",
-			x if x == REG_Y.offset()       => "y",
-			x if x == REG_S.offset()       => "s",
-			x if x == REG_CF.offset()      => "cf",
-			x if x == REG_ZF.offset()      => "zf",
-			x if x == REG_IF.offset()      => "if",
-			x if x == REG_DF.offset()      => "df",
-			x if x == REG_VF.offset()      => "vf",
-			x if x == REG_NF.offset()      => "nf",
-			x if x == REG_TMP1.offset()    => "tmp1",
-			x if x == REG_TMP2.offset()    => "tmp2",
-			x if x == REG_TMP16.offset()   => "tmp16",
-			x if x == REG_TMP16_2.offset() => "tmp16_2",
-			_ => panic!(),
-		}
-	}
 }
 
 const REG_A:  IrReg = IrReg::reg8(0);
 const REG_X:  IrReg = IrReg::reg8(1);
 const REG_Y:  IrReg = IrReg::reg8(2);
-const REG_S:  IrReg = IrReg::reg8(3);
+pub(super) const REG_S:  IrReg = IrReg::reg8(3);
 const REG_CF: IrReg = IrReg::reg8(4);  // 0 Carry
 const REG_ZF: IrReg = IrReg::reg8(5);  // 1 Zero
 const REG_IF: IrReg = IrReg::reg8(6);  // 2 Interrupt
@@ -70,7 +42,7 @@ const REG_TMP2:  IrReg = IrReg::reg8(13);  // 8-bit temporary
 const REG_TMP16: IrReg = IrReg::reg16(15); // 16-bit temporary
 const REG_TMP16_2: IrReg = IrReg::reg16(17); // 16-bit temporary
 
-static ARCH_REGS: &[IrReg] =
+pub(super) static ARCH_REGS: &[IrReg] =
 	&[REG_A, REG_X, REG_Y, REG_CF, REG_ZF, REG_IF, REG_DF, REG_VF, REG_NF];
 
 fn reg_to_ir_reg(reg: u8) -> IrReg {
@@ -80,6 +52,26 @@ fn reg_to_ir_reg(reg: u8) -> IrReg {
 		Reg::Y => REG_Y,
 		Reg::S => REG_S,
 		Reg::P => panic!(),
+	}
+}
+
+pub(super) fn reg_name(offset: u8) -> &'static str {
+	match offset {
+		x if x == REG_A.offset()       => "a",
+		x if x == REG_X.offset()       => "x",
+		x if x == REG_Y.offset()       => "y",
+		x if x == REG_S.offset()       => "s",
+		x if x == REG_CF.offset()      => "cf",
+		x if x == REG_ZF.offset()      => "zf",
+		x if x == REG_IF.offset()      => "if",
+		x if x == REG_DF.offset()      => "df",
+		x if x == REG_VF.offset()      => "vf",
+		x if x == REG_NF.offset()      => "nf",
+		x if x == REG_TMP1.offset()    => "tmp1",
+		x if x == REG_TMP2.offset()    => "tmp2",
+		x if x == REG_TMP16.offset()   => "tmp16",
+		x if x == REG_TMP16_2.offset() => "tmp16_2",
+		_ => panic!(),
 	}
 }
 

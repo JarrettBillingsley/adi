@@ -13,6 +13,7 @@ use crate::arch::{
 	IrCompiler, IIrCompiler,
 };
 use crate::memory::{ MemAccess, MmuState, Endian, EA, VA };
+use crate::ir::{ IrReg };
 
 // ------------------------------------------------------------------------------------------------
 // Submodules
@@ -402,4 +403,16 @@ impl IArchitecture for ToyArchitecture {
 	fn new_disassembler(&self) -> Disassembler { ToyDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { ToyPrinter::new().into() }
 	fn new_ir_compiler (&self) -> IrCompiler   { ToyIrCompiler.into() }
+
+	fn arch_regs(&self) -> &'static [IrReg] {
+		ir::ARCH_REGS
+	}
+
+	fn stack_ptr_reg(&self) -> IrReg {
+		ir::REG_SP
+	}
+
+	fn reg_name(&self, offset: u8) -> &'static str {
+		ir::reg_name(offset)
+	}
 }

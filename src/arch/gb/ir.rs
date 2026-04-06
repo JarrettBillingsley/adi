@@ -28,40 +28,6 @@ impl IIrCompiler for GBIrCompiler {
 			_                 => unreachable!(),
 		}
 	}
-
-	fn arch_regs(&self) -> &'static [IrReg] {
-		ARCH_REGS
-	}
-
-	fn stack_ptr_reg(&self) -> IrReg {
-		REG_SP
-	}
-
-	fn reg_name(&self, offset: u8) -> &'static str {
-		match offset {
-			x if x == REG_A.offset()  => "a",
-			x if x == REG_B.offset()  => "b",
-			x if x == REG_C.offset()  => "c",
-			x if x == REG_D.offset()  => "d",
-			x if x == REG_E.offset()  => "e",
-			x if x == REG_H.offset()  => "h",
-			x if x == REG_L.offset()  => "l",
-			x if x == REG_CF.offset() => "cf",
-			x if x == REG_HF.offset() => "hf",
-			x if x == REG_NF.offset() => "nf",
-			x if x == REG_ZF.offset() => "zf",
-			x if x == REG_SP.offset() => "sp",
-			x if x == REG_W.offset()  => "w",
-			x if x == REG_X.offset()  => "x",
-			x if x == REG_Y.offset()  => "y",
-			x if x == REG_Z.offset()  => "z",
-			x if x == REG_BC.offset() => "bc",
-			x if x == REG_DE.offset() => "de",
-			x if x == REG_HL.offset() => "hl",
-			x if x == REG_WZ.offset() => "wz",
-			_ => panic!(),
-		}
-	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -94,7 +60,7 @@ const REG_CF: IrReg = IrReg::reg8 (7);  // 4 Carry
 const REG_HF: IrReg = IrReg::reg8 (8);  // 5 Half-carry (BCD)
 const REG_NF: IrReg = IrReg::reg8 (9);  // 6 Subtraction (BCD)
 const REG_ZF: IrReg = IrReg::reg8 (10); // 7 Zero
-const REG_SP: IrReg = IrReg::reg16(11);
+pub(super) const REG_SP: IrReg = IrReg::reg16(11);
 const REG_W:  IrReg = IrReg::reg8 (13); // 8-bit temporary
 const REG_X:  IrReg = IrReg::reg8 (14); // 8-bit temporary
 const REG_Y:  IrReg = IrReg::reg8 (15); // 8-bit temporary
@@ -104,7 +70,7 @@ const REG_DE: IrReg = IrReg::reg16(19); // 16-bit temporary
 const REG_HL: IrReg = IrReg::reg16(21); // 16-bit temporary
 const REG_WZ: IrReg = IrReg::reg16(23); // 16-bit temporary
 
-static ARCH_REGS: &[IrReg] =
+pub(super) static ARCH_REGS: &[IrReg] =
 	&[REG_A, REG_B, REG_C, REG_D, REG_E, REG_H, REG_L, REG_CF, REG_HF, REG_NF, REG_ZF];
 
 impl From<Reg> for IrReg {
@@ -126,6 +92,31 @@ impl From<Reg> for IrReg {
 	}
 }
 
+pub(super) fn reg_name(offset: u8) -> &'static str {
+	match offset {
+		x if x == REG_A.offset()  => "a",
+		x if x == REG_B.offset()  => "b",
+		x if x == REG_C.offset()  => "c",
+		x if x == REG_D.offset()  => "d",
+		x if x == REG_E.offset()  => "e",
+		x if x == REG_H.offset()  => "h",
+		x if x == REG_L.offset()  => "l",
+		x if x == REG_CF.offset() => "cf",
+		x if x == REG_HF.offset() => "hf",
+		x if x == REG_NF.offset() => "nf",
+		x if x == REG_ZF.offset() => "zf",
+		x if x == REG_SP.offset() => "sp",
+		x if x == REG_W.offset()  => "w",
+		x if x == REG_X.offset()  => "x",
+		x if x == REG_Y.offset()  => "y",
+		x if x == REG_Z.offset()  => "z",
+		x if x == REG_BC.offset() => "bc",
+		x if x == REG_DE.offset() => "de",
+		x if x == REG_HL.offset() => "hl",
+		x if x == REG_WZ.offset() => "wz",
+		_ => panic!(),
+	}
+}
 // ------------------------------------------------------------------------------------------------
 // Register and flag handling
 // ------------------------------------------------------------------------------------------------

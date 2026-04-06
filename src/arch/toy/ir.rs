@@ -18,46 +18,21 @@ impl IIrCompiler for ToyIrCompiler {
 	fn build_ir_term(&self, b: &mut IrBuilder, term: &BBTerm) {
 		lookup_desc(b.inst().bytes()[0]).expect("ono").build_ir(Some(term), b);
 	}
-
-	fn arch_regs(&self) -> &'static [IrReg] {
-		ARCH_REGS
-	}
-
-	fn stack_ptr_reg(&self) -> IrReg {
-		REG_SP
-	}
-
-	fn reg_name(&self, offset: u8) -> &'static str {
-		match offset {
-			x if x == REG_A.offset()     => "a",
-			x if x == REG_B.offset()     => "b",
-			x if x == REG_C.offset()     => "c",
-			x if x == REG_D.offset()     => "d",
-			x if x == REG_SP.offset()    => "sp",
-			x if x == REG_NF.offset()    => "nf",
-			x if x == REG_ZF.offset()    => "zf",
-			x if x == REG_CF.offset()    => "cf",
-			x if x == REG_TMP.offset()   => "tmp",
-			x if x == REG_TMP16.offset() => "tmp16",
-			x if x == REG_TMPCF.offset() => "tmpcf",
-			_ => panic!(),
-		}
-	}
 }
 
-const REG_A:     IrReg = IrReg::reg8 (0);
-const REG_B:     IrReg = IrReg::reg8 (1);
-const REG_C:     IrReg = IrReg::reg8 (2);
-const REG_D:     IrReg = IrReg::reg8 (3);
-const REG_SP:    IrReg = IrReg::reg16(4);
-const REG_NF:    IrReg = IrReg::reg8 (6);
-const REG_ZF:    IrReg = IrReg::reg8 (7);
-const REG_CF:    IrReg = IrReg::reg8 (8);
+pub(super) const REG_A:     IrReg = IrReg::reg8 (0);
+pub(super) const REG_B:     IrReg = IrReg::reg8 (1);
+pub(super) const REG_C:     IrReg = IrReg::reg8 (2);
+pub(super) const REG_D:     IrReg = IrReg::reg8 (3);
+pub(super) const REG_SP:    IrReg = IrReg::reg16(4);
+pub(super) const REG_NF:    IrReg = IrReg::reg8 (6);
+pub(super) const REG_ZF:    IrReg = IrReg::reg8 (7);
+pub(super) const REG_CF:    IrReg = IrReg::reg8 (8);
 const REG_TMP:   IrReg = IrReg::reg8 (9);
 const REG_TMP16: IrReg = IrReg::reg16(10);
 const REG_TMPCF: IrReg = IrReg::reg8 (12);
 
-static ARCH_REGS: &[IrReg]    = &[ REG_A, REG_B, REG_C, REG_D, REG_NF, REG_ZF, REG_CF ];
+pub(super) static ARCH_REGS: &[IrReg]    = &[ REG_A, REG_B, REG_C, REG_D, REG_NF, REG_ZF, REG_CF ];
 
 fn reg_to_ir_reg(reg: Reg) -> IrReg {
 	match reg {
@@ -67,6 +42,23 @@ fn reg_to_ir_reg(reg: Reg) -> IrReg {
 		Reg::D  => REG_D,
 		Reg::DC => panic!(),
 		Reg::SP => REG_SP,
+	}
+}
+
+pub(super) fn reg_name(offset: u8) -> &'static str {
+	match offset {
+		x if x == REG_A.offset()     => "a",
+		x if x == REG_B.offset()     => "b",
+		x if x == REG_C.offset()     => "c",
+		x if x == REG_D.offset()     => "d",
+		x if x == REG_SP.offset()    => "sp",
+		x if x == REG_NF.offset()    => "nf",
+		x if x == REG_ZF.offset()    => "zf",
+		x if x == REG_CF.offset()    => "cf",
+		x if x == REG_TMP.offset()   => "tmp",
+		x if x == REG_TMP16.offset() => "tmp16",
+		x if x == REG_TMPCF.offset() => "tmpcf",
+		_ => panic!(),
 	}
 }
 

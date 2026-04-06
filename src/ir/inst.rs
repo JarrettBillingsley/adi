@@ -211,9 +211,9 @@ impl Debug for Opn {
 
 // helper type for printing out registers more easily
 #[derive(Clone, Copy)]
-pub(crate) struct RegDbg<'c>(pub(crate) IrReg, pub(crate) Option<&'c IrCompiler>);
+pub(crate) struct RegDbg<'a>(pub(crate) IrReg, pub(crate) Option<&'a Architecture>);
 
-impl<'c> Debug for RegDbg<'c> {
+impl<'a> Debug for RegDbg<'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		self.0.debug_fmt(f, self.1)
 	}
@@ -221,9 +221,9 @@ impl<'c> Debug for RegDbg<'c> {
 
 // helper type for printing out IrSrcs more easily
 #[derive(Clone, Copy)]
-pub(crate) struct SrcDbg<'c>(pub(crate) IrSrc, pub(crate) Option<&'c IrCompiler>);
+pub(crate) struct SrcDbg<'a>(pub(crate) IrSrc, pub(crate) Option<&'a Architecture>);
 
-impl<'c> Debug for SrcDbg<'c> {
+impl<'a> Debug for SrcDbg<'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		self.0.debug_fmt(f, self.1)
 	}
@@ -268,11 +268,11 @@ impl IrInstKind {
 		}
 	}
 
-	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		use IrInstKind::*;
 
-		let r = |dst: IrReg| -> RegDbg { RegDbg(dst, compiler) };
-		let s = |src: IrSrc| -> SrcDbg { SrcDbg(src, compiler) };
+		let r = |dst: IrReg| -> RegDbg { RegDbg(dst, arch) };
+		let s = |src: IrSrc| -> SrcDbg { SrcDbg(src, arch) };
 
 		write!(f, "{:<8} ", self.name())?;
 
@@ -356,9 +356,9 @@ impl IrInst {
 		self.kind.target()
 	}
 
-	pub(crate) fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+	pub(crate) fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		write!(f, "{:?} ", self.ea)?;
-		self.kind.debug_fmt(f, compiler)
+		self.kind.debug_fmt(f, arch)
 	}
 
 	pub(crate) fn nop(ea: EA) -> Self {

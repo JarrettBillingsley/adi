@@ -20,6 +20,7 @@ use crate::arch::{
 	IrCompiler,
 };
 use crate::memory::{ MmuState, Endian, EA, VA, MemAccess };
+use crate::ir::{ IrReg };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -324,4 +325,16 @@ impl IArchitecture for GBArchitecture {
 	fn new_disassembler(&self) -> Disassembler { GBDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { GBPrinter::new().into() }
 	fn new_ir_compiler (&self) -> IrCompiler   { GBIrCompiler.into() }
+
+	fn arch_regs(&self) -> &'static [IrReg] {
+		ir::ARCH_REGS
+	}
+
+	fn stack_ptr_reg(&self) -> IrReg {
+		ir::REG_SP
+	}
+
+	fn reg_name(&self, offset: u8) -> &'static str {
+		ir::reg_name(offset)
+	}
 }

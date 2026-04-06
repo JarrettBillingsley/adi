@@ -1,11 +1,16 @@
 
 # Yak stack
 
+- what IrRewriter uses Program for:
+	- `prog.func_that_contains(ea).?reg_usage()`
+		- then uses both `.changes()` and `.args()` on it
+		- replace with map from `EA` (all entry points of all functions) to `Option<FuncRegUsage>`
+	- `prog.plat.arch().arch_ir_reg()`
+		-
 - Register usage analysis
 	- ah shit: new arg/clobber info needs to be used *during* the first phase
 		- either `to_ir` needs to support some "override" info that we pass in
 		- or we need to apply that info to the function as soon as it's determined, which will require some algorithm rekajiggering
-			- would have to move the loop up into
 	- determine arg/clobber regs for recursive funcs
 		- a self-recursive function is interesting because the argument and return value sets can kind of depend on each other?
 		- probably have to analyze mutually-recursive functions simultaneously, since each can affect the other
@@ -13,6 +18,7 @@
 	- determine return values for recursive funcs
 	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
 		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
+	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 	- code cleanup when done
 	- *when* (if ever) should reguse pass be automatically scheduled?
 
@@ -39,9 +45,6 @@
 	- also I think it'd be possible to renumber generations when e.g. saving/loading so that they never get out of hand
 - **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
 	- more generally, a bunch of the printing/output stuff in `main.rs` needs to be moved into the library itself so it doesn't e.g. have to be duplicated in GUI frontends
-- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
-- **Move some `IIrCompiler` methods into `IArchitecture`**
-	- `arch_regs`, `stack_ptr_reg`, and `reg_name` are really just there because they "use `IrReg`" but they're static, unchanging properties of the architecture, not associated with compilation
 - **Inventory `TODO`s throughout the codebase**
 - **Const prop provenance ASTs**
 	- come up with OpInfo::Ref for halves of addresses

@@ -36,7 +36,7 @@ impl Program {
 					let ir = self.func_to_ir(fid);
 
 					log::debug!("before determining clobbers: {:?}",
-						crate::ir::IrFunctionWithNames(&ir, &arch.new_ir_compiler()));
+						crate::ir::IrFunctionWithNames(&ir, &arch));
 
 					// 1. clobber regs are the union of all callee clobbers *except for itself
 					// (for recursive funcs)*, plus any reg with nonzero generation at any exit
@@ -83,7 +83,7 @@ impl Program {
 					let ir = self.func_to_ir(fid);
 
 					log::debug!("after determining clobbers: {:?}",
-						crate::ir::IrFunctionWithNames(&ir, &arch.new_ir_compiler()));
+						crate::ir::IrFunctionWithNames(&ir, &arch));
 
 					let defs = ir.find_defs_and_uses();
 
@@ -96,7 +96,7 @@ impl Program {
 						match defs.get(&reg) {
 							Some(usage) if usage.is_really_used() => {
 								log::trace!("  {:?} is used as an argument!",
-									RegDbg(reg, Some(&arch.new_ir_compiler())));
+									RegDbg(reg, Some(&arch)));
 							}
 							Some(_) | None => {
 								arg_set.remove(reg.offset());
@@ -210,14 +210,14 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch.new_ir_compiler()));
+		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch));
 
 		log::debug!("  callees to BBs = {:?}", callees_to_bbs);
 
 		// SAFETY: phase 1 put reg usage on every function.
 		ir.elim_dead_stores(reg_usage[&fid].unwrap());
 
-		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch.new_ir_compiler()));
+		log::debug!("{:?}", crate::ir::IrFunctionWithNames(&ir, &arch));
 
 		// any remaining return-use is a *true* return value from a callee and not just a clobber.
 		for (callee_fid, irbbid) in callees_to_bbs.into_iter() {
@@ -230,7 +230,7 @@ impl<'a> RegUsagePass<'a> {
 			for reg in ir.get_bb(irbbid).dummy_return_use_regs() {
 				if ret_set.insert(reg.offset()) {
 					log::trace!("  {:?} is a return value from {:?}",
-						RegDbg(reg, Some(&arch.new_ir_compiler())), callee_fid);
+						RegDbg(reg, Some(&arch)), callee_fid);
 				}
 			}
 

@@ -17,6 +17,7 @@ use crate::arch::{
 	IrCompiler,
 };
 use crate::memory::{ MmuState, Endian, EA, VA };
+use crate::ir::{ IrReg };
 
 // ------------------------------------------------------------------------------------------------
 // Sub-modules
@@ -615,4 +616,16 @@ impl IArchitecture for Mos65xxArchitecture {
 	fn new_disassembler(&self) -> Disassembler { Mos65xxDisassembler.into() }
 	fn new_printer     (&self) -> Printer      { Mos65xxPrinter::new(SyntaxFlavor::Old).into() }
 	fn new_ir_compiler (&self) -> IrCompiler   { Mos65xxIrCompiler.into() }
+
+	fn arch_regs(&self) -> &'static [IrReg] {
+		ir::ARCH_REGS
+	}
+
+	fn stack_ptr_reg(&self) -> IrReg {
+		ir::REG_S
+	}
+
+	fn reg_name(&self, offset: u8) -> &'static str {
+		ir::reg_name(offset)
+	}
 }

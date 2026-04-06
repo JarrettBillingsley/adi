@@ -340,7 +340,7 @@ impl<'a> IrRewriter<'a> {
 		}
 
 		for irbbid in callpoints.into_iter() {
-			self.rewrite_returns(prog, irbbid);
+			self.insert_dummy_return_uses(prog, irbbid);
 		}
 
 		self.bbs.append(&mut self.new_bbs);
@@ -390,8 +390,8 @@ impl<'a> IrRewriter<'a> {
 		}
 	}
 
-	fn rewrite_returns(&mut self, prog: &Program, irbbid: IrBBId) {
-		log::debug!("returns on irbb{}", irbbid);
+	fn insert_dummy_return_uses(&mut self, prog: &Program, irbbid: IrBBId) {
+		// log::debug!("returns on irbb{}", irbbid);
 		// first update the cfg.
 		let (old_cont, callee_changed_regs) = self.change_cont(prog, irbbid, self.new_bbid);
 

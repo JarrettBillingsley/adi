@@ -9,7 +9,7 @@ use petgraph::{
 	visit::{ DfsPostOrder },
 };
 
-use crate::arch::{ IrCompiler, IIrCompiler };
+use crate::arch::{ Architecture };
 use crate::dataflow::{ DataflowCfg };
 use crate::memory::{ EA };
 use crate::program::{ BBId, FuncId, FuncRegUsage };
@@ -106,11 +106,11 @@ impl IrReg {
 	/// Maximum valid IR register offset.
 	pub(crate) const MAX: u8 = Self::MAX_NUM as u8 - 1;
 
-	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		// have to do it like this for borrowing reasons
-		match compiler {
-			Some(compiler) => self.debug_fmt_name(f, compiler.reg_name(self.offset)),
-			None           => self.debug_fmt_name(f, &format!("r{}", self.offset)),
+		match arch {
+			Some(arch) => self.debug_fmt_name(f, arch.reg_name(self.offset)),
+			None       => self.debug_fmt_name(f, &format!("r{}", self.offset)),
 		}
 	}
 
@@ -278,9 +278,9 @@ impl Debug for IrSrc {
 }
 
 impl IrSrc {
-	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		match self {
-			IrSrc::Reg(r)    => r.debug_fmt(f, compiler),
+			IrSrc::Reg(r)    => r.debug_fmt(f, arch),
 			IrSrc::Const(c)  => write!(f, "{:?}", c),
 			IrSrc::Return(s) => write!(f, "<return.{}>", s.name()),
 		}
@@ -382,18 +382,18 @@ impl IrPhi {
 		&mut self.args
 	}
 
-	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
-		self.dst.debug_fmt(f, compiler)?;
+	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
+		self.dst.debug_fmt(f, arch)?;
 		write!(f, " = φ(")?;
 
 		let mut args = self.args.iter();
 
 		if let Some(arg) = args.next() {
-			arg.debug_fmt(f, compiler)?;
+			arg.debug_fmt(f, arch)?;
 
 			for arg in args {
 				write!(f, ", ")?;
-				arg.debug_fmt(f, compiler)?;
+				arg.debug_fmt(f, arch)?;
 			}
 		}
 
@@ -525,12 +525,12 @@ impl IrBasicBlock {
 		self.insts.iter().filter_map(IrInst::dummy_return_use_reg)
 	}
 
-	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		writeln!(f, "bb{}: (real BB: {:?})", self.id, self.real_bbid)?;
 
 		for p in self.phis.iter() {
 			write!(f, "    ")?;
-			p.debug_fmt(f, compiler)?;
+			p.debug_fmt(f, arch)?;
 			writeln!(f)?;
 		}
 
@@ -540,7 +540,7 @@ impl IrBasicBlock {
 
 		for i in self.insts.iter() {
 			write!(f, "    ")?;
-			i.debug_fmt(f, compiler)?;
+			i.debug_fmt(f, arch)?;
 			writeln!(f)?;
 		}
 
@@ -654,10 +654,10 @@ impl IrFunction {
 		elim_dead_stores(&mut self.bbs, reg_usage);
 	}
 
-	fn debug_fmt(&self, f: &mut Formatter, compiler: Option<&IrCompiler>) -> FmtResult {
+	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		writeln!(f, "-------------------------------------------------------")?;
 		writeln!(f, "IR for {:?}", self.real_fid)?;
-		writeln!(f, "{:?}", DebugWorkaroundThing(&self.cfg, &self.bbs, compiler))
+		writeln!(f, "{:?}", DebugWorkaroundThing(&self.cfg, &self.bbs, arch))
 	}
 }
 
@@ -667,19 +667,19 @@ impl Debug for IrFunction {
 	}
 }
 
-pub(crate) struct IrFunctionWithNames<'f, 'c>(pub &'f IrFunction, pub &'c IrCompiler);
+pub(crate) struct IrFunctionWithNames<'f, 'a>(pub &'f IrFunction, pub &'a Architecture);
 
-impl<'f, 'c> Debug for IrFunctionWithNames<'f, 'c> {
+impl<'f, 'a> Debug for IrFunctionWithNames<'f, 'a> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
 		self.0.debug_fmt(f, Some(self.1))
 	}
 }
 
-struct DebugWorkaroundThing<'a, 'b>(&'a IrCfg, &'a [IrBasicBlock], Option<&'b IrCompiler>);
+struct DebugWorkaroundThing<'a, 'b>(&'a IrCfg, &'a [IrBasicBlock], Option<&'b Architecture>);
 
 impl<'a, 'b> Debug for DebugWorkaroundThing<'a, 'b> {
 	fn fmt(&self, f: &mut Formatter) -> FmtResult {
-		let DebugWorkaroundThing(cfg, bbs, compiler) = *self;
+		let DebugWorkaroundThing(cfg, bbs, arch) = *self;
 		writeln!(f)?;
 		writeln!(f, "CFG (NOTE!!!! numbers in \"a -> b\" are NOT NECESSARILY BB NUMBERS,")?;
 		writeln!(f, "only trust the actual dot graph output or look at the successors")?;
@@ -688,7 +688,7 @@ impl<'a, 'b> Debug for DebugWorkaroundThing<'a, 'b> {
 		writeln!(f, "{:?}", Dot::with_config(cfg, &[DotConfig::EdgeNoLabel]))?;
 
 		for bb in bbs {
-			bb.debug_fmt(f, compiler)?;
+			bb.debug_fmt(f, arch)?;
 
 			for dst in cfg.edges(bb.id).map(|(_, n, _)|n) {
 				writeln!(f, "    -> bb{}", dst)?;
