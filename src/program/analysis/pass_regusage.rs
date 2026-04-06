@@ -133,9 +133,17 @@ impl<'a> RegUsagePass<'a> {
 
 		for callee in self.cg.callees_of(fid) {
 			if callee != fid {
-				clobber_set |= self.usage_of_fid(callee)
-					.map(|ru| ru.clobbers())
-					.unwrap();
+				// TODO: replace this with unwrap() once mutually-recursive functions are done
+				match self.usage_of_fid(callee) {
+					Some(usage) => {
+						clobber_set |= usage.clobbers();
+					}
+					None => {
+						log::warn!(
+							"- TODO: trying to get clobbers of mutually-recursive function {:?}",
+							callee);
+					}
+				}
 			}
 
 			// early out if all regs are clobbered
@@ -274,10 +282,17 @@ impl<'a> RegUsagePass<'a> {
 				}
 			}
 
-			// SAFETY: phase 1 put reg usage on every function.
-			let mut usage = self.usage_of_fid(callee_fid).unwrap();
-			if usage.mark_returns(ret_set) {
-				self.change_usage(callee_fid, usage);
+			// TODO: replace this with unwrap() once mutually-recursive functions are done
+			match self.usage_of_fid(callee_fid) {
+				Some(mut usage) => {
+					if usage.mark_returns(ret_set) {
+						self.change_usage(callee_fid, usage);
+					}
+				}
+				None => {
+					log::warn!("- TODO: trying to set returns on mutually-recursive function {:?}",
+						callee_fid);
+				}
 			}
 		}
 	}
