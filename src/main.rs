@@ -413,7 +413,7 @@ fn toy_test_calls() -> ToyTest {
 	b.movi(A, 5);                   //     mov  a, 5
 	b.movi(B, 0);                   //     mov  b, 0
 	b.call_to(SELF_RECURSIVE);      //     call self_recursive
-	b.sti(A, 0x8002);               //     st   b, [var_8002]
+	b.sti(B, 0x8002);               //     st   b, [var_8002]
 	b.movi(A, 15);                  //     mov  a, 15
 	b.movi(B, 0);                   //     mov  b, 0
 	b.call_to(MUT_REC_1);           //     call mut_rec_1

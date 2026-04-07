@@ -120,28 +120,33 @@ impl Program {
 				}
 			};
 
-			// determine what kind of use-insertion is needed, if any.
+			// determine exitpoints and callpoints
 			use BBTerm::*;
 			match bb.term {
-				// never insert
+				// never
 				DeadEnd | Halt => {}
-				// always insert, before final
+				// always
 				Return { .. } => {
-					// before, ret regs
 					exitpoints.push(rewrite_irbbid);
 				}
-				_ => {
-					// it's only an exitpoint if there is *at least one* out-of-function successor.
+				Call { cont, .. } | IndirCall { cont, .. } => {
+					// if ALL successors are out-of-function, it's an exitpoint.
+					if !self.bb_any_successor_in_function(bbid) {
+						exitpoints.push(rewrite_irbbid);
+					}
+
+					// if cont is an in-function successor, it needs return-insertion
+					if self.ea_is_bb_in_function(cont, bb.func()).is_some() {
+						callpoints.push(rewrite_irbbid);
+					}
+				}
+				IndirJump { .. } | Cond { .. } | Jump { .. } |
+				FallThru { .. } | StateChange { .. } => {
+					// if ANY successor is out-of-function, it's an exitpoint.
 					if !self.bb_all_successors_in_function(bbid) {
 						exitpoints.push(rewrite_irbbid);
 					}
 				}
-			}
-
-			// if cont is an in-function successor, it needs return-insertion
-			if let Call { cont, .. } | IndirCall { cont, .. } = bb.term &&
-			self.ea_is_bb_in_function(cont, bb.func()).is_some() {
-				callpoints.push(rewrite_irbbid);
 			}
 		}
 

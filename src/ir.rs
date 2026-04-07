@@ -657,6 +657,8 @@ impl IrFunction {
 	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
 		writeln!(f, "-------------------------------------------------------")?;
 		writeln!(f, "IR for {:?}", self.real_fid)?;
+		writeln!(f, "Entrypoint BBs: {:?}", self.entrypoints)?;
+		writeln!(f, "Exitpoint BBs: {:?}", self.exitpoints)?;
 		writeln!(f, "{:?}", DebugWorkaroundThing(&self.cfg, &self.bbs, arch))
 	}
 }

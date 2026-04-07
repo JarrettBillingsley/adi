@@ -255,6 +255,14 @@ impl Program {
 		bb.successors().all(|&ea| { self.ea_is_bb_in_function(ea, fid).is_some() })
 	}
 
+	/// Is any successor of `bbid` in the same function that `bbid` appears in?
+	pub fn bb_any_successor_in_function(&self, bbid: BBId) -> bool {
+		let bb = self.bbidx.get(bbid);
+		let fid = bb.func();
+
+		bb.successors().any(|&ea| { self.ea_is_bb_in_function(ea, fid).is_some() })
+	}
+
 	/// Iterator over all functions in the program, in arbitrary order.
 	pub fn all_funcs(&self) -> impl Iterator<Item = &Function> + '_ {
 		self.funcs.all_funcs().map(|(_, func)| func)
