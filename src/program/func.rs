@@ -42,9 +42,10 @@ bitflags! {
 // FuncRegUsage
 // ------------------------------------------------------------------------------------------------
 
+// TODO: make pub(crate)
 /// How a function uses or affects registers.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(crate) struct FuncRegUsage {
+pub struct FuncRegUsage {
 	args:     RegSet,
 	// INVARIANT: these two sets never overlap (i.e. their intersection is always empty).
 	rets:     RegSet,
@@ -120,6 +121,15 @@ impl FuncRegUsage {
 	pub(crate) fn change_clobbers(&mut self, new_clobbers: RegSet) -> bool {
 		if self.clobbers != new_clobbers {
 			self.clobbers = new_clobbers;
+			true
+		} else {
+			false
+		}
+	}
+
+	pub(crate) fn change_args(&mut self, new_args: RegSet) -> bool {
+		if self.args != new_args {
+			self.args = new_args;
 			true
 		} else {
 			false
@@ -242,7 +252,8 @@ impl Function {
 		}
 	}
 
-	pub(crate) fn reg_usage(&self) -> Option<FuncRegUsage> {
+	// TODO: make pub(crate)
+	pub fn reg_usage(&self) -> Option<FuncRegUsage> {
 		self.reg_usage
 	}
 

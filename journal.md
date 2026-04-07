@@ -653,6 +653,7 @@ current state of affairs:
 		- **else** all_regs
 - **clobbers are determined bottom-up.**
 	- clobber set starts empty.
+		- ⚠️ though for mutrecs, their usage is set to all regs for the IR...
 	- for leaf functions, clobbers are only `use`-before-`ret` with nonzero generation.
 	- for non-leaf functions, clobbers also include all **changes** of all callees
 		- ...except for recursive/mutrec funcs, in which case those are ignored.

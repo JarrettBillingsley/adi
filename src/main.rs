@@ -73,6 +73,10 @@ fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
 	// 	println!("  {:?}", scc);
 	// }
 
+	for func in prog.all_funcs() {
+		println!("{:?} {:?}", func.id(), func.reg_usage().unwrap());
+	}
+
 	Ok(())
 }
 
