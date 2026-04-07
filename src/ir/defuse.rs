@@ -16,7 +16,13 @@ pub(crate) enum DefUseKind {
 	/// Used, but only by dummy `use` instructions.
 	OnlyDummy,
 
-	/// Used by at least one "real" instruction or phi function.
+	/// Used, but only as phi-function arguments.
+	OnlyPhi,
+
+	/// Used, but only by dummy `use` instructions and phi-function arguments.
+	DummyAndPhi,
+
+	/// Used by at least one "real" instruction.
 	Real,
 }
 
@@ -71,18 +77,35 @@ impl DefInfo {
 	}
 
 	pub(crate) fn is_really_used(&self) -> bool {
-		matches!(self.use_kind, DefUseKind::Real)
+		// matches!(self.use_kind, DefUseKind::Real | DefUseKind::OnlyPhi | DefUseKind::DummyAndPhi)
+		!matches!(self.use_kind, DefUseKind::None)
 	}
 
-	fn mark_used(&mut self, is_dummy: bool) {
-		if is_dummy {
-			if matches!(self.use_kind, DefUseKind::None) {
-				self.use_kind = DefUseKind::OnlyDummy;
-			}
-			// otherwise, leave it as is
-		} else {
-			self.use_kind = DefUseKind::Real;
+	/// mark it as used by a dummy `use` instruction.
+	fn mark_dummy_used(&mut self) {
+		match self.use_kind {
+			DefUseKind::None    => self.use_kind = DefUseKind::OnlyDummy,
+			DefUseKind::OnlyPhi => self.use_kind = DefUseKind::DummyAndPhi,
+			// OnlyDummy? no change
+			// DummyAndPhi? dummy already included
+			// Real? don't care
+			_ => {}
 		}
+	}
+
+	fn mark_phi_used(&mut self) {
+		match self.use_kind {
+			DefUseKind::None      => self.use_kind = DefUseKind::OnlyDummy,
+			DefUseKind::OnlyDummy => self.use_kind = DefUseKind::DummyAndPhi,
+			// OnlyPhi? no change
+			// DummyAndPhi? dummy already included
+			// Real? don't care
+			_ => {}
+		}
+	}
+
+	fn mark_really_used(&mut self) {
+		self.use_kind = DefUseKind::Real;
 	}
 }
 
@@ -123,9 +146,8 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 					defs.insert(*reg, DefInfo::new_arg());
 				}
 
-				log::trace!(" marking bb{} phi arg {:?} as used", bb.id, reg);
 				// SAFETY: see above
-				defs.get_mut(&reg).unwrap().mark_used(false);
+				defs.get_mut(&reg).unwrap().mark_phi_used();
 			}
 		}
 
@@ -136,8 +158,13 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 					defs.insert(reg, DefInfo::new_arg());
 				}
 
-				// SAFETY: see above
-				defs.get_mut(&reg).unwrap().mark_used(inst.is_dummy_use());
+				if inst.is_dummy_use() {
+					// SAFETY: see above
+					defs.get_mut(&reg).unwrap().mark_dummy_used();
+				} else {
+					// SAFETY: see above
+					defs.get_mut(&reg).unwrap().mark_really_used();
+				}
 			});
 		}
 	}

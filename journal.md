@@ -628,3 +628,45 @@ wait this is a DAG meaning the leaves could be used in multiple different addres
 AAAAAAAAAAAAAAAAAAA
 
 So, in a case like this, as long as *all* addresses derived from it start with the same half, we can arbitrarily pick one... otherwise, uhhhhhhhhhh point of interest on it? or just pick the "first" one?
+
+---
+
+## The Register Usage Analysis Morass
+
+current state of affairs:
+
+*initial* register sets are set to taking all regs and clobbering all regs.
+
+- **when generating IR...**
+	- `use`-before-`ret` is self.changes (self.clobbers | self.rets)
+		- ⚠️ self.changes defaults to all_regs when function is first analyzed, so uses are inserted even though the clobber set is empty.
+			- but I guess this is what we want? because we need to know if nonzero gen regs are `used` before returns for clobbers...
+		- *but now I'm thinking this needs to be self.changes during clobber/arg analysis, and only self.rets duing ret analysis*
+			- because right now, it's over-diagnosing rets
+	- `use`-before-`call` is either:
+		- **if recursive,** self.args
+		- **else if callee exists,** callee.args 
+		- **else** all_regs
+	- `mov`-after-`call` is either:
+		- **if recursive,** self.rets
+		- **else if callee exists,** callee.changes (callee.clobbers | callee.rets)
+		- **else** all_regs
+- **clobbers are determined bottom-up.**
+	- clobber set starts empty.
+	- for leaf functions, clobbers are only `use`-before-`ret` with nonzero generation.
+	- for non-leaf functions, clobbers also include all **changes** of all callees
+		- ...except for recursive/mutrec funcs, in which case those are ignored.
+- **arguments are determined bottom-up.**
+	- arg set starts full (all_regs).
+	- defs and uses are determined.
+	- any gen0 register that is never used in *any* way is removed from the set.
+		- even if it's only used by a phi or `use`, it's kept as an argument.
+		- *it wasn't like this before. only "real" uses and phi args counted as "used."*
+- **returns are determined top-down by the callers.**
+	- dead stores are eliminated.
+	- after each call to an *external* destination (i.e. not recursive) with an *internal* continuation,
+		- any remaining `use`-after-`call` is a return value from that callee, and is moved from its clobber set to its ret set.
+
+hmmmmmmmmmmmmmmmmmmmmmm
+
+is it working??????

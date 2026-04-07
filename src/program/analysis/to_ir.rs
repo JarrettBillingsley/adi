@@ -326,6 +326,9 @@ pub(crate) trait IRewriteCtx {
 
 	/// The default set of regs for this arch
 	fn default_regs(&self) -> RegSet;
+
+	/// Is the return analysis pass running?
+	fn is_return_analysis_pass(&self) -> bool;
 }
 
 impl IRewriteCtx for Program {
@@ -350,6 +353,10 @@ impl IRewriteCtx for Program {
 
 	fn default_regs(&self) -> RegSet {
 		self.arch().arch_reg_set()
+	}
+
+	fn is_return_analysis_pass(&self) -> bool {
+		false
 	}
 }
 
@@ -413,7 +420,13 @@ impl<'a> IrRewriter<'a> {
 		let regs = match term_inst.kind() {
 			// because *all* modified registers (returns *and* clobbers) need to be marked as used
 			// or else they'll be marked dead by DSE.
-			IrInstKind::Ret { .. } => self.changed_regs,
+			IrInstKind::Ret { .. } => {
+				if ctx.is_return_analysis_pass() {
+					self.ret_regs
+				} else {
+					self.changed_regs
+				}
+			}
 			// SAFETY: same reason as the match.
 			// (fixup_ir_targets is the step before this one, so this match is good.)
 			_ => match term_inst.target().unwrap() {
