@@ -381,8 +381,7 @@ impl<'a> IrRewriter<'a> {
 			ctx.reg_usage_of(ea)
 			.unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
 
-		log::trace!("IrRewriter::new arg_regs = {:?}, ret_regs = {:?}, changed_regs = {:?}",
-			reg_usage.args(), reg_usage.rets(), reg_usage.changes());
+		log::trace!("IrRewriter::new (above call to reg_usage_of was for *this* function)");
 
 		Self {
 			new_bbs:  vec![],
@@ -397,7 +396,9 @@ impl<'a> IrRewriter<'a> {
 
 	fn perform_rewrites(&mut self, ctx: &impl IRewriteCtx, exitpoints: &[IrBBId],
 	callpoints: Vec<IrBBId>) {
-		for irbbid in exitpoints.iter() {
+		log::trace!("IrRewriter::perform_rewrites callpoints = {:?} exitpoints = {:?}",
+			callpoints, exitpoints);
+		for irbbid in exitpoints.iter().chain(callpoints.iter()) {
 			self.insert_dummy_uses(ctx, *irbbid);
 		}
 
