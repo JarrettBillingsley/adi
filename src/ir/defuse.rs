@@ -38,6 +38,7 @@ pub(crate) enum DefLocation {
 }
 
 /// Information about a single IR register def.
+#[derive(Debug)]
 pub(crate) struct DefInfo {
 	use_kind: DefUseKind,
 	loc:      DefLocation,

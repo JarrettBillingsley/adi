@@ -685,7 +685,7 @@ both kinds encode the most-recent-available generation of each register at that 
 exit-`use`s of non-gen-0 regs are clobbers or returns. 
 
 call-`use`s are used to encode arguments, *but* the callee may or may not actually *use* those registers as arguments. same with the `mov _, <return>`s after - they may or may not actually be clobbered.
-	
+
 *but we're building those sets bottom up in the call graph.* so by the time you analyze a function call, the clobber and arg sets are already known, so presumably the right sets of `use`s and `mov`s are inserted. *except for mutrecs, that gets fucky - all their clobbers are determined together, and then all their args, and then you repeat as long as there are changes.*
 
 *what about points that are simultaneously calls and exits?*
@@ -712,6 +712,7 @@ and then on the second loop through, have all local clobbers established and use
 	- set current function to clobber all, all others in SCC to clobber none.
 	- run clobber set algo.
 	- this determines the **local clobbers.**
+		- *what about non-SCC callees? okay to include those?*
 2. for each function,
 	- set current function to clobber all, others in SCC to their local clobbers.
 	- run clobber set algo.

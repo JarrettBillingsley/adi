@@ -1,5 +1,5 @@
 
-use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 
 use crate::program::{ EA, Program, FuncId, RegSet, FuncRegUsage };
 use crate::program::analysis::callgraph::*;
@@ -19,24 +19,18 @@ impl Program {
 		let sccs = cg.sccs();
 
 		// do the analysis
-		let mut reg_usage = RegUsagePass::new(self, &cg);
-		reg_usage.analyze_clobbers_args(&sccs);
-		reg_usage.analyze_returns(&sccs);
+		let fids_to_usage = RegUsagePass::new(self, &cg).analyze(&sccs).finish();
 
 		// then apply results
 		log::trace!("  return analysis finished. applying final results");
-		let RegUsagePass { fids_to_usage, changed_fids, .. } = reg_usage;
 
 		for (fid, usage) in fids_to_usage.into_iter() {
 			log::trace!("    setting {:?} usage to {:?}", fid, usage);
+
+			// TODO: check if usage changed *here* and... enqueue state change analysis on them??
 			*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
 		}
 
-		// TODO: enqueue state change analysis on every function which changed???
-		log::trace!("  these functions' reg usage changed:");
-		for fid in changed_fids.into_iter() {
-			log::trace!("    {:?}", fid);
-		}
 		log::info!("- end register usage pass");
 		log::info!("------------------------------------------------------------------------");
 	}
@@ -76,7 +70,6 @@ struct RegUsagePass<'a> {
 	cg:            &'a ProgramCallGraph,
 	eas_to_fids:   HashMap<EA, FuncId>,
 	fids_to_usage: HashMap<FuncId, FuncRegUsage>,
-	changed_fids:  HashSet<FuncId>,
 	is_return_analysis_pass: bool,
 }
 
@@ -96,26 +89,35 @@ impl<'a> RegUsagePass<'a> {
 					// start off with no arguments since we're determining them bottom-up, and
 					// recursive functions' arguments will be mis-analyzed if the set is nonempty.
 					//
-					// clobbers start as all_regs, though, since uhhhhhhhhhhhh
-					// uhHHHHHHH
+					// clobbers start as all_regs, though, since uhhhhhhhhhhhh uhHHHHHHH
 					.unwrap_or_else(|| FuncRegUsage::new(RegSet::EMPTY, all_regs)))
 				).collect(),
-			changed_fids:  HashSet::new(),
 			is_return_analysis_pass: false,
 		}
 	}
 
+	fn analyze(mut self, sccs: &[Vec<FuncId>]) -> Self {
+		self.analyze_clobbers_and_args(&sccs);
+		self.analyze_returns(&sccs);
+		self
+	}
+
+	fn finish(self) -> HashMap<FuncId, FuncRegUsage> {
+		self.fids_to_usage
+	}
+
+	// --------------------------------------------------------------------------------------------
+
 	fn usage_of_fid(&self, fid: FuncId) -> FuncRegUsage {
-		*self.fids_to_usage.get(&fid).unwrap()
+		self.fids_to_usage[&fid]
 	}
 
 	fn change_usage(&mut self, fid: FuncId, usage: FuncRegUsage) -> bool {
-		if self.fids_to_usage[&fid] != usage {
+		if self.usage_of_fid(fid) != usage {
 			log::trace!("  temporarily setting {:?} usage to \
 				\n            {:?} <-- new usage\
-				\n            {:?} <-- old usage", fid, usage, self.fids_to_usage[&fid]);
+				\n            {:?} <-- old usage", fid, usage, self.usage_of_fid(fid));
 			self.fids_to_usage.insert(fid, usage);
-			self.changed_fids.insert(fid);
 			true
 		} else {
 			false
@@ -123,89 +125,117 @@ impl<'a> RegUsagePass<'a> {
 	}
 
 	fn change_clobbers(&mut self, fid: FuncId, clobber_set: RegSet) -> bool {
-		// SAFETY: every function was added to fids_to_usage in new
-		let mut usage = *self.fids_to_usage.get(&fid).unwrap();
-		if usage.change_clobbers(clobber_set) {
-			self.change_usage(fid, usage);
-			true
-		} else {
-			false
-		}
+		self.change_usage(fid, self.usage_of_fid(fid).with_clobbers(clobber_set))
 	}
 
 	fn change_args(&mut self, fid: FuncId, arg_set: RegSet) -> bool {
-		// SAFETY: every function was added to fids_to_usage in new
-		let mut usage = *self.fids_to_usage.get(&fid).unwrap();
-		if usage.change_args(arg_set) {
-			self.change_usage(fid, usage);
-			true
-		} else {
-			false
-		}
+		self.change_usage(fid, self.usage_of_fid(fid).with_args(arg_set))
+	}
+
+	fn change_returns(&mut self, fid: FuncId, ret_set: RegSet) -> bool {
+		self.change_usage(fid, self.usage_of_fid(fid).with_returns(ret_set))
 	}
 
 	// --------------------------------------------------------------------------------------------
 	// pass 1: bottom-up, determine clobber and argument sets for each function
-	fn analyze_clobbers_args(&mut self, sccs: &[Vec<FuncId>]) {
+	fn analyze_clobbers_and_args(&mut self, sccs: &[Vec<FuncId>]) {
 		for scc in sccs.iter() {
 			match scc[..] {
-				[]    => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
+				[] => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
 				[fid] => {
 					self.analyze_clobbers(fid, None);
 					self.analyze_args(fid);
 				}
 				_ => {
-					// 2 or more mutually-recursive functions.
 					log::trace!("  mutually-recursive SCC: {:?}", scc);
-
-					for i in 0 .. {
-						log::trace!("  >> clobbers/args loop start {}", i);
-						let mut any_changed = false;
-
-						for fid in scc.iter() {
-							// idea: assume clobbers of all other SCC items are empty, but assume
-							// this function's clobbers are full???????
-							//
-							// determine "local clobbers" *first* and *then* the second iteration
-							// can take callee clobbers into account?
-							//
-							// something like that?
-							any_changed |= self.analyze_clobbers(*fid, Some(scc));
-						}
-
-						for fid in scc.iter() {
-							any_changed |= self.analyze_args(*fid);
-						}
-
-						if !any_changed {
-							break;
-						} else if i > scc.len() {
-							panic!("hmmmmmm should have converged by now...");
-						}
-					}
+					self.analyze_clobbers_mutrec(scc);
+					self.analyze_args_mutrec(scc);
 				}
 			}
 		}
 	}
 
+	// --------------------------------------------------------------------------------------------
+	// clobber regs are the union of all callee changes* plus any reg with nonzero generation at
+	// any exit point.
+	//
+	// *For recursive and mutually-recursive funcs, it's..... more subtle
+
+	fn analyze_clobbers_mutrec(&mut self, scc: &[FuncId]) {
+		let all_regs = self.prog.arch().arch_reg_set();
+
+		// since we'll be replacing the clobber sets with dummies in the loop below, this vec holds
+		// the actual clobber sets which will be applied after the loop.
+		let mut actual_clobbers = vec![RegSet::EMPTY; scc.len()];
+
+		// FIRST ROUND: determine "local" clobbers.
+		log::trace!("  > BEGIN mutrec local clobbers");
+
+		for (i, &fid) in scc.iter().enumerate() {
+			// assume all *other* SCC's clobbers are empty, but assume *this* function's clobbers
+			// are all_regs.
+			//
+			// note that this is not the same thing as simply "not adding callees' clobbers to this
+			// function's clobber set," as is implemented by the in_scc check in analyze_clobbers.
+			// this actually changes which `mov _, <return>` instructions are inserted during IR
+			// building and therefore changes which registers are in use at the end of this
+			// function.
+			self.change_clobbers(fid, all_regs);
+			for &other in scc.iter() {
+				if other != fid {
+					self.change_clobbers(other, RegSet::EMPTY);
+				}
+			}
+
+			// run clobbers algo.
+			self.analyze_clobbers(fid, Some(scc));
+
+			// whatever clobbers are on the function now are its local clobbers; put it in
+			// actual_clobbers.
+			actual_clobbers[i] = self.usage_of_fid(fid).clobbers();
+		}
+
+		// now apply the clobbers
+		for (&fid, clobber_set) in scc.iter().zip(actual_clobbers.into_iter()) {
+			log::trace!("    {:?} local clobbers = {:?}", fid, clobber_set);
+			self.change_clobbers(fid, clobber_set);
+		}
+
+		log::trace!("  >   END mutrec local clobbers");
+
+		// SECOND ROUND: incorporate clobbers from callees in SCC
+		for loop_iteration in 0 .. {
+			log::trace!("  >> mutrec clobbers loop start {}", loop_iteration);
+			let mut any_changed = false;
+
+			for &fid in scc.iter() {
+				// pass None as scc this time, so that other items in the SCC *are* merged with this
+				// function's clobbers.
+				any_changed |= self.analyze_clobbers(fid, None);
+			}
+
+			if !any_changed {
+				break;
+			} else if loop_iteration > scc.len() {
+				panic!("hmmmmmm should have converged by now...");
+			}
+		}
+	}
+
 	fn analyze_clobbers(&mut self, fid: FuncId, scc: Option<&[FuncId]>) -> bool {
-		log::debug!("> BEGIN clobbers  {} {:?}",
-			self.prog.get_func(fid).ea(), fid);
+		log::debug!("> BEGIN clobbers  {} {:?}", self.prog.get_func(fid).ea(), fid);
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
 		let ir = self.prog.func_to_ir_ctx(fid, self);
 
 		log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
 
-		// clobber regs are the union of all callee changes* plus any reg with nonzero generation at
-		// any exit point.
-		//
-		// *For recursive and mutually-recursive funcs, the func itself or all funcs in the
-		// mutually-recursive set are excluded.
 		let mut clobber_set = RegSet::new();
 
 		let in_scc = |id: FuncId| -> bool {
 			match scc {
+				// yeah this is O(n) but n is extremely likely to be tiny and mutrecs are rare to
+				// begin with
 				Some(scc) => scc.contains(&id),
 				None      => id == fid,
 			}
@@ -234,8 +264,7 @@ impl<'a> RegUsagePass<'a> {
 				for reg in ir.get_bb(irbbid).dummy_use_regs() {
 					if !reg.is_gen0() {
 						log::trace!("      bb{} adds {:?}", irbbid, reg);
-						if clobber_set.insert(reg.offset()) &&
-						clobber_set == all_regs {
+						if clobber_set.insert(reg.offset()) && clobber_set == all_regs {
 							// early out if all regs are clobbered
 							break;
 						}
@@ -247,14 +276,66 @@ impl<'a> RegUsagePass<'a> {
 		log::trace!("  >   END building clobber set");
 
 		log::trace!("    clobber_set = {:?}", clobber_set);
-		log::debug!(">   END clobbers  {} {:?}",
-			self.prog.get_func(fid).ea(), fid);
+		log::debug!(">   END clobbers  {} {:?}", self.prog.get_func(fid).ea(), fid);
 		self.change_clobbers(fid, clobber_set)
 	}
 
+	// --------------------------------------------------------------------------------------------
+	// argument regs are zero-generation registers which are used at least once.
+
+	fn analyze_args_mutrec(&mut self, scc: &[FuncId]) {
+		// since we'll be replacing the clobber sets with dummies in the loop below, this vec holds
+		// the actual clobber sets which will be applied after the loop.
+		let backup_clobbers: Vec<RegSet> = scc.iter()
+			.map(|&fid| self.usage_of_fid(fid).clobbers())
+			.collect();
+		let mut actual_args = vec![RegSet::EMPTY; scc.len()];
+
+		// FIRST ROUND: determine "local" clobbers.
+		log::trace!("  > BEGIN mutrec local args");
+
+		for (i, &fid) in scc.iter().enumerate() {
+			// assume all all args are empty.
+			for &fid in scc.iter() {
+				self.change_args(fid, RegSet::EMPTY);
+			}
+
+			// run args algo.
+			self.analyze_args(fid);
+
+			// get the local args
+			actual_args[i] = self.usage_of_fid(fid).args();
+		}
+
+		// restore backup clobbers and apply actual arguments
+		for ((&fid, clobber_set), arg_set) in scc.iter()
+			.zip(backup_clobbers.into_iter())
+			.zip(actual_args.into_iter()) {
+			self.change_clobbers(fid, clobber_set);
+			self.change_args(fid, arg_set);
+		}
+
+		log::trace!("  >   END mutrec local args");
+
+
+		for loop_iteration in 0 .. {
+			log::trace!("  >> mutrec args loop start {}", loop_iteration);
+			let mut any_changed = false;
+
+			for &fid in scc.iter() {
+				any_changed |= self.analyze_args(fid);
+			}
+
+			if !any_changed {
+				break;
+			} else if loop_iteration > scc.len() {
+				panic!("hmmmmmm should have converged by now...");
+			}
+		}
+	}
+
 	fn analyze_args(&mut self, fid: FuncId) -> bool {
-		log::debug!("> BEGIN arguments {} {:?}",
-			self.prog.get_func(fid).ea(), fid);
+		log::debug!("> BEGIN arguments {} {:?}", self.prog.get_func(fid).ea(), fid);
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
 		let ir = self.prog.func_to_ir_ctx(fid, self);
@@ -262,15 +343,14 @@ impl<'a> RegUsagePass<'a> {
 
 		let defs = ir.find_defs_and_uses();
 
-		// argument regs are zero-generation registers which are used at least once.
 		let mut arg_set = all_regs;
 
 		for reg in arch.arch_ir_regs() {
 			let reg = reg.sub(0);
 			match defs.get(&reg) {
 				Some(usage) if usage.is_really_used() => {
-					log::trace!("      {:?} is used as an argument to {:?}",
-						RegDbg(reg, Some(&arch)), fid);
+					log::trace!("      {:?} is an argument to {:?} ({:?})",
+						RegDbg(reg, Some(&arch)), fid, usage);
 				}
 				Some(_) | None => {
 					arg_set.remove(reg.offset());
@@ -284,8 +364,7 @@ impl<'a> RegUsagePass<'a> {
 		}
 
 		log::trace!("    arg_set = {:?}", arg_set);
-		log::debug!(">   END arguments {} {:?}",
-			self.prog.get_func(fid).ea(), fid);
+		log::debug!(">   END arguments {} {:?}", self.prog.get_func(fid).ea(), fid);
 		self.change_args(fid, arg_set)
 	}
 
@@ -322,8 +401,7 @@ impl<'a> RegUsagePass<'a> {
 	}
 
 	fn analyze_returns_func(&mut self, fid: FuncId) -> bool {
-		log::debug!("> BEGIN returns   {} {:?}",
-			self.prog.get_func(fid).ea(), fid);
+		log::debug!("> BEGIN returns   {} {:?}", self.prog.get_func(fid).ea(), fid);
 		let arch = self.prog.arch();
 		let mut ir = self.prog.func_to_ir_ctx(fid, self);
 
@@ -382,15 +460,10 @@ impl<'a> RegUsagePass<'a> {
 				}
 			}
 
-			let mut usage = self.usage_of_fid(callee_fid);
-			if usage.mark_returns(ret_set) {
-				any_changed |= self.change_usage(callee_fid, usage);
-			}
+			any_changed |= self.change_returns(callee_fid, ret_set);
 		}
 
-		log::debug!(">   END returns   {} {:?}",
-			self.prog.get_func(fid).ea(), fid);
-
+		log::debug!(">   END returns   {} {:?}", self.prog.get_func(fid).ea(), fid);
 		any_changed
 	}
 }

@@ -91,16 +91,34 @@ impl FuncRegUsage {
 		!(self.args | self.rets | self.clobbers).contains(reg)
 	}
 
+
+	/// Returns a new `FuncRegUsage` with the same arguments and returns, but with `new_clobbers`.
+	pub(crate) fn with_clobbers(&self, new_clobbers: RegSet) -> FuncRegUsage {
+		FuncRegUsage {
+			clobbers: new_clobbers,
+			..*self
+		}
+	}
+
+	/// Returns a new `FuncRegUsage` with the same clobbers and returns, but with `new_args`.
+	pub(crate) fn with_args(&self, new_args: RegSet) -> FuncRegUsage {
+		FuncRegUsage {
+			args: new_args,
+			..*self
+		}
+	}
+
 	/// Mark `rets` as return registers, moving them out of the `clobbers` set. If one or more
-	/// registers are already marked as returns, has no effect on them.
+	/// registers are already marked as returns, has no effect on them. If `rets` is empty, returns
+	/// the original usage unchanged.
 	///
-	/// Returns true if the sets changed.
+	/// Returns a new `FuncRegUsage` with `rets` moved from the clobbers to the returns.
 	///
 	/// Panics if any register in `rets` is not in either the clobber or return sets already.
-	pub(crate) fn mark_returns(&mut self, rets: RegSet) -> bool {
+	pub(crate) fn with_returns(&self, rets: RegSet) -> FuncRegUsage {
 		// bail if `rets` is empty, or else the assert will fail
 		if rets.is_empty() {
-			return false;
+			return *self;
 		}
 
 		// if intersection of `rets` and `changed` is empty, that's a problem.
@@ -110,29 +128,10 @@ impl FuncRegUsage {
 			clobbers = {:?}\n\
 			new      = {:?}", self.rets, self.clobbers, rets);
 
-		let (old_clobbers, old_rets) = (self.clobbers, self.rets);
-
-		self.clobbers -= rets;
-		self.rets |= rets;
-
-		old_clobbers != self.clobbers || old_rets != self.rets
-	}
-
-	pub(crate) fn change_clobbers(&mut self, new_clobbers: RegSet) -> bool {
-		if self.clobbers != new_clobbers {
-			self.clobbers = new_clobbers;
-			true
-		} else {
-			false
-		}
-	}
-
-	pub(crate) fn change_args(&mut self, new_args: RegSet) -> bool {
-		if self.args != new_args {
-			self.args = new_args;
-			true
-		} else {
-			false
+		FuncRegUsage {
+			clobbers: self.clobbers - rets,
+			rets:     self.rets | rets,
+			..*self
 		}
 	}
 }

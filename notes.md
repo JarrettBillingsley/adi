@@ -2,8 +2,11 @@
 # Yak stack
 
 - Register usage analysis
+	- TODO: separate IrInstKind::Use into two: one for use-before-call and one for use-before-ret
+		- *but what about this situation* **can a BB be a callpoint *and* an exitpoint? if so, does it double-insert `use` instructions?**
+	- TODO: mutrec local args, temp set args of other funcs in SCC to empty
 	- oh dang, DSE isn't eliminating dead stores that come from phis. it really should.
-	- **QUESTION: can a BB be a callpoint *and* an exitpoint? if so, does it double-insert `use` instructions?**
+		- or should it...?
 	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 	- determine arg/clobber regs for recursive funcs
 		- I think DSE needs to be done after each phase...
