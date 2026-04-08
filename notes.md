@@ -3,6 +3,7 @@
 
 - Register usage analysis
 	- oh dang, DSE isn't eliminating dead stores that come from phis. it really should.
+	- **QUESTION: can a BB be a callpoint *and* an exitpoint? if so, does it double-insert `use` instructions?**
 	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 	- determine arg/clobber regs for recursive funcs
 		- I think DSE needs to be done after each phase...

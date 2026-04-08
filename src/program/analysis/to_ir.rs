@@ -335,14 +335,14 @@ impl IRewriteCtx for Program {
 	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
 		if let Some(func) = self.func_that_contains(ea) {
 			if let Some(ru) = func.reg_usage() {
-				log::trace!("  callee {:?} usage = {:?}", ea, ru);
+				log::trace!("    callee {:?} usage = {:?}", ea, ru);
 				Some(ru)
 			} else {
-				log::trace!("  callee {:?} has no usage", ea);
+				log::trace!("    callee {:?} has no usage", ea);
 				None
 			}
 		} else {
-			log::trace!("  callee {:?} is not a func", ea);
+			log::trace!("    callee {:?} is not a func", ea);
 			None
 		}
 	}
@@ -381,8 +381,6 @@ impl<'a> IrRewriter<'a> {
 			ctx.reg_usage_of(ea)
 			.unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
 
-		log::trace!("IrRewriter::new (above call to reg_usage_of was for *this* function)");
-
 		Self {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
@@ -396,7 +394,7 @@ impl<'a> IrRewriter<'a> {
 
 	fn perform_rewrites(&mut self, ctx: &impl IRewriteCtx, exitpoints: &[IrBBId],
 	callpoints: Vec<IrBBId>) {
-		log::trace!("IrRewriter::perform_rewrites callpoints = {:?} exitpoints = {:?}",
+		log::trace!("  IrRewriter::perform_rewrites callpoints = {:?} exitpoints = {:?}",
 			callpoints, exitpoints);
 		for irbbid in exitpoints.iter().chain(callpoints.iter()) {
 			self.insert_dummy_uses(ctx, *irbbid);

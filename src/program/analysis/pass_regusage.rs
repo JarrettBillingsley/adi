@@ -24,18 +24,21 @@ impl Program {
 		reg_usage.analyze_returns(&sccs);
 
 		// then apply results
+		log::trace!("  return analysis finished. applying final results");
 		let RegUsagePass { fids_to_usage, changed_fids, .. } = reg_usage;
 
 		for (fid, usage) in fids_to_usage.into_iter() {
-			log::trace!(" setting {:?} usage to {:?}", fid, usage);
+			log::trace!("    setting {:?} usage to {:?}", fid, usage);
 			*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
 		}
 
 		// TODO: enqueue state change analysis on every function which changed???
-		log::trace!(" these functions' reg usage changed:");
+		log::trace!("  these functions' reg usage changed:");
 		for fid in changed_fids.into_iter() {
-			log::trace!("  {:?}", fid);
+			log::trace!("    {:?}", fid);
 		}
+		log::info!("- end register usage pass");
+		log::info!("------------------------------------------------------------------------");
 	}
 }
 
@@ -43,14 +46,14 @@ impl<'a> IRewriteCtx for RegUsagePass<'a> {
 	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
 		if let Some(fid) = self.eas_to_fids.get(&ea) {
 			if let Some(ru) = self.fids_to_usage.get(fid).copied() {
-				log::trace!("  callee {:?} usage = {:?}", ea, ru);
+				log::trace!("    callee {:?} {:?} {:?}", ea, fid, ru);
 				Some(ru)
 			} else {
-				log::trace!("  callee {:?} has no usage in the map", ea);
+				log::trace!("    callee {:?} {:?} has no usage in the map", ea, fid);
 				None
 			}
 		} else {
-			log::trace!("  callee {:?} is not in the map", ea);
+			log::trace!("    callee {:?} is not in the map", ea);
 			None
 		}
 	}
@@ -108,8 +111,9 @@ impl<'a> RegUsagePass<'a> {
 
 	fn change_usage(&mut self, fid: FuncId, usage: FuncRegUsage) -> bool {
 		if self.fids_to_usage[&fid] != usage {
-			log::trace!(" temporarily setting {:?} usage to \n  {:?} (old usage: \n  {:?})",
-				fid, usage, self.fids_to_usage[&fid]);
+			log::trace!("  temporarily setting {:?} usage to \
+				\n            {:?} <-- new usage\
+				\n            {:?} <-- old usage", fid, usage, self.fids_to_usage[&fid]);
 			self.fids_to_usage.insert(fid, usage);
 			self.changed_fids.insert(fid);
 			true
@@ -155,7 +159,7 @@ impl<'a> RegUsagePass<'a> {
 					log::trace!("  mutually-recursive SCC: {:?}", scc);
 
 					for i in 0 .. {
-						log::trace!("    --------------------------------------- loop start {}", i);
+						log::trace!("  >> clobbers/args loop start {}", i);
 						let mut any_changed = false;
 
 						for fid in scc.iter() {
@@ -173,12 +177,9 @@ impl<'a> RegUsagePass<'a> {
 							any_changed |= self.analyze_args(*fid);
 						}
 
-						log::trace!("    loop end, any_changed = {}", any_changed);
 						if !any_changed {
 							break;
-						}
-
-						if i > scc.len() {
+						} else if i > scc.len() {
 							panic!("hmmmmmm should have converged by now...");
 						}
 					}
@@ -188,13 +189,13 @@ impl<'a> RegUsagePass<'a> {
 	}
 
 	fn analyze_clobbers(&mut self, fid: FuncId, scc: Option<&[FuncId]>) -> bool {
-		log::trace!("- begin analyzing function arguments/clobbers at {}",
-			self.prog.get_func(fid).ea());
+		log::debug!("> BEGIN clobbers  {} {:?}",
+			self.prog.get_func(fid).ea(), fid);
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
 		let ir = self.prog.func_to_ir_ctx(fid, self);
 
-		log::debug!("before determining clobbers: {:?}", IrFunctionWithNames(&ir, &arch));
+		log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
 
 		// clobber regs are the union of all callee changes* plus any reg with nonzero generation at
 		// any exit point.
@@ -210,12 +211,13 @@ impl<'a> RegUsagePass<'a> {
 			}
 		};
 
-		log::trace!("> BEGIN building clobber set for {:?}", fid);
+		log::trace!("  > BEGIN building clobber set");
+		log::trace!("    callees:");
 
 		for callee in self.cg.callees_of(fid) {
 			if !in_scc(callee) {
 				let usage = self.usage_of_fid(callee);
-				log::trace!("  callee {:?} adds {:?}", callee, usage.changes());
+				log::trace!("      callee {:?} adds {:?}", callee, usage.changes());
 				clobber_set |= usage.changes();
 			}
 
@@ -225,13 +227,13 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::trace!("  now for exitpoints: {:?}", ir.exitpoints());
+		log::trace!("    exitpoints: {:?}", ir.exitpoints());
 
 		if clobber_set != all_regs {
 			for irbbid in ir.exitpoints().iter().copied() {
 				for reg in ir.get_bb(irbbid).dummy_use_regs() {
 					if !reg.is_gen0() {
-						log::trace!("  bb{} adds {:?}", irbbid, reg);
+						log::trace!("      bb{} adds {:?}", irbbid, reg);
 						if clobber_set.insert(reg.offset()) &&
 						clobber_set == all_regs {
 							// early out if all regs are clobbered
@@ -242,17 +244,21 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::trace!("> END building clobber set for {:?}", fid);
+		log::trace!("  >   END building clobber set");
 
-		log::trace!("    {:?} clobber_set = {:?}", fid, clobber_set);
+		log::trace!("    clobber_set = {:?}", clobber_set);
+		log::debug!(">   END clobbers  {} {:?}",
+			self.prog.get_func(fid).ea(), fid);
 		self.change_clobbers(fid, clobber_set)
 	}
 
 	fn analyze_args(&mut self, fid: FuncId) -> bool {
+		log::debug!("> BEGIN arguments {} {:?}",
+			self.prog.get_func(fid).ea(), fid);
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
 		let ir = self.prog.func_to_ir_ctx(fid, self);
-		log::debug!("after determining clobbers: {:?}", IrFunctionWithNames(&ir, &arch));
+		log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
 
 		let defs = ir.find_defs_and_uses();
 
@@ -263,7 +269,7 @@ impl<'a> RegUsagePass<'a> {
 			let reg = reg.sub(0);
 			match defs.get(&reg) {
 				Some(usage) if usage.is_really_used() => {
-					log::trace!("  {:?} is used as an argument to {:?}",
+					log::trace!("      {:?} is used as an argument to {:?}",
 						RegDbg(reg, Some(&arch)), fid);
 				}
 				Some(_) | None => {
@@ -277,7 +283,9 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::trace!("    {:?} arg_set = {:?}", fid, arg_set);
+		log::trace!("    arg_set = {:?}", arg_set);
+		log::debug!(">   END arguments {} {:?}",
+			self.prog.get_func(fid).ea(), fid);
 		self.change_args(fid, arg_set)
 	}
 
@@ -294,20 +302,16 @@ impl<'a> RegUsagePass<'a> {
 					log::trace!("  mutually-recursive SCC: {:?}", scc);
 
 					for i in 0 .. {
-						log::trace!("    --------------------------------------- \
-							returns loop start {}", i);
+						log::trace!("  >> returns loop start {}", i);
 						let mut any_changed = false;
 
 						for fid in scc.iter() {
 							any_changed |= self.analyze_returns_func(*fid);
 						}
 
-						log::trace!("    returns loop end, any_changed = {}", any_changed);
 						if !any_changed {
 							break;
-						}
-
-						if i > scc.len() {
+						} else if i > scc.len() {
 							panic!("hmmmmmm should have converged by now...");
 						}
 					}
@@ -318,7 +322,8 @@ impl<'a> RegUsagePass<'a> {
 	}
 
 	fn analyze_returns_func(&mut self, fid: FuncId) -> bool {
-		log::trace!("- begin analyzing function returns at {}", self.prog.get_func(fid).ea());
+		log::debug!("> BEGIN returns   {} {:?}",
+			self.prog.get_func(fid).ea(), fid);
 		let arch = self.prog.arch();
 		let mut ir = self.prog.func_to_ir_ctx(fid, self);
 
@@ -354,12 +359,11 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::debug!("{:?}", IrFunctionWithNames(&ir, &arch));
-		log::debug!("  callees to BBs = {:?}", callees_to_bbs);
+		log::trace!("    before DSE:\n{:?}", IrFunctionWithNames(&ir, &arch));
 
 		ir.elim_dead_stores();
 
-		log::debug!("{:?}", IrFunctionWithNames(&ir, &arch));
+		log::trace!("    after DSE:\n{:?}", IrFunctionWithNames(&ir, &arch));
 
 		let mut any_changed = false;
 
@@ -373,7 +377,7 @@ impl<'a> RegUsagePass<'a> {
 
 			for reg in ir.get_bb(irbbid).dummy_return_use_regs() {
 				if ret_set.insert(reg.offset()) {
-					log::trace!("  {:?} is a return value from {:?}",
+					log::trace!("    {:?} is a return value from {:?}",
 						RegDbg(reg, Some(&arch)), callee_fid);
 				}
 			}
@@ -383,6 +387,9 @@ impl<'a> RegUsagePass<'a> {
 				any_changed |= self.change_usage(callee_fid, usage);
 			}
 		}
+
+		log::debug!(">   END returns   {} {:?}",
+			self.prog.get_func(fid).ea(), fid);
 
 		any_changed
 	}
