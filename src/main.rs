@@ -74,7 +74,8 @@ fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
 	// }
 
 	for func in prog.all_funcs() {
-		println!("{:?} {:?}", func.id(), func.reg_usage().unwrap());
+		println!("{:?} {:20} {:?}", func.id(), prog.name_of_ea(func.ea()).to_string(),
+			func.reg_usage().unwrap());
 	}
 
 	Ok(())

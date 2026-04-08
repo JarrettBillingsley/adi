@@ -90,7 +90,12 @@ impl<'a> RegUsagePass<'a> {
 				).flatten().collect(),
 			fids_to_usage: prog.all_funcs()
 					.map(|func| (func.id(), func.reg_usage()
-						.unwrap_or_else(|| FuncRegUsage::new(all_regs, all_regs)))
+					// start off with no arguments since we're determining them bottom-up, and
+					// recursive functions' arguments will be mis-analyzed if the set is nonempty.
+					//
+					// clobbers start as all_regs, though, since uhhhhhhhhhhhh
+					// uhHHHHHHH
+					.unwrap_or_else(|| FuncRegUsage::new(RegSet::EMPTY, all_regs)))
 				).collect(),
 			changed_fids:  HashSet::new(),
 			is_return_analysis_pass: false,
@@ -138,8 +143,6 @@ impl<'a> RegUsagePass<'a> {
 	// --------------------------------------------------------------------------------------------
 	// pass 1: bottom-up, determine clobber and argument sets for each function
 	fn analyze_clobbers_args(&mut self, sccs: &[Vec<FuncId>]) {
-		let all_regs = self.prog.arch().arch_reg_set();
-
 		for scc in sccs.iter() {
 			match scc[..] {
 				[]    => unreachable!("petgraph::algo::tarjan_scc gave a 0-size SCC???"),
@@ -151,16 +154,18 @@ impl<'a> RegUsagePass<'a> {
 					// 2 or more mutually-recursive functions.
 					log::trace!("  mutually-recursive SCC: {:?}", scc);
 
-					// start them off as clobbering every reg.
-					for &fid in scc {
-						self.change_clobbers(fid, all_regs);
-					}
-
 					for i in 0 .. {
 						log::trace!("    --------------------------------------- loop start {}", i);
 						let mut any_changed = false;
 
 						for fid in scc.iter() {
+							// idea: assume clobbers of all other SCC items are empty, but assume
+							// this function's clobbers are full???????
+							//
+							// determine "local clobbers" *first* and *then* the second iteration
+							// can take callee clobbers into account?
+							//
+							// something like that?
 							any_changed |= self.analyze_clobbers(*fid, Some(scc));
 						}
 
@@ -246,14 +251,12 @@ impl<'a> RegUsagePass<'a> {
 	fn analyze_args(&mut self, fid: FuncId) -> bool {
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
-		// regenerate the IR using the newly-determined clobbers
 		let ir = self.prog.func_to_ir_ctx(fid, self);
 		log::debug!("after determining clobbers: {:?}", IrFunctionWithNames(&ir, &arch));
 
 		let defs = ir.find_defs_and_uses();
 
-		// 2. argument regs are zero-generation registers which are used by real uses,
-		// not just dummy uses.
+		// argument regs are zero-generation registers which are used at least once.
 		let mut arg_set = all_regs;
 
 		for reg in arch.arch_ir_regs() {

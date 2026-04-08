@@ -638,11 +638,11 @@ current state of affairs:
 *initial* register sets are set to taking all regs and clobbering all regs.
 
 - **when generating IR...**
-	- `use`-before-`ret` is self.changes (self.clobbers | self.rets)
+	- `use`-before-`ret` is...
+		- self.changes (self.clobbers | self.rets) **during clobber/arg analysis**
+		- self.rets **during ret analysis**
 		- ⚠️ self.changes defaults to all_regs when function is first analyzed, so uses are inserted even though the clobber set is empty.
 			- but I guess this is what we want? because we need to know if nonzero gen regs are `used` before returns for clobbers...
-		- *but now I'm thinking this needs to be self.changes during clobber/arg analysis, and only self.rets duing ret analysis*
-			- because right now, it's over-diagnosing rets
 	- `use`-before-`call` is either:
 		- **if recursive,** self.args
 		- **else if callee exists,** callee.args 
@@ -671,3 +671,68 @@ current state of affairs:
 hmmmmmmmmmmmmmmmmmmmmmm
 
 is it working??????
+
+kind of.
+
+I just had a realization:
+
+**`use`-before-`ret`s are not really the same things as `use`-before-`call`s.**
+
+or more generally, a `use` before an exitpoint is not the same thing as a `use` before a callpoint.
+
+both kinds encode the most-recent-available generation of each register at that point.
+
+exit-`use`s of non-gen-0 regs are clobbers or returns. 
+
+call-`use`s are used to encode arguments, *but* the callee may or may not actually *use* those registers as arguments. same with the `mov _, <return>`s after - they may or may not actually be clobbered.
+	
+*but we're building those sets bottom up in the call graph.* so by the time you analyze a function call, the clobber and arg sets are already known, so presumably the right sets of `use`s and `mov`s are inserted. *except for mutrecs, that gets fucky - all their clobbers are determined together, and then all their args, and then you repeat as long as there are changes.*
+
+*what about points that are simultaneously calls and exits?*
+
+uhhhhh
+
+0000:00000090 during ret analysis, it says callee 0000:00000070 has args {r0 r1}, but no uses are inserted before the call to it???
+
+
+
+CLOBBERS.
+
+for normal functions, it doesn't matter what they start out as because the algorithm doesn't look at them.
+
+for self-recursive functions, they have to start off as all regs so that we can determine which are actually changed by the function and which aren't (`use rx_0` before `ret` means unclobbered).
+
+for mutrec functions... I'm thinking they have to be "all regs for self" *but* "no regs for others in SCC" in order to determine *local* clobbers...
+
+and then on the second loop through, have all local clobbers established and use those.
+
+**mutrec clobbers**
+
+1. for each function,
+	- set current function to clobber all, all others in SCC to clobber none.
+	- run clobber set algo.
+	- this determines the **local clobbers.**
+2. for each function,
+	- set current function to clobber all, others in SCC to their local clobbers.
+	- run clobber set algo.
+	- this **merges local and callee clobbers.**
+3. at the end, **all functions in the SCC *should* have the same clobber set.**
+	- because if you call any of them, you can get to all the rest, and therefore it could call all of them, so all their clobbers should be identical.
+
+also what order do we do clobbers/args in?
+
+	c1, a1, c2, a2, c3, a3,   c1, a1, c2, a2, c3, a3 (interleave clobbers and args per-func)?
+
+or
+
+	c1, c2, c3, a1, a2, a3,   c1, c2, c3, a1, a2, a3 (all clobbers then all args, twice)? (current)
+
+or
+
+	c1, c2, c3, c1, c2, c3,   a1, a2, a3, a1, a2, a3 (all clobbers twice, all args twice)?
+	
+**mutrec args**
+
+similar to clobbers? determine "local args" first, then include callees' arg sets?
+
+*can they have different arg sets?* I would imagine so... because arguments are *input* state, while clobbers are *output* state, and they all share the same output state but can have different input states.
