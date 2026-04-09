@@ -520,6 +520,11 @@ impl IrBasicBlock {
 		self.insts.iter().filter_map(IrInst::dummy_use_reg)
 	}
 
+	/// Iterator over all registers used by clobbers (`IrInstKind::Clobber`) in this BB.
+	pub(crate) fn clobber_regs(&self) -> impl Iterator<Item = IrReg> {
+		self.insts.iter().filter_map(IrInst::clobber_reg)
+	}
+
 	/// Iterator over all registers def'd by `mov _, <return>` in this BB.
 	pub(crate) fn dummy_return_use_regs(&self) -> impl Iterator<Item = IrReg> {
 		self.insts.iter().filter_map(IrInst::dummy_return_use_reg)

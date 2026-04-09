@@ -13,17 +13,25 @@ pub(crate) enum DefUseKind {
 	/// Not used anywhere.
 	None,
 
-	/// Used, but only by dummy `use` instructions.
-	OnlyDummy,
-
-	/// Used, but only as phi-function arguments.
-	OnlyPhi,
-
-	/// Used, but only by dummy `use` instructions and phi-function arguments.
-	DummyAndPhi,
+	/// Used, but only by one or more kinds of "weird" uses.
+	Weird { clobber: bool, use_: bool, phi: bool },
 
 	/// Used by at least one "real" instruction.
 	Real,
+}
+
+impl DefUseKind {
+	fn clobber() -> Self {
+		Self::Weird { clobber: true, use_: false, phi: false }
+	}
+
+	fn use_() -> Self {
+		Self::Weird { clobber: false, use_: true, phi: false }
+	}
+
+	fn phi() -> Self {
+		Self::Weird { clobber: false, use_: false, phi: true }
+	}
 }
 
 /// Where a register was defined.
@@ -82,26 +90,30 @@ impl DefInfo {
 		!matches!(self.use_kind, DefUseKind::None)
 	}
 
-	/// mark it as used by a dummy `use` instruction.
-	fn mark_dummy_used(&mut self) {
-		match self.use_kind {
-			DefUseKind::None    => self.use_kind = DefUseKind::OnlyDummy,
-			DefUseKind::OnlyPhi => self.use_kind = DefUseKind::DummyAndPhi,
-			// OnlyDummy? no change
-			// DummyAndPhi? dummy already included
-			// Real? don't care
-			_ => {}
+	/// mark it as used by a `clobber` instruction.
+	fn mark_clobbered(&mut self) {
+		match &mut self.use_kind {
+			DefUseKind::None                  => self.use_kind = DefUseKind::clobber(),
+			DefUseKind::Weird { clobber, .. } => *clobber = true,
+			DefUseKind::Real                  => {}
 		}
 	}
 
+	/// mark it as used by a dummy `use` instruction.
+	fn mark_dummy_used(&mut self) {
+		match &mut self.use_kind {
+			DefUseKind::None               => self.use_kind = DefUseKind::use_(),
+			DefUseKind::Weird { use_, .. } => *use_ = true,
+			DefUseKind::Real               => {}
+		}
+	}
+
+	/// mark it as used by phi function.
 	fn mark_phi_used(&mut self) {
-		match self.use_kind {
-			DefUseKind::None      => self.use_kind = DefUseKind::OnlyDummy,
-			DefUseKind::OnlyDummy => self.use_kind = DefUseKind::DummyAndPhi,
-			// OnlyPhi? no change
-			// DummyAndPhi? dummy already included
-			// Real? don't care
-			_ => {}
+		match &mut self.use_kind {
+			DefUseKind::None              => self.use_kind = DefUseKind::phi(),
+			DefUseKind::Weird { phi, .. } => *phi = true,
+			DefUseKind::Real              => {}
 		}
 	}
 
@@ -159,12 +171,15 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 					defs.insert(reg, DefInfo::new_arg());
 				}
 
+				// SAFETY: see above
+				let usage = defs.get_mut(&reg).unwrap();
+
 				if inst.is_dummy_use() {
-					// SAFETY: see above
-					defs.get_mut(&reg).unwrap().mark_dummy_used();
+					usage.mark_dummy_used();
+				} else if inst.is_clobber() {
+					usage.mark_clobbered();
 				} else {
-					// SAFETY: see above
-					defs.get_mut(&reg).unwrap().mark_really_used();
+					usage.mark_really_used();
 				}
 			});
 		}

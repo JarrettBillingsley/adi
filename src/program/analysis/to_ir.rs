@@ -56,11 +56,12 @@ impl Program {
 		// in here; the second half is handled by the "extra_edges" above
 		let mut eas_to_bbids: HashMap<EA, IrBBId> = HashMap::new();
 
-		// exitpoints from the function
+		// BBs which have zero in-function successors
 		let mut exitpoints: Vec<IrBBId> = vec![];
-
-		// BBs which need to have dummy `mov _, <return>` added after them
+		// BBs which need to have `use` added before them
 		let mut callpoints: Vec<IrBBId> = vec![];
+		// BBs which need to have `mov _, <return>` added after them
+		let mut returnpoints: Vec<IrBBId> = vec![];
 
 		for (irbbid, bbid) in func.all_bbs().enumerate() {
 			let bb = self.get_bb(bbid);
@@ -123,21 +124,20 @@ impl Program {
 			// determine exitpoints and callpoints
 			use BBTerm::*;
 			match bb.term {
-				// never
 				DeadEnd | Halt => {}
-				// always
 				Return { .. } => {
 					exitpoints.push(rewrite_irbbid);
 				}
 				Call { cont, .. } | IndirCall { cont, .. } => {
-					// if ALL successors are out-of-function, it's an exitpoint.
-					if !self.bb_any_successor_in_function(bbid) {
-						exitpoints.push(rewrite_irbbid);
-					}
-
 					// if cont is an in-function successor, it needs return-insertion
+					// TODO: just func, not bb.func()
 					if self.ea_is_bb_in_function(cont, bb.func()).is_some() {
 						callpoints.push(rewrite_irbbid);
+						returnpoints.push(rewrite_irbbid);
+					} else if !self.bb_any_successor_in_function(bbid) {
+						// if ALL successors are out-of-function, it's an exitpoint.
+						// yes, the same BB can be *both* a callpoint *and* an exitpoint!
+						exitpoints.push(rewrite_irbbid);
 					}
 				}
 				IndirJump { .. } | Cond { .. } | Jump { .. } |
@@ -161,7 +161,7 @@ impl Program {
 		// arch_reg_set is the default ("pessimal") sets of argument and return value registers, to
 		// be used for functions which have not had their register usage determined yet.
 		IrRewriter::new(ctx, func.ea(), &mut bbs)
-			.perform_rewrites(ctx, &exitpoints, callpoints);
+			.perform_rewrites(ctx, &exitpoints, callpoints, returnpoints);
 
 		// 4. build the CFG from the IrBB terminators
 		let cfg = build_ir_cfg(&bbs, extra_edges);
@@ -368,7 +368,7 @@ struct IrRewriter<'a> {
 	bbs:          &'a mut Vec<IrBasicBlock>,
 	new_bbs:      Vec<IrBasicBlock>,
 	new_bbid:     IrBBId,
-	default_regs: RegSet,
+	all_regs:     RegSet,
 	arg_regs:     RegSet,
 	ret_regs:     RegSet,
 	changed_regs: RegSet,
@@ -376,10 +376,10 @@ struct IrRewriter<'a> {
 
 impl<'a> IrRewriter<'a> {
 	fn new(ctx: &impl IRewriteCtx, ea: EA, bbs: &'a mut Vec<IrBasicBlock>) -> Self {
-		let default_regs = ctx.default_regs();
+		let all_regs = ctx.default_regs();
 		let reg_usage =
 			ctx.reg_usage_of(ea)
-			.unwrap_or_else(|| FuncRegUsage::new(default_regs, default_regs));
+			.unwrap_or_else(|| FuncRegUsage::new(all_regs, all_regs));
 
 		Self {
 			new_bbs:  vec![],
@@ -388,59 +388,53 @@ impl<'a> IrRewriter<'a> {
 			arg_regs:     reg_usage.args(),
 			ret_regs:     reg_usage.rets(),
 			changed_regs: reg_usage.changes(),
-			default_regs,
+			all_regs,
 		}
 	}
 
 	fn perform_rewrites(&mut self, ctx: &impl IRewriteCtx, exitpoints: &[IrBBId],
-	callpoints: Vec<IrBBId>) {
-		log::trace!("  IrRewriter::perform_rewrites callpoints = {:?} exitpoints = {:?}",
-			callpoints, exitpoints);
-		for irbbid in exitpoints.iter().chain(callpoints.iter()) {
-			self.insert_dummy_uses(ctx, *irbbid);
-		}
+	callpoints: Vec<IrBBId>, returnpoints: Vec<IrBBId>) {
+		log::trace!("  IrRewriter::perform_rewrites \
+			exitpoints = {:?} callpoints = {:?} returnpoints = {:?}",
+			exitpoints, callpoints, returnpoints);
 
 		for irbbid in callpoints.into_iter() {
-			self.insert_dummy_return_uses(ctx, irbbid);
+			self.insert_callpoint_uses(ctx, irbbid);
+		}
+
+		for &irbbid in exitpoints.iter() {
+			self.insert_exitpoint_clobbers(ctx, irbbid);
+		}
+
+		// do this last since it modifies the CFG
+		for irbbid in returnpoints.into_iter() {
+			self.insert_callpoint_return_movs(ctx, irbbid);
 		}
 
 		self.bbs.append(&mut self.new_bbs);
 	}
 
-	fn insert_dummy_uses(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
-		// log::debug!("dummy uses on irbb{}", irbb.id);
+	fn insert_callpoint_uses(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
+		// log::debug!("dummy uses on irbb{}", irbbid);
 		let irbb = &mut self.bbs[irbbid];
 		let term_inst = *irbb.term_inst();
 
-		// SAFETY: this match is valid because exitpoints was built from BBs which were either
-		// `BBTerm::Return`, in which case irbb_terminator_sanity_check ensured it ended with
-		// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed to
-		// be a call/jump/branch.
-		let regs = match term_inst.kind() {
-			// because *all* modified registers (returns *and* clobbers) need to be marked as used
-			// or else they'll be marked dead by DSE.
-			IrInstKind::Ret { .. } => {
-				if ctx.is_return_analysis_pass() {
-					self.ret_regs
-				} else {
-					self.changed_regs
-				}
-			}
-			// SAFETY: same reason as the match.
-			// (fixup_ir_targets is the step before this one, so this match is good.)
-			_ => match term_inst.target().unwrap() {
-				// recursive call! use our own arg regs.
-				IrTarget::Internal(_)  => self.arg_regs,
-				IrTarget::External(ea) => {
-					// if the callee exists, and *its* argument registers have been analyzed, use
-					// those; otherwise use the default ones.
-					ctx.reg_usage_of(ea)
-					.map(|ru| ru.args())
-					.unwrap_or(self.default_regs)
-				}
+		// SAFETY: this match is valid because callpoints contains only `call/icall` instructions
+		// which are guaranteed to have a target.
+		// (fixup_ir_targets is the step before this one, so this match is good.)
+		let regs = match term_inst.target().unwrap() {
+			// recursive call! use our own arg regs.
+			IrTarget::Internal(_)  => self.arg_regs,
+			IrTarget::External(ea) => {
+				// if the callee exists, and *its* argument registers have been analyzed, use
+				// those; otherwise use the default ones.
+				ctx.reg_usage_of(ea)
+				.map(|ru| ru.args())
+				.unwrap_or(self.all_regs)
 			}
 		};
 
+		// TODO: abstract this out of here and insert_exitpoint_clobbers
 		if !regs.is_empty() {
 			let ea = term_inst.ea();
 			irbb.insts.pop();
@@ -453,8 +447,48 @@ impl<'a> IrRewriter<'a> {
 		}
 	}
 
-	fn insert_dummy_return_uses(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
-		// log::debug!("returns on irbb{}", irbbid);
+	fn insert_exitpoint_clobbers(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
+		// log::debug!("clobbers on irbb{}", irbbid);
+		let irbb = &mut self.bbs[irbbid];
+		let term_inst = *irbb.term_inst();
+
+		// SAFETY: this match is valid because exitpoints was built from BBs which were either
+		// `BBTerm::Return`, in which case irbb_terminator_sanity_check ensured it ended with
+		// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed to
+		// be a call/jump/branch.
+		let regs = match term_inst.kind() {
+			IrInstKind::Ret { .. } => {
+				if ctx.is_return_analysis_pass() {
+					// during return analysis, if we insert clobbers here, it'll over-diagnose
+					// returns...
+					self.ret_regs
+				} else {
+					// because *all* modified registers (returns *and* clobbers) need to be marked
+					// as used or else they'll be marked dead by DSE.
+					self.changed_regs
+				}
+			}
+
+			// call/icall/ibranch/cbranch/branch
+			_ => {
+				todo!("tailcall... what do we do here? clobbers or uses? both? on what reg sets?");
+			}
+		};
+
+		if !regs.is_empty() {
+			let ea = term_inst.ea();
+			irbb.insts.pop();
+
+			for reg_offs in regs.iter() {
+				irbb.insts.push(IrInst::clobber(ea, ctx.arch_ir_reg(reg_offs)));
+			}
+
+			irbb.insts.push(term_inst);
+		}
+	}
+
+	fn insert_callpoint_return_movs(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
+		// log::debug!("return movs on irbb{}", irbbid);
 		// first update the cfg.
 		let (old_cont, callee_changed_regs) = self.change_cont(ctx, irbbid, self.new_bbid);
 
@@ -503,7 +537,7 @@ impl<'a> IrRewriter<'a> {
 					IrTarget::External(ea) => {
 						ctx.reg_usage_of(*ea)
 						.map(|ru| ru.changes())
-						.unwrap_or(self.default_regs)
+						.unwrap_or(self.all_regs)
 					}
 				};
 
@@ -515,7 +549,7 @@ impl<'a> IrRewriter<'a> {
 				let old_cont = *cont;
 				*cont = IrTarget::Internal(new_cont);
 				// can't know target, so have to return default regset
-				(old_cont, self.default_regs)
+				(old_cont, self.all_regs)
 			}
 			_ => panic!("bb{} marked for return-insertion should have ended with `Call` or `ICall` \
 				but ended with {:?} instead", irbbid, bb.term_inst().kind()),

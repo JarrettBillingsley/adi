@@ -161,6 +161,8 @@ pub(crate) enum IrInstKind {
 
 	// dummy use of reg
 	Use     { reg: IrReg },
+	// marks reg as being clobbered
+	Clobber { reg: IrReg },
 	// dst = src
 	Mov     { dst: IrReg, src: IrSrc,                             dstn: i8, srcn: i8, },
 	// dst = *addr
@@ -242,6 +244,7 @@ impl IrInstKind {
 		match self {
 			Nop                => "nop",
 			Use     { .. }     => "use",
+			Clobber { .. }     => "clobber",
 			Mov     { .. }     => "mov",
 			Load    { .. }     => "load",
 			Store   { .. }     => "store",
@@ -280,6 +283,8 @@ impl IrInstKind {
 			Nop =>
 				Ok(()),
 			Use { reg } =>
+				write!(f, "{:?}", r(reg)),
+			Clobber { reg } =>
 				write!(f, "{:?}", r(reg)),
 			Mov { dst, src, dstn, srcn } =>
 				write!(f, "{:?}{:?}, {:?}{:?}", r(dst), Opn(dstn), s(src), Opn(srcn)),
@@ -367,6 +372,10 @@ impl IrInst {
 
 	pub(crate) fn use_(ea: EA, reg: IrReg) -> Self {
 		Self { ea, kind: IrInstKind::Use { reg } }
+	}
+
+	pub(crate) fn clobber(ea: EA, reg: IrReg) -> Self {
+		Self { ea, kind: IrInstKind::Clobber { reg } }
 	}
 
 	pub(crate) fn mov(ea: EA, dst: IrReg, src: IrSrc,
@@ -792,11 +801,24 @@ impl IrInst {
 		matches!(self.kind, IrInstKind::Use { .. })
 	}
 
+	/// True if this is an `IrInstKind::Clobber`.
+	pub(crate) fn is_clobber(&self) -> bool {
+		matches!(self.kind, IrInstKind::Clobber { .. })
+	}
+
 	/// If this is an `IrInstKind::Use`, the register it uses, or `None` if not.
 	pub(crate) fn dummy_use_reg(&self) -> Option<IrReg> {
 		match self.kind {
 			IrInstKind::Use { reg } => Some(reg),
 			_                       => None,
+		}
+	}
+
+	/// If this is an `IrInstKind::Clobber`, the register marked as clobbered, or `None` if not.
+	pub(crate) fn clobber_reg(&self) -> Option<IrReg> {
+		match self.kind {
+			IrInstKind::Clobber { reg } => Some(reg),
+			_                           => None,
 		}
 	}
 
@@ -824,6 +846,7 @@ impl IrInst {
 			| Halt => panic!("no source"),
 
 			Use       { reg }      => reg.size(),
+			Clobber   { reg }      => reg.size(),
 			Mov       { src, .. }  => src.size(),
 			Load      { dst, .. }  => dst.size(), // yes, it's weird
 			Store     { src, .. }  => src.size(),
@@ -848,6 +871,7 @@ impl IrInst {
 			| Ret { .. }
 			| CBranch { .. }
 			| Use { .. }
+			| Clobber { .. }
 			| Halt => panic!("no destination"),
 
 			Mov     { dst, .. } => dst.size(),
@@ -871,6 +895,7 @@ impl IrInst {
 			| Halt => {}
 
 			Use { reg }              => { f(*reg); }
+			Clobber { reg }          => { f(*reg); }
 			Mov { dst, src, .. }     => { f(*dst); src.regs(&mut f); }
 			Load { dst, addr, .. }   => { f(*dst); addr.regs(&mut f); }
 			Store { addr,  src, .. } => { addr.regs(&mut f); src.regs(&mut f); }
@@ -898,8 +923,8 @@ impl IrInst {
 		use IrInstKind::*;
 
 		match &self.kind {
-			Nop | Use { .. } | Branch { .. } | CBranch { .. } | ICall { .. } | Ret { .. }
-			| IBranch { .. } | Store { .. } | Call { .. } | Halt => false,
+			Nop | Use { .. } | Clobber { .. } | Branch { .. } | CBranch { .. } | ICall { .. }
+			| Ret { .. } | IBranch { .. } | Store { .. } | Call { .. } | Halt => false,
 
 			Mov { dst, .. } | Load { dst, .. } | Unary { dst, .. } | Binary { dst, .. }
 			| Ternary { dst, .. } => *dst == reg,
@@ -917,13 +942,14 @@ impl IrInst {
 			| Halt => {}
 
 			Use { reg }             => { f(*reg); }
+			Clobber { reg }         => { f(*reg); }
 			Mov { src, .. }         => { src.visit_use(&mut f); }
 			Load { addr, .. }       => { addr.visit_use(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use(&mut f); src.visit_use(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use(&mut f); }
-			IBranch { dst, .. }  => { dst.visit_use(&mut f); }
-			ICall { dst, .. }    => { dst.visit_use(&mut f); }
-			Ret { dst, .. }      => { dst.visit_use(&mut f); }
+			IBranch { dst, .. }     => { dst.visit_use(&mut f); }
+			ICall { dst, .. }       => { dst.visit_use(&mut f); }
+			Ret { dst, .. }         => { dst.visit_use(&mut f); }
 			Unary { src, .. }       => { src.visit_use(&mut f); }
 			Binary { src1, src2, .. } => {
 				src1.visit_use(&mut f);
@@ -948,13 +974,14 @@ impl IrInst {
 			| Halt => {}
 
 			Use { reg }             => { f(reg); }
+			Clobber { reg }         => { f(reg); }
 			Mov { src, .. }         => { src.visit_use_mut(&mut f); }
 			Load { addr, .. }       => { addr.visit_use_mut(&mut f); }
 			Store { addr, src, .. } => { addr.visit_use_mut(&mut f); src.visit_use_mut(&mut f); }
 			CBranch { cond, .. }    => { cond.visit_use_mut(&mut f); }
-			IBranch { dst, .. }  => { dst.visit_use_mut(&mut f); }
-			ICall { dst, .. }    => { dst.visit_use_mut(&mut f); }
-			Ret { dst, .. }      => { dst.visit_use_mut(&mut f); }
+			IBranch { dst, .. }     => { dst.visit_use_mut(&mut f); }
+			ICall { dst, .. }       => { dst.visit_use_mut(&mut f); }
+			Ret { dst, .. }         => { dst.visit_use_mut(&mut f); }
 			Unary { src, .. }       => { src.visit_use_mut(&mut f); }
 			Binary { src1, src2, .. } => {
 				src1.visit_use_mut(&mut f);
@@ -975,6 +1002,7 @@ impl IrInst {
 		match &self.kind {
 			Nop
 			| Use { .. }
+			| Clobber { .. }
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
@@ -984,7 +1012,7 @@ impl IrInst {
 			| CBranch { .. }
 			| Halt => None,
 
-			Mov  { dst, .. }
+			Mov     { dst, .. }
 			| Load    { dst, .. }
 			| Unary   { dst, .. }
 			| Binary  { dst, .. }
@@ -999,6 +1027,7 @@ impl IrInst {
 		match &mut self.kind {
 			Nop
 			| Use { .. }
+			| Clobber { .. }
 			| Branch { .. }
 			| IBranch { .. }
 			| Call { .. }
@@ -1008,7 +1037,7 @@ impl IrInst {
 			| CBranch { .. }
 			| Halt => None,
 
-			Mov  { dst, .. }
+			Mov     { dst, .. }
 			| Load    { dst, .. }
 			| Unary   { dst, .. }
 			| Binary  { dst, .. }

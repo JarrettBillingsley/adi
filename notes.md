@@ -2,9 +2,10 @@
 # Yak stack
 
 - Register usage analysis
-	- TODO: separate IrInstKind::Use into two: one for use-before-call and one for use-before-ret
-		- *but what about this situation* **can a BB be a callpoint *and* an exitpoint? if so, does it double-insert `use` instructions?**
-	- TODO: mutrec local args, temp set args of other funcs in SCC to empty
+	- **QUESTION: can a BB be a callpoint *and* an exitpoint? if so, does it double-insert `use` instructions?**
+		- callpoints are call/icall instructions where cont is in-function.
+		- exitpoints are call/icall/ibranch/cbranch/branch instructions where all successors are out-of-function.
+		- so **no,** the same BB can't be both. *however.* consider an exitpoint call where the target and cont are out-of-function. should the current generation of regs be marked as `use` or as `clobber` or both?
 	- oh dang, DSE isn't eliminating dead stores that come from phis. it really should.
 		- or should it...?
 	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**

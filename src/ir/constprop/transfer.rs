@@ -17,8 +17,8 @@ pub(super) fn transfer(inst: &IrInst, state: &mut ConstPropState) -> bool {
 
 	let thing = match inst.kind() {
 		// no change!
-		Nop | Use { .. } | Store { .. } | Branch { .. } | CBranch { .. } | IBranch { .. }
-		| Call { .. } | ICall { .. } | Ret { .. } | Halt => None,
+		Nop | Use { .. } | Clobber { .. } | Store { .. } | Branch { .. } | CBranch { .. } |
+		IBranch { .. } | Call { .. } | ICall { .. } | Ret { .. } | Halt => None,
 
 		Mov  { dst, src, srcn, .. } => Some((dst, src_to_info(src, srcn, state))),
 		Load { dst, .. }            => Some((dst, Info::Any)),

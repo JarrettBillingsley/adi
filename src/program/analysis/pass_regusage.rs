@@ -261,7 +261,7 @@ impl<'a> RegUsagePass<'a> {
 
 		if clobber_set != all_regs {
 			for irbbid in ir.exitpoints().iter().copied() {
-				for reg in ir.get_bb(irbbid).dummy_use_regs() {
+				for reg in ir.get_bb(irbbid).clobber_regs() {
 					if !reg.is_gen0() {
 						log::trace!("      bb{} adds {:?}", irbbid, reg);
 						if clobber_set.insert(reg.offset()) && clobber_set == all_regs {
@@ -291,47 +291,48 @@ impl<'a> RegUsagePass<'a> {
 			.collect();
 		let mut actual_args = vec![RegSet::EMPTY; scc.len()];
 
-		// FIRST ROUND: determine "local" clobbers.
+		// assume all all args and clobbers are empty at first.
+		for &fid in scc.iter() {
+			self.change_args(fid, RegSet::EMPTY);
+			self.change_clobbers(fid, RegSet::EMPTY);
+		}
+
+		// FIRST ROUND: determine "local" args.
 		log::trace!("  > BEGIN mutrec local args");
 
 		for (i, &fid) in scc.iter().enumerate() {
-			// assume all all args are empty.
-			for &fid in scc.iter() {
-				self.change_args(fid, RegSet::EMPTY);
-			}
-
 			// run args algo.
 			self.analyze_args(fid);
 
-			// get the local args
+			// get the local args and empty the args back out.
 			actual_args[i] = self.usage_of_fid(fid).args();
+			self.change_args(fid, RegSet::EMPTY);
 		}
 
 		// restore backup clobbers and apply actual arguments
 		for ((&fid, clobber_set), arg_set) in scc.iter()
 			.zip(backup_clobbers.into_iter())
 			.zip(actual_args.into_iter()) {
-			self.change_clobbers(fid, clobber_set);
 			self.change_args(fid, arg_set);
+			self.change_clobbers(fid, clobber_set);
 		}
 
 		log::trace!("  >   END mutrec local args");
 
+		// for loop_iteration in 0 .. {
+		// 	log::trace!("  >> mutrec args loop start {}", loop_iteration);
+		// 	let mut any_changed = false;
 
-		for loop_iteration in 0 .. {
-			log::trace!("  >> mutrec args loop start {}", loop_iteration);
-			let mut any_changed = false;
+		// 	for &fid in scc.iter() {
+		// 		any_changed |= self.analyze_args(fid);
+		// 	}
 
-			for &fid in scc.iter() {
-				any_changed |= self.analyze_args(fid);
-			}
-
-			if !any_changed {
-				break;
-			} else if loop_iteration > scc.len() {
-				panic!("hmmmmmm should have converged by now...");
-			}
-		}
+		// 	if !any_changed {
+		// 		break;
+		// 	} else if loop_iteration > scc.len() {
+		// 		panic!("hmmmmmm should have converged by now...");
+		// 	}
+		// }
 	}
 
 	fn analyze_args(&mut self, fid: FuncId) -> bool {
