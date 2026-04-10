@@ -156,16 +156,6 @@ impl IrBuilder<'_> {
 		self.push_inst(IrInst::nop(self.ea))
 	}
 
-	/// A dummy "use" of `reg`. This tells data analysis algorithms that `reg`'s value is read in
-	/// some way.
-	///
-	/// Internally this is used before control flow leaves a function to analyze those registers as
-	/// potential return values. You might use this for implicit inputs to an instruction whose
-	/// outputs aren't actually computed from that input.
-	pub(crate) fn use_(&mut self, reg: IrReg) -> &mut Self {
-		self.push_inst(IrInst::use_(self.ea, reg))
-	}
-
 	/// Copies a value from `src` to `dst`.
 	///
 	/// Panics if `src` and `dst` are different sizes.
