@@ -430,7 +430,7 @@ impl<'a> IrRewriter<'a> {
 	}
 
 	fn insert_callpoint_uses(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
-		// log::debug!("dummy uses on irbb{}", irbbid);
+		// log::debug!("callpoint uses on irbb{}", irbbid);
 		let irbb = &mut self.bbs[irbbid];
 		let term_inst = *irbb.term_inst();
 
@@ -476,7 +476,7 @@ impl<'a> IrRewriter<'a> {
 	}
 
 	fn insert_exitpoint_clobbers(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
-		// log::debug!("clobbers on irbb{}", irbbid);
+		// log::debug!("exitpoint clobbers on irbb{}", irbbid);
 		let irbb = &mut self.bbs[irbbid];
 		let term_inst = *irbb.term_inst();
 
@@ -503,7 +503,7 @@ impl<'a> IrRewriter<'a> {
 	}
 
 	fn insert_callpoint_return_movs(&mut self, ctx: &impl IRewriteCtx, irbbid: IrBBId) {
-		// log::debug!("return movs on irbb{}", irbbid);
+		// log::debug!("callpoint return movs on irbb{}", irbbid);
 		// first update the cfg.
 		let (old_cont, callee_changed_regs) = self.change_cont(ctx, irbbid, self.new_bbid);
 

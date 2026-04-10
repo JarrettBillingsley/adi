@@ -457,7 +457,7 @@ impl<'a> RegUsagePass<'a> {
 
 			let mut ret_set = RegSet::new();
 
-			for reg in ir.get_bb(irbbid).dummy_return_use_regs() {
+			for reg in ir.get_bb(irbbid).return_use_regs() {
 				if ret_set.insert(reg.offset()) {
 					log::trace!("    {:?} is a return value from {:?}",
 						RegDbg(reg, Some(&arch)), callee_fid);

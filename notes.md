@@ -5,9 +5,6 @@
 	- code cleanup when done
 	- *when* (if ever) should reguse pass be automatically scheduled?
 	- what happens if we rerun reg usage analysis on funcs which already have usage info on them?
-- "dummy" uses aren't really dummy anymore
-	- they may be over-added in cases where we don't know the register usage, but they are now only inserted before calls and encode arguments to the callee
-	- same goes for the `mov _, <return>`s after calls - they encode callee clobbers/returns, and aren't "dummies"
 
 # Major tasks
 

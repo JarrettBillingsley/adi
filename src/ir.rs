@@ -519,9 +519,9 @@ impl IrBasicBlock {
 		self.insts.last_mut().unwrap()
 	}
 
-	/// Iterator over all registers used by dummy uses (`IrInstKind::Use`) in this BB.
-	pub(crate) fn dummy_use_regs(&self) -> impl Iterator<Item = IrReg> {
-		self.insts.iter().filter_map(IrInst::dummy_use_reg)
+	/// Iterator over all registers used by uses (`IrInstKind::Use`) in this BB.
+	pub(crate) fn use_regs(&self) -> impl Iterator<Item = IrReg> {
+		self.insts.iter().filter_map(IrInst::use_reg)
 	}
 
 	/// Iterator over all registers used by clobbers (`IrInstKind::Clobber`) in this BB.
@@ -530,8 +530,8 @@ impl IrBasicBlock {
 	}
 
 	/// Iterator over all registers def'd by `mov _, <return>` in this BB.
-	pub(crate) fn dummy_return_use_regs(&self) -> impl Iterator<Item = IrReg> {
-		self.insts.iter().filter_map(IrInst::dummy_return_use_reg)
+	pub(crate) fn return_use_regs(&self) -> impl Iterator<Item = IrReg> {
+		self.insts.iter().filter_map(IrInst::return_use_reg)
 	}
 
 	fn debug_fmt(&self, f: &mut Formatter, arch: Option<&Architecture>) -> FmtResult {
@@ -641,8 +641,9 @@ impl IrFunction {
 	}
 
 	/// A list of exitpoints (BBs where control flow leaves the function). Each exitpoint may have
-	/// dummy `use` instructions before the terminator which encode the registers in use at that
-	/// exit.
+	/// `clobber` instructions before the terminator which encode the registers in use at that
+	/// exit, and possibly `use` instructions which encode the arguments to the function to which
+	/// control is being transferred (if this is a tailcall/tailbranch/fallthrough).
 	pub(crate) fn exitpoints(&self) -> &[IrBBId] {
 		&self.exitpoints
 	}
