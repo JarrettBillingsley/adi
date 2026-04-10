@@ -118,7 +118,6 @@ fn test_gb() -> Result<(), Box<dyn std::error::Error>> {
 		] {
 			prog.enqueue_new_func(state, prog.ea_from_va(state, VA(va)));
 		}
-
 	}
 
 	test_common(prog)
@@ -143,9 +142,7 @@ fn test_nes() -> Result<(), Box<dyn std::error::Error>> {
 		// "tests/data/castlevania3.nes";  // 5   (mmc5/exrom)              *UNIMPLEMENTED*
 		// NO ROM: e.g. star wars, rolling thunder // 19 (namco N129/N163)          *UNIMPLEMENTED*
 	let img = Image::new_from_file(img_name)?;
-
 	let (mut prog, start_ea) = program_from_image(img)?;
-
 	println!("{}", prog);
 	println!("Start EA: {:?} ({})", start_ea, prog.name_of_ea(start_ea));
 

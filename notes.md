@@ -1,14 +1,10 @@
 
 # Yak stack
 
-- Register usage analysis
-	- *when* (if ever) should reguse pass be automatically scheduled?
-	- what happens if we rerun reg usage analysis on funcs which already have usage info on them?
-
 # Major tasks
 
 - Const prop provenance ASTs
-- Type propagation (**depends on const prop ASTs** and **register usage analysis**)
+- Type propagation (**depends on const prop ASTs**)
 - Data analysis (***good* analysis depends on type propagation**)
 - Jump table analysis, indirect jumps and calls (**depends on data analysis**)
 - IR correctness testing
@@ -20,7 +16,16 @@
 
 # Imminent tasks!
 
-- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
+- **What happens if we rerun reg usage analysis on funcs which already have usage info on them?**
+- ***When* should register usage pass be automatically scheduled?**
+	- maybe `Program`'s interface for setting it up can be a little different
+	- have `ProgramBuilder` which lets you e.g. enqueue extra functions like I'm doing now
+	- and when you build, it runs the initial analysis which includes a register usage pass
+	- but even then, we need to redo it once in a while... 
+		- is it possible to make it work locally? only on a single function and its callers/callees?
+		- but it's a very nonlocal analysis... it could propagate changes all the way up/down the call graph
+		- maybe it can work semi-locally, where it only visits the functions above/below that one function in the call graph
+- **Does DSE work in a single pass? or does one pass make other things dead?**
 - **Should `sp` be included in arch_regs?**
 	- because it's now being eliminated as a dead store at the ends of functions which is wrong...
 	- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
@@ -46,9 +51,6 @@
 		- non-const values are also taken into account
 		- the info for each register is a type, or union of types
 		- ohhhh this is type reconstruction... maybe implement a form of HM
-	- but wait, **we kinda need register usage analysis for type propagation to work**
-		- there's just not enough information at the level of a single function to say much
-		- ouughhg
 - **Data analysis**
 	- new data analysis pass that runs after refs
 		- inspects outrefs and takes closer look at `OpInfo::Ref` operands
@@ -143,9 +145,7 @@
 		- for allowing the user to set the state manually
 	- **Should IrFunction hold a ref to the owning function?**
 		- would prevent issues like modifying a function and then using the outdated IR
-	- **Does state change analysis needs to take multiple entry points into account?**
-	- **License: GPL3?**
-		- it's what Mesen uses and I'm referencing that heavily for Mos65xx so idk
+	- **Does state change analysis need to take multiple entry points into account?**
 	- **Write some more FUCKING tests**
 	- **Evaluate what really should be `pub`, `pub(crate)`, `pub(super)`, or private**
 	- **Is there duplication of info between `OpInfo::Ref` and `RefMap`?**
@@ -176,8 +176,6 @@
 		- `constprop::Info::join` arbitrarily picks one of the sources right now, and having an AST node for "phi" would avoid throwing away that info
 		- this could be used for *way more* than just constant provenance right?
 			- you could have it show little HLL-like snippets of what a sequence of instructions does, like a very limited decompiler
-	- **IR Dead Store Elimination**
-		- ties into register usage analysis
 	- **Marking functions as "bankswitch functions"**
 		- if it e.g. takes the bank to switch as an argument
 		- ofc user can help with this, but we should be able to identify candidates
@@ -231,11 +229,6 @@
 	- **Ensure each segment's base VA is the same every time it's mapped in**
 		- this is a big fuckin assumption on my part, that each e.g. ROM block will be mapped into the same VA window every time it's accessed
 		- during state change analysis, whenever state changes, check with the mapped-in segments to see if their VA is the same as it ever was
-	- **register usage analysis**
-		- very low-priority pass, done on whole program call graph
-		- can be used to prune `use` and `=<return>` in IR, which gives better info for const prop, which allows better MMU state determination
-			- so it could trigger MMU state analysis again on just about every function in the program lol
-		- **much more is written below**
 
 - **arch/platform-specific**
 	- **NES**
