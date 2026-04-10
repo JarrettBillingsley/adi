@@ -2,12 +2,9 @@
 # Yak stack
 
 - Register usage analysis
-	- **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
-	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
-	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
-		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
 	- code cleanup when done
 	- *when* (if ever) should reguse pass be automatically scheduled?
+	- what happens if we rerun reg usage analysis on funcs which already have usage info on them?
 - "dummy" uses aren't really dummy anymore
 	- they may be over-added in cases where we don't know the register usage, but they are now only inserted before calls and encode arguments to the callee
 	- same goes for the `mov _, <return>`s after calls - they encode callee clobbers/returns, and aren't "dummies"
@@ -27,6 +24,13 @@
 
 # Imminent tasks!
 
+- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
+- **Should `sp` be included in arch_regs?**
+	- because it's now being eliminated as a dead store at the ends of functions which is wrong...
+	- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
+- **Unify architecture "abstract register numbering" and `IrReg` numbering?**
+	- Like the register numbers used in `Operand::Reg` and print methods, and the register numbers used by `IrReg` and `Program::reg_to_string`.
+	- I could see some really headache-inducing bugs caused by incoherence between these
 - **Look into the `tracing` crate to replace `simplelog`**
 	- apparently OpenTelemetry has some way of running a local webserver to view output in your browser, which would be *really fucking useful* especially because doing a search in the terminal is getting to be really painful
 - **Look into `typed-generational-arena` crate**

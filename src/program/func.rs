@@ -63,19 +63,19 @@ impl FuncRegUsage {
 	}
 
 	/// A `RegSet` of argument registers to this function.
-	pub(crate) fn args(&self) -> RegSet {
-		self.args
+	pub(crate) fn args(&self) -> &RegSet {
+		&self.args
 	}
 
 	/// A `RegSet` of return value registers from this function.
-	pub(crate) fn rets(&self) -> RegSet {
-		self.rets
+	pub(crate) fn rets(&self) -> &RegSet {
+		&self.rets
 	}
 
 	/// A `RegSet` of registers which are "clobbered" by this function (i.e. changed by this
 	/// function but not used as return values).
-	pub(crate) fn clobbers(&self) -> RegSet {
-		self.clobbers
+	pub(crate) fn clobbers(&self) -> &RegSet {
+		&self.clobbers
 	}
 
 	/// A `RegSet` of registers which are changed by this function. The union of `rets` and
@@ -250,8 +250,8 @@ impl Function {
 		}
 	}
 
-	pub(crate) fn reg_usage(&self) -> Option<FuncRegUsage> {
-		self.reg_usage
+	pub(crate) fn reg_usage(&self) -> Option<&FuncRegUsage> {
+		self.reg_usage.as_ref()
 	}
 
 	pub(crate) fn reg_usage_mut(&mut self) -> &mut Option<FuncRegUsage> {

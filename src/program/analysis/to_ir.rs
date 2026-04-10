@@ -351,7 +351,7 @@ impl IRewriteCtx for Program {
 		if let Some(func) = self.func_that_contains(ea) {
 			if let Some(ru) = func.reg_usage() {
 				// log::trace!("    callee {:?} usage = {:?}", ea, ru);
-				Some(ru)
+				Some(*ru)
 			} else {
 				// log::trace!("    callee {:?} has no usage", ea);
 				None
@@ -400,8 +400,8 @@ impl<'a> IrRewriter<'a> {
 			new_bbs:  vec![],
 			new_bbid: bbs.len(),
 			bbs,
-			arg_regs:     reg_usage.args(),
-			ret_regs:     reg_usage.rets(),
+			arg_regs:     *reg_usage.args(),
+			ret_regs:     *reg_usage.rets(),
 			changed_regs: reg_usage.changes(),
 			all_regs,
 		}
@@ -448,7 +448,7 @@ impl<'a> IrRewriter<'a> {
 					// if the callee exists, and *its* argument registers have been analyzed, use
 					// those; otherwise use the default ones.
 					ctx.reg_usage_of(ea)
-					.map(|ru| ru.args())
+					.map(|ru| ru.args().clone())
 					.unwrap_or(self.all_regs)
 				}
 			}

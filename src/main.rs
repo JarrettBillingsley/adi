@@ -16,8 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	setup_logging(LevelFilter::Info)?;
 	setup_panic();
 
-	// test_gb()
-	test_nes()
+	test_gb()
+	// test_nes()
 	// test_toy()
 }
 
@@ -981,19 +981,25 @@ fn show_func_piece_header(prog: &Program, func: &Function) {
 	println!("{}{}{}", "; (Piece of function ".green(), name.name.green(), ")".green());
 }
 
-// fn show_reg_set(prog: &Program, name: &str, regs: RegSet) {
-// 	print!("{}", format!("; {} = ", name).green());
+fn show_reg_set<I>(prog: &Program, name: &str, regs: I)
+where
+	I: Iterator<Item = u8> + ExactSizeIterator + std::iter::FusedIterator,
+{
+	print!("{}", format!("; {}", name).green());
 
-// 	if regs.is_empty() {
-// 		print!("{}", "<none>".green());
-// 	} else {
-// 		for reg in regs.iter() {
-// 			print!("{} ", reg.to_string().green());
-// 		}
-// 	}
+	if regs.len() == 0 {
+		print!("{}", "<none>".green());
+	} else {
+		for (i, reg) in regs.enumerate() {
+			if i != 0 {
+				print!("{}", ", ".green());
+			}
+			print!("{}", prog.reg_to_string(reg).green());
+		}
+	}
 
-// 	println!();
-// }
+	println!();
+}
 
 fn show_func_header(prog: &Program, func: &Function) {
 	let divider =
@@ -1004,12 +1010,29 @@ fn show_func_header(prog: &Program, func: &Function) {
 	let name = prog.name_of_ea(func.ea());
 	println!("{}{}", "; Function ".green(), name.name.green());
 
-	// if let Some(usage) = func.reg_usage() {
-	// 	println!("{}", "; Register usage:".green());
-	// 	show_reg_set(prog, "Arguments    ", usage.args());
-	// 	show_reg_set(prog, "Return Values", usage.rets());
-	// 	show_reg_set(prog, "Clobbers     ", usage.clobbers());
+
+	show_reg_set(prog, "Arguments:     ", prog.func_arg_regs(func));
+	show_reg_set(prog, "Return values: ", prog.func_return_regs(func));
+	show_reg_set(prog, "Clobbers:      ", prog.func_clobber_regs(func));
+	// print!("{}", "; Arguments: ".green());
+
+	// let regs = prog.func_args(func);
+	// if regs.len() == 0 {
+	// 	print!("{}", "<none>".green());
+	// } else {
+	// 	for (i, reg) in regs.enumerate() {
+	// 		if i != 0 {
+	// 			print!("{}", ", ".green());
+	// 		}
+	// 		print!("{}", prog.reg_to_string(reg).green());
+	// 	}
 	// }
+
+	println!();
+
+	// show_reg_set(prog, "Arguments    ", Program::func_args, func);
+	// show_reg_set(prog, "Return Values", usage.rets());
+	// show_reg_set(prog, "Clobbers     ", usage.clobbers());
 
 	// TODO: rewrite this using some new API
 	// if let Some(usage) = func.reg_usage() {

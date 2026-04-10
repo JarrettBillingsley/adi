@@ -1,4 +1,5 @@
 
+use std::iter::{ FusedIterator };
 use std::fmt::{ Debug, Formatter, Result as FmtResult };
 
 use crate::ir::{ IrRegSetType, IrReg };
@@ -101,7 +102,7 @@ impl RegSet {
 	}
 
 	/// Iterator over the register indices in this set.
-	pub(crate) fn iter(&self) -> impl Iterator<Item = u8> {
+	pub(crate) fn iter(&self) -> impl Iterator<Item = u8> + ExactSizeIterator + FusedIterator {
 		struct RegSetIter {
 			bits: IrRegSetType,
 			idx: u8,
@@ -127,14 +128,14 @@ impl RegSet {
 			}
 		}
 
-		impl std::iter::ExactSizeIterator for RegSetIter {
+		impl ExactSizeIterator for RegSetIter {
 			fn len(&self) -> usize {
 				// eh why not, I'm sure the default impl of calling size_hint would optimize down
 				// to the same thing anyway but whatever
 				self.bits.count_ones() as usize
 			}
 		}
-		impl std::iter::FusedIterator for RegSetIter {}
+		impl FusedIterator for RegSetIter {}
 
 		RegSetIter { bits: self.bits, idx: 0 }
 	}

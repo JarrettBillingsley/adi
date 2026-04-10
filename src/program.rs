@@ -1,4 +1,5 @@
 
+use std::iter::{ FusedIterator };
 use std::borrow::{ Cow };
 use std::collections::{
 	btree_map::Iter as BTreeIter,
@@ -277,6 +278,43 @@ impl Program {
 		} else {
 			None
 		}
+	}
+
+	/// Returns an iterator over the registers used as arguments to `f`. The `u8` values given by
+	/// the iterator are opaque numbers which can be passed to `reg_to_string`.
+	pub fn func_arg_regs(&self, f: &Function) ->
+		impl Iterator<Item = u8> + ExactSizeIterator + FusedIterator {
+		match f.reg_usage() {
+			Some(usage) => usage.args().iter(),
+			None        => RegSet::EMPTY.iter(),
+		}
+	}
+
+	/// Returns an iterator over the registers used as return values from `f`. The `u8` values given
+	/// by the iterator are opaque numbers which can be passed to `reg_to_string`.
+	pub fn func_return_regs(&self, f: &Function) ->
+		impl Iterator<Item = u8> + ExactSizeIterator + FusedIterator {
+		match f.reg_usage() {
+			Some(usage) => usage.rets().iter(),
+			None        => RegSet::EMPTY.iter(),
+		}
+	}
+
+	/// Returns an iterator over the registers which are clobbered by `f` (changed, but not used as
+	/// return values). The `u8` values given by the iterator are opaque numbers which can be
+	/// passed to `reg_to_string`.
+	pub fn func_clobber_regs(&self, f: &Function) ->
+		impl Iterator<Item = u8> + ExactSizeIterator + FusedIterator {
+		match f.reg_usage() {
+			Some(usage) => usage.clobbers().iter(),
+			None        => RegSet::EMPTY.iter(),
+		}
+	}
+
+	/// Gets the string representation of a register index given by `func_arg_regs`,
+	/// `func_return_regs`, or `func_clobber_regs`.
+	pub fn reg_to_string(&self, reg: u8) -> &'static str {
+		self.arch().reg_name(reg)
 	}
 
 	/// Gets the function that contains the given EA, or None if none does.

@@ -88,7 +88,7 @@ impl<'a> RegUsagePass<'a> {
 					.map(|bbid| (prog.bbidx.get(*bbid).ea(), func.id()))
 				).flatten().collect(),
 			fids_to_usage: prog.all_funcs()
-					.map(|func| (func.id(), func.reg_usage()
+					.map(|func| (func.id(), func.reg_usage().cloned()
 					// start off with no arguments since we're determining them bottom-up, and
 					// recursive functions' arguments will be mis-analyzed if the set is nonempty.
 					//
@@ -195,7 +195,7 @@ impl<'a> RegUsagePass<'a> {
 
 			// whatever clobbers are on the function now are its local clobbers; put it in
 			// actual_clobbers.
-			actual_clobbers[i] = self.usage_of_fid(fid).clobbers();
+			actual_clobbers[i] = *self.usage_of_fid(fid).clobbers();
 		}
 
 		// now apply the clobbers
@@ -290,7 +290,7 @@ impl<'a> RegUsagePass<'a> {
 		// since we'll be replacing the clobber sets with dummies in the loop below, this vec holds
 		// the actual clobber sets which will be applied after the loop.
 		let backup_clobbers: Vec<RegSet> = scc.iter()
-			.map(|&fid| self.usage_of_fid(fid).clobbers())
+			.map(|&fid| self.usage_of_fid(fid).clobbers().clone())
 			.collect();
 		let mut actual_args = vec![RegSet::EMPTY; scc.len()];
 
@@ -308,7 +308,7 @@ impl<'a> RegUsagePass<'a> {
 			self.analyze_args(fid);
 
 			// get the local args and empty the args back out.
-			actual_args[i] = self.usage_of_fid(fid).args();
+			actual_args[i] = *self.usage_of_fid(fid).args();
 			self.change_args(fid, RegSet::EMPTY);
 		}
 
