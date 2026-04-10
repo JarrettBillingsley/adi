@@ -162,7 +162,6 @@ const INST_DESCS: &[InstDesc] = &[
 	InstDesc { opcode: ADC_IMM, meta_op: ADC,  addr_mode: IMM, access: None },
 	InstDesc { opcode: ROR_IMP, meta_op: RORA, addr_mode: IMP, access: None },
 	OP_INVALID,
-	// TODO: has an implicit Target
 	InstDesc { opcode: JMP_IND, meta_op: JMP,  addr_mode: IND, access: Some(direct_r) },
 	InstDesc { opcode: ADC_ABS, meta_op: ADC,  addr_mode: ABS, access: Some(direct_r) },
 	InstDesc { opcode: ROR_ABS, meta_op: ROR,  addr_mode: ABS, access: Some(direct_rw) },
@@ -188,7 +187,6 @@ const INST_DESCS: &[InstDesc] = &[
 
 	// 0x80
 	InstDesc { opcode: DOP_80,  meta_op: DOP,  addr_mode: IMM, access: None },
-	// TODO: implicit indirect write
 	InstDesc { opcode: STA_IZX, meta_op: STA,  addr_mode: IZX, access: Some(indirx_r) },
 	InstDesc { opcode: DOP_82,  meta_op: DOP,  addr_mode: IMM, access: None },
 	OP_INVALID,
@@ -207,7 +205,6 @@ const INST_DESCS: &[InstDesc] = &[
 
 	// 0x90
 	InstDesc { opcode: BCC_REL, meta_op: BCC,  addr_mode: REL, access: Some(target) },
-	// TODO: implicit indirect write
 	InstDesc { opcode: STA_IZY, meta_op: STA,  addr_mode: IZY, access: Some(direct_r) },
 	InstDesc { opcode: HLT_92,  meta_op: HLT,  addr_mode: IMP, access: None },
 	OP_INVALID,

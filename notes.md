@@ -39,8 +39,7 @@
 		- 32/32 is almost certainly more than enough
 	- also I think it'd be possible to renumber generations when e.g. saving/loading so that they never get out of hand
 - **move much of the printing/output stuff in `main.rs` into the library itself**
-	- so it doesn't e.g. have to be duplicated in GUI frontends
-- **Inventory `TODO`s throughout the codebase**
+	- so it doesn't e.g. have to be duplicated in GUI frontends	
 - **Const prop provenance ASTs**
 	- come up with OpInfo::Ref for halves of addresses
 - **Type propagation**
@@ -66,10 +65,13 @@
 	- move data printing into `Program`
 		- it can call some of the `IPrinter` methods for printing numbers, addresses etc.
 - **IR**
-	- `ValSize::_1` for bools?
-	- **Mos65xx IR:**
-		- reimplement rotates and uses of `iand` which could be bit instructions
 	- **Cleanup/reorganize both Mos65xx and Toy to match GB IR compiler (methods on `IrBuilder`, free functions instead of methods on `InstDesc`, method chaining)**
+	- `ValSize::_1` for bools?
+	- **Mos65xx:**
+		- reimplement rotates and uses of `iand` which could be bit instructions
+		- indirect jump page-crossing behavior differs on different models
+		- dummy reads and writes?
+		- abstract shift/rotate instruction IR code
 	- **Put some sanity checking to ensure that IR insts that refer to operands *actually refer to real operands on the source instruction***
 		- ...and that all operands in the source instruction are referenced by the IR
 	- **IR stress tests - test *all* possible opcodes for each arch**
@@ -78,6 +80,13 @@
 		- make a test ROM that can be run in an emulator
 		- validate against emulator output (any emulators output memory traces?)
 		- use a dummy testing mapper/MBC which can be used to output the contents of stores to specific location to output results of const prop
+	- **Const Prop**
+		- `constprop::Info::join` arbitrarily picks one of the sources right now, and having an AST node for "phi" would avoid throwing away that info
+		- tests for carriesc/borrowsb
+		- modulo on signed numbers is poorly-defined
+		- negative shift distances?
+		- this could be used for *way more* than just constant provenance right?
+			- you could have it show little HLL-like snippets of what a sequence of instructions does, like a very limited decompiler
 	
 - detect "always/never taken" branches (IR `cbranch` instructions where condition is constant)
 	- examples:
@@ -107,7 +116,7 @@
 			- **BUUUUUUUUUUUUUUUUUUUUUUUUUUT** something could split the BB between the `lda` and the `bne` and ffffffffffffffuck it all up lol. aAHGHAHGlLlL
 	- I think what makes the most sense then is:
 		- un-make the BB which can never be run
-		- put a point of interest there
+		- put a POI there
 	- **BUT THIS IS IMPORTANT:** since this is changing the function's CFG, it means it needs to rerun the static analysis pass. **but that means it's rescheduling itself.**
 		- so something else needs to be put at that address/on the BB that owns the terminator to say "hey, we analyzed this before, don't do it again" or else it could loop infinitely
 - refs pass needs to notify any existing referenced functions of the MMU state flowing into them...
@@ -115,7 +124,33 @@
 
 # TODO:
 
+- `pass_staticfuncanalysis`
+	- change `BBTerm::StateChange` on dynamic state changes
+	- either visit AST to insert `Half` refs, or have `ConstAddrs` do that
+	- revisiting `StateChange`s can turn them from `Static` to `Dynamic`; need to implement that
+- **Open Questions**
+	- `Program::name_of_ea`
+		- how to implement `base + offset` naming correctly?
+		- am I getting the VA from an EA right?
+	- are there GB MBCs which respond to loads?
+	- `pass_staticfuncanalysis` const addr `RefInfo` is always marked absolute. is that correct?
+	- `pass_regusage`
+		- enqueue state change analysis on funcs whose reg usage changed?
+		- what happens when rerun on already-analyzed funcs?
+	- `pass_newfunc` wat do when `should_analyze_bb` called on `Data` span? mark referrer invalid?
 - **Design issues**
+	- **Misc**
+		- `dataflow` should support reverse dataflow algorithms too
+		- `IrBasicBlock::phi_for_reg` is linear time - use a map instead?
+		- `IrFunction::consts` needs to be invalidated whenever the function is modified
+			- such as in `IrFunction::elim_dead_stores`
+		- `IrBuilder` default capacity is 8 picked by Vibes. don't actually know typical IR size
+		- `DomTree` uses `DiGraphMap`; could it be implemented directly?
+		- `BasicBlock::control_target` - how should it work for `icall/ibranch`?
+		- `data::BitfieldDesc::add_field` should be more like `StructDesc::add_field`
+		- `data::StructDesc::add_field` should detect and reject recursive struct types
+		- `OpInfo` needs more variants for e.g. enum values, struct fields, strings...
+		- `program/namemap` "loc" and "func" prefixes should be customizable, not constants
 	- **`BBTerm` and `InstructionKind` really encode *control flow strategies***
 		- so maybe that's what they should be named
 		- also opens up ideas for "custom" control flow set by user (does it continue to the next PC? does it have a target? multiple targets? does it change state? etc)
@@ -167,33 +202,35 @@
 		- but **I think I'd wanna put this off until after const prop builds ASTs** - not sure what the implications are for custom IR instructions if that's the case
 
 - **Analysis**
+	- **Function splitting**
+		- splitting multi-entry funcs *is* possible in some cases
 	- **Method to only analyze one queue item**
 		- this way the queue can be analyzed in an executor-based environment instead of being forced onto a second thread
 		- and/or some listener for analysis steps
-	- **Make const prop build ASTs for constant provenance**
-		- want this for back-propagating info to the sources!!! duhh
-			- also makes **type propagation** possible
-		- `constprop::Info::join` arbitrarily picks one of the sources right now, and having an AST node for "phi" would avoid throwing away that info
-		- this could be used for *way more* than just constant provenance right?
-			- you could have it show little HLL-like snippets of what a sequence of instructions does, like a very limited decompiler
 	- **Marking functions as "bankswitch functions"**
 		- if it e.g. takes the bank to switch as an argument
 		- ofc user can help with this, but we should be able to identify candidates
 	- **Dead-end/invalid control flow back-propagation**
 		- if we hit a dead end, that's a sign that the control flow that got us here is mis-analyzed - maybe an "always-taken conditional branch" or sth
 		- also common with *jump table functions* - right after the call is *not code*
-	- **Jumptable analysis**
+		- `pass_newfunc` - mark referrer invalid when BB split fails
+		- `pass_splitfunc` - mark referrer invalid when BB split fails
+			- (uhhh is this different from the one in `pass_newfunc`?)
+	- **Jumptable analysis and indirect calls/branches (icall/ibranch)**
 		- should support multiple strategies (depending on the arch), e.g.
 			- absolute
 			- PC-relative
 			- jumptable-base-relative
 		- should support *jumptable functions* - call a function to perform the switch
-	- **BBs and functions for which the MMU state can be multiple possibilities**
+		- `IrInstKind::ICall/IBranch` target vec members
+		- `to_ir` union their arg and changed regs
+		- `pass_regusage` handle returns
+	- **Multi-state BBs BBs (and functions)**
 		- BB MMU state could really be more than just one thing...
 			- `Single(state)` if the MMU is in just one state
 			- `Multi(Vec<MmuState>)` if the MMU could be one of many states
 			- `Dynamic` if the MMU state cannot be *statically* determined
-				- and maybe it can hold a `Vec<MmuState>` for user-added MMU state possibilities
+				- and maybe it can hold a `Vec<MmuState>` for possibilities which *can* be statically determined, or which the user added
 		- this means each *function* can also have multiple MMU states on entry
 			- e.g. common functions called from multiple banks
 		- and the MMU state on *exit* from a function can be different than on entry
@@ -210,6 +247,7 @@
 				- and consequently instruction printing...
 			- state change analysis
 				- which actually would handle this just fine already, it's written for it
+				- `StateInfo::Dynamic` variant needed
 	- **Stack analysis**
 		- IR makes this straightforward (ha... ha ha.....)
 		- if a function makes the stack pointer go *past its return address* then that's a pretty strong signal it's doing something funky, like implementing a jump table
@@ -232,15 +270,20 @@
 
 - **arch/platform-specific**
 	- **NES**
-		- MMU doesn't yet handle external RAM
+		- cart RAM (PRG RAM), RAM banking
 		- loader incorrectly sets `Image::orig_offs` due to Ines not supporting that
-		- std labels need data item once data is implemented
+		- std labels need data items once data is implemented
 		- more mappers (remember to set segment base VA when state changes)
+		- platform option to enable unused test registers?
 	- **GB**
-		- MMU doesn't yet handle external RAM
+		- cart RAM, RAM banking
 		- more MBCs (remember to set segment base VA when state changes)
 		- syntax options - `[hl]` vs. `(hl)`; `add a, b` vs. `add b`
+		- CGB memory map and names
+		- MBC1: more than 32 ROM banks
+		- MBC1: different wiring for more ROM banks
 	- **Mos65xx**
+		- zero-page address display should be different
 		- there are more (unofficial) variations of `NOP`
 		- correct `DOP` addressing modes
 		- implement `TOP`
@@ -260,10 +303,13 @@
 		- how to keep it globally-unique for the `NameMap` tho?
 			- well, could leave that to the frontend to deal with it
 			- e.g. frontend could generate a globally-unique prefix/suffix for each local name, and simply not *display* that part to the user
-	- **"Points of interest" to let user know things to investigate**
-		- state changes that can't be automatically determined
-		- jumptables
+	- **"Points of interest (POI)" to let user know things to investigate**
+		- state changes that can't be automatically determined (`pass_staticfuncanalysis`)
+		- multi-constant addresses (`pass_staticfuncanalysis`)
+		- multi-state BBs (`pass_staticfuncanalysis`), or just implement those lol
+		- jumptables (`pass_jumptable`)
 		- functions that access particular hardware registers
+		- calling functions in fake segments (`pass_newfunc`)
 	- **Function attributes**
 		- e.g. "bankswitch", "jumptable"
 		- for bankswitch functions, we could **let the user specify some formula for them**

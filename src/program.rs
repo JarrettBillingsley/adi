@@ -553,9 +553,6 @@ impl Program {
 
 	/// Gets the name of a given EA if one exists, or generates one if not.
 	pub fn name_of_ea(&self, given_ea: EA) -> Name<'_> {
-		// TODO: uhhhh Functions and DataItems have their own name fields. how does
-		// that interact with this? (should they even have name fields?)
-
 		// find the EA of the span that covers this EA... which might be different (see end)
 		// TODO: figure out how to do this right
 		let ea = given_ea; //self.span_at_ea(given_ea).start();

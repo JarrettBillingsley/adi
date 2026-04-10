@@ -10,8 +10,7 @@ use crate::program::{ Program, FuncId, EA };
 
 type CallGraph = DiGraphMap<FuncId, ()>;
 
-// TODO: make pub(crate)
-pub struct ProgramCallGraph {
+pub(crate) struct ProgramCallGraph {
 	g: CallGraph,
 }
 
@@ -22,23 +21,19 @@ impl ProgramCallGraph {
 		}
 	}
 
-	// TODO: make pub(crate)
-	pub fn sccs(&self) -> Vec<Vec<FuncId>> {
+	pub(crate) fn sccs(&self) -> Vec<Vec<FuncId>> {
 		tarjan_scc(&self.g)
 	}
 
-	// TODO: make pub(crate)
-	pub fn callers_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
+	pub(crate) fn callers_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
 		self.g.edges_directed(fid, Direction::Incoming).map(|(_, dst, _)| dst)
 	}
 
-	// TODO: make pub(crate)
-	pub fn callees_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
+	pub(crate) fn callees_of(&self, fid: FuncId) -> impl Iterator<Item = FuncId> {
 		self.g.edges_directed(fid, Direction::Outgoing).map(|(_, dst, _)| dst)
 	}
 
-	// TODO: make pub(crate)
-	pub fn is_recursive(&self, fid: FuncId) -> bool {
+	pub(crate) fn is_recursive(&self, fid: FuncId) -> bool {
 		self.callees_of(fid).any(|dst| dst == fid)
 	}
 
@@ -57,8 +52,7 @@ impl ProgramCallGraph {
 
 impl Program {
 	/// Build the call graph for the whole program.
-	// TODO: make pub(crate)
-	pub fn build_call_graph(&self) -> ProgramCallGraph {
+	pub(crate) fn build_call_graph(&self) -> ProgramCallGraph {
 		let mut g = CallGraph::new();
 
 		for (_, func) in self.funcs.all_funcs() {
@@ -97,8 +91,7 @@ impl Program {
 		ProgramCallGraph::new(g)
 	}
 
-	// TODO: make pub(crate)
-	pub fn dump_call_graph(&self, cg: &ProgramCallGraph) {
+	pub(crate) fn dump_call_graph(&self, cg: &ProgramCallGraph) {
 		println!("----------------------------------------------------------------------------");
 		println!("Call Graph");
 		println!();

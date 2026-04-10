@@ -150,8 +150,8 @@ impl InstDesc {
 					// tmp2  = lo
 					// tmp1  = hi
 					// tmp16 = tmp1:tmp2
-					b.load (REG_TMP2,  IrConst::_16(va));
-					b.load (REG_TMP1,  IrConst::_16(va & 0xFF00));
+					b.load(REG_TMP2,  IrConst::_16(va));
+					b.load(REG_TMP1,  IrConst::_16(va & 0xFF00));
 					b.pair(REG_TMP16, REG_TMP1, REG_TMP2);
 				} else {
 					// ez mode

@@ -31,6 +31,11 @@ impl Program {
 			log::trace!("    setting {:?} usage to {:?}", fid, usage);
 
 			// TODO: check if usage changed *here* and... enqueue state change analysis on them??
+
+			// TODO: if a function's reg usage has been analyzed before, its *arguments* cannot have
+			// changed, but its *return/clobber* regs may have. (the changed set won't change, but
+			// regs might have moved from clobbers to rets.) In that case... uhhhh what? mark it
+			// for state change analysis?
 			*self.funcs.get_mut(fid).reg_usage_mut() = Some(usage);
 		}
 
@@ -451,11 +456,6 @@ impl<'a> RegUsagePass<'a> {
 
 		// any remaining return-use is a *true* return value from a callee and not just a clobber.
 		for (callee_fid, irbbid) in callees_to_bbs.into_iter() {
-			// TODO: if a function's reg usage has been analyzed before, its *arguments* cannot have
-			// changed, but its *return/clobber* regs may have. (the changed set won't change, but
-			// regs might have moved from clobbers to rets.) In that case... uhhhh what? mark it
-			// for state change analysis?
-
 			let mut ret_set = RegSet::new();
 
 			for reg in ir.get_bb(irbbid).return_use_regs() {

@@ -819,7 +819,6 @@ fn show_unk(prog: &Program, span: &Span) {
 	let divider =
 		"; -------------------------------------------------------------------------".green();
 
-	// TODO: this is kind of a mess
 	let ea    = span.start();
 	let seg   = prog.segment_from_ea(ea);
 	let state = prog.mmu_state_at(ea).unwrap_or_else(|| prog.initial_mmu_state());
@@ -1006,37 +1005,10 @@ fn show_func_header(prog: &Program, func: &Function) {
 
 	let name = prog.name_of_ea(func.ea());
 	println!("{}{}", "; Function ".green(), name.name.green());
-
-
 	show_reg_set(prog, "Arguments:     ", prog.func_arg_regs(func));
 	show_reg_set(prog, "Return values: ", prog.func_return_regs(func));
 	show_reg_set(prog, "Clobbers:      ", prog.func_clobber_regs(func));
-	// print!("{}", "; Arguments: ".green());
-
-	// let regs = prog.func_args(func);
-	// if regs.len() == 0 {
-	// 	print!("{}", "<none>".green());
-	// } else {
-	// 	for (i, reg) in regs.enumerate() {
-	// 		if i != 0 {
-	// 			print!("{}", ", ".green());
-	// 		}
-	// 		print!("{}", prog.reg_to_string(reg).green());
-	// 	}
-	// }
-
 	println!();
-
-	// show_reg_set(prog, "Arguments    ", Program::func_args, func);
-	// show_reg_set(prog, "Return Values", usage.rets());
-	// show_reg_set(prog, "Clobbers     ", usage.clobbers());
-
-	// TODO: rewrite this using some new API
-	// if let Some(usage) = func.reg_usage() {
-	// 	println!("{}{}", "; Argument registers: ".green(), format!("{:?}", usage.args()).green());
-	// 	println!("{}{}", "; Return registers: ".green(), format!("{:?}", usage.rets()).green());
-	// 	println!("{}{}", "; Clobbered registers: ".green(), format!("{:?}", usage.clobbers()).green());
-	// }
 
 	if !func.attrs().is_empty() {
 		let attrs = format!("{:?}", func.attrs());

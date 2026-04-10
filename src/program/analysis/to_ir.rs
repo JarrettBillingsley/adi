@@ -137,22 +137,11 @@ impl Program {
 					// after it; otherwise, it's a tailcall, and this BB is an exitpoint, so we need
 					// to insert clobbers. the same BB can have *both* clobbers *and* uses inserted,
 					// but with different reg sets.
-					if self.ea_is_bb_in_function(cont, bb.func()).is_some() {
+					if self.ea_is_bb_in_function(cont, fid).is_some() {
 						returnpoints.push(rewrite_irbbid);
 					} else {
 						exitpoints.push(rewrite_irbbid);
 					}
-
-					// // if cont is an in-function successor, it needs return-insertion
-					// // TODO: just func, not bb.func()
-					// if self.ea_is_bb_in_function(cont, bb.func()).is_some() {
-					// 	callpoints.push(rewrite_irbbid);
-					// 	returnpoints.push(rewrite_irbbid);
-					// } else if !self.bb_any_successor_in_function(bbid) {
-					// 	// if ALL successors are out-of-function, it's an exitpoint.
-					// 	// yes, the same BB can be *both* a callpoint *and* an exitpoint!
-					// 	exitpoints.push(rewrite_irbbid);
-					// }
 				}
 				Jump { .. } | FallThru { .. } | StateChange { .. } |
 				Cond { .. } | IndirJump { .. }  => {
@@ -462,7 +451,6 @@ impl<'a> IrRewriter<'a> {
 			_ => unreachable!("what the hell is callpoints.push() pushing??"),
 		};
 
-		// TODO: abstract this out of here and insert_exitpoint_clobbers
 		if !regs.is_empty() {
 			let ea = term_inst.ea();
 			irbb.insts.pop();
