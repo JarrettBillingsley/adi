@@ -1,5 +1,5 @@
 
-use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
+use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx, FxHashSet as HashSet, FxHashSetEx };
 
 use super::*;
 
@@ -9,13 +9,11 @@ use super::*;
 
 /// Ways in which a register is used.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(crate) enum DefUseKind {
+enum DefUseKind {
 	/// Not used anywhere.
 	None,
-	/// Used as an argument to the `phin`th phi function of `bbid`.
-	///
-	/// Note this is never in the map returned by find_defs_and_uses - they will all be either
-	/// `None` or `Real`. This is used internally by the algorithm.
+	/// Used as an argument to the `phin`th phi function of `bbid`. Used temporarily in the middle
+	/// of the algorithm; these are replaced by `None` or `Real` at the end.
 	Phi { bbid: IrBBId, phin: usize },
 	/// Used by at least one "real" instruction.
 	Real,
@@ -61,21 +59,16 @@ impl DefInfo {
 		}
 	}
 
-	/// how the register is used.
-	pub(crate) fn how_used(&self) -> DefUseKind {
-		self.use_kind
-	}
-
 	/// the location where it was defined.
 	pub(crate) fn loc(&self) -> DefLocation {
 		self.loc
 	}
 
+	/// is it used?
 	pub(crate) fn is_used(&self) -> bool {
 		!matches!(self.use_kind, DefUseKind::None)
 	}
 
-	/// mark it as used by phi function.
 	fn mark_phi_used(&mut self, bbid: IrBBId, phin: usize) {
 		if self.use_kind == DefUseKind::None {
 			self.use_kind = DefUseKind::Phi { bbid, phin };
@@ -152,15 +145,24 @@ pub(crate) fn find_defs_and_uses(bbs: &[IrBasicBlock]) -> DefMap {
 
 	for (&reg, info) in defs.iter() {
 		if let DefUseKind::Phi { bbid, phin } = info.use_kind {
-			let mut final_reg = bbs[bbid].get_phi(phin).dst_reg();
-			let mut final_info = defs.get(&final_reg).unwrap();
+			let mut visited = HashSet::new();
+			visited.insert((bbid, phin));
 
-			while let DefUseKind::Phi { bbid, phin } = final_info.use_kind {
-				final_reg = bbs[bbid].get_phi(phin).dst_reg();
-				final_info = defs.get(&final_reg).unwrap();
+			let mut cur_reg = bbs[bbid].get_phi(phin).dst_reg();
+			let mut cur_use_kind = defs.get(&cur_reg).unwrap().use_kind;
+
+			while let DefUseKind::Phi { bbid, phin } = cur_use_kind {
+				// if already visited, we're in a loop; it's never really used.
+				if !visited.insert((bbid, phin)) {
+					cur_use_kind = DefUseKind::None;
+					break;
+				}
+
+				cur_reg = bbs[bbid].get_phi(phin).dst_reg();
+				cur_use_kind = defs.get(&cur_reg).unwrap().use_kind;
 			}
 
-			true_use_kinds.insert(reg, final_info.use_kind);
+			true_use_kinds.insert(reg, cur_use_kind);
 		}
 	}
 

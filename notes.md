@@ -2,16 +2,7 @@
 # Yak stack
 
 - Register usage analysis
-	- **QUESTION: can a BB be a callpoint *and* an exitpoint? if so, does it double-insert `use` instructions?**
-		- callpoints are call/icall instructions where cont is in-function.
-		- exitpoints are call/icall/ibranch/cbranch/branch instructions where all successors are out-of-function.
-		- so **no,** the same BB can't be both. *however.* consider an exitpoint call where the target and cont are out-of-function. should the current generation of regs be marked as `use` or as `clobber` or both?
-	- oh dang, DSE isn't eliminating dead stores that come from phis. it really should.
-		- or should it...?
 	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
-	- determine arg/clobber regs for recursive funcs
-		- I think DSE needs to be done after each phase...
-	- determine return values for recursive funcs
 	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
 		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
 	- code cleanup when done
@@ -42,7 +33,8 @@
 		- 32/32 is almost certainly more than enough
 	- also I think it'd be possible to renumber generations when e.g. saving/loading so that they never get out of hand
 - **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
-	- more generally, a bunch of the printing/output stuff in `main.rs` needs to be moved into the library itself so it doesn't e.g. have to be duplicated in GUI frontends
+- **move much of the printing/output stuff in `main.rs` into the library itself**
+	- so it doesn't e.g. have to be duplicated in GUI frontends
 - **Inventory `TODO`s throughout the codebase**
 - **Const prop provenance ASTs**
 	- come up with OpInfo::Ref for halves of addresses
@@ -220,11 +212,20 @@
 				- and consequently instruction printing...
 			- state change analysis
 				- which actually would handle this just fine already, it's written for it
-	- **Stack pointer tracking**
+	- **Stack analysis**
 		- IR makes this straightforward (ha... ha ha.....)
 		- if a function makes the stack pointer go *past its return address* then that's a pretty strong signal it's doing something funky, like implementing a jump table
 		- this can also improve dataflow analysis - constants that are pushed/popped can be tracked through the virtual stack!
 			- TRICKY in the presence of calls tho
+		- currently reg use analysis mis-identifies saved regs as arguments and return values, i.e. 
+			```
+			func:
+				push bc # <- identifies b,c as args
+				...
+				pop bc # <- identifies b,c as return values
+				ret
+			```
+			- but stack analysis could correct this - b and c are actually saved and restored, meaning they are unaffected
 	- **Detect and de-duplicate identical functions in multiple banks**
 		- e.g. the NES Battletoads bankswitch function
 	- **Ensure each segment's base VA is the same every time it's mapped in**
