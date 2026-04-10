@@ -129,21 +129,36 @@ impl Program {
 					exitpoints.push(rewrite_irbbid);
 				}
 				Call { cont, .. } | IndirCall { cont, .. } => {
-					// if cont is an in-function successor, it needs return-insertion
-					// TODO: just func, not bb.func()
+					// it doesn't matter whether this is a normal call or tailcall; we are passing
+					// arguments to that function.
+					callpoints.push(rewrite_irbbid);
+
+					// if the continuation successor is in-function, we need to insert mov-returns
+					// after it; otherwise, it's a tailcall, and this BB is an exitpoint, so we need
+					// to insert clobbers. the same BB can have *both* clobbers *and* uses inserted,
+					// but with different reg sets.
 					if self.ea_is_bb_in_function(cont, bb.func()).is_some() {
-						callpoints.push(rewrite_irbbid);
 						returnpoints.push(rewrite_irbbid);
-					} else if !self.bb_any_successor_in_function(bbid) {
-						// if ALL successors are out-of-function, it's an exitpoint.
-						// yes, the same BB can be *both* a callpoint *and* an exitpoint!
+					} else {
 						exitpoints.push(rewrite_irbbid);
 					}
+
+					// // if cont is an in-function successor, it needs return-insertion
+					// // TODO: just func, not bb.func()
+					// if self.ea_is_bb_in_function(cont, bb.func()).is_some() {
+					// 	callpoints.push(rewrite_irbbid);
+					// 	returnpoints.push(rewrite_irbbid);
+					// } else if !self.bb_any_successor_in_function(bbid) {
+					// 	// if ALL successors are out-of-function, it's an exitpoint.
+					// 	// yes, the same BB can be *both* a callpoint *and* an exitpoint!
+					// 	exitpoints.push(rewrite_irbbid);
+					// }
 				}
-				IndirJump { .. } | Cond { .. } | Jump { .. } |
-				FallThru { .. } | StateChange { .. } => {
-					// if ANY successor is out-of-function, it's an exitpoint.
+				Jump { .. } | FallThru { .. } | StateChange { .. } |
+				Cond { .. } | IndirJump { .. }  => {
+					// if ANY successor is out-of-function, it's a tailcall.
 					if !self.bb_all_successors_in_function(bbid) {
+						callpoints.push(rewrite_irbbid);
 						exitpoints.push(rewrite_irbbid);
 					}
 				}
@@ -422,16 +437,30 @@ impl<'a> IrRewriter<'a> {
 		// SAFETY: this match is valid because callpoints contains only `call/icall` instructions
 		// which are guaranteed to have a target.
 		// (fixup_ir_targets is the step before this one, so this match is good.)
-		let regs = match term_inst.target().unwrap() {
-			// recursive call! use our own arg regs.
-			IrTarget::Internal(_)  => self.arg_regs,
-			IrTarget::External(ea) => {
-				// if the callee exists, and *its* argument registers have been analyzed, use
-				// those; otherwise use the default ones.
-				ctx.reg_usage_of(ea)
-				.map(|ru| ru.args())
-				.unwrap_or(self.all_regs)
+		log::warn!("term_inst = {:?}", term_inst);
+
+		let regs = match term_inst.kind() {
+			IrInstKind::Branch  { dst, .. } |
+			IrInstKind::CBranch { dst, .. } |
+			IrInstKind::Call    { dst, .. } => match dst {
+				// recursive call! use our own arg regs.
+				IrTarget::Internal(_)  => self.arg_regs,
+				IrTarget::External(ea) => {
+					// if the callee exists, and *its* argument registers have been analyzed, use
+					// those; otherwise use the default ones.
+					ctx.reg_usage_of(ea)
+					.map(|ru| ru.args())
+					.unwrap_or(self.all_regs)
+				}
 			}
+
+			IrInstKind::ICall { .. } |
+			IrInstKind::IBranch { .. } => {
+				// TODO: once we know the destinations of these, do the union of all their args
+				self.all_regs
+			}
+
+			_ => unreachable!("what the hell is callpoints.push() pushing??"),
 		};
 
 		// TODO: abstract this out of here and insert_exitpoint_clobbers
@@ -452,27 +481,14 @@ impl<'a> IrRewriter<'a> {
 		let irbb = &mut self.bbs[irbbid];
 		let term_inst = *irbb.term_inst();
 
-		// SAFETY: this match is valid because exitpoints was built from BBs which were either
-		// `BBTerm::Return`, in which case irbb_terminator_sanity_check ensured it ended with
-		// IrInstKind::Ret; or some other non-return terminator, in which case it is guaranteed to
-		// be a call/jump/branch.
-		let regs = match term_inst.kind() {
-			IrInstKind::Ret { .. } => {
-				if ctx.is_return_analysis_pass() {
-					// during return analysis, if we insert clobbers here, it'll over-diagnose
-					// returns...
-					self.ret_regs
-				} else {
-					// because *all* modified registers (returns *and* clobbers) need to be marked
-					// as used or else they'll be marked dead by DSE.
-					self.changed_regs
-				}
-			}
-
-			// call/icall/ibranch/cbranch/branch
-			_ => {
-				todo!("tailcall... what do we do here? clobbers or uses? both? on what reg sets?");
-			}
+		let regs = if ctx.is_return_analysis_pass() {
+			// during return analysis, if we insert clobbers here, it'll over-diagnose
+			// returns...
+			self.ret_regs
+		} else {
+			// because *all* modified registers (returns *and* clobbers) need to be marked
+			// as used or else they'll be marked dead by DSE.
+			self.changed_regs
 		};
 
 		if !regs.is_empty() {
