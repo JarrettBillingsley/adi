@@ -319,20 +319,20 @@ impl<'a> RegUsagePass<'a> {
 
 		log::trace!("  >   END mutrec local args");
 
-		// for loop_iteration in 0 .. {
-		// 	log::trace!("  >> mutrec args loop start {}", loop_iteration);
-		// 	let mut any_changed = false;
+		for loop_iteration in 0 .. {
+			log::trace!("  >> mutrec args loop start {}", loop_iteration);
+			let mut any_changed = false;
 
-		// 	for &fid in scc.iter() {
-		// 		any_changed |= self.analyze_args(fid);
-		// 	}
+			for &fid in scc.iter() {
+				any_changed |= self.analyze_args(fid);
+			}
 
-		// 	if !any_changed {
-		// 		break;
-		// 	} else if loop_iteration > scc.len() {
-		// 		panic!("hmmmmmm should have converged by now...");
-		// 	}
-		// }
+			if !any_changed {
+				break;
+			} else if loop_iteration > scc.len() {
+				panic!("hmmmmmm should have converged by now...");
+			}
+		}
 	}
 
 	fn analyze_args(&mut self, fid: FuncId) -> bool {
@@ -349,7 +349,7 @@ impl<'a> RegUsagePass<'a> {
 		for reg in arch.arch_ir_regs() {
 			let reg = reg.sub(0);
 			match defs.get(&reg) {
-				Some(usage) if usage.is_really_used() => {
+				Some(usage) if usage.is_used() => {
 					log::trace!("      {:?} is an argument to {:?} ({:?})",
 						RegDbg(reg, Some(&arch)), fid, usage);
 				}

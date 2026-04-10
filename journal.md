@@ -737,3 +737,23 @@ or
 similar to clobbers? determine "local args" first, then include callees' arg sets?
 
 *can they have different arg sets?* I would imagine so... because arguments are *input* state, while clobbers are *output* state, and they all share the same output state but can have different input states.
+
+**ARGUMENTSSSSSSSSS**
+
+- it's not just as simple as "if gen0 is used" because there are multiple kinds of uses and phis obscure some of the info
+- for example,
+	c_1 = <return>
+	c_2 = φ(*c_0*, c_1)
+	c_3 = <return>
+	c_4 = φ(c_2, c_3)
+	
+	now if you have
+	
+		use c_4 *<----- REALLY IS a use of c_0*
+	
+	but if you have
+	
+		clobber c_4 *<---- NOT a use of c_0*
+		
+- simply looking at all generations of `c` will not help here
+	- you *have* to look at the specific uses of `x_0` and transitively through the phis in which it appears.

@@ -7,7 +7,7 @@ use super::*;
 
 pub(super) fn elim_dead_stores(bbs: &mut [IrBasicBlock]) {
 	for (reg, def) in find_defs_and_uses(bbs).iter() {
-		if !def.is_really_used() {
+		if !def.is_used() {
 			match def.loc() {
 				DefLocation::Inst { bbid, instn } => {
 					log::trace!("    {:?} is dead ({:?})", reg, def.how_used());

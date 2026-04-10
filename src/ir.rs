@@ -473,6 +473,10 @@ impl IrBasicBlock {
 		self.insts.iter().any(|i| i.assigns(reg))
 	}
 
+	fn get_phi(&self, i: usize) -> &IrPhi {
+		&self.phis[i]
+	}
+
 	fn phis(&self) -> impl Iterator<Item = &IrPhi> {
 		self.phis.iter()
 	}

@@ -16,6 +16,9 @@
 		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
 	- code cleanup when done
 	- *when* (if ever) should reguse pass be automatically scheduled?
+- "dummy" uses aren't really dummy anymore
+	- they may be over-added in cases where we don't know the register usage, but they are now only inserted before calls and encode arguments to the callee
+	- same goes for the `mov _, <return>`s after calls - they encode callee clobbers/returns, and aren't "dummies"
 
 # Major tasks
 
