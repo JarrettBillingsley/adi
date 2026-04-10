@@ -29,8 +29,8 @@ impl Program {
 		let func = self.funcs.get(fid);
 
 		if func.is_multi_entry() {
-			log::warn!("func_to_ir on multi-entry function");
-			self.func_dump_cfg(&self.func_analyze_cfg(func));
+			log::warn!("func_to_ir on multi-entry function {:?} @ {:?}", fid, func.ea());
+			// self.func_dump_cfg(&self.func_analyze_cfg(func));
 		}
 
 		// log::debug!("func has {} bbs", func.num_bbs());
@@ -350,14 +350,14 @@ impl IRewriteCtx for Program {
 	fn reg_usage_of(&self, ea: EA) -> Option<FuncRegUsage> {
 		if let Some(func) = self.func_that_contains(ea) {
 			if let Some(ru) = func.reg_usage() {
-				log::trace!("    callee {:?} usage = {:?}", ea, ru);
+				// log::trace!("    callee {:?} usage = {:?}", ea, ru);
 				Some(ru)
 			} else {
-				log::trace!("    callee {:?} has no usage", ea);
+				// log::trace!("    callee {:?} has no usage", ea);
 				None
 			}
 		} else {
-			log::trace!("    callee {:?} is not a func", ea);
+			// log::trace!("    callee {:?} is not a func", ea);
 			None
 		}
 	}
@@ -409,9 +409,9 @@ impl<'a> IrRewriter<'a> {
 
 	fn perform_rewrites(&mut self, ctx: &impl IRewriteCtx, exitpoints: &[IrBBId],
 	callpoints: Vec<IrBBId>, returnpoints: Vec<IrBBId>) {
-		log::trace!("  IrRewriter::perform_rewrites \
-			exitpoints = {:?} callpoints = {:?} returnpoints = {:?}",
-			exitpoints, callpoints, returnpoints);
+		// log::trace!("  IrRewriter::perform_rewrites \
+		// 	exitpoints = {:?} callpoints = {:?} returnpoints = {:?}",
+		// 	exitpoints, callpoints, returnpoints);
 
 		for irbbid in callpoints.into_iter() {
 			self.insert_callpoint_uses(ctx, irbbid);
@@ -437,7 +437,6 @@ impl<'a> IrRewriter<'a> {
 		// SAFETY: this match is valid because callpoints contains only `call/icall` instructions
 		// which are guaranteed to have a target.
 		// (fixup_ir_targets is the step before this one, so this match is good.)
-		log::warn!("term_inst = {:?}", term_inst);
 
 		let regs = match term_inst.kind() {
 			IrInstKind::Branch  { dst, .. } |
@@ -547,7 +546,7 @@ impl<'a> IrRewriter<'a> {
 					// but on subsequent reg usage passes, this will correctly insert return-uses
 					// for the return registers.
 					IrTarget::Internal(_)  => {
-						log::trace!("  callee is self, using {:?}", self.ret_regs);
+						// log::trace!("  callee is self, using {:?}", self.ret_regs);
 						self.ret_regs
 					}
 					IrTarget::External(ea) => {

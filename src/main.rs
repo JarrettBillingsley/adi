@@ -13,11 +13,11 @@ use colored::Color;
 use adi::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	setup_logging(LevelFilter::Trace)?;
+	setup_logging(LevelFilter::Info)?;
 	setup_panic();
 
-	test_gb()
-	// test_nes()
+	// test_gb()
+	test_nes()
 	// test_toy()
 }
 
@@ -72,11 +72,6 @@ fn test_common(mut prog: Program) -> Result<(), Box<dyn std::error::Error>> {
 	// for scc in sccs.into_iter() {
 	// 	println!("  {:?}", scc);
 	// }
-
-	for func in prog.all_funcs() {
-		println!("{:?} {:20} {:?}", func.id(), prog.name_of_ea(func.ea()).to_string(),
-			func.reg_usage().unwrap());
-	}
 
 	Ok(())
 }
@@ -986,6 +981,20 @@ fn show_func_piece_header(prog: &Program, func: &Function) {
 	println!("{}{}{}", "; (Piece of function ".green(), name.name.green(), ")".green());
 }
 
+// fn show_reg_set(prog: &Program, name: &str, regs: RegSet) {
+// 	print!("{}", format!("; {} = ", name).green());
+
+// 	if regs.is_empty() {
+// 		print!("{}", "<none>".green());
+// 	} else {
+// 		for reg in regs.iter() {
+// 			print!("{} ", reg.to_string().green());
+// 		}
+// 	}
+
+// 	println!();
+// }
+
 fn show_func_header(prog: &Program, func: &Function) {
 	let divider =
 		"; -------------------------------------------------------------------------".green();
@@ -995,7 +1004,12 @@ fn show_func_header(prog: &Program, func: &Function) {
 	let name = prog.name_of_ea(func.ea());
 	println!("{}{}", "; Function ".green(), name.name.green());
 
-	println!("{}{}", "; ".green(), format!("{:?}", func).green());
+	// if let Some(usage) = func.reg_usage() {
+	// 	println!("{}", "; Register usage:".green());
+	// 	show_reg_set(prog, "Arguments    ", usage.args());
+	// 	show_reg_set(prog, "Return Values", usage.rets());
+	// 	show_reg_set(prog, "Clobbers     ", usage.clobbers());
+	// }
 
 	// TODO: rewrite this using some new API
 	// if let Some(usage) = func.reg_usage() {

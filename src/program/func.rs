@@ -42,10 +42,9 @@ bitflags! {
 // FuncRegUsage
 // ------------------------------------------------------------------------------------------------
 
-// TODO: make pub(crate)
 /// How a function uses or affects registers.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct FuncRegUsage {
+pub(crate) struct FuncRegUsage {
 	args:     RegSet,
 	// INVARIANT: these two sets never overlap (i.e. their intersection is always empty).
 	rets:     RegSet,
@@ -251,8 +250,7 @@ impl Function {
 		}
 	}
 
-	// TODO: make pub(crate)
-	pub fn reg_usage(&self) -> Option<FuncRegUsage> {
+	pub(crate) fn reg_usage(&self) -> Option<FuncRegUsage> {
 		self.reg_usage
 	}
 

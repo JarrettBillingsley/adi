@@ -2,6 +2,7 @@
 # Yak stack
 
 - Register usage analysis
+	- **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
 	- **QUESTION: does DSE work in a single pass? or does one pass make other things dead?**
 	- actually maybe `sp` *should* be included in arch_regs because it's now being eliminated as a dead store at the ends of functions which is wrong...
 		- but that means we have to special-case the return value set by removing the stack pointer for it before applying it to the function
@@ -32,7 +33,6 @@
 	- I really don't think 64b generation numbers are really needed, or hell, even 64b indexes
 		- 32/32 is almost certainly more than enough
 	- also I think it'd be possible to renumber generations when e.g. saving/loading so that they never get out of hand
-- **Some API for getting and/or printing a function's reg usage that doesn't expose `RegSet` or `FuncRegUsage` through the public API**
 - **move much of the printing/output stuff in `main.rs` into the library itself**
 	- so it doesn't e.g. have to be duplicated in GUI frontends
 - **Inventory `TODO`s throughout the codebase**

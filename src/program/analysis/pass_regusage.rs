@@ -4,7 +4,10 @@ use crate::fxhash::{ FxHashMap as HashMap, FxHashMapEx };
 use crate::program::{ EA, Program, FuncId, RegSet, FuncRegUsage };
 use crate::program::analysis::callgraph::*;
 use crate::program::analysis::to_ir::{ IRewriteCtx };
-use crate::ir::{ RegDbg, IrInstKind, IrTarget, IrBBId, IrReg, IrFunctionWithNames };
+use crate::ir::{ RegDbg, IrInstKind, IrTarget, IrBBId, IrReg };
+
+#[allow(unused)]
+use crate::ir::{ IrFunctionWithNames };
 
 // ------------------------------------------------------------------------------------------------
 // Whole-program register usage analysis
@@ -228,7 +231,7 @@ impl<'a> RegUsagePass<'a> {
 		let all_regs = arch.arch_reg_set();
 		let ir = self.prog.func_to_ir_ctx(fid, self);
 
-		log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
+		// log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
 
 		let mut clobber_set = RegSet::new();
 
@@ -340,7 +343,7 @@ impl<'a> RegUsagePass<'a> {
 		let arch = self.prog.arch();
 		let all_regs = arch.arch_reg_set();
 		let ir = self.prog.func_to_ir_ctx(fid, self);
-		log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
+		// log::trace!("{:?}", IrFunctionWithNames(&ir, &arch));
 
 		let defs = ir.find_defs_and_uses();
 
@@ -438,11 +441,11 @@ impl<'a> RegUsagePass<'a> {
 			}
 		}
 
-		log::trace!("    before DSE:\n{:?}", IrFunctionWithNames(&ir, &arch));
+		// log::trace!("    before DSE:\n{:?}", IrFunctionWithNames(&ir, &arch));
 
 		ir.elim_dead_stores();
 
-		log::trace!("    after DSE:\n{:?}", IrFunctionWithNames(&ir, &arch));
+		// log::trace!("    after DSE:\n{:?}", IrFunctionWithNames(&ir, &arch));
 
 		let mut any_changed = false;
 
