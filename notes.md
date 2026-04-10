@@ -2,7 +2,6 @@
 # Yak stack
 
 - Register usage analysis
-	- code cleanup when done
 	- *when* (if ever) should reguse pass be automatically scheduled?
 	- what happens if we rerun reg usage analysis on funcs which already have usage info on them?
 
